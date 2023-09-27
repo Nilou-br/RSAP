@@ -9,6 +9,8 @@ public class UE5CoopHorrorTarget : TargetRules
 	{
 		Type = TargetType.Game;
 		DefaultBuildSettings = BuildSettingsVersion.V4;
+		
+		bUsesSteam = true;
 
 		ExtraModuleNames.AddRange( new string[] { "UE5CoopHorror" } );
 	}
