@@ -3,13 +3,13 @@
 using UnrealBuildTool;
 using System.Collections.Generic;
 
-public class UE5CoopHorrorEditorTarget : TargetRules
+public class UE5MBHorrorEditorTarget : TargetRules
 {
-	public UE5CoopHorrorEditorTarget(TargetInfo Target) : base(Target)
+	public UE5MBHorrorEditorTarget(TargetInfo Target) : base(Target)
 	{
 		Type = TargetType.Editor;
 		DefaultBuildSettings = BuildSettingsVersion.V4;
 
-		ExtraModuleNames.AddRange( new string[] { "UE5CoopHorror" } );
+		ExtraModuleNames.AddRange( new string[] { "UE5MBHorror" } );
 	}
 }

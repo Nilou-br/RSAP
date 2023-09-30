@@ -3,15 +3,13 @@
 using UnrealBuildTool;
 using System.Collections.Generic;
 
-public class UE5CoopHorrorTarget : TargetRules
+public class UE5MBHorrorTarget : TargetRules
 {
-	public UE5CoopHorrorTarget(TargetInfo Target) : base(Target)
+	public UE5MBHorrorTarget(TargetInfo Target) : base(Target)
 	{
 		Type = TargetType.Game;
 		DefaultBuildSettings = BuildSettingsVersion.V4;
-		
-		bUsesSteam = true;
 
-		ExtraModuleNames.AddRange( new string[] { "UE5CoopHorror" } );
+		ExtraModuleNames.AddRange( new string[] { "UE5MBHorror" } );
 	}
 }

@@ -4,13 +4,13 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
-#include "UE5CoopHorrorGameModeBase.generated.h"
+#include "UE5MBHorrorGameModeBase.generated.h"
 
 /**
  * 
  */
 UCLASS()
-class UE5COOPHORROR_API AUE5CoopHorrorGameModeBase : public AGameModeBase
+class UE5MBHORROR_API AUE5MBHorrorGameModeBase : public AGameModeBase
 {
 	GENERATED_BODY()
 	

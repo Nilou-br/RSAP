@@ -5,7 +5,7 @@
 	"Description": "",
 	"Modules": [
 		{
-			"Name": "UE5CoopHorror",
+			"Name": "UE5MBHorror",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
 		}
@@ -19,20 +19,9 @@
 			]
 		},
 		{
-			"Name": "OnlineSubsystemNull",
-			"Enabled": false
-		},
-		{
-			"Name": "OnlineSubsystemUtils",
-			"Enabled": false
-		},
-		{
-			"Name": "OnlineSubsystemIOS",
-			"Enabled": false,
-			"SupportedTargetPlatforms": [
-				"IOS",
-				"TVOS"
-			]
+			"Name": "OnlineSubsystemRedpointEOS",
+			"Enabled": true,
+			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/2c92594ce5aa416c8bfbd79275389e3b"
 		},
 		{
 			"Name": "OnlineSubsystemGooglePlay",
@@ -42,16 +31,12 @@
 			]
 		},
 		{
-			"Name": "OnlineSubsystem",
-			"Enabled": false
-		},
-		{
-			"Name": "OnlineBase",
-			"Enabled": false
-		},
-		{
-			"Name": "SteamSockets",
-			"Enabled": true
+			"Name": "OnlineSubsystemIOS",
+			"Enabled": false,
+			"SupportedTargetPlatforms": [
+				"IOS",
+				"TVOS"
+			]
 		}
 	]
 }
