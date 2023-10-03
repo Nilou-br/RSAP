@@ -8,7 +8,7 @@
 UGetAvatar* UGetAvatar::GetAvatar(UObject* WorldContextObject, UTexture* DefaultAvatar)
 {
 	UGetAvatar* Proxy = NewObject<UGetAvatar>();
-	Proxy->World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull);
+	Proxy->World = WorldContextObject->GetWorld();
 	Proxy->DefaultAvatar = DefaultAvatar;
 	return Proxy;
 }
@@ -17,7 +17,7 @@ void UGetAvatar::Activate()
 {
 	Super::Activate();
 
-	IOnlineSubsystem *Subsystem = Online::GetSubsystem(GetWorld());
+	IOnlineSubsystem *Subsystem = Online::GetSubsystem(World);
 	if (Subsystem == nullptr)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("::GetAvatar. No valid IOnlineSubsystem"))
@@ -58,7 +58,7 @@ void UGetAvatar::Activate()
 void UGetAvatar::HandleGetAvatarComplete(
 	bool bWasSuccessful,
 	TSoftObjectPtr<UTexture> Avatar,
-	FProxyGetAvatarComplete Delegate)
+	FProxyGetAvatarComplete OnGetAvatarCompleteDelegate)
 {
-	Delegate.Broadcast(Avatar.Get());
+	OnGetAvatarCompleteDelegate.Broadcast(Avatar.Get());
 }

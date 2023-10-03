@@ -20,13 +20,8 @@ class MBCROSSPLAY_API UMBPartySubsystem : public UGameInstanceSubsystem
 
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
-
 public:
 	DECLARE_MULTICAST_DELEGATE_OneParam(FMBOnCreatePartyComplete, const bool bWasSuccessful)
 	FMBOnCreatePartyComplete OnCreatePartyComplete;
 	void CreateParty(const uint8 MaxMembers);
-
-private:
-	void HandleLoginComplete(int32 LocalUserNum, bool bWasSuccessful, const FUniqueNetId &UserId, const FString &Error);
-	FDelegateHandle LoginDelegateHandle;
 };

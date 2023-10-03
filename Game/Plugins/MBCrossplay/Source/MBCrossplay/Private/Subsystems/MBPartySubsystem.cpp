@@ -13,16 +13,6 @@ DEFINE_LOG_CATEGORY(MBPartySubsystem)
 void UMBPartySubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
-
-	const IOnlineSubsystem *Subsystem = Online::GetSubsystem(GetWorld());
-	const IOnlineIdentityPtr Identity = Subsystem->GetIdentityInterface();
-
-	UE_LOG(MBPartySubsystem, Warning, TEXT("Starting AutoLogin..."))
-	LoginDelegateHandle = Identity->AddOnLoginCompleteDelegate_Handle(0, FOnLoginComplete::FDelegate::CreateUObject(this, &ThisClass::HandleLoginComplete));
-	if (!Identity->AutoLogin(0))
-	{
-		UE_LOG(MBPartySubsystem, Error, TEXT("AutoLogin failed."))
-	}
 }
 
 void UMBPartySubsystem::CreateParty(const uint8 MaxMembers)
@@ -51,14 +41,4 @@ void UMBPartySubsystem::CreateParty(const uint8 MaxMembers)
 	{
 		UE_LOG(MBPartySubsystem, Warning, TEXT("CreateParty Failed."));
 	}
-}
-
-void UMBPartySubsystem::HandleLoginComplete(int32 LocalUserNum, bool bWasSuccessful, const FUniqueNetId& UserId, const FString& Error)
-{
-	const IOnlineSubsystem *Subsystem = Online::GetSubsystem(this->GetWorld());
-	const IOnlineIdentityPtr Identity = Subsystem->GetIdentityInterface();
-	
-	Identity->ClearOnLoginCompleteDelegate_Handle(LocalUserNum, LoginDelegateHandle);
-	LoginDelegateHandle.Reset();
-	UE_LOG(MBPartySubsystem, Warning, TEXT("AutoLogin %s."), *FString(bWasSuccessful ? "Success" : "Failed"));
 }

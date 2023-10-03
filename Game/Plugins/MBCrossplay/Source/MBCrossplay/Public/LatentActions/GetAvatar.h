@@ -16,9 +16,9 @@ class MBCROSSPLAY_API UGetAvatar : public UOnlineBlueprintCallProxyBase
 {
 	GENERATED_BODY()
 
-public:
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FProxyGetAvatarComplete, UTexture*, Avatar);
 
+public:
 	UPROPERTY(BlueprintAssignable)
 	FProxyGetAvatarComplete OnComplete;
 
@@ -31,6 +31,4 @@ public:
 private:
 	UPROPERTY() UWorld* World;
 	UPROPERTY() UTexture* DefaultAvatar;
-	
-	FDelegateHandle StartServerCompleteDelegateHandle;
 };

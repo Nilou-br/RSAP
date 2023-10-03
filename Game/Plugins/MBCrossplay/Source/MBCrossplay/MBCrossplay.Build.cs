@@ -14,7 +14,7 @@ public class MBCrossplay : ModuleRules
 				"Core",
 				"UMG",
 				"OnlineSubsystem",
-				"OnlineSubsystemUtils",
+				"OnlineSubsystemUtils"
 			}
 		);
 		
