@@ -23,7 +23,7 @@ public:
 	FProxyGetAvatarComplete OnComplete;
 
 	UFUNCTION(BlueprintCallable, meta = (BlueprintInternalUseOnly = "true", WorldContext = "WorldContextObject"), Category = "Online|Avatar")
-	static UGetAvatar* GetAvatar(UObject* WorldContextObject, UTexture* DefaultAvatar);
+	static UGetAvatar* GetAvatar(UObject* WorldContextObject, UTexture* DefaultAvatar, const FUniqueNetIdRepl TargetUserID);
 
 	virtual void Activate() override;
 	void HandleGetAvatarComplete(bool bWasSuccessful, TSoftObjectPtr<UTexture> DefaultAvatar, FProxyGetAvatarComplete OnComplete);
@@ -31,4 +31,5 @@ public:
 private:
 	UPROPERTY() UWorld* World;
 	UPROPERTY() UTexture* DefaultAvatar;
+	FUniqueNetIdRepl TargetUserID;
 };
