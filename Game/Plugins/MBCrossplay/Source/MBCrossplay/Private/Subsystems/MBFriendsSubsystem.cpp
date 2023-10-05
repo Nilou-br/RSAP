@@ -28,25 +28,27 @@ void UMBFriendsSubsystem::CacheFriendList()
 	}
 }
 
-TArray<FSimpleFriendInfo> UMBFriendsSubsystem::GetFriendList(UObject* WorldContextObject)
+TArray<UFriend*> UMBFriendsSubsystem::GetFriendList(UObject* WorldContextObject)
 {
 	const IOnlineSubsystem* OnlineSubsystem = OnlineSubsystem = Online::GetSubsystem(WorldContextObject->GetWorld());
 	const IOnlineFriendsPtr FriendsInterface = OnlineSubsystem->GetFriendsInterface();
-	
-	FriendsInterface->GetFriendsList(
-		0,
-		TEXT(""),
-		FriendList
-	);
-	UE_LOG(LogMBFriendsSubsystem, Log, TEXT("%i friends."), FriendList.Num());
 
-	TArray<FSimpleFriendInfo> SimpleFriendList;
-	for(const auto Friend : FriendList)
+	TArray<TSharedRef<FOnlineFriend>> FriendListRaw;
+	if(!FriendsInterface->GetFriendsList(0, TEXT(""), FriendListRaw ))
 	{
-		SimpleFriendList.Add(FSimpleFriendInfo(Friend->GetDisplayName(), Friend->GetUserId()));
+		return TArray<UFriend*>();
 	}
 
-	return SimpleFriendList;
+	// Create an array of blueprint compatible 'UFriend' types for each 'FOnlineFriend' in the array
+	TArray<UFriend*> FriendList;
+	for(const auto FriendRaw : FriendListRaw)
+	{
+		UFriend* Friend = NewObject<UFriend>(this);
+		Friend->Friend = FriendRaw;
+		FriendList.Add(Friend);
+	}
+
+	return FriendList;
 }
 
 void UMBFriendsSubsystem::HandleCacheFriendListComplete(int32 LocalUserNum, bool bWasSuccessful, const FString& ListName, const FString& ErrorStr)

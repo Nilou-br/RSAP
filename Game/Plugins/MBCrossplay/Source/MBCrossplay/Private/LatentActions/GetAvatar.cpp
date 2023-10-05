@@ -5,7 +5,7 @@
 #include "RedpointInterfaces/OnlineAvatarInterface.h"
 
 
-UGetAvatar* UGetAvatar::GetAvatar(UObject* WorldContextObject, UTexture* DefaultAvatar, const FUniqueNetIdRepl TargetUserID)
+UGetAvatar* UGetAvatar::GetAvatar(UObject* WorldContextObject, UTexture* DefaultAvatar, const FUniqueNetIdRepl& TargetUserID)
 {
 	UGetAvatar* Proxy = NewObject<UGetAvatar>();
 	Proxy->World = WorldContextObject->GetWorld();
@@ -55,18 +55,26 @@ void UGetAvatar::Activate()
 		OnComplete.Broadcast(DefaultAvatar);
 		return;
 	}
-
+	
 	AvatarInterface->GetAvatar(
-		*Identity->GetUniquePlayerId(0),
-		*TargetUserID,
-		DefaultAvatar,
-		FOnGetAvatarComplete::CreateUObject(this, &UGetAvatar::HandleGetAvatarComplete, OnComplete));
+	*Identity->GetUniquePlayerId(0),
+	*TargetUserID,
+	DefaultAvatar,
+	FOnGetAvatarComplete::CreateUObject(this, &UGetAvatar::HandleGetAvatarComplete, OnComplete));
+	
+	// AvatarInterface->GetAvatarUrl(
+	// *Identity->GetUniquePlayerId(0),
+	// *TargetUserID,
+	// FString(),
+	// FOnGetAvatarUrlComplete::CreateUObject(this, &UGetAvatar::HandleGetAvatarUrlComplete, OnComplete)
+	// );
 }
 
-void UGetAvatar::HandleGetAvatarComplete(
-	bool bWasSuccessful,
-	TSoftObjectPtr<UTexture> Avatar,
-	FProxyGetAvatarComplete OnGetAvatarCompleteDelegate)
+void UGetAvatar::HandleGetAvatarComplete(bool bWasSuccessful, TSoftObjectPtr<UTexture> Avatar, FProxyGetAvatarComplete OnGetAvatarCompleteDelegate)
 {
 	OnGetAvatarCompleteDelegate.Broadcast(Avatar.Get());
+}
+
+void UGetAvatar::HandleGetAvatarUrlComplete(bool bWasSuccessful, FString AvatarUrl, FProxyGetAvatarComplete OnGetAvatarCompleteDelegate)
+{
 }

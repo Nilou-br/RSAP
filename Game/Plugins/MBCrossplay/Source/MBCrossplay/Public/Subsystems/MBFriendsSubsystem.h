@@ -4,26 +4,43 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "GameFramework/OnlineReplStructs.h"
+#include "OnlineSubsystemTypes.h"
 #include "MBFriendsSubsystem.generated.h"
 
 class FOnlineFriend;
 DECLARE_LOG_CATEGORY_EXTERN(LogMBFriendsSubsystem, Log, All);
 
 
-USTRUCT(BlueprintType)
-struct FSimpleFriendInfo
+
+/*
+ * Blueprint friendly friend type easily giving access to often needed data.
+ */
+UCLASS(BlueprintType)
+class UFriend : public UObject
 {
-	GENERATED_USTRUCT_BODY()
+	GENERATED_BODY()
 
-	UPROPERTY(BlueprintReadOnly)
-	FString Username;
+public:
+	TSharedPtr<FOnlineFriend> Friend;
 
-	UPROPERTY(BlueprintReadOnly)
-	FUniqueNetIdRepl UserID;
+	UFUNCTION(BlueprintPure)
+	FUniqueNetIdRepl GetID() const
+	{
+		return FUniqueNetIdRepl(*Friend->GetUserId());
+	}
 
-	// Assuming you've some way to expose avatars as Texture2Ds
-	UPROPERTY(BlueprintReadOnly)
-	UTexture2D* Avatar;
+	UFUNCTION(BlueprintPure)
+	FString GetIDString() const
+	{
+		return Friend->GetUserId()->ToString();
+	}
+
+	UFUNCTION(BlueprintPure)
+	FString GetUsername() const
+	{
+		return Friend->GetDisplayName();
+	}
 };
 
 
@@ -45,10 +62,8 @@ public:
 	FOnCacheFriendListCompleteDelegate OnCacheFriendListCompleteDelegate;
 
 	UFUNCTION(BlueprintCallable, meta = (WorldContext = "WorldContextObject"))
-	TArray<FSimpleFriendInfo> GetFriendList(UObject* WorldContextObject);
+	TArray<UFriend*> GetFriendList(UObject* WorldContextObject);
 
 private:
 	void HandleCacheFriendListComplete(int32 LocalUserNum, bool bWasSuccessful, const FString& ListName, const FString& ErrorStr);
-
-	TArray<TSharedRef<FOnlineFriend>> FriendList;
 };
