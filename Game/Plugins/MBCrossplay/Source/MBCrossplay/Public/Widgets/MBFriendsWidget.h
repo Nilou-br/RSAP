@@ -6,6 +6,8 @@
 #include "Blueprint/UserWidget.h"
 #include "MBFriendsWidget.generated.h"
 
+class UMBFriendsSubsystem;
+
 
 
 /**
@@ -17,4 +19,16 @@ class MBCROSSPLAY_API UMBFriendsWidget : public UUserWidget
 	GENERATED_BODY()
 
 	virtual void NativeOnInitialized() override;
+
+public:
+	UFUNCTION(BlueprintImplementableEvent, Category = "Friends|Events")
+	void OnNewFriendAdded(FUniqueNetIdRepl NetID);
+	FDelegateHandle OnNewFriendAddedHandle;
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "Friends|Events")
+	void OnFriendUpdated(FUniqueNetIdRepl NetID);
+	FDelegateHandle OnFriendUpdatedHandle;
+
+private:
+	UPROPERTY() UMBFriendsSubsystem* FriendsSubsystem;
 };

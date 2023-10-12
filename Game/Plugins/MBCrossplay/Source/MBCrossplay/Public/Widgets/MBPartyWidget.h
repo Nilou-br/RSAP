@@ -29,7 +29,6 @@ protected:
 	FDelegateHandle OnJoinPartyCompleteHandle;
 
 private:
-	UPROPERTY()
-	UMBPartySubsystem* PartySubsystem;
+	UPROPERTY() UMBPartySubsystem* PartySubsystem;
 	
 };
