@@ -3,13 +3,11 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Subsystems/GameInstanceSubsystem.h"
-#include "GameFramework/OnlineReplStructs.h"
 #include "Interfaces/OnlinePresenceInterface.h"
-#include "OnlineSubsystemTypes.h"
+#include "Online/CoreOnline.h"
+#include "Online/CoreOnlineFwd.h"
 #include "MBFriendsSubsystem.generated.h"
 
-class FOnlineFriend;
 DECLARE_LOG_CATEGORY_EXTERN(LogMBFriendsSubsystem, Log, All);
 
 
@@ -31,7 +29,7 @@ class UFriend : public UObject
 	GENERATED_BODY()
 	
 	TSharedPtr<FOnlineFriend> Friend;
-	UPROPERTY() UTexture* Avatar;
+	UPROPERTY(BlueprintReadOnly, meta=(AllowPrivateAccess = "true")) const UTexture* Avatar;
 
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnFriendDataUpdated);
 
@@ -69,6 +67,11 @@ public:
 		Friend = InOnlineFriend;
 		if(bShouldBroadcast) OnFriendDataUpdated.Broadcast();
 	}
+
+	void SetAvatar(const UTexture* AvatarTexture)
+	{
+		Avatar = AvatarTexture;
+	}
 	
 	UPROPERTY(BlueprintAssignable)
 	FOnFriendDataUpdated OnFriendDataUpdated;
@@ -88,26 +91,37 @@ class MBCROSSPLAY_API UMBFriendsSubsystem : public UGameInstanceSubsystem
 	virtual void Deinitialize() override;
 	
 	DECLARE_MULTICAST_DELEGATE_OneParam(FOnCacheFriendListCompleteDelegate, bool bWasSuccessful)
-	DECLARE_MULTICAST_DELEGATE_OneParam(FOnNewFriendAdded, FUniqueNetIdRepl NetID)
-	DECLARE_MULTICAST_DELEGATE_OneParam(FOnFriendUpdated, FUniqueNetIdRepl NetID)
+	DECLARE_MULTICAST_DELEGATE(FOnFriendListChangedDelegate)
+	DECLARE_MULTICAST_DELEGATE_OneParam(FOnFriendPresenceUpdatedDelegate, const FUniqueNetIdPtr& NetID)
 
 public:
 	FOnCacheFriendListCompleteDelegate OnCacheFriendListCompleteDelegate;
-	FOnNewFriendAdded OnNewFriendAdded;
-	FOnFriendUpdated OnFriendUpdated;
+	FOnFriendListChangedDelegate OnFriendListChangedDelegate;
+	FOnFriendPresenceUpdatedDelegate OnFriendPresenceUpdatedDelegate;
 	
 	void CacheFriendList();
+	
+	UFUNCTION(BlueprintPure, meta = (WorldContext = "WorldContextObject"))
+	TArray<UFriend*> GetFriendList(const UObject* WorldContextObject);
 
 	UFUNCTION(BlueprintPure, meta = (WorldContext = "WorldContextObject"))
-	FORCEINLINE TArray<UFriend*> GetFriendList();
+	UFriend* GetFriend(const UObject* WorldContextObject, const FUniqueNetIdRef& NetID);
+
+	UFUNCTION(BlueprintPure, meta = (WorldContext = "WorldContextObject"))
+	void GetPresenceSortedFriendList(const UObject* WorldContextObject, TArray<UFriend*>& FriendsInGame, TArray<UFriend*>& FriendsOnline, TArray<UFriend*>& FriendsOffline);
+
+	void CacheAvatar(const FUniqueNetIdPtr& NetID, UTexture* AvatarTexture);
+	UTexture* GetCachedAvatar(const FUniqueNetIdPtr& NetID);
 
 private:
 	void HandleCacheFriendListComplete(int32 LocalUserNum, bool bWasSuccessful, const FString& ListName, const FString& ErrorStr);
-	void InitFriendList();
 
 	FDelegateHandle OnFriendListChangeHandle;
 	void OnFriendListChange();
 
-	UPROPERTY()
-	TMap<FString, UFriend*> FriendMap;
+	FTimerHandle TimeoutHandle;
+	UPROPERTY() TMap<FString, UTexture*> CachedAvatarList;
+
+	FDelegateHandle OnFriendPresenceUpdatedHandle;
+	void OnFriendPresenceUpdated(const FUniqueNetIdPtr& NetID);
 };

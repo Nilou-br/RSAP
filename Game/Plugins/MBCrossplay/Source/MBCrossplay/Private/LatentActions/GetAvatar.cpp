@@ -2,21 +2,24 @@
 
 #include "LatentActions/GetAvatar.h"
 #include "OnlineSubsystemUtils.h"
+#include "OnlineSubsystem.h"
 #include "RedpointInterfaces/OnlineAvatarInterface.h"
+#include "Subsystems/MBFriendsSubsystem.h"
 
 
-UGetAvatar* UGetAvatar::GetAvatar(UObject* WorldContextObject, UTexture* DefaultAvatar, const FUniqueNetIdRepl& TargetUserID)
+UGetAvatar* UGetAvatar::GetAvatar(UObject* WorldContextObject, UTexture* DefaultAvatar)
 {
 	UGetAvatar* Proxy = NewObject<UGetAvatar>();
 	Proxy->World = WorldContextObject->GetWorld();
 	Proxy->DefaultAvatar = DefaultAvatar;
-	Proxy->TargetUserID = TargetUserID;
+	// Proxy->TargetUserID = TargetUserID;
 	return Proxy;
 }
 
 void UGetAvatar::Activate()
 {
 	Super::Activate();
+	return;
 
 	IOnlineSubsystem* OnlineSubsystem = Online::GetSubsystem(World);
 	if (OnlineSubsystem == nullptr)
@@ -34,9 +37,10 @@ void UGetAvatar::Activate()
 		return;
 	}
 
-	if(!Identity->GetUniquePlayerId(0).IsValid())
+	const FUniqueNetIdPtr LocalNetId = Identity->GetUniquePlayerId(0);
+	if(!LocalNetId.IsValid())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("::GetAvatar. No valid UniquePlayerId"))
+		UE_LOG(LogTemp, Warning, TEXT("::GetAvatar. No valid LocalUniqueNetId"))
 		OnComplete.Broadcast(DefaultAvatar);
 		return;
 	}
@@ -48,8 +52,20 @@ void UGetAvatar::Activate()
 		return;
 	}
 
+	// Check if avatar has been cached.
+	if(UMBFriendsSubsystem* FriendsSubsystem = World->GetGameInstance()->GetSubsystem<UMBFriendsSubsystem>(); FriendsSubsystem)
+	{
+		UTexture* AvatarTexture = FriendsSubsystem->GetCachedAvatar(TargetUserID);
+		if (AvatarTexture)
+		{
+			UE_LOG(LogTemp, Log, TEXT("Using cached avatar."))
+			OnComplete.Broadcast(AvatarTexture);
+			return;
+		}
+	}
+
 	const TSharedPtr<IOnlineAvatar, ESPMode::ThreadSafe> AvatarInterface = Online::GetAvatarInterface(OnlineSubsystem);
-	if (AvatarInterface.IsValid() == false)
+	if (AvatarInterface == nullptr)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("::GetAvatar. No valid AvatarInterface"))
 		OnComplete.Broadcast(DefaultAvatar);
@@ -61,20 +77,15 @@ void UGetAvatar::Activate()
 	*TargetUserID,
 	DefaultAvatar,
 	FOnGetAvatarComplete::CreateUObject(this, &UGetAvatar::HandleGetAvatarComplete, OnComplete));
-	
-	// AvatarInterface->GetAvatarUrl(
-	// *Identity->GetUniquePlayerId(0),
-	// *TargetUserID,
-	// FString(),
-	// FOnGetAvatarUrlComplete::CreateUObject(this, &UGetAvatar::HandleGetAvatarUrlComplete, OnComplete)
-	// );
 }
 
 void UGetAvatar::HandleGetAvatarComplete(bool bWasSuccessful, TSoftObjectPtr<UTexture> Avatar, FProxyGetAvatarComplete OnGetAvatarCompleteDelegate)
 {
+	const IOnlineSubsystem* OnlineSubsystem = Online::GetSubsystem(World);
+	const IOnlineIdentityPtr Identity = OnlineSubsystem->GetIdentityInterface();
+	const FUniqueNetIdPtr LocalUniqueNetId = Identity->GetUniquePlayerId(0);
+	UMBFriendsSubsystem* FriendsSubsystem = World->GetGameInstance()->GetSubsystem<UMBFriendsSubsystem>();
+	FriendsSubsystem->CacheAvatar(LocalUniqueNetId, Avatar.Get());
+	
 	OnGetAvatarCompleteDelegate.Broadcast(Avatar.Get());
-}
-
-void UGetAvatar::HandleGetAvatarUrlComplete(bool bWasSuccessful, FString AvatarUrl, FProxyGetAvatarComplete OnGetAvatarCompleteDelegate)
-{
 }

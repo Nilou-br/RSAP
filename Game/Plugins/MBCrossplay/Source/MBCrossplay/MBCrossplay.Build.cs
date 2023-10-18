@@ -27,5 +27,20 @@ public class MBCrossplay : ModuleRules
 				"SlateCore",
 			}
 		);
+		
+		// Add Steamworks
+		// if (Target.Platform == UnrealTargetPlatform.Win64 ||
+  //           Target.Platform == UnrealTargetPlatform.Mac ||
+  //           Target.Platform == UnrealTargetPlatform.Linux)
+  //       {
+  //           PrivateDependencyModuleNames.AddRange(
+  //               new string[]
+  //               {
+  //                   "SteamShared",
+  //               }
+  //           );
+  //
+  //           AddEngineThirdPartyPrivateStaticDependencies(Target, "Steamworks");
+  //       }
 	}
 }

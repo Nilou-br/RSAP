@@ -4,9 +4,11 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "CoreMinimal.h"
 #include "MBFriendsWidget.generated.h"
 
 class UMBFriendsSubsystem;
+class UFriend;
 
 
 
@@ -22,12 +24,12 @@ class MBCROSSPLAY_API UMBFriendsWidget : public UUserWidget
 
 public:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Friends|Events")
-	void OnNewFriendAdded(FUniqueNetIdRepl NetID);
-	FDelegateHandle OnNewFriendAddedHandle;
+	void OnFriendListChanged();
+	FDelegateHandle OnFriendListChangedHandle;
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "Friends|Events")
-	void OnFriendUpdated(FUniqueNetIdRepl NetID);
-	FDelegateHandle OnFriendUpdatedHandle;
+	void OnFriendPresenceUpdated(const FString& NetID);
+	FDelegateHandle OnFriendPresenceUpdatedHandle;
 
 private:
 	UPROPERTY() UMBFriendsSubsystem* FriendsSubsystem;
