@@ -33,8 +33,5 @@ private:
 	
 	FDelegateHandle CacheFriendListDelegateHandle;
 	void HandleCacheFriendListComplete(bool bWasSuccessful);
-
-	FDelegateHandle QueryPresenceDelegateHandle;
-	void HandleQueryPresenceComplete(bool bWasSuccessful);
 	
 };

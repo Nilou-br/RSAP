@@ -11,5 +11,5 @@ void UMBFriendsWidget::NativeOnInitialized()
 
 	FriendsSubsystem = GetGameInstance()->GetSubsystem<UMBFriendsSubsystem>();
 	OnFriendListChangedHandle = FriendsSubsystem->OnFriendListChangedDelegate.AddLambda([this](){ OnFriendListChanged(); });
-	OnFriendPresenceUpdatedHandle = FriendsSubsystem->OnFriendPresenceUpdatedDelegate.AddLambda([this](FUniqueNetIdPtr NetID){ if(NetID->IsValid()) OnFriendPresenceUpdated(NetID->ToString()); });
+	OnFriendPresenceUpdatedHandle = FriendsSubsystem->OnFriendPresenceUpdatedDelegate.AddLambda([this](const FUniqueNetIdRepl& NetID){ if(NetID->IsValid()) OnFriendPresenceUpdated(*NetID); });
 }

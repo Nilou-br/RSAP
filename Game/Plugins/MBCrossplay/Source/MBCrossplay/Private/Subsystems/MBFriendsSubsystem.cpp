@@ -96,8 +96,7 @@ void UMBFriendsSubsystem::HandleCacheFriendListComplete(int32 LocalUserNum, bool
 	// Fetch the avatar for each friend. Broadcast success when the last friend's avatar has been cached.
 	CachedAvatarList.Empty();
 	TSharedPtr<int32> AmountLeftToFetch = MakeShareable(new int32(RawFriendList.Num()));
-
-	UE_LOG(LogTemp, Warning, TEXT("Schedule a timer to fire in 30 seconds....."));
+	
 	// Schedule a timer to fire in 30 seconds
 	GetWorld()->GetTimerManager().SetTimer(
 		TimeoutHandle,
@@ -106,7 +105,7 @@ void UMBFriendsSubsystem::HandleCacheFriendListComplete(int32 LocalUserNum, bool
 			UE_LOG(LogMBFriendsSubsystem, Warning, TEXT("Avatar fetching timed out."));
 			OnCacheFriendListCompleteDelegate.Broadcast(false);
 		},
-		15.0f,
+		10.0f,
 		false
 	);
 
@@ -120,11 +119,9 @@ void UMBFriendsSubsystem::HandleCacheFriendListComplete(int32 LocalUserNum, bool
 		FOnGetAvatarComplete::CreateLambda([this, AmountLeftToFetch, RawFriend](bool bWasSuccessful, TSoftObjectPtr<UTexture> Avatar)
 		{
 			if(bWasSuccessful) CacheAvatar(RawFriend->GetUserId(), Avatar.Get());
-			UE_LOG(LogTemp, Warning, TEXT("AmountLeftToFetch: %d"), *AmountLeftToFetch);
-			UE_LOG(LogTemp, Warning, TEXT("bWasSuccessful: %s"), *FString(bWasSuccessful ? "true" : "false"));
-			UE_LOG(LogTemp, Warning, TEXT("RawFriend ID: %s"), *RawFriend->GetUserId()->ToString());
 			if(--(*AmountLeftToFetch) == 0)
 			{
+				UE_LOG(LogTemp, Warning, TEXT("Cached all friends."));
 				if(const UWorld* World = GetWorld(); World && TimeoutHandle.IsValid()) World->GetTimerManager().ClearTimer(TimeoutHandle);
 				OnCacheFriendListCompleteDelegate.Broadcast(true);
 			}
@@ -134,6 +131,8 @@ void UMBFriendsSubsystem::HandleCacheFriendListComplete(int32 LocalUserNum, bool
 
 TArray<UFriend*> UMBFriendsSubsystem::GetFriendList(const UObject* WorldContextObject)
 {
+	if(FriendList.Num()) return FriendList;
+	
 	const IOnlineSubsystem* OnlineSubsystem = OnlineSubsystem = Online::GetSubsystem(WorldContextObject->GetWorld());
 	if(!OnlineSubsystem)
 	{
@@ -151,66 +150,52 @@ TArray<UFriend*> UMBFriendsSubsystem::GetFriendList(const UObject* WorldContextO
 	}
 
 	// Create an array of blueprint compatible 'UFriend' types for each 'FOnlineFriend' in the array
-	TArray<UFriend*> FriendList;
 	for(const auto RawFriend : RawFriendList)
 	{
 		UFriend* NewFriend = NewObject<UFriend>(this);
 		NewFriend->SetFriend(RawFriend);
 		NewFriend->SetAvatar(GetCachedAvatar(RawFriend->GetUserId()));
+		UE_LOG(LogTemp, Warning, TEXT("%s"), *NewFriend->GetUsername());
 		FriendList.Add(NewFriend);
 	}
+
+	SortFriendList();
 	return FriendList;
 }
 
-UFriend* UMBFriendsSubsystem::GetFriend(const UObject* WorldContextObject, const FUniqueNetIdRef& NetID)
+UFriend* UMBFriendsSubsystem::GetFriend(const FUniqueNetIdRepl& NetID) const
 {
-	const IOnlineSubsystem* OnlineSubsystem = OnlineSubsystem = Online::GetSubsystem(WorldContextObject->GetWorld());
-	if(!OnlineSubsystem)
-	{
-		UE_LOG(LogMBFriendsSubsystem, Warning, TEXT("Error getting friend-list: [Invalid OnlineSubsystem]"));
-		return nullptr;
-	}
-	
-	const IOnlineFriendsPtr FriendsInterface = OnlineSubsystem->GetFriendsInterface();
-
-	TSharedPtr<FOnlineFriend> RawFriend = FriendsInterface->GetFriend(0, *NetID, TEXT(""));
-	if(!RawFriend) return nullptr;
-
-	UFriend* NewFriend = NewObject<UFriend>(this);
-	NewFriend->SetFriend(RawFriend.ToSharedRef());
-	NewFriend->SetAvatar(GetCachedAvatar(RawFriend->GetUserId()));
-	return NewFriend;
-}
-
-void UMBFriendsSubsystem::GetPresenceSortedFriendList(const UObject* WorldContextObject, TArray<UFriend*>& FriendsInGame, TArray<UFriend*>& FriendsOnline, TArray<UFriend*>& FriendsOffline)
-{
-	// Clear existing lists to prepare for new data
-	FriendsInGame.Empty();
-	FriendsOnline.Empty();
-	FriendsOffline.Empty();
-
-	// Get the friend list
-	TArray<UFriend*> FriendList = GetFriendList(WorldContextObject);
-
-	// Sort friends by presence
+	UFriend* FoundFriend = nullptr;
+    
 	for (UFriend* Friend : FriendList)
 	{
-		switch (EFriendPresenceStatus PresenceStatus = Friend->GetPresence())
+		if (Friend && Friend->GetID().IsValid() && *(Friend->GetID()) == *NetID)
 		{
-		case EFriendPresenceStatus::IsPlaying:
-			FriendsInGame.Add(Friend);
-			break;
-		case EFriendPresenceStatus::IsOnline:
-			FriendsOnline.Add(Friend);
-			break;
-		case EFriendPresenceStatus::IsOffline:
-			FriendsOffline.Add(Friend);
-			break;
-		default:
-			FriendsOffline.Add(Friend);
+			FoundFriend = Friend;
 			break;
 		}
 	}
+
+	return FoundFriend;
+}
+
+/**
+ * Sorts the cached FriendList alphabetically and by presence status.
+ * @see EFriendPresenceStatus
+ */
+void UMBFriendsSubsystem::SortFriendList()
+{
+	FriendList.Sort([](const UFriend& A, const UFriend& B)
+	{
+		const int8 PresenceComparison = static_cast<int32>(A.GetPresence()) - static_cast<int32>(B.GetPresence());
+	    
+		if (PresenceComparison == 0) // if both are equal in terms of presence
+		{
+			return A.GetUsername() < B.GetUsername(); // sort by username
+		}
+    
+		return PresenceComparison < 0; // sort by presence
+	});
 }
 
 void UMBFriendsSubsystem::CacheAvatar(const FUniqueNetIdPtr& NetID, UTexture* AvatarTexture)
@@ -238,7 +223,15 @@ void UMBFriendsSubsystem::OnFriendListChange()
 	OnFriendListChangedDelegate.Broadcast();
 }
 
-void UMBFriendsSubsystem::OnFriendPresenceUpdated(const FUniqueNetIdPtr& NetID)
+void UMBFriendsSubsystem::OnFriendPresenceUpdated(const FUniqueNetIdRepl& NetID, const TSharedRef<FOnlineUserPresence>& Presence)
 {
+	UFriend* Friend = GetFriend(NetID);
+	if(!Friend) return;
+
+	Friend->UpdatePresence(Presence.Get());
+	SortFriendList();
+
+	UE_LOG(LogMBFriendsSubsystem, Warning, TEXT("Updated '%s', presence to: '%d'"), *Friend->GetUsername(), Friend->GetPresence())
+	
 	OnFriendPresenceUpdatedDelegate.Broadcast(NetID);
 }

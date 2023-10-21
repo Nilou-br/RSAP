@@ -15,7 +15,8 @@ DECLARE_LOG_CATEGORY_EXTERN(LogMBFriendsSubsystem, Log, All);
 UENUM(BlueprintType)
 enum EFriendPresenceStatus
 {
-	IsPlaying UMETA(DisplayName = "User is playing the game."),
+	IsPlayingThisGame UMETA(DisplayName = "User is playing this game."),
+	IsPlaying UMETA(DisplayName = "User is playing another game."),
 	IsOnline UMETA(DisplayName = "User is online."),
 	IsOffline UMETA(DisplayName = "User is offline."),
 };
@@ -30,10 +31,10 @@ class UFriend : public UObject
 	
 	TSharedPtr<FOnlineFriend> Friend;
 	UPROPERTY(BlueprintReadOnly, meta=(AllowPrivateAccess = "true")) const UTexture* Avatar;
-
-	DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnFriendDataUpdated);
+	EFriendPresenceStatus PresenceStatus;
 
 public:
+	
 	UFUNCTION(BlueprintPure)
 	FUniqueNetIdRepl GetID() const
 	{
@@ -55,26 +56,30 @@ public:
 	UFUNCTION(BlueprintPure)
 	EFriendPresenceStatus GetPresence() const
 	{
-		const FOnlineUserPresence OnlineUserPresence = Friend->GetPresence();
-		if(OnlineUserPresence.bIsPlaying) return EFriendPresenceStatus::IsPlaying;
-		if(OnlineUserPresence.bIsOnline) return EFriendPresenceStatus::IsOnline;
-		return EFriendPresenceStatus::IsOffline;
+		return PresenceStatus;
+	}
+
+	void UpdatePresence(const FOnlineUserPresence& OnlineUserPresence)
+	{
+		if(OnlineUserPresence.bIsPlayingThisGame) PresenceStatus = EFriendPresenceStatus::IsPlayingThisGame;
+		else if(OnlineUserPresence.bIsPlaying) PresenceStatus = EFriendPresenceStatus::IsPlaying;
+		else if(OnlineUserPresence.bIsOnline) PresenceStatus = EFriendPresenceStatus::IsOnline;
+		else PresenceStatus = EFriendPresenceStatus::IsOffline;
 	}
 	
 	void SetFriend(const TSharedRef<FOnlineFriend>& InOnlineFriend)
 	{
-		const bool bShouldBroadcast = Friend.IsValid(); // Broadcast if the friend was already set, meaning this is an update.
+		// Set FOnlineFriend reference
 		Friend = InOnlineFriend;
-		if(bShouldBroadcast) OnFriendDataUpdated.Broadcast();
+
+		// Set presence status
+		UpdatePresence(Friend->GetPresence());
 	}
 
 	void SetAvatar(const UTexture* AvatarTexture)
 	{
 		Avatar = AvatarTexture;
 	}
-	
-	UPROPERTY(BlueprintAssignable)
-	FOnFriendDataUpdated OnFriendDataUpdated;
 };
 
 
@@ -92,7 +97,7 @@ class MBCROSSPLAY_API UMBFriendsSubsystem : public UGameInstanceSubsystem
 	
 	DECLARE_MULTICAST_DELEGATE_OneParam(FOnCacheFriendListCompleteDelegate, bool bWasSuccessful)
 	DECLARE_MULTICAST_DELEGATE(FOnFriendListChangedDelegate)
-	DECLARE_MULTICAST_DELEGATE_OneParam(FOnFriendPresenceUpdatedDelegate, const FUniqueNetIdPtr& NetID)
+	DECLARE_MULTICAST_DELEGATE_OneParam(FOnFriendPresenceUpdatedDelegate, const FUniqueNetIdRepl& NetID)
 
 public:
 	FOnCacheFriendListCompleteDelegate OnCacheFriendListCompleteDelegate;
@@ -104,17 +109,17 @@ public:
 	UFUNCTION(BlueprintPure, meta = (WorldContext = "WorldContextObject"))
 	TArray<UFriend*> GetFriendList(const UObject* WorldContextObject);
 
-	UFUNCTION(BlueprintPure, meta = (WorldContext = "WorldContextObject"))
-	UFriend* GetFriend(const UObject* WorldContextObject, const FUniqueNetIdRef& NetID);
-
-	UFUNCTION(BlueprintPure, meta = (WorldContext = "WorldContextObject"))
-	void GetPresenceSortedFriendList(const UObject* WorldContextObject, TArray<UFriend*>& FriendsInGame, TArray<UFriend*>& FriendsOnline, TArray<UFriend*>& FriendsOffline);
+	UFUNCTION(BlueprintPure)
+	UFriend* GetFriend(const FUniqueNetIdRepl& NetID) const;
 
 	void CacheAvatar(const FUniqueNetIdPtr& NetID, UTexture* AvatarTexture);
 	UTexture* GetCachedAvatar(const FUniqueNetIdPtr& NetID);
 
 private:
 	void HandleCacheFriendListComplete(int32 LocalUserNum, bool bWasSuccessful, const FString& ListName, const FString& ErrorStr);
+
+	UPROPERTY() TArray<UFriend*> FriendList;
+	void SortFriendList();
 
 	FDelegateHandle OnFriendListChangeHandle;
 	void OnFriendListChange();
@@ -123,5 +128,5 @@ private:
 	UPROPERTY() TMap<FString, UTexture*> CachedAvatarList;
 
 	FDelegateHandle OnFriendPresenceUpdatedHandle;
-	void OnFriendPresenceUpdated(const FUniqueNetIdPtr& NetID);
+	void OnFriendPresenceUpdated(const FUniqueNetIdRepl& NetID, const TSharedRef<FOnlineUserPresence>& Presence);
 };

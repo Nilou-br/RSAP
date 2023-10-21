@@ -17,23 +17,14 @@ class MBCROSSPLAY_API UMBPresenceSubsystem : public UGameInstanceSubsystem
 	GENERATED_BODY()
 
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+	virtual void Deinitialize() override;
 
-	DECLARE_MULTICAST_DELEGATE_OneParam(FOnQueryPresenceCompleteDelegate, bool bWasSuccessful)
-	DECLARE_MULTICAST_DELEGATE_OneParam(FOnFriendUpdatedDelegate, const FUniqueNetIdPtr& NetID)
+	DECLARE_MULTICAST_DELEGATE_TwoParams(FOnFriendUpdatedDelegate, const FUniqueNetIdRepl& NetID, const TSharedRef<class FOnlineUserPresence>& Presence)
 
 public:
-	FOnQueryPresenceCompleteDelegate OnQueryPresenceCompleteDelegate;
 	FOnFriendUpdatedDelegate OnFriendUpdatedDelegate;
 
-	UFUNCTION(BlueprintCallable)
-	void QueryPresence();
-
 private:
-	void HandleQueryPresenceComplete(const FUniqueNetId& UserId, const bool bWasSuccessful);
-
 	FDelegateHandle OnPresenceReceivedHandle;
 	void OnPresenceReceived(const FUniqueNetId& UserID, const TSharedRef<class FOnlineUserPresence>& Presence);
-
-	FDelegateHandle OnPresenceArrayUpdatedHandle;
-	void OnPresenceArrayUpdated(const FUniqueNetId& UserID, const TArray<TSharedRef<FOnlineUserPresence>>& PresenceList);
 };

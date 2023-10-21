@@ -28,7 +28,7 @@ public:
 	FDelegateHandle OnFriendListChangedHandle;
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "Friends|Events")
-	void OnFriendPresenceUpdated(const FString& NetID);
+	void OnFriendPresenceUpdated(const FUniqueNetIdRepl& NetID);
 	FDelegateHandle OnFriendPresenceUpdatedHandle;
 
 private:

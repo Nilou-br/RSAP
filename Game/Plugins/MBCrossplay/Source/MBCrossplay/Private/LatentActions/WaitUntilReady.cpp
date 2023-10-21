@@ -50,31 +50,5 @@ void UWaitUntilReady::HandleCacheFriendListComplete(bool bWasSuccessful)
 {
 	UMBFriendsSubsystem* FriendsSubsystem = World->GetGameInstance()->GetSubsystem<UMBFriendsSubsystem>();
 	if (CacheFriendListDelegateHandle.IsValid() && FriendsSubsystem) FriendsSubsystem->OnCacheFriendListCompleteDelegate.Remove(CacheFriendListDelegateHandle);
-	
-	if(!bWasSuccessful)
-	{
-		OnComplete.Broadcast();
-		return;
-	}
-
-	OnComplete.Broadcast();
-	return;
-	
-	UMBPresenceSubsystem* PresenceSubsystem = World->GetGameInstance()->GetSubsystem<UMBPresenceSubsystem>();
-	if(!PresenceSubsystem)
-	{
-		OnComplete.Broadcast();
-		return;
-	}
-
-	QueryPresenceDelegateHandle = PresenceSubsystem->OnQueryPresenceCompleteDelegate.AddUObject(this, &ThisClass::HandleQueryPresenceComplete);
-	PresenceSubsystem->QueryPresence();
-}
-
-void UWaitUntilReady::HandleQueryPresenceComplete(bool bWasSuccessful)
-{
-	UMBPresenceSubsystem* PresenceSubsystem = World->GetGameInstance()->GetSubsystem<UMBPresenceSubsystem>();
-	if(QueryPresenceDelegateHandle.IsValid() && PresenceSubsystem) PresenceSubsystem->OnQueryPresenceCompleteDelegate.Remove(QueryPresenceDelegateHandle);
-	UE_LOG(LogTemp, Warning, TEXT("Query presence Complete !!!!!!!!!!!!"));
 	OnComplete.Broadcast();
 }
