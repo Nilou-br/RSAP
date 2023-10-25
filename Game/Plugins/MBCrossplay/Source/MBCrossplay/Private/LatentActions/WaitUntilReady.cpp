@@ -4,7 +4,9 @@
 #include "OnlineSubsystemUtils.h"
 #include "OnlineSubsystem.h"
 #include "Subsystems/MBFriendsSubsystem.h"
-#include "Subsystems/MBPresenceSubsystem.h"
+#include "Subsystems/MBLocalUserSubsystem.h"
+
+DEFINE_LOG_CATEGORY(LogWaitUntilReady);
 
 
 
@@ -20,7 +22,7 @@ void UWaitUntilReady::Activate()
 	Super::Activate();
 
 	const IOnlineSubsystem* OnlineSubsystem = Online::GetSubsystem(World);
-	IOnlineIdentityPtr IdentityInterface = OnlineSubsystem->GetIdentityInterface();
+	const IOnlineIdentityPtr IdentityInterface = OnlineSubsystem->GetIdentityInterface();
 	
 	LoginDelegateHandle = IdentityInterface->AddOnLoginCompleteDelegate_Handle(
             0,
@@ -41,14 +43,30 @@ void UWaitUntilReady::HandleLoginComplete(int32 LocalUserNum, bool bWasSuccessfu
 	
 	if (LoginDelegateHandle.IsValid()) IdentityInterface->ClearOnLoginCompleteDelegate_Handle(LocalUserNum, LoginDelegateHandle);
 
-	UMBFriendsSubsystem* FriendsSubsystem = World->GetGameInstance()->GetSubsystem<UMBFriendsSubsystem>();
-	CacheFriendListDelegateHandle = FriendsSubsystem->OnCacheFriendListCompleteDelegate.AddUObject(this, &ThisClass::HandleCacheFriendListComplete);
-	FriendsSubsystem->CacheFriendList();
-}
 
-void UWaitUntilReady::HandleCacheFriendListComplete(bool bWasSuccessful)
-{
+	// Cache both friends and the local user.
+	// Will broadcast only after both have completed.
+	UE_LOG(LogWaitUntilReady, Log, TEXT("Caching friend-list and local user..."))
+	
 	UMBFriendsSubsystem* FriendsSubsystem = World->GetGameInstance()->GetSubsystem<UMBFriendsSubsystem>();
-	if (CacheFriendListDelegateHandle.IsValid() && FriendsSubsystem) FriendsSubsystem->OnCacheFriendListCompleteDelegate.Remove(CacheFriendListDelegateHandle);
-	OnComplete.Broadcast();
+	CacheFriendListDelegateHandle = FriendsSubsystem->OnCacheFriendListCompleteDelegate.AddLambda([this, FriendsSubsystem](bool bWasSuccessful)
+	{
+		FriendsSubsystem->OnCacheFriendListCompleteDelegate.Remove(CacheFriendListDelegateHandle);
+		bCacheFriendListComplete = true;
+		if(bWasSuccessful) UE_LOG(LogWaitUntilReady, Log, TEXT("friend-list has been cached successfully."))
+		else UE_LOG(LogWaitUntilReady, Warning, TEXT("friend-list failed to cache."))
+		if(bCacheLocalUserComplete) OnComplete.Broadcast();
+	});
+	FriendsSubsystem->CacheFriendList(World);
+
+	UMBLocalUserSubsystem* LocalUserSubsystem = World->GetGameInstance()->GetSubsystem<UMBLocalUserSubsystem>();
+	CacheLocalUserDelegateHandle = LocalUserSubsystem->OnCacheLocalUserCompleteDelegate.AddLambda([this, LocalUserSubsystem](bool bWasSuccessful)
+	{
+		LocalUserSubsystem->OnCacheLocalUserCompleteDelegate.Remove(CacheLocalUserDelegateHandle);
+		bCacheLocalUserComplete = true;
+		if(bWasSuccessful) UE_LOG(LogWaitUntilReady, Log, TEXT("local-user has been cached successfully."))
+		else UE_LOG(LogWaitUntilReady, Warning, TEXT("local-user failed to cache."))
+		if(bCacheFriendListComplete) OnComplete.Broadcast();
+	});
+	LocalUserSubsystem->CacheLocalUser(World);
 }

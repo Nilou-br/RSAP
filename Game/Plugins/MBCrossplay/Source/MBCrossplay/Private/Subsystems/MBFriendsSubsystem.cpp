@@ -29,7 +29,7 @@ void UMBFriendsSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
-void UMBFriendsSubsystem::CacheFriendList()
+void UMBFriendsSubsystem::CacheFriendList(const UWorld* World)
 {
 	if(!IsValid(GetWorld()))
 	{
@@ -64,7 +64,10 @@ void UMBFriendsSubsystem::HandleCacheFriendListComplete(int32 LocalUserNum, bool
 	}
 
 	
-	// Cache all avatars first before broadcasting.
+	/* 
+	 * Cache all avatars before broadcasting.
+	*/
+	
 	UE_LOG(LogTemp, Warning, TEXT("Cache all avatars first before broadcasting....."));
 	
 	IOnlineSubsystem* OnlineSubsystem = Online::GetSubsystem(GetWorld());
@@ -97,7 +100,7 @@ void UMBFriendsSubsystem::HandleCacheFriendListComplete(int32 LocalUserNum, bool
 	CachedAvatarList.Empty();
 	TSharedPtr<int32> AmountLeftToFetch = MakeShareable(new int32(RawFriendList.Num()));
 	
-	// Schedule a timer to fire in 30 seconds
+	// Fallback for if something fails.
 	GetWorld()->GetTimerManager().SetTimer(
 		TimeoutHandle,
 		[this]()

@@ -6,6 +6,10 @@
 #include "Net/OnlineBlueprintCallProxyBase.h"
 #include "WaitUntilReady.generated.h"
 
+DECLARE_LOG_CATEGORY_EXTERN(LogWaitUntilReady, Log, All);
+
+
+
 /**
  * 
  */
@@ -27,11 +31,12 @@ public:
 
 private:
 	UPROPERTY() UWorld* World;
+	bool bCacheFriendListComplete = false;
+	bool bCacheLocalUserComplete = false;
 
 	FDelegateHandle LoginDelegateHandle;
 	void HandleLoginComplete(int32 LocalUserNum, bool bWasSuccessful, const FUniqueNetId& UserId, const FString& Error);
 	
 	FDelegateHandle CacheFriendListDelegateHandle;
-	void HandleCacheFriendListComplete(bool bWasSuccessful);
-	
+	FDelegateHandle CacheLocalUserDelegateHandle;
 };

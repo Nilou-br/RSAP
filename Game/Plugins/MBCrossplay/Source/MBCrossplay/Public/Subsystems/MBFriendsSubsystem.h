@@ -104,7 +104,7 @@ public:
 	FOnFriendListChangedDelegate OnFriendListChangedDelegate;
 	FOnFriendPresenceUpdatedDelegate OnFriendPresenceUpdatedDelegate;
 	
-	void CacheFriendList();
+	void CacheFriendList(const UWorld* World);
 	
 	UFUNCTION(BlueprintPure, meta = (WorldContext = "WorldContextObject"))
 	TArray<UFriend*> GetFriendList(const UObject* WorldContextObject);
