@@ -3,16 +3,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Types.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "WorldNavigationSubsystem.generated.h"
 
+class UVoxelGridGenerator;
 
-
-struct FVoxel
-{
-	FVector VoxelExtent;
-	FVector VoxelCenter;
-};
 
 
 /**
@@ -26,9 +22,8 @@ class MBNAVIGATION_API UWorldNavigationSubsystem : public UWorldSubsystem
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
 
-	void StartGeneration(const FActorsInitializedParams& ActorsInitializedParams);
-	void CreateLevelBoundaries(const float InVoxelSize);
-	void CreateVoxelGrid();
+	FDelegateHandle OnWorldInitializedActorsHandle;
+	void OnWorldActorsInitialized(const FActorsInitializedParams& ActorsInitializedParams);
 
 public:
 	void ShowBoundaries();
@@ -40,7 +35,9 @@ public:
 	bool InDebugRange(const FVector& Location);
 
 private:
-	FDelegateHandle OnWorldInitializedActorsHandle;
+	UPROPERTY()
+	UVoxelGridGenerator* VoxelGridGenerator;
+	
 	FBox LevelBoundaries;
 	float VoxelSize;
 	float DebugDistance = 500.f;
