@@ -1,0 +1,41 @@
+Generation:
+
+	Variables:
+
+		DefaultDepth: Integer deciding what the MaximumDepth should be for the whole octree outside of the players LOD distance. ( Limit this variable to some extent. )
+		MaxDepth: Maximum depth for the octree, the highest resolution layer will be generated close to the player. ( Also limit this variable to some extent. )
+		LODs: Lowest LOD is the DefaultDepth, highest is the MaximumDepth. Determines the depth of close voxels.
+		MinVoxelSize: Unsigned long long, Size of the voxel at the MaxDepth. Could also used to calculate size of the chunks.
+		CollisionBoxes: list of collision-boxes (FCollisionShape::MakeBox), one for each layer in the SVO, that will be used to check if a given node is occluded.
+
+	Instruction:
+
+		Generate chunks starting from 0,0,0; size of the chunk should hold the MinVoxelSize a certain number of times. Find a sweet spot for the chunk size, not too small.
+		Store the chunks in a TMap so we can find them by their coordinates. Find a specific chunk by (player-location / chunk-size) - chunk-extent? ( Find out how to get specific chunk).
+		Create a list of collision-boxes (FCollisionShape::MakeBox), one for each layer in the SVO, that will be used to check if a given node is occluded.
+
+
+		For each chunk:
+			
+			Get the total amount of nodes a given layer could have.
+
+
+			For each node:
+				
+				Check if the node is occluded using 'OverlapBlockingTestByChannel' with the collision-box for that layer.
+
+
+
+
+Dynamic updates:
+	
+	Info:
+		
+		The player and Dynamic Objects have a certain radius around them which makes the nodes within that radius higher resolution.
+
+		Nodes store pointers instead of variables to neighbours (maybe also to children and parent).
+		This does increase memory usage, but because only the nodes around dynamic objects are of higher resolution, and the rest of the SVO is lower resolution, it won't be a big impact
+ 		unless there are a lot of dynamic objects. A normal link node would be 40 bytes, compared to 72 bytes when using pointers ( on 64 bit OS ).
+
+		Dynamic objects will use their bounding box as affected area. When they move, they will notify the WorldNavigationSubsystem, which will use another class to update everything in batches every so often.
+		How often it updates will depend on how far away the chunk is from the player (chunk where affected nodes it exists in, could be multiple chunks at once).

@@ -1,0 +1,82 @@
+https://trdwll.com/blog/some-simple-optimizations-unreal-engine/
+
+
+
+TArray.Reserve(size):
+
+This will reserve memory for the array in advance. Do this before modifying an array to prevent allocations in a loop etc.
+When adding elements to a container in a loop, performances can be impacted because of multiple heap allocations to resize the container.
+Also, do this on temporary allocations (see the second example). (if you allocate an array in a method and then return that array later or need to do something specific to the results)
+
+
+
+TArray.Emplace(type):
+
+By using Emplace over Add you don't create a copy of the type. Really only use emplace on types larger than 8 bytes or rather don't use it on things like ints.
+Add (or Push) will copy (or move) an instance of the element type into the array. 
+Emplace will use the arguments you give it to construct a new instance of the element type.
+
+
+
+Range-based for loops:
+
+By using range-based for loops you can drop an allocation from the int32 i = 0; ... and it also makes your code a bit cleaner
+
+
+
+Pass by reference:
+
+Passing by reference you don't copy said member which doesn't do another allocation of the type.
+Don't pass normal types (int/float/bool) by reference as that actually can slow down performance.
+Instead of copying an array or any other type TArray<uint8> GetMyArray() const { return MyArray; } return it as a const reference like const TArray<uint8>& GetMyArray() const { return MyArray; } (You can expose this to BP btw)
+
+
+
+Smaller types:
+
+Use smaller types like uint8 or uint16 when possible. Sure, uint16 isn't exposed to Blueprint, so that really limits you however, you may not need to expose that to BP.
+I only pass by value if the type is < 8 bytes
+
+
+
+Tick:
+
+Disable tick on actors that don't need ticking.
+Add PrimaryActorTick.bCanEverTick = false; to the constructor of the Actor class.
+Tick is much more performance in C++ than in BP, but you still shouldn't tick actors that don't need ticking.
+
+
+
+UMG:
+
+Avoid using the bindings as they're essentially Tick with a pretty name. Instead, use delegates to update and maintain your UI
+
+
+
+FVector_NetQuantize:
+Use these when you don't need a very precise Vector and if it's needing to be sent over the net - otherwise just use FVector.
+
+
+
+Structs:
+
+Instead of passing a ton of variables sometimes, it's better to package them into a struct to send over the net.
+
+
+
+DOREPLIFETIME_CONDITION:
+
+Set members replication condition as necessary.
+Sometimes you don't have to replicate something, so always check if you actually have to.
+
+
+
+
+Overlap Events:
+
+Disable these if you don't need them on an actor.
+SetGenerateOverlapEvents
+
+
+
+When performing an RPC call in a method do checks before doing an RPC call to have an early out if certain conditions aren't met
