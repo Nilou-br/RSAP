@@ -26,8 +26,9 @@ struct FOctree
 
 struct FChunk
 {
-	FVector Location;
+	FVector Location; // todo morton code
 
+	// Max 16 deep
 	uint8 StaticDepth: 4;
 	uint8 DynamicDepth: 4;
 
@@ -36,18 +37,37 @@ struct FChunk
 
 	FChunk()
 	{
-		StaticDepth = 4;
-		DynamicDepth = 6;
+		StaticDepth = 6;
+		DynamicDepth = 8;
 	}
 };
 
-// The navigation-mesh is a hashmap of chunks, each holding their own SVO.
-typedef TMap<FString, FChunk> FNavMesh;
+// The navigation-mesh is a hashmap of chunks, each being a SVO.
+typedef TSharedPtr<TMap<FString, FChunk>> FNavMesh;
 
 
 
 struct FNavMeshSettings
 {
-	float SmallestVoxelSize = 4.f;
-	float ChunkSize = 1600.f;
+	uint8 StaticDepth: 4;
+	uint8 DynamicDepth: 4;
+	
+	float SmallestVoxelSize;
+	float ChunkSize;
+
+	FNavMeshSettings()
+	{
+		StaticDepth = 6;
+		DynamicDepth = 8;
+		SmallestVoxelSize = 4.f;
+		ChunkSize = 1024.f;
+	}
+
+	FNavMeshSettings(const uint8 InStaticDepth, const uint8 InDynamicDepth, const float InSmallestVoxelSize, const float InChunkSize)
+	{
+		StaticDepth = InStaticDepth;
+		DynamicDepth = InDynamicDepth;
+		SmallestVoxelSize = InSmallestVoxelSize;
+		ChunkSize = InChunkSize;
+	}
 };

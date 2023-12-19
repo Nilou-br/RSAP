@@ -10,10 +10,7 @@
 void UWorldNavigationManager::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
-
-	NavMeshGenerator = NewObject<UNavMeshGenerator>(this);
-	NavMeshGenerator->Initialize(GetWorld(), FNavMeshSettings(4, 3200));
-
+	
 	NavMeshUpdater = NewObject<UNavMeshUpdater>(this);
 	NavMeshUpdater->Initialize(GetWorld());
 	
@@ -31,9 +28,15 @@ void UWorldNavigationManager::OnWorldActorsInitialized(const FActorsInitializedP
 {
 	if(OnWorldInitializedActorsHandle.IsValid()) FWorldDelegates::OnWorldInitializedActors.Remove(OnWorldInitializedActorsHandle);
 
-	
-	// Create a bounding-box around the entire level, encompassing all meshes.
-	
+	// todo maybe update navmesh for dynamic objects
+}
+
+/**
+ * Creates a bounding-box around the entire level, encompassing all meshes.
+ * Returns a FBox representing the bounding-box.
+ */
+FBox UWorldNavigationManager::GetLevelBoundaries() const
+{
 	FVector LevelMin = FVector();
 	FVector LevelMax = FVector();
 	TArray<AActor*> FoundActors;
@@ -52,5 +55,6 @@ void UWorldNavigationManager::OnWorldActorsInitialized(const FActorsInitializedP
 		LevelMin = LevelMin.ComponentMin(ActorBox.Min);
 		LevelMax = LevelMax.ComponentMax(ActorBox.Max);
 	}
-	LevelBoundaries = FBox(LevelMin, LevelMax);
+	
+	return FBox(LevelMin, LevelMax);
 }

@@ -1,34 +1,47 @@
-﻿#include "NavMeshUtilityWidget.h"
+﻿// Copyright Melvin Brink 2023. All Rights Reserved.
+
+#include "NavMeshUtilityWidget.h"
 #include "NavMeshTypes.h"
 #include "WorldNavigationManager.h"
 #include "Generation/NavMeshGenerator.h"
 
 
 
-void UNavMeshEditorUtilityWidget::GenerateNavMesh()
+void UNavMeshEditorUtilityWidget::GenerateNavMesh(uint8 StaticDepth, uint8 DynamicDepth, const float SmallestVoxelSize, const float ChunkSize)
 {
-	// Initialize the generator
-	constexpr FNavMeshSettings NavMeshSettings(4, 3200);
-	UNavMeshGenerator* NavMeshGenerator = NewObject<UNavMeshGenerator>(this);
-	NavMeshGenerator->Initialize(GetWorld(), NavMeshSettings);
+	UWorld* EditorWorld = GEditor->GetEditorWorldContext().World();
+	if(!EditorWorld) return;
 
-	// Get level-boundaries from WorldNavigationManager (subsystem)
-	const UWorldNavigationManager* WorldNavigationManager = GetWorld()->GetSubsystem<UWorldNavigationManager>();
-	if(!WorldNavigationManager)
-	{
-		UE_LOG(LogProcess, Error, TEXT("No WorldNavigationSubsystem found. Generation cannot start without it."))
-		return;
-	}
-	const FBox LevelBoundaries = WorldNavigationManager->GetLevelBoundaries();
+	const UWorldNavigationManager* WorldNavManager = EditorWorld->GetSubsystem<UWorldNavigationManager>(EditorWorld);
+	if(!WorldNavManager) return;
+
+	UNavMeshGenerator* NavMeshGenerator = NewObject<UNavMeshGenerator>();
+	if(!NavMeshGenerator) return;
+
+	// Init generator
+	const FNavMeshSettings NavMeshSettings(StaticDepth, DynamicDepth, SmallestVoxelSize, ChunkSize);
+	NavMeshGenerator->Initialize(EditorWorld, NavMeshSettings);
+
+	// Start generation
+	const FNavMesh NavMesh = NavMeshGenerator->Generate(WorldNavManager->GetLevelBoundaries());
 	
-	// Generate the navmesh with the level-boundaries.
-	FNavMesh NavMesh = NavMeshGenerator->Generate(LevelBoundaries);
 
-	// Display chunks
+	// Debug visualization
+	FlushPersistentDebugLines(EditorWorld);
 	TArray<FChunk> Chunks;
-	NavMesh.GenerateValueArray(Chunks);
-	for (FChunk Chunk : Chunks)
+	NavMesh->GenerateValueArray(Chunks);
+	for (FChunk Chunk: Chunks)
 	{
-		DrawDebugBox(GetWorld(), Chunk.Location, FVector(3200/2), FColor::Yellow, true);
+		DrawDebugBox(EditorWorld, Chunk.Location, FVector(ChunkSize/2), FColor::Orange, true);
 	}
+}
+
+/*
+ * Simple helper method for displaying a readable value for the chunk-size.
+ */
+FString UNavMeshEditorUtilityWidget::GetChunkSizeString(const float ChunkSize)
+{
+	if (ChunkSize < 100) return FString::Printf(TEXT("%.2f cm"), ChunkSize);
+	if (ChunkSize < 100000) return FString::Printf(TEXT("%.2f m"), ChunkSize / 100.0f);
+	return FString::Printf(TEXT("%.2f km"), ChunkSize / 100000.0f);
 }

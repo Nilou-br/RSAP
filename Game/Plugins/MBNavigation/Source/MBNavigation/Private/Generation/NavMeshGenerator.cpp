@@ -1,13 +1,17 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #include "Generation/NavMeshGenerator.h"
-#include "Kismet/GameplayStatics.h"
-#include "Engine/StaticMeshActor.h"
-#include "Components/LineBatchComponent.h"
+#include <chrono>
 
 DEFINE_LOG_CATEGORY(LogNavMeshGenerator)
 
 
+
+void UNavMeshGenerator::Initialize(UWorld* InWorld, const FNavMeshSettings InSettings)
+{
+	World = InWorld;
+	Settings = InSettings;
+}
 
 FNavMesh UNavMeshGenerator::Generate(const FBox &LevelBoundaries)
 {
@@ -16,9 +20,11 @@ FNavMesh UNavMeshGenerator::Generate(const FBox &LevelBoundaries)
 		UE_LOG(LogNavMeshGenerator, Error, TEXT("Invalid 'UWorld' instance. Make sure you call the initialize method first with a valid UWorld instance."))
 		return FNavMesh();
 	}
-	
-	FNavMesh NavMesh = GenerateChunks(LevelBoundaries);
 
+	NavMesh = MakeShared<TMap<FString, FChunk>>();
+	GenerateChunks(LevelBoundaries);
+	Rasterize();
+	
 	return NavMesh;
 }
 
@@ -26,7 +32,7 @@ FNavMesh UNavMeshGenerator::Generate(const FBox &LevelBoundaries)
  * Create a grid of chunks filling the entire area of the level-boundaries.
  * Chunks are be placed so that their center-point align with the world coordinates 0,0,0.
  */
-FNavMesh UNavMeshGenerator::GenerateChunks(const FBox &LevelBoundaries)
+void UNavMeshGenerator::GenerateChunks(const FBox &LevelBoundaries)
 {
 	const float ChunkSize = Settings.ChunkSize;
 	const FVector LevelMin = LevelBoundaries.Min;
@@ -59,9 +65,7 @@ FNavMesh UNavMeshGenerator::GenerateChunks(const FBox &LevelBoundaries)
 	ChunksMaxLoc += RefChunkOrigin;
 
 
-	// Initialize the nav-mesh and fill it with chunks using these coordinates.
-	
-	FNavMesh NavigationMesh;
+	// Fill the navigation-mesh with chunks using these coordinates.
 	for (float x = ChunksMinLoc.X; x < ChunksMaxLoc.X; x += ChunkSize) {
 		for (float y = ChunksMinLoc.Y; y < ChunksMaxLoc.Y; y += ChunkSize) {
 			for (float z = ChunksMinLoc.Z; z < ChunksMaxLoc.Z; z += ChunkSize)
@@ -69,9 +73,35 @@ FNavMesh UNavMeshGenerator::GenerateChunks(const FBox &LevelBoundaries)
 				FChunk Chunk;
 				Chunk.Location = FVector(x, y, z) + FVector(ChunkHalveWidth); // Location is at the chunk's center.
 				FString Key = Chunk.Location.ToString();
-				NavigationMesh.Add(Key, Chunk);
+				NavMesh->Add(Key, Chunk);
 			}
 		}
 	}
-	return NavigationMesh;
+}
+
+/**
+ * Rasterizes the navigation-mesh, filling the chunks with FOctreeNode's.
+ */
+void UNavMeshGenerator::Rasterize()
+{
+	const uint64 ChunkSize = Settings.ChunkSize;
+	
+#if WITH_EDITOR
+	const auto StartTime = std::chrono::high_resolution_clock::now();
+#endif
+
+	
+	for (int x = 0; x < ChunkSize; ++x) {
+		for (int y = 0; y < ChunkSize; ++y) {
+			for (int z = 0; z < ChunkSize; ++z) {
+				uint8 Test = 2*2;
+			}
+		}
+	}
+	
+#if WITH_EDITOR
+	const float Duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - StartTime).count() / 1000.0f;
+	UE_LOG(LogNavMeshGenerator, Log, TEXT("Generation took : %f seconds"), Duration);
+#endif
+
 }

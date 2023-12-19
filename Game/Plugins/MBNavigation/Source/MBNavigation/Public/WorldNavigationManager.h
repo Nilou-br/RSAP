@@ -26,17 +26,13 @@ class MBNAVIGATION_API UWorldNavigationManager : public UWorldSubsystem
 
 	FDelegateHandle OnWorldInitializedActorsHandle;
 	void OnWorldActorsInitialized(const FActorsInitializedParams& ActorsInitializedParams);
-	
-	UPROPERTY() UNavMeshGenerator* NavMeshGenerator;
+
+	FNavMesh NavMesh;
 	UPROPERTY() UNavMeshUpdater* NavMeshUpdater;
-	
-	FBox LevelBoundaries; // Used for generating the nav-mesh.
 	
 	float VoxelSize;
 	float DebugDistance = 500.f;
 
-	FNavMesh NavMesh;
-
 public:
-	FORCEINLINE FBox GetLevelBoundaries() const { return LevelBoundaries; }
+	FBox GetLevelBoundaries() const;
 };
