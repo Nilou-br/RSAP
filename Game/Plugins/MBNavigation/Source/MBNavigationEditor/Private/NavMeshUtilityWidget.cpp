@@ -7,7 +7,7 @@
 
 
 
-void UNavMeshEditorUtilityWidget::GenerateNavMesh(uint8 StaticDepth, uint8 DynamicDepth, const float SmallestVoxelSize, const float ChunkSize)
+void UNavMeshEditorUtilityWidget::GenerateNavMesh(const float ChunkSizeFloat, const float StaticDepthFloat, const float DynamicDepthFloat)
 {
 	UWorld* EditorWorld = GEditor->GetEditorWorldContext().World();
 	if(!EditorWorld) return;
@@ -18,8 +18,14 @@ void UNavMeshEditorUtilityWidget::GenerateNavMesh(uint8 StaticDepth, uint8 Dynam
 	UNavMeshGenerator* NavMeshGenerator = NewObject<UNavMeshGenerator>();
 	if(!NavMeshGenerator) return;
 
+
+	// Cast floats to desired type
+	const uint32 ChunkSize = static_cast<uint32>(FMath::Clamp(ChunkSizeFloat, 8.0f, 262144.0f));
+	const uint8 StaticDepth = static_cast<uint8>(FMath::Clamp(StaticDepthFloat, 1.0f, 255.0f));
+	const uint8 DynamicDepth = static_cast<uint8>(FMath::Clamp(DynamicDepthFloat, 1.0f, 255.0f));
+
 	// Init generator
-	const FNavMeshSettings NavMeshSettings(StaticDepth, DynamicDepth, SmallestVoxelSize, ChunkSize);
+	const FNavMeshSettings NavMeshSettings(ChunkSize, StaticDepth, DynamicDepth);
 	NavMeshGenerator->Initialize(EditorWorld, NavMeshSettings);
 
 	// Start generation
@@ -39,9 +45,9 @@ void UNavMeshEditorUtilityWidget::GenerateNavMesh(uint8 StaticDepth, uint8 Dynam
 /*
  * Simple helper method for displaying a readable value for the chunk-size.
  */
-FString UNavMeshEditorUtilityWidget::GetChunkSizeString(const float ChunkSize)
+FString UNavMeshEditorUtilityWidget::GetChunkSizeString(const int32 ChunkSize)
 {
-	if (ChunkSize < 100) return FString::Printf(TEXT("%.2f cm"), ChunkSize);
-	if (ChunkSize < 100000) return FString::Printf(TEXT("%.2f m"), ChunkSize / 100.0f);
-	return FString::Printf(TEXT("%.2f km"), ChunkSize / 100000.0f);
+	if (ChunkSize < 100) return FString::Printf(TEXT("%i cm"), ChunkSize);
+	if (ChunkSize < 100000) return FString::Printf(TEXT("%.2f m"), FMath::RoundToFloat(ChunkSize / 100.0f * 100.0f) / 100.0f);
+	return FString::Printf(TEXT("%.2f km"), FMath::RoundToFloat(ChunkSize / 100000.0f * 100.0f) / 100.0f);
 }

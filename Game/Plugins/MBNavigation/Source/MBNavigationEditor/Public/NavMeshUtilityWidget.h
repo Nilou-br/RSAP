@@ -14,8 +14,8 @@ class UNavMeshEditorUtilityWidget : public UEditorUtilityWidget
 
 protected:
 	UFUNCTION(BlueprintCallable)
-	void GenerateNavMesh(uint8 StaticDepth, uint8 DynamicDepth, const float SmallestVoxelSize, const float ChunkSize);
+	void GenerateNavMesh(const float ChunkSizeFloat, const float StaticDepthFloat, const float DynamicDepthFloat);
 
 	UFUNCTION(BlueprintCallable)
-	FString GetChunkSizeString(const float ChunkSize);
+	FString GetChunkSizeString(const int32 ChunkSize);
 };

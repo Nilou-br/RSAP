@@ -22,8 +22,8 @@ FNavMesh UNavMeshGenerator::Generate(const FBox &LevelBoundaries)
 	}
 
 	NavMesh = MakeShared<TMap<FString, FChunk>>();
+	
 	GenerateChunks(LevelBoundaries);
-	Rasterize();
 	
 	return NavMesh;
 }
@@ -34,18 +34,16 @@ FNavMesh UNavMeshGenerator::Generate(const FBox &LevelBoundaries)
  */
 void UNavMeshGenerator::GenerateChunks(const FBox &LevelBoundaries)
 {
-	const float ChunkSize = Settings.ChunkSize;
+	const uint32 ChunkSize = Settings.ChunkSize;
+	const int32 ChunkHalveWidth = ChunkSize/2;
 	const FVector LevelMin = LevelBoundaries.Min;
 	const FVector LevelMax = LevelBoundaries.Max;
 	
-	const float ChunkHalveWidth = ChunkSize/2;
-	const FVector ChunkExtent = FVector(ChunkSize);
-
 	
 	// Determine the min/max coordinates of the chunks.
 
 	// Reference chunk's negative most corner
-	FVector RefChunkOrigin = FVector(-ChunkHalveWidth, -ChunkHalveWidth, -ChunkHalveWidth);
+	const FVector RefChunkOrigin = FVector(-ChunkHalveWidth, -ChunkHalveWidth, -ChunkHalveWidth);
 
 	// Adjust the boundaries to align with the reference chunk
 	FVector ChunksMinLoc = LevelMin - RefChunkOrigin;
@@ -66,9 +64,9 @@ void UNavMeshGenerator::GenerateChunks(const FBox &LevelBoundaries)
 
 
 	// Fill the navigation-mesh with chunks using these coordinates.
-	for (float x = ChunksMinLoc.X; x < ChunksMaxLoc.X; x += ChunkSize) {
-		for (float y = ChunksMinLoc.Y; y < ChunksMaxLoc.Y; y += ChunkSize) {
-			for (float z = ChunksMinLoc.Z; z < ChunksMaxLoc.Z; z += ChunkSize)
+	for (int x = ChunksMinLoc.X; x < ChunksMaxLoc.X; x += ChunkSize) {
+		for (int y = ChunksMinLoc.Y; y < ChunksMaxLoc.Y; y += ChunkSize) {
+			for (int z = ChunksMinLoc.Z; z < ChunksMaxLoc.Z; z += ChunkSize)
 			{
 				FChunk Chunk;
 				Chunk.Location = FVector(x, y, z) + FVector(ChunkHalveWidth); // Location is at the chunk's center.
@@ -91,13 +89,13 @@ void UNavMeshGenerator::Rasterize()
 #endif
 
 	
-	for (int x = 0; x < ChunkSize; ++x) {
-		for (int y = 0; y < ChunkSize; ++y) {
-			for (int z = 0; z < ChunkSize; ++z) {
-				uint8 Test = 2*2;
-			}
-		}
-	}
+	// for (int x = 0; x < ChunkSize; ++x) {
+	// 	for (int y = 0; y < ChunkSize; ++y) {
+	// 		for (int z = 0; z < ChunkSize; ++z) {
+	// 			uint8 Test = 2*2;
+	// 		}
+	// 	}
+	// }
 	
 #if WITH_EDITOR
 	const float Duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - StartTime).count() / 1000.0f;

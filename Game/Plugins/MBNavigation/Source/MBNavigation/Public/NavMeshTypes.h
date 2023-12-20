@@ -49,25 +49,21 @@ typedef TSharedPtr<TMap<FString, FChunk>> FNavMesh;
 
 struct FNavMeshSettings
 {
+	uint32 ChunkSize;
 	uint8 StaticDepth: 4;
 	uint8 DynamicDepth: 4;
-	
-	float SmallestVoxelSize;
-	float ChunkSize;
 
 	FNavMeshSettings()
 	{
+		ChunkSize = 1024.f;
 		StaticDepth = 6;
 		DynamicDepth = 8;
-		SmallestVoxelSize = 4.f;
-		ChunkSize = 1024.f;
 	}
 
-	FNavMeshSettings(const uint8 InStaticDepth, const uint8 InDynamicDepth, const float InSmallestVoxelSize, const float InChunkSize)
+	FNavMeshSettings(const uint32 InChunkSize, const uint8 InStaticDepth, const uint8 InDynamicDepth)
 	{
+		ChunkSize = InChunkSize;
 		StaticDepth = InStaticDepth;
 		DynamicDepth = InDynamicDepth;
-		SmallestVoxelSize = InSmallestVoxelSize;
-		ChunkSize = InChunkSize;
 	}
 };
