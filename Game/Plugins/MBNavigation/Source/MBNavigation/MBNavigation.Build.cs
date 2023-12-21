@@ -1,5 +1,6 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
+using System.IO;
 using UnrealBuildTool;
 
 public class MBNavigation : ModuleRules
@@ -14,7 +15,7 @@ public class MBNavigation : ModuleRules
 				"Core",
 				// ... add other public dependencies that you statically link with here ...
 			}
-			);
+		);
 			
 		
 		PrivateDependencyModuleNames.AddRange(
@@ -27,6 +28,12 @@ public class MBNavigation : ModuleRules
 				"UnrealEd"
 				// ... add private dependencies that you statically link with here ...	
 			}
-			);
+		);
+		
+		PublicIncludePaths.AddRange(
+			new string[] {
+				Path.Combine(ModuleDirectory, "ThirdParty/LibMorton")
+			}
+		);
 	}
 }

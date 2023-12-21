@@ -20,9 +20,9 @@ void UNavMeshEditorUtilityWidget::GenerateNavMesh(const float ChunkSizeFloat, co
 
 
 	// Cast floats to desired type
-	const uint32 ChunkSize = static_cast<uint32>(FMath::Clamp(ChunkSizeFloat, 8.0f, 262144.0f));
-	const uint8 StaticDepth = static_cast<uint8>(FMath::Clamp(StaticDepthFloat, 1.0f, 255.0f));
-	const uint8 DynamicDepth = static_cast<uint8>(FMath::Clamp(DynamicDepthFloat, 1.0f, 255.0f));
+	const uint32 ChunkSize = static_cast<uint32>(FMath::Clamp(ChunkSizeFloat, 64.0f, 262144.0f));
+	const uint8 StaticDepth = static_cast<uint8>(FMath::Clamp(StaticDepthFloat, 4.0f, 16.0f));
+	const uint8 DynamicDepth = static_cast<uint8>(FMath::Clamp(DynamicDepthFloat, 4.0f, 16.0f));
 
 	// Init generator
 	const FNavMeshSettings NavMeshSettings(ChunkSize, StaticDepth, DynamicDepth);
@@ -38,7 +38,14 @@ void UNavMeshEditorUtilityWidget::GenerateNavMesh(const float ChunkSizeFloat, co
 	NavMesh->GenerateValueArray(Chunks);
 	for (FChunk Chunk: Chunks)
 	{
-		DrawDebugBox(EditorWorld, Chunk.Location, FVector(ChunkSize/2), FColor::Orange, true);
+		const uint8 TotalLayers = Chunk.Layers.Num();
+		for(uint8 LayerIndex = 0; LayerIndex < TotalLayers; ++LayerIndex)
+		{
+			for(auto const Node : Chunk.Layers[LayerIndex])
+			{
+				DrawDebugBox(EditorWorld, FVector(Node.Location.X, Node.Location.Y, Node.Location.Z), FVector(10), FColor::Orange, true);
+			}
+		}
 	}
 }
 

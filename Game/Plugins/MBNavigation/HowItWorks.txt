@@ -11,20 +11,28 @@ Generation:
 
 	Instruction:
 
-		Generate chunks starting from 0,0,0; size of the chunk should hold the MinVoxelSize a certain number of times. Chunks should be around half the size of the max sound range, 3x3x3 chunks around the player.
+		Generate chunks in such a way so that their centers align with world-coordinate 0,0,0; So that there exists a chunk encompassing the world-center ( if there are any objects placed there which is likely ).
+		( chunk-size should be so that a grid of 3x3x3 chunks around the player will cover the whole distance. Or some other better value. )
+
+		Chunks ( or the FOctree ) will have a local-coordinate starting from its negative most corner which is used to know the location of children inside the octree.
+		Child nodes will have their morton-code generated relative from this chunk's local-coordinate.
+
+		Child nodes are recursively generated starting from the corner closest to the root's local coordinate, and inserted into the layers array in morton-code order.
+		Recursive method should be run in such a way so that every node insertion into a layer will be in perfect morton-code order.
+
 		Store the chunks in a TMap so we can find them by their coordinates. Find a specific chunk by (player-location / chunk-size) - chunk-extent? ( Find out how to get specific chunk).
 		Create a list of collision-boxes (FCollisionShape::MakeBox), one for each layer in the SVO, that will be used to check if a given node is occluded.
 
 
 		For each chunk:
 			
-			Either 1: Get the total amount of nodes a given layer could have.
-			Or 2: Recursively go through each chunk's layer and subdivide the nodes that occlude a mesh.
+ 			Start at the root node:
+			Call a recursive method that checks the passed in node if it occludes anything using 'OverlapBlockingTestByChannel' with the correct 'voxel-size' from the VoxelSizes array for that layer.
 
+			If the node occludes anything:
+			Subdivide into 8 children and use the same recursive method on each child; Repeat until max-depth is reached which simply returns directly at the start of the recursive method.	
 
-			For each node:
-				
-				Check if the node is occluded using 'OverlapBlockingTestByChannel' with the collision-box for that layer.
+			
 
 
 

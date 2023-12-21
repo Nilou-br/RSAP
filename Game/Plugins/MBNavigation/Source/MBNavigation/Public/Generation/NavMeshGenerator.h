@@ -21,12 +21,21 @@ public:
 
 private:
 
-	// Methods used for generation
+	// Pre-generation methods
+	void CalculateNodeSizes();
+
+	// Generation methods
 	void GenerateChunks(const FBox &LevelBoundaries);
-	void Rasterize();
-	
+	void RasterizeChunks();
+	void RasterizeNode(FChunk &Chunk, FOctreeNode &ParentNode, const FNodeCoordinate &NodeLocation, const uint8 CurrentDepth);
+
+	// Variables set during initialization
 	UPROPERTY() UWorld* World;
-	
-	FNavMesh NavMesh;
 	FNavMeshSettings Settings;
+
+	// Variables used during generation
+	FNavMesh NavMesh;
+	TArray<int32> NodeSizes;
+	TArray<int32> NodeHalveSizes;
+	TArray<int32> NodeQuarterSizes;
 };
