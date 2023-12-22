@@ -6,84 +6,67 @@
 
 
 
-struct FOctreeLeaf
-{
-	uint_fast64_t SubNodes = 0;
-};
-
 /**
  * Used to represent the location of a node within a chunk's local-space.
- * Used during generation and not stored on FOctreeNodes.
+ * A chunk's local-space will be in its negative-most corner meaning that all node coords are positive,
+ * which is computationally faster and required for morton-codes.
  */
-struct FNodeCoordinate
+struct FOctreeLocalCoordinate
 {
 	uint_fast32_t X;
 	uint_fast32_t Y;
 	uint_fast32_t Z;
 
-	FNodeCoordinate operator+(const uint_fast32_t Value) const
+	FORCEINLINE FOctreeLocalCoordinate operator+(const uint_fast32_t Value) const
 	{
-		return FNodeCoordinate(X + Value, Y + Value, Z + Value);
+		return FOctreeLocalCoordinate(X + Value, Y + Value, Z + Value);
 	}
 
-	explicit FNodeCoordinate(const uint32 InX, const uint32 InY, const uint32 InZ)
+	explicit FOctreeLocalCoordinate(const uint32 InX, const uint32 InY, const uint32 InZ)
 	{
 		X = InX;
 		Y = InY;
 		Z = InZ;
 	}
-};
 
-struct FOctreeNode
-{
-	uint_fast64_t MortonCode;
-	FNodeCoordinate Location;
-	
-	FOctreeNode* Parent;
-	FOctreeNode* FirstChild;
-	FOctreeNode* Neighbours[6];
-
-	FOctreeNode(uint_fast32_t X, uint_fast32_t Y, uint_fast32_t Z)
-		: MortonCode(0), Parent(nullptr), FirstChild(nullptr), Neighbours{}, Location(X, Y, Z) // todo remove location
-	{
-		libmorton::morton3D_64_decode(MortonCode, X, Y, Z);
-	}
-	
-	FOctreeNode(uint_fast32_t X, uint_fast32_t Y, uint_fast32_t Z, FOctreeNode* ParentNode)
-		: MortonCode(0), Parent(ParentNode), FirstChild(nullptr), Neighbours{}, Location(X, Y, Z) // todo remove location
-	{
-		libmorton::morton3D_64_decode(MortonCode, X, Y, Z);
-	}
+	FOctreeLocalCoordinate()
+		:X(0), Y(0), Z(0)
+	{}
 };
 
 /**
- * Coordinates for chunks/nodes within a NavMesh will never have decimal-points.
- * Meaning that I can use integers instead which is more compatible with Morton-Codes and require less computation.
+ * Coordinates used for chunks or nodes that exist in global-space which don't need floating point precision.
+ * All chunks are located and sized by a multiple of 2.
  */
-struct FChunkCoordinate
+struct FOctreeGlobalCoordinate
 {
-	uint_fast64_t X;
-	uint_fast64_t Y;
-	uint_fast64_t Z;
+	int_fast64_t X;
+	int_fast64_t Y;
+	int_fast64_t Z;
 	
 	FORCEINLINE FString ToKey() const
 	{
 		return FString::Printf(TEXT("X=%lluY=%lluYZ=%lluY"), X, Y, Z);
 	}
 
-	FChunkCoordinate operator+(const uint_fast64_t Value) const
+	FORCEINLINE FOctreeGlobalCoordinate operator+(const uint_fast64_t Value) const
 	{
-		return FChunkCoordinate(X + Value, Y + Value, Z + Value);
+		return FOctreeGlobalCoordinate(X + Value, Y + Value, Z + Value);
 	}
 
-	explicit FChunkCoordinate(const FVector &InVector)
+	FORCEINLINE FOctreeGlobalCoordinate operator+(const FOctreeLocalCoordinate LocalCoordinate) const
 	{
-		X = static_cast<uint_fast64_t>(std::round(InVector.X));
-		Y = static_cast<uint_fast64_t>(std::round(InVector.Y));
-		Z = static_cast<uint_fast64_t>(std::round(InVector.Z));
+		return FOctreeGlobalCoordinate(X + LocalCoordinate.X, Y + LocalCoordinate.Y, Z + LocalCoordinate.Z);
 	}
 
-	explicit FChunkCoordinate(const uint32 InX, const uint32 InY, const uint32 InZ)
+	explicit FOctreeGlobalCoordinate(const FVector &InVector)
+	{
+		X = static_cast<int_fast64_t>(std::round(InVector.X));
+		Y = static_cast<int_fast64_t>(std::round(InVector.Y));
+		Z = static_cast<int_fast64_t>(std::round(InVector.Z));
+	}
+
+	explicit FOctreeGlobalCoordinate(const int32 InX, const int32 InY, const int32 InZ)
 	{
 		X = InX;
 		Y = InY;
@@ -91,28 +74,62 @@ struct FChunkCoordinate
 	}
 };
 
+struct FOctreeLeaf
+{
+	uint_fast64_t SubNodes = 0;
+};
+
+struct FOctreeNode
+{
+	uint_fast64_t MortonCode;
+	
+	FOctreeNode* Parent;
+	FOctreeNode* FirstChild;
+	FOctreeNode* Neighbours[6];
+
+	FOctreeNode(const uint_fast32_t X, const uint_fast32_t Y, const uint_fast32_t Z)
+		: MortonCode(0), Parent(nullptr), FirstChild(nullptr), Neighbours{}
+	{
+		MortonCode = libmorton::morton3D_64_encode(X, Y, Z);
+	}
+	
+	FOctreeNode(const uint_fast32_t X, const uint_fast32_t Y, const uint_fast32_t Z, FOctreeNode* ParentNode)
+		: MortonCode(0), Parent(ParentNode), FirstChild(nullptr), Neighbours{}
+	{
+		MortonCode = libmorton::morton3D_64_encode(X, Y, Z);
+	}
+
+	/**
+	 * Get the local coordinates of the node.
+	 */
+	FORCEINLINE FOctreeLocalCoordinate GetNodeLocalLocation() const
+	{
+		FOctreeLocalCoordinate NodeLocation = FOctreeLocalCoordinate();
+		libmorton::morton3D_64_decode(MortonCode, NodeLocation.X, NodeLocation.Y, NodeLocation.Z);;
+		return NodeLocation;
+	}
+};
+
 struct FChunk
 {
-	FChunkCoordinate Location;
+	FOctreeGlobalCoordinate Location; // Negative most corner
 	
 	TArray<TArray<FOctreeNode>> Layers;
 	TArray<FOctreeLeaf> Leafs;
-
-	FChunk(const FChunkCoordinate &InLocation, const uint8 DynamicDepth)
+	
+	FChunk(const FOctreeGlobalCoordinate &InLocation, const uint8 DynamicDepth)
 		: Location(InLocation)
 	{
 		Layers.Reserve(DynamicDepth);
-		for (uint8 i = 0; i < DynamicDepth; ++i)
+		for (uint8 i = 0; i < DynamicDepth; i++)
 		{
 			Layers.Add(TArray<FOctreeNode>());
 		}
 	}
 };
 
-// The navigation-mesh is a hashmap of chunks, each holding a SVO.
+// The navigation-mesh is a hashmap of chunks, each being a SVO tree.
 typedef TSharedPtr<TMap<FString, FChunk>> FNavMesh;
-
-
 
 struct FNavMeshSettings
 {

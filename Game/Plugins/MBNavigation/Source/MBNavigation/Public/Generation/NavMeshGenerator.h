@@ -27,7 +27,9 @@ private:
 	// Generation methods
 	void GenerateChunks(const FBox &LevelBoundaries);
 	void RasterizeChunks();
-	void RasterizeNode(FChunk &Chunk, FOctreeNode &ParentNode, const FNodeCoordinate &NodeLocation, const uint8 CurrentDepth);
+	void RasterizeNode(FChunk &Chunk, FOctreeNode &Node, const uint8 CurrentDepth);
+
+	FORCEINLINE bool HasOverlap(const FOctreeGlobalCoordinate &GlobalNodeLocation, const uint8 LayerIndex);
 
 	// Variables set during initialization
 	UPROPERTY() UWorld* World;
