@@ -1,0 +1,24 @@
+the sparse voxel octree is build from the objects in the level. The navigation mesh is a TMap of chunks where each chunk holds the layers; Each layer holds the nodes of a certain depth in the SVO, where layer 0 is the root.
+I split the navmesh into two parts, one for static nodes which does not change at all, and one for dynamic nodes which does change dynamically.
+
+The static octree is stored on the world-subsystem, with its max depth being based on a StaticDepth variable. All the nodes in this "static" octree can point to other nodes in this octree and the references are guaranteed to either point to nothing, indicating there is no neighbour or first-child etc, or to valid nodes, so the references cannot become corrupt because this TArray will not resize.
+Static nodes should be rather large in size, but just small enough so that they can fit into any gap that sound should traverse through.
+
+The dynamic octree is handled very differently.
+Every dynamic object which should affect the navmesh should have a certain component added to them ( no name yet for this component. And currently only for meshes that won't change its scale during gameplay ).
+This component will have its own unique set of layers just like the static octree.
+
+Dynamic objects have a fixed size and thus we can deduce how many nodes can in total fit inside of it; Meaning that we can create a TArray of a fixed-size which is always capable of holding the maximum amount of nodes.
+This allocates more memory than required but it prevents having to resize the list and fix all the references, and fix the morton-code order when more nodes need to be added which is much better performance-wise.
+Having a fixed size like this also means that new nodes can be set directly with a given index, where the index equals its morton-code relative from to the dynamic-objects local-space ( negative most corner ).
+
+
+So how does this component add nodes to its layers? The object can move through the level, which means it can also through the "static" octree.
+The component it will look at these "static" nodes it is inside of, and subdivide it until the DynamicDepth is reached. These subdivided nodes which are children of the "static" octree's nodes are added to the layers on the component.
+The "static" octree can have valid references to nodes on any particular dynamic object's component, and vise versa.
+
+Pathfinding should be rather efficient because the nodes in these layers are sorted by morton-code order for memory coherence.
+The only part where the memory isn't coherent is when it moves from a node from a static node to a dynamic node, but moving to the next node will likely be a cache hit again since it will be right next to the previous one in memory.
+
+Storing dynamic nodes like this means that we only allocate memory for the amount of dynamic objects in the level. And we can also add a max-range for these dynamic objects so that only objects close to the player will dynamically update.
+Sound cannot be heard from infinite distance, so if we know what the loudest sound in the game will be, and how far that can travel, we can deduce what the max-range should be.
