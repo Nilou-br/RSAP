@@ -8,45 +8,48 @@
 
 /**
  * Used to represent the location of a node within a chunk's local-space.
- * A chunk's local-space will be in its negative-most corner meaning that all node coords are positive,
- * which is computationally faster and required for morton-codes.
+ * A chunk's origin will be in its negative-most corner meaning that all node's inside it have positive coordinates.
  */
 struct FOctreeLocalCoordinate
 {
-	uint_fast32_t X;
-	uint_fast32_t Y;
-	uint_fast32_t Z;
+	uint_fast16_t X;
+	uint_fast16_t Y;
+	uint_fast16_t Z;
 
-	FORCEINLINE FOctreeLocalCoordinate operator+(const uint_fast32_t Value) const
+	FORCEINLINE FOctreeLocalCoordinate operator+(const uint_fast16_t Value) const
 	{
 		return FOctreeLocalCoordinate(X + Value, Y + Value, Z + Value);
 	}
 
-	explicit FOctreeLocalCoordinate(const uint32 InX, const uint32 InY, const uint32 InZ)
-	{
-		X = InX;
-		Y = InY;
-		Z = InZ;
-	}
+	explicit FOctreeLocalCoordinate(const uint16 InX, const uint16 InY, const uint16 InZ)
+		: X(InX), Y(InY), Z(InZ) {}
+
+	explicit FOctreeLocalCoordinate(const uint_fast16_t InX, const uint_fast16_t InY, const uint_fast16_t InZ)
+		: X(InX), Y(InY), Z(InZ) {}
 
 	FOctreeLocalCoordinate()
 		:X(0), Y(0), Z(0)
 	{}
+
+	FORCEINLINE FVector ToVector() const
+	{
+		return FVector(X, Y, Z);
+	};
 };
 
 /**
  * Coordinates used for chunks or nodes that exist in global-space which don't need floating point precision.
- * All chunks are located and sized by a multiple of 2.
+ * All chunks / nodes don't require floating point precision for their coordinates.
  */
 struct FOctreeGlobalCoordinate
 {
-	int_fast64_t X;
-	int_fast64_t Y;
-	int_fast64_t Z;
+	int_fast32_t X;
+	int_fast32_t Y;
+	int_fast32_t Z;
 	
 	FORCEINLINE FString ToKey() const
 	{
-		return FString::Printf(TEXT("X=%lluY=%lluYZ=%lluY"), X, Y, Z);
+		return FString::Printf(TEXT("X=%i=%i=%i"), X, Y, Z);
 	}
 
 	FORCEINLINE FOctreeGlobalCoordinate operator+(const uint_fast64_t Value) const
@@ -67,64 +70,97 @@ struct FOctreeGlobalCoordinate
 	}
 
 	explicit FOctreeGlobalCoordinate(const int32 InX, const int32 InY, const int32 InZ)
+		: X(InX), Y(InY), Z(InZ) {}
+
+	FORCEINLINE FVector ToVector() const
 	{
-		X = InX;
-		Y = InY;
-		Z = InZ;
-	}
+		return FVector(X, Y, Z);
+	};
 };
 
+// todo
 struct FOctreeLeaf
 {
 	uint_fast64_t SubNodes = 0;
 };
 
+/**
+ * 64 bit node used in the 3D navigation-mesh for pathfinding.
+ */
 struct FOctreeNode
 {
-	uint_fast64_t MortonCode;
-	
-	FOctreeNode* Parent;
-	FOctreeNode* FirstChild;
-	FOctreeNode* Neighbours[6];
+	uint_fast32_t MortonCode;
+	bool IsFilled;
 
-	FOctreeNode(const uint_fast32_t X, const uint_fast32_t Y, const uint_fast32_t Z)
-		: MortonCode(0), Parent(nullptr), FirstChild(nullptr), Neighbours{}
+	// Used to find dynamic-object child-nodes are stored on.
+	uint16 DynamicIndex: 11;
+
+	// Bitmasks
+	uint8 ChunkBorder: 6;
+	uint8 NeighbourFilled: 6;
+	uint8 ChildFilled: 8;
+
+	FOctreeNode(const uint_fast16_t X, const uint_fast16_t Y, const uint_fast16_t Z)
+		: MortonCode(0)
 	{
-		MortonCode = libmorton::morton3D_64_encode(X, Y, Z);
-	}
-	
-	FOctreeNode(const uint_fast32_t X, const uint_fast32_t Y, const uint_fast32_t Z, FOctreeNode* ParentNode)
-		: MortonCode(0), Parent(ParentNode), FirstChild(nullptr), Neighbours{}
-	{
-		MortonCode = libmorton::morton3D_64_encode(X, Y, Z);
+		MortonCode = libmorton::morton3D_32_encode(X, Y, Z);
 	}
 
 	/**
-	 * Get the local coordinates of the node.
+	 * Get the local coordinates of the node within a chunk.
 	 */
-	FORCEINLINE FOctreeLocalCoordinate GetNodeLocalLocation() const
+	FORCEINLINE FOctreeLocalCoordinate GetLocalLocation() const
 	{
 		FOctreeLocalCoordinate NodeLocation = FOctreeLocalCoordinate();
-		libmorton::morton3D_64_decode(MortonCode, NodeLocation.X, NodeLocation.Y, NodeLocation.Z);;
+		libmorton::morton3D_32_decode(MortonCode, NodeLocation.X, NodeLocation.Y, NodeLocation.Z);;
 		return NodeLocation;
+	}
+	
+	FORCEINLINE FOctreeGlobalCoordinate GetGlobalLocation(const FOctreeGlobalCoordinate &ChunkLocation) const
+	{
+		return ChunkLocation + GetLocalLocation();
 	}
 };
 
-struct FChunk
+struct FOctree
 {
-	FOctreeGlobalCoordinate Location; // Negative most corner
-	
 	TArray<TArray<FOctreeNode>> Layers;
 	TArray<FOctreeLeaf> Leafs;
-	
-	FChunk(const FOctreeGlobalCoordinate &InLocation, const uint8 DynamicDepth)
-		: Location(InLocation)
+
+	FOctree()
 	{
-		Layers.Reserve(DynamicDepth);
-		for (uint8 i = 0; i < DynamicDepth; i++)
+		Layers.Reserve(10);
+		for (uint8 i = 0; i < 10; i++)
 		{
 			Layers.Add(TArray<FOctreeNode>());
 		}
+	}
+};
+
+/**
+ * A Chunk stores a list of octree pointers.
+ * The first octree at index 0 is the static-octree which will never change in size.
+ * All the other octree's are dynamic and accessible from index 1-4096, and represent the dynamic-object's nodes.
+ */
+struct FChunk
+{
+	FOctreeGlobalCoordinate Origin; // Negative most corner, -x -y -z.
+	TArray<TUniquePtr<FOctree>> Octrees;
+	
+	FChunk(const FOctreeGlobalCoordinate &InLocation)
+		: Origin(InLocation)
+	{
+		// Create the static octree, this octree should always exist.
+		Octrees.Add(MakeUnique<FOctree>());
+	}
+
+	FORCEINLINE FVector GetCenter(const uint32 ChunkHalveSize) const
+	{
+		return FVector(
+			Origin.X + ChunkHalveSize,
+			Origin.Y + ChunkHalveSize,
+			Origin.Z + ChunkHalveSize
+		);
 	}
 };
 
@@ -134,20 +170,17 @@ typedef TSharedPtr<TMap<FString, FChunk>> FNavMesh;
 struct FNavMeshSettings
 {
 	uint32 ChunkSize;
-	uint8 StaticDepth: 4;
-	uint8 DynamicDepth: 4;
+	uint8 StaticDepth;
 
 	FNavMeshSettings()
 	{
 		ChunkSize = 1024;
 		StaticDepth = 6;
-		DynamicDepth = 8;
 	}
 
-	FNavMeshSettings(const uint32 InChunkSize, const uint8 InStaticDepth, const uint8 InDynamicDepth)
+	FNavMeshSettings(const uint32 InChunkSize, const uint8 InStaticDepth)
 	{
-		ChunkSize = FMath::Clamp(InChunkSize, 64, 262144);
-		StaticDepth = FMath::Clamp(InStaticDepth, 4, 16);
-		DynamicDepth = FMath::Clamp(InDynamicDepth, 4, 16);
+		ChunkSize = FMath::Clamp(InChunkSize, 1024, 262144);
+		StaticDepth = FMath::Clamp(InStaticDepth, 4, 10);
 	}
 };

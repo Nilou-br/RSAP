@@ -26,10 +26,11 @@ private:
 
 	// Generation methods
 	void GenerateChunks(const FBox &LevelBoundaries);
-	void RasterizeChunks();
-	void RasterizeNode(FChunk &Chunk, FOctreeNode &Node, const uint8 CurrentDepth);
+	void RasterizeStaticOctree(FChunk* Chunk);
+	void RasterizeStaticNode(FChunk* Chunk, FOctreeNode &Node, const uint8 CurrentDepth);
+	// void RasterizeNode(FChunk &Chunk, FOctreeNode &Node, const uint8 CurrentDepth);
 
-	FORCEINLINE bool HasOverlap(const FOctreeGlobalCoordinate &GlobalNodeLocation, const uint8 LayerIndex);
+	FORCEINLINE bool HasOverlap(const FOctreeGlobalCoordinate &NodeGlobalLocation, const uint8 LayerIndex);
 
 	// Variables set during initialization
 	UPROPERTY() UWorld* World;
@@ -40,4 +41,6 @@ private:
 	TArray<int32> NodeSizes;
 	TArray<int32> NodeHalveSizes;
 	TArray<int32> NodeQuarterSizes;
+
+	const uint8 DynamicDepth = 10;
 };
