@@ -1,16 +1,17 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #include "Generation/NavMeshGenerator.h"
+#include "NavMeshTypes.h"
 #include <chrono>
 
 DEFINE_LOG_CATEGORY(LogNavMeshGenerator)
 
 
 
-void UNavMeshGenerator::Initialize(UWorld* InWorld, const FNavMeshSettings InSettings = FNavMeshSettings())
+void UNavMeshGenerator::Initialize(UWorld* InWorld, const uint8 VoxelSizeExponentFloat, const uint8 StaticDepthFloat)
 {
 	World = InWorld;
-	Settings = InSettings;
+	FNavMeshSettings::Initialize(VoxelSizeExponentFloat, StaticDepthFloat);
 }
 
 FNavMesh UNavMeshGenerator::Generate(const FBox &LevelBoundaries)
@@ -46,11 +47,11 @@ FNavMesh UNavMeshGenerator::Generate(const FBox &LevelBoundaries)
  */
 void UNavMeshGenerator::CalculateNodeSizes()
 {
-	for (uint8 LayerIndex = 0; LayerIndex <= DynamicDepth; LayerIndex++)
+	for (uint8 LayerIndex = 0; LayerIndex < DynamicDepth; ++LayerIndex)
 	{
-		NodeSizes.Add(Settings.ChunkSize >> LayerIndex);
-		NodeHalveSizes.Add(NodeSizes[LayerIndex]/2);
-		NodeQuarterSizes.Add(NodeSizes[LayerIndex]/4);
+		NodeSizes.Add(FNavMeshSettings::ChunkSize >> LayerIndex);
+		NodeHalveSizes.Add(NodeSizes[LayerIndex] >> 1);
+		NodeQuarterSizes.Add(NodeSizes[LayerIndex] >> 2);
 	}
 }
 
@@ -60,7 +61,7 @@ void UNavMeshGenerator::CalculateNodeSizes()
  */
 void UNavMeshGenerator::GenerateChunks(const FBox &LevelBoundaries)
 {
-	const int32 ChunkSize = Settings.ChunkSize;
+	const int32 ChunkSize = FNavMeshSettings::ChunkSize;
 	const FVector LevelMin = LevelBoundaries.Min;
 	const FVector LevelMax = LevelBoundaries.Max;
 
@@ -82,9 +83,9 @@ void UNavMeshGenerator::GenerateChunks(const FBox &LevelBoundaries)
 		for (int32 y = ChunksMinLoc.Y; y < ChunksMaxLoc.Y; y += ChunkSize) {
 			for (int32 z = ChunksMinLoc.Z; z < ChunksMaxLoc.Z; z += ChunkSize)
 			{
-				// Set the chunk's location to the negative most coordinate which is already correct in this case.
+				// Set the chunk's origin to the negative most coordinate.
 				// This way the local-space of all nodes in a chunk is positive, and is required for morton-codes.
-				FOctreeGlobalCoordinate ChunkLocation(x, y, z);
+				F3DVector32 ChunkLocation = F3DVector32(x, y, z);
 				FChunk* Chunk = &NavMesh->Add(
 					ChunkLocation.ToKey(),
 					FChunk(ChunkLocation)
@@ -105,69 +106,72 @@ void UNavMeshGenerator::RasterizeStaticOctree(FChunk* Chunk)
 	FOctree* StaticOctree = Chunk->Octrees[0].Get();
 	
 	// Get the first layer on the octree.
-	const uint32 ChunkHalveWidth = Settings.ChunkSize/2;
 	TArray<FOctreeNode>& FirstLayer = StaticOctree->Layers[0];
 
-	// Create the root node, which is the same size as the chunk and its location is the center of the chunk.
-	FirstLayer.Emplace(ChunkHalveWidth, ChunkHalveWidth, ChunkHalveWidth);
-	FOctreeNode& Node = FirstLayer.Last(); // Inserting the node directly and using that reference for updating it prevents having to copy it into the array later on.
+	// Create the root node, which is the same size as the chunk.
+	FirstLayer.Emplace(0, 0, 0);
+	FOctreeNode& Node = FirstLayer.Last(); // Getting the reference of already inserted nodes for updating it prevents having to copy it into the array later on.
 	Node.ChunkBorder = 0b111111; // Set the ChunkBorder to touch all borders.
 
 	// Recursively rasterize each node until max depth is reached.
-	// Start at layer 1 since the just created node is the one at layer 0.
-	RasterizeStaticNode(Chunk, Node, 1);
+	RasterizeStaticNode(Chunk, Node, 0);
 }
 
 /**
  * Rasterize a static node, only if it occludes anything.
  * This method is called recursively until it either reaches the static-depth or if it doesn't occlude anything.
  */
-void UNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, const uint8 CurrentDepth)
+void UNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, const uint8 LayerIndex)
 {
-	const FOctreeLocalCoordinate NodeLocalLocation = Node.GetLocalLocation();
-	const FOctreeGlobalCoordinate NodeGlobalCoordinate = Chunk->Origin + NodeLocalLocation;
+	const F3DVector16 NodeLocalLoc = Node.GetLocalLocation();
+	const F3DVector32 NodeGlobalLoc = Node.GetGlobalLocation(Chunk->Location);
 	
-	// Return if static-depth reached, or if not overlapping any object.
-	if(CurrentDepth >= Settings.StaticDepth || !HasOverlap(NodeGlobalCoordinate, CurrentDepth-1)) return;
-	Node.IsFilled = true;
+	if(!HasOverlap(NodeGlobalLoc, LayerIndex)) return;
+	Node.SetOccluded(true);
 	
-	TArray<FOctreeNode>& CurrentLayer = Chunk->Octrees[0].Get()->Layers[CurrentDepth];
-	const int32 ChildOffset = NodeHalveSizes[CurrentDepth];
+	// Stop recursion if end reached.
+	if(LayerIndex >= FNavMeshSettings::StaticDepth) return;
+	Node.SetFilled(true);
+	
+	const uint8 ChildLayerIndex = LayerIndex+1;
+	
+	TArray<FOctreeNode>& ChildLayer = Chunk->Octrees[0].Get()->Layers[ChildLayerIndex];
+	const int_fast16_t ChildOffset = NodeHalveSizes[LayerIndex];
 
-	CurrentLayer.Reserve(8);
+	ChildLayer.Reserve(8);
 	for(uint8 i = 0; i < 8; ++i)
 	{
 		// Get child local-coords in this chunk by adding/subtracting the offset (halve the node's size)
 		// for each direction starting with the child at the negative most location.
-		uint_fast32_t ChildNodeLocalX = NodeLocalLocation.X + ((i & 1) ? ChildOffset : -ChildOffset);
-		uint_fast32_t ChildNodeLocalY = NodeLocalLocation.Y + ((i & 2) ? ChildOffset : -ChildOffset);
-		uint_fast32_t ChildNodeLocalZ = NodeLocalLocation.Z + ((i & 4) ? ChildOffset : -ChildOffset);
+		uint_fast16_t ChildNodeLocalX = NodeLocalLoc.X + ((i & 1) ? ChildOffset : 0);
+		uint_fast16_t ChildNodeLocalY = NodeLocalLoc.Y + ((i & 2) ? ChildOffset : 0);
+		uint_fast16_t ChildNodeLocalZ = NodeLocalLoc.Z + ((i & 4) ? ChildOffset : 0);
 
 		// Add child-node to current-layer and get its reference
-		CurrentLayer.Emplace(ChildNodeLocalX, ChildNodeLocalY, ChildNodeLocalZ);
-		FOctreeNode& CurrentChild = CurrentLayer.Last();
-
+		ChildLayer.Emplace(ChildNodeLocalX, ChildNodeLocalY, ChildNodeLocalZ);
+		FOctreeNode& ChildNode = ChildLayer.Last();
+		
 		// Determine the chunk-border of this child-node.
-		if(Node.ChunkBorder) // Skip if parent is not touching any border.
+		if(Node.ChunkBorder)
 		{
 			// ChunkBorder represents "+xyz -xyz".
-			CurrentChild.ChunkBorder |= (i & 1) ? 0b100000 : 0b000100; // X
-			CurrentChild.ChunkBorder |= (i & 2) ? 0b010000 : 0b000010; // Y
-			CurrentChild.ChunkBorder |= (i & 4) ? 0b001000 : 0b000001; // Z
-			CurrentChild.ChunkBorder &= Node.ChunkBorder; // Can only be against the same border's as the parent.
+			ChildNode.ChunkBorder |= (i & 1) ? 0b100000 : 0b000100; // X
+			ChildNode.ChunkBorder |= (i & 2) ? 0b010000 : 0b000010; // Y
+			ChildNode.ChunkBorder |= (i & 4) ? 0b001000 : 0b000001; // Z
+			ChildNode.ChunkBorder &= Node.ChunkBorder; // Can only be against the same border's as the parent.
 		}
 
 		// Recursively rasterize this child-node.
-		RasterizeStaticNode(Chunk, CurrentChild, CurrentDepth+1);
+		RasterizeStaticNode(Chunk, ChildNode, ChildLayerIndex);
 	}
 }
 
-bool UNavMeshGenerator::HasOverlap(const FOctreeGlobalCoordinate &NodeGlobalLocation, const uint8 LayerIndex)
+bool UNavMeshGenerator::HasOverlap(const F3DVector32 &NodeGlobalLocation, const uint8 LayerIndex)
 {
 	return World->OverlapAnyTestByChannel(
-		FVector(NodeGlobalLocation.X, NodeGlobalLocation.Y, NodeGlobalLocation.Z),
+		FVector(NodeGlobalLocation.X + NodeHalveSizes[LayerIndex], NodeGlobalLocation.Y + NodeHalveSizes[LayerIndex], NodeGlobalLocation.Z + NodeHalveSizes[LayerIndex]),
 		FQuat::Identity,
 		ECollisionChannel::ECC_WorldStatic,
-		FCollisionShape::MakeBox(FVector(NodeHalveSizes[LayerIndex]))
+		FCollisionShape::MakeBox(FVector(NodeSizes[LayerIndex]))
 	);
 }

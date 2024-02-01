@@ -8,7 +8,7 @@
 
 
 /* Floats are used here because bp-widget sliders don't support other types. */
-void UNavMeshEditorUtilityWidget::GenerateNavMesh(const float ChunkSizeFloat, const float StaticDepthFloat, const bool bDisplayDebug)
+void UNavMeshEditorUtilityWidget::GenerateNavMesh(const float VoxelSizeExponentFloat, const float StaticDepthFloat,  const bool bDisplayDebug)
 {
 	UWorld* EditorWorld = GEditor->GetEditorWorldContext().World();
 	if(!EditorWorld) return;
@@ -17,14 +17,10 @@ void UNavMeshEditorUtilityWidget::GenerateNavMesh(const float ChunkSizeFloat, co
 	const UWorldNavigationManager* WorldNavManager = EditorWorld->GetSubsystem<UWorldNavigationManager>(EditorWorld);
 	if(!WorldNavManager) return;
 	
-	// Cast floats to desired type
-	const uint32 ChunkSize = static_cast<uint32>(FMath::Clamp(ChunkSizeFloat, 64.0f, 262144.0f));
-	const uint8 StaticDepth = static_cast<uint8>(FMath::Clamp(StaticDepthFloat, 4.0f, 10.0f));
-
 	// Init generator
-	const FNavMeshSettings NavMeshSettings(ChunkSize, StaticDepth);
 	UNavMeshGenerator* NavMeshGenerator = NewObject<UNavMeshGenerator>();
-	NavMeshGenerator->Initialize(EditorWorld, NavMeshSettings);
+	FNavMeshSettings::Initialize(VoxelSizeExponentFloat, StaticDepthFloat);
+	NavMeshGenerator->Initialize(EditorWorld, VoxelSizeExponentFloat, StaticDepthFloat);
 
 	// Start generation
 	const FBox LevelBoundaries = WorldNavManager->GetLevelBoundaries();
@@ -38,12 +34,10 @@ void UNavMeshEditorUtilityWidget::GenerateNavMesh(const float ChunkSizeFloat, co
 	constexpr uint8 DynamicDepth = 10;
 	for (uint8 LayerIndex = 0; LayerIndex < DynamicDepth; ++LayerIndex)
 	{
-		NodeSizes.Add(ChunkSize >> LayerIndex);
-		NodeHalveSizes.Add(NodeSizes[LayerIndex]/2);
-		NodeQuarterSizes.Add(NodeSizes[LayerIndex]/4);
+		NodeSizes.Add(FNavMeshSettings::ChunkSize >> LayerIndex);
+		NodeHalveSizes.Add(NodeSizes[LayerIndex] >> 1);
+		NodeQuarterSizes.Add(NodeSizes[LayerIndex] >> 2);
 	}
-	
-
 	
 	// Debug visualization
 	if(!bDisplayDebug) return;
@@ -65,19 +59,27 @@ void UNavMeshEditorUtilityWidget::GenerateNavMesh(const float ChunkSizeFloat, co
 	// Draw level-boundaries
 	DrawDebugBox(EditorWorld, LevelBoundaries.GetCenter(), LevelBoundaries.GetExtent(), FColor::White, true);
 
-	// DrawDebugBox(World, FVector(NodeGlobalCoordinate.X, NodeGlobalCoordinate.Y, NodeGlobalCoordinate.Z), FVector(NodeHalveSizes[CurrentDepth-1]), FColor::Orange, true);
-
-	// todo check if voxel local location is center OR its negative most point, recommend setting it to the latter.
-	// todo, best to store chunk/node locations at center or corner??
+	UE_LOG(LogTemp, Log, TEXT("VoxelSizeExponent: %i"), FNavMeshSettings::VoxelSizeExponent)
+	UE_LOG(LogTemp, Log, TEXT("StaticDepth: %i"), FNavMeshSettings::StaticDepth)
 	
 	for (const auto &Pair : *NavMesh)
 	{
 		const FChunk& Chunk = Pair.Value;
-		DrawDebugBox(EditorWorld, Chunk.Origin.ToVector() + NodeHalveSizes[0], FVector(NodeHalveSizes[0]), FColor::Black, true);
 
-		for (const FOctreeNode &Node : Chunk.Octrees[0].Get()->Layers[0])
+		TArray<TArray<FOctreeNode>> Layers = Chunk.Octrees[0].Get()->Layers;
+		for (int LayerIndex = 0; LayerIndex < 10; ++LayerIndex)
 		{
-			DrawDebugBox(EditorWorld, Node.GetGlobalLocation(Chunk.Origin).ToVector() + NodeHalveSizes[1], FVector(NodeHalveSizes[1]), LayerColors[1], true);
+			TArray<FOctreeNode> Layer = Layers[LayerIndex];
+			for (const FOctreeNode &Node : Layer)
+			{
+				
+				FVector NodeGlobalLocation = Node.GetGlobalLocation(Chunk.Location).ToVector();
+				if(LayerIndex == FNavMeshSettings::StaticDepth && Node.GetOccluded())
+				{
+					const bool bOccluded = Node.GetOccluded();
+					if(bOccluded) DrawDebugBox(EditorWorld, NodeGlobalLocation + NodeHalveSizes[LayerIndex], FVector(NodeHalveSizes[LayerIndex]), LayerColors[LayerIndex], true);
+				}
+			}
 		}
 	}
 }

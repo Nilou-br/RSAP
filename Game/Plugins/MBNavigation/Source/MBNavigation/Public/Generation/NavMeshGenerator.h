@@ -16,7 +16,7 @@ class MBNAVIGATION_API UNavMeshGenerator : public UObject
 	GENERATED_BODY()
 	
 public:
-	void Initialize(UWorld* InWorld, const FNavMeshSettings InSettings);
+	void Initialize(UWorld* InWorld, const uint8 VoxelSizeExponentFloat, const uint8 StaticDepthFloat);
 	FNavMesh Generate(const FBox &LevelBoundaries);
 
 private:
@@ -27,14 +27,13 @@ private:
 	// Generation methods
 	void GenerateChunks(const FBox &LevelBoundaries);
 	void RasterizeStaticOctree(FChunk* Chunk);
-	void RasterizeStaticNode(FChunk* Chunk, FOctreeNode &Node, const uint8 CurrentDepth);
+	void RasterizeStaticNode(FChunk* Chunk, FOctreeNode &Node, const uint8 LayerIndex);
 	// void RasterizeNode(FChunk &Chunk, FOctreeNode &Node, const uint8 CurrentDepth);
 
-	FORCEINLINE bool HasOverlap(const FOctreeGlobalCoordinate &NodeGlobalLocation, const uint8 LayerIndex);
+	FORCEINLINE bool HasOverlap(const F3DVector32 &NodeGlobalLocation, const uint8 LayerIndex);
 
 	// Variables set during initialization
 	UPROPERTY() UWorld* World;
-	FNavMeshSettings Settings;
 
 	// Variables used during generation
 	FNavMesh NavMesh;
