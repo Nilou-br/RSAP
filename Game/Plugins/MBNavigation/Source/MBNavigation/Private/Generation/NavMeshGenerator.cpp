@@ -172,6 +172,6 @@ bool UNavMeshGenerator::HasOverlap(const F3DVector32 &NodeGlobalLocation, const 
 		FVector(NodeGlobalLocation.X + NodeHalveSizes[LayerIndex], NodeGlobalLocation.Y + NodeHalveSizes[LayerIndex], NodeGlobalLocation.Z + NodeHalveSizes[LayerIndex]),
 		FQuat::Identity,
 		ECollisionChannel::ECC_WorldStatic,
-		FCollisionShape::MakeBox(FVector(NodeSizes[LayerIndex]))
+		FCollisionShape::MakeBox(FVector(NodeHalveSizes[LayerIndex]))
 	);
 }
