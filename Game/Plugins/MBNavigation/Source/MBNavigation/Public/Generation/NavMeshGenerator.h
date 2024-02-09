@@ -28,9 +28,9 @@ private:
 	void GenerateChunks(const FBox &LevelBoundaries);
 	void RasterizeStaticOctree(FChunk* Chunk);
 	void RasterizeStaticNode(FChunk* Chunk, FOctreeNode &Node, const uint8 LayerIndex);
-	// void RasterizeNode(FChunk &Chunk, FOctreeNode &Node, const uint8 CurrentDepth);
 
 	FORCEINLINE bool HasOverlap(const F3DVector32 &NodeGlobalLocation, const uint8 LayerIndex);
+	bool FindNeighbour(const FOctreeNode& Node, const uint8 Direction, FOctreeNode& OutNeighbour);
 
 	// Variables set during initialization
 	UPROPERTY() UWorld* World;

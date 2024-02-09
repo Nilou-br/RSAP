@@ -3,7 +3,7 @@
 #pragma once
 
 #include "morton.h"
-
+#include "unordered_dense.h"
 
 
 /**
@@ -153,7 +153,7 @@ struct FOctreeNode
 	
 	static constexpr uint_fast32_t BoolFilledMask = 1u << 30; // Filled boolean mask on the MortonCode
 	static constexpr uint_fast32_t BoolOccludedMask = 1u << 31; // Occluded boolean mask on the MortonCode
-	static constexpr uint_fast32_t MortonMask = (1u << 30) - 1; // Mask for the MortonCode itself.
+	static constexpr uint_fast32_t MortonMask = (1u << 30) - 1;
 
 	// Used to find dynamic-object child-nodes are stored on.
 	uint16 DynamicIndex: 12;
@@ -189,6 +189,11 @@ struct FOctreeNode
 		return ChunkLocation + GetLocalLocation();
 	}
 
+	FORCEINLINE uint_fast32_t GetMortonCode() const
+	{
+		return MortonCode & MortonMask;
+	}
+
 	void SetFilled(const bool Value)
 	{
 		if (Value) MortonCode |= BoolFilledMask;
@@ -213,6 +218,8 @@ struct FOctreeNode
 	}
 };
 
+typedef ankerl::unordered_dense::map<uint_fast32_t, FOctreeNode> FNodesMap;
+
 /**
  * The octree stores all the nodes in 10 different layers, each layer having higher resolution nodes.
  * Leaf nodes are stored in a separate list.
@@ -222,7 +229,7 @@ struct FOctreeNode
  */
 struct FOctree
 {
-	TArray<TArray<FOctreeNode>> Layers;
+	TArray<FNodesMap> Layers;
 	TArray<FOctreeLeaf> Leafs;
 
 	FOctree()
@@ -230,7 +237,7 @@ struct FOctree
 		Layers.Reserve(10);
 		for (uint8 i = 0; i < 10; i++)
 		{
-			Layers.Add(TArray<FOctreeNode>());
+			Layers.Add(FNodesMap());
 		}
 	}
 };

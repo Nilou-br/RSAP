@@ -43,7 +43,7 @@ void UNavMeshEditorUtilityWidget::GenerateNavMesh(const float VoxelSizeExponentF
 	if(!bDisplayDebug) return;
 	FlushPersistentDebugLines(EditorWorld);
 	
-	// Create list of colors for each different layer.
+	// List of colors for each layer.
 	TArray<FColor> LayerColors;
 	LayerColors.Emplace(51, 102, 255);
 	LayerColors.Emplace(102, 102, 255);
@@ -66,12 +66,13 @@ void UNavMeshEditorUtilityWidget::GenerateNavMesh(const float VoxelSizeExponentF
 	{
 		const FChunk& Chunk = Pair.Value;
 
-		TArray<TArray<FOctreeNode>> Layers = Chunk.Octrees[0].Get()->Layers;
+		TArray<FNodesMap> Layers = Chunk.Octrees[0].Get()->Layers;
 		for (int LayerIndex = 0; LayerIndex < 10; ++LayerIndex)
 		{
-			TArray<FOctreeNode> Layer = Layers[LayerIndex];
-			for (const FOctreeNode &Node : Layer)
+			FNodesMap Layer = Layers[LayerIndex];
+			for (const auto &NodePair : Layers[LayerIndex])
 			{
+				const FOctreeNode &Node = NodePair.second;
 				
 				FVector NodeGlobalLocation = Node.GetGlobalLocation(Chunk.Location).ToVector();
 				if(LayerIndex == FNavMeshSettings::StaticDepth && Node.GetOccluded())

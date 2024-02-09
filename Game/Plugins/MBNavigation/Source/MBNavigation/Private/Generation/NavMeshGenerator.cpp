@@ -3,6 +3,7 @@
 #include "Generation/NavMeshGenerator.h"
 #include "NavMeshTypes.h"
 #include <chrono>
+#include "unordered_dense.h"
 
 DEFINE_LOG_CATEGORY(LogNavMeshGenerator)
 
@@ -104,14 +105,21 @@ void UNavMeshGenerator::GenerateChunks(const FBox &LevelBoundaries)
 void UNavMeshGenerator::RasterizeStaticOctree(FChunk* Chunk)
 {
 	FOctree* StaticOctree = Chunk->Octrees[0].Get();
-	
-	// Get the first layer on the octree.
-	TArray<FOctreeNode>& FirstLayer = StaticOctree->Layers[0];
+	FNodesMap& FirstLayer = StaticOctree->Layers[0];
 
 	// Create the root node, which is the same size as the chunk.
-	FirstLayer.Emplace(0, 0, 0);
-	FOctreeNode& Node = FirstLayer.Last(); // Getting the reference of already inserted nodes for updating it prevents having to copy it into the array later on.
-	Node.ChunkBorder = 0b111111; // Set the ChunkBorder to touch all borders.
+	const auto EmplaceResult = FirstLayer.emplace(0, FOctreeNode(0, 0, 0));
+	if (!EmplaceResult.second)
+	{
+		UE_LOG(LogNavMeshGenerator, Error, TEXT("Error emplacing node into the FNodesMap in ::RasterizeStaticOctree"));
+		return;
+	}
+
+	// Get reference to inserted node.
+	FOctreeNode& Node = EmplaceResult.first->second;
+
+	// Set the ChunkBorder to touch all borders.
+	Node.ChunkBorder = 0b111111; 
 
 	// Recursively rasterize each node until max depth is reached.
 	RasterizeStaticNode(Chunk, Node, 0);
@@ -135,10 +143,10 @@ void UNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 	
 	const uint8 ChildLayerIndex = LayerIndex+1;
 	
-	TArray<FOctreeNode>& ChildLayer = Chunk->Octrees[0].Get()->Layers[ChildLayerIndex];
+	FNodesMap& ChildLayer = Chunk->Octrees[0].Get()->Layers[ChildLayerIndex];
 	const int_fast16_t ChildOffset = NodeHalveSizes[LayerIndex];
 
-	ChildLayer.Reserve(8);
+	ChildLayer.reserve(8);
 	for(uint8 i = 0; i < 8; ++i)
 	{
 		// Get child local-coords in this chunk by adding/subtracting the offset (halve the node's size)
@@ -148,17 +156,35 @@ void UNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 		uint_fast16_t ChildNodeLocalZ = NodeLocalLoc.Z + ((i & 4) ? ChildOffset : 0);
 
 		// Add child-node to current-layer and get its reference
-		ChildLayer.Emplace(ChildNodeLocalX, ChildNodeLocalY, ChildNodeLocalZ);
-		FOctreeNode& ChildNode = ChildLayer.Last();
+		FOctreeNode NewNode(ChildNodeLocalX, ChildNodeLocalY, ChildNodeLocalZ);
+		const auto EmplaceResult = ChildLayer.emplace(NewNode.GetMortonCode(), NewNode);
+
+		if (!EmplaceResult.second) {
+			UE_LOG(LogNavMeshGenerator, Error, TEXT("Error emplacing child-node into the FNodesMap"));
+			return;
+		}
+
+		// Get reference to stored child-node.
+		FOctreeNode& ChildNode = EmplaceResult.first->second;
 		
 		// Determine the chunk-border of this child-node.
 		if(Node.ChunkBorder)
 		{
 			// ChunkBorder represents "+xyz -xyz".
-			ChildNode.ChunkBorder |= (i & 1) ? 0b100000 : 0b000100; // X
-			ChildNode.ChunkBorder |= (i & 2) ? 0b010000 : 0b000010; // Y
-			ChildNode.ChunkBorder |= (i & 4) ? 0b001000 : 0b000001; // Z
-			ChildNode.ChunkBorder &= Node.ChunkBorder; // Can only be against the same border's as the parent.
+			ChildNode.ChunkBorder |= (i & 1) ? 0b100000 : 0b000100; // +X : -X
+			ChildNode.ChunkBorder |= (i & 2) ? 0b010000 : 0b000010; // +Y : -Y
+			ChildNode.ChunkBorder |= (i & 4) ? 0b001000 : 0b000001; // +Z : -Z
+			ChildNode.ChunkBorder &= Node.ChunkBorder; // Can only be against the same border(s) as the parent.
+		}
+
+		// Find any neighbouring nodes in each negative direction, and store their layer-index on this child-node.
+		// Add this child-node's layer-index to the neighbouring nodes ( since nodes located positively from this one are not yet generated ).
+		for(uint8 n = 0; n < 3; ++n)
+		{
+			// todo: only nodes in a negative direction can be set like this, since nodes located positively from this one are not yet generated.
+			// First -x, second -y, third -z.
+
+			
 		}
 
 		// Recursively rasterize this child-node.
@@ -174,4 +200,24 @@ bool UNavMeshGenerator::HasOverlap(const F3DVector32 &NodeGlobalLocation, const 
 		ECollisionChannel::ECC_WorldStatic,
 		FCollisionShape::MakeBox(FVector(NodeHalveSizes[LayerIndex]))
 	);
+}
+
+/**
+ * Find a neighbour of the given node in the given direction.
+ * 
+ * @param Node: node to get the neighbour of.
+ * @param Direction: direction you want to find the neighbour in.
+ * @param OutNeighbour: out-parameter for the found neighbour.
+ *
+ * @return true if a neighbour has been found.
+ */
+bool UNavMeshGenerator::FindNeighbour(const FOctreeNode& Node, const uint8 Direction, FOctreeNode& OutNeighbour)
+{
+	if(!NavMesh.IsValid())
+	{
+		UE_LOG(LogNavMeshGenerator, Warning, TEXT("Invalid navmesh in ::FindNeighbour"));
+		return false;
+	}
+
+	return true;
 }
