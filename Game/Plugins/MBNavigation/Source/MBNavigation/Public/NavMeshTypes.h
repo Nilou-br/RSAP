@@ -4,6 +4,9 @@
 
 #include "morton.h"
 #include "unordered_dense.h"
+#include <sstream>
+
+
 
 
 /**
@@ -37,6 +40,12 @@ struct F3DVector16
 	uint_fast16_t Y;
 	uint_fast16_t Z;
 
+	// Keep in mind that the morton-code supports 10 bits per axis.
+	FORCEINLINE uint_fast32_t ToMortonCode() const
+	{
+		return libmorton::morton3D_32_encode(X, Y, Z);
+	}
+
 	FORCEINLINE F3DVector16 operator+(const uint_fast16_t Value) const
 	{
 		return F3DVector16(X + Value, Y + Value, Z + Value);
@@ -55,7 +64,7 @@ struct F3DVector16
 	FORCEINLINE FVector ToVector() const
 	{
 		return FVector(X, Y, Z);
-	};
+	}
 };
 
 /**
@@ -69,9 +78,10 @@ struct F3DVector32
 	int_fast32_t Z;
 
 	// Creates an FString from the Chunk's coordinates, usable for hashmaps.
-	FORCEINLINE FString ToKey() const
-	{
-		return FString::Printf(TEXT("X=%i=%i=%i"), X, Y, Z);
+	FORCEINLINE std::string ToKey() const {
+		std::ostringstream oss;
+		oss << "X=" << X << "=Y=" << Y << "=Z=" << Z;
+		return oss.str();
 	}
 
 	FORCEINLINE F3DVector32 operator+(const uint_fast64_t Value) const
@@ -130,6 +140,21 @@ struct FOctreeLeaf
 };
 
 /**
+ * Stores a 4-bit layer-index value for each neighbour a node has.
+ */
+struct FOctreeNeighbours
+{
+	uint_fast8_t NeighbourX_P : 4; // X positive
+	uint_fast8_t NeighbourX_N : 4; // X negative
+	
+	uint_fast8_t NeighbourY_P : 4; // Y positive
+	uint_fast8_t NeighbourY_N : 4; // Y negative
+	
+	uint_fast8_t NeighbourZ_P : 4; // Z positive
+	uint_fast8_t NeighbourZ_N : 4; // Z negative
+};
+
+/**
  * 64 bit node used in the 3D navigation-mesh for pathfinding.
  *
  * MortonCode: represents its location in a single value.
@@ -146,6 +171,10 @@ struct FOctreeLeaf
  * Further info about the VOXEL_SIZE_EXPONENT macro value:
  * The precision of the octree can be changed by setting this value to a lower/higher value.
  * It simply raises the size of all the voxels to the power of VOXEL_SIZE_EXPONENT.
+ *
+ * ( Could potentially be made smaller by sacrificing some bits on the morton-code,
+ *	which makes the chunk-size smaller but could use the last 4 (or 7) bits for the DynamicIndex,
+ *	combined with 2 leftover bits on this struct making it 6/9 bits. ). 
  */
 struct FOctreeNode
 {
@@ -154,34 +183,45 @@ struct FOctreeNode
 	static constexpr uint_fast32_t BoolFilledMask = 1u << 30; // Filled boolean mask on the MortonCode
 	static constexpr uint_fast32_t BoolOccludedMask = 1u << 31; // Occluded boolean mask on the MortonCode
 	static constexpr uint_fast32_t MortonMask = (1u << 30) - 1;
+	
+	static constexpr int LayerShiftAmount[10] = {30, 27, 24, 21, 18, 15, 12, 9, 6, 3};
+
+	// Stores layer-index of neighbours.
+	FOctreeNeighbours Neighbours;
 
 	// Used to find dynamic-object child-nodes are stored on.
 	uint16 DynamicIndex: 12;
 
+	// To determine position node is in in parent. todo might not be needed
+	uint8 ChildIndex: 3;
+
 	// Bitmasks
 	uint8 ChunkBorder: 6;
-	uint8 NeighbourFilled: 6;
-	uint8 ChildFilled: 8;
 
-	FOctreeNode(uint_fast16_t NodeLocationX, uint_fast16_t NodeLocationY, uint_fast16_t NodeLocationZ)
+	FOctreeNode(uint_fast16_t NodeLocationX, uint_fast16_t NodeLocationY, uint_fast16_t NodeLocationZ):
+		DynamicIndex(0), ChildIndex(0), ChunkBorder(0)
 	{
-		// Right bit shift by the Voxel-Size-Exponent into morton-space.
+		// Right bit-shift using the Voxel-Size-Exponent into morton-space.
 		NodeLocationX >>= FNavMeshSettings::VoxelSizeExponent;
 		NodeLocationY >>= FNavMeshSettings::VoxelSizeExponent;
 		NodeLocationZ >>= FNavMeshSettings::VoxelSizeExponent;
 		MortonCode = libmorton::morton3D_32_encode(NodeLocationX, NodeLocationY, NodeLocationZ);
 	}
-	
+
+	FOctreeNode():
+		MortonCode(0), DynamicIndex(0), ChildIndex(0), ChunkBorder(0)
+	{}
+
 	FORCEINLINE F3DVector16 GetLocalLocation() const
 	{
-		F3DVector16 NodeLocation = F3DVector16();
-		libmorton::morton3D_32_decode(MortonCode & MortonMask, NodeLocation.X, NodeLocation.Y, NodeLocation.Z);
+		F3DVector16 NodeLocalLocation = F3DVector16();
+		libmorton::morton3D_32_decode(MortonCode & MortonMask, NodeLocalLocation.X, NodeLocalLocation.Y, NodeLocalLocation.Z);
 
-		// Left bit shift by the Voxel-Size-Exponent into local-space.
-		NodeLocation.X <<= FNavMeshSettings::VoxelSizeExponent;
-		NodeLocation.Y <<= FNavMeshSettings::VoxelSizeExponent;
-		NodeLocation.Z <<= FNavMeshSettings::VoxelSizeExponent;
-		return NodeLocation;
+		// Left bit-shift using the Voxel-Size-Exponent into local-space.
+		NodeLocalLocation.X <<= FNavMeshSettings::VoxelSizeExponent;
+		NodeLocalLocation.Y <<= FNavMeshSettings::VoxelSizeExponent;
+		NodeLocalLocation.Z <<= FNavMeshSettings::VoxelSizeExponent;
+		return NodeLocalLocation;
 	}
 	
 	FORCEINLINE F3DVector32 GetGlobalLocation(const F3DVector32 &ChunkLocation) const
@@ -192,6 +232,12 @@ struct FOctreeNode
 	FORCEINLINE uint_fast32_t GetMortonCode() const
 	{
 		return MortonCode & MortonMask;
+	}
+
+	FORCEINLINE uint_fast32_t GetParentMortonCode(const uint8 LayerIndex) const
+	{
+		const uint_fast32_t ParentMask = ~((1 << LayerShiftAmount[LayerIndex-1]) - 1);
+		return (MortonCode & MortonMask) & ParentMask ;
 	}
 
 	void SetFilled(const bool Value)
@@ -250,13 +296,13 @@ struct FOctree
 struct FChunk
 {
 	F3DVector32 Location; // Located at the negative most voxel's center point, which makes the morton-codes align.
-	TArray<TUniquePtr<FOctree>> Octrees;
+	TArray<TSharedPtr<FOctree>> Octrees;
 	
 	FChunk(const F3DVector32 &InLocation)
 		: Location(InLocation)
 	{
 		// Create the static octree, this octree should always exist.
-		Octrees.Add(MakeUnique<FOctree>());
+		Octrees.Add(MakeShared<FOctree>());
 	}
 
 	FORCEINLINE FVector GetCenter(const uint32 ChunkHalveSize) const
@@ -269,5 +315,7 @@ struct FChunk
 	}
 };
 
+typedef ankerl::unordered_dense::map<std::string, FChunk> FChunkMap;
+
 // The navigation-mesh is a hashmap of chunks, each being a SVO tree.
-typedef TSharedPtr<TMap<FString, FChunk>> FNavMesh;
+typedef TSharedPtr<FChunkMap> FNavMesh;

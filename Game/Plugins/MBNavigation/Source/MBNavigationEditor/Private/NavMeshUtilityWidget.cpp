@@ -64,7 +64,7 @@ void UNavMeshEditorUtilityWidget::GenerateNavMesh(const float VoxelSizeExponentF
 	
 	for (const auto &Pair : *NavMesh)
 	{
-		const FChunk& Chunk = Pair.Value;
+		const FChunk& Chunk = Pair.second;
 
 		TArray<FNodesMap> Layers = Chunk.Octrees[0].Get()->Layers;
 		for (int LayerIndex = 0; LayerIndex < 10; ++LayerIndex)
