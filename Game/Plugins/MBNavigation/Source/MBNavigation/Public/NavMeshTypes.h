@@ -77,11 +77,14 @@ struct F3DVector32
 	int_fast32_t Y;
 	int_fast32_t Z;
 
-	// Creates an FString from the Chunk's coordinates, usable for hashmaps.
-	FORCEINLINE std::string ToKey() const {
-		std::ostringstream oss;
-		oss << "X=" << X << "=Y=" << Y << "=Z=" << Z;
-		return oss.str();
+	// Creates key from the Chunk's coordinates, usable for hashmaps. todo far-away chunks won't fit into 21 bits.
+	FORCEINLINE uint_fast64_t ToKey() const
+	{
+		uint_fast64_t Key = 0;
+		Key |= (static_cast<uint64_t>(X) & 0x1FFFFF) << 43; // Allocate 21 bits for X, shift left by 43 bits
+		Key |= (static_cast<uint64_t>(Y) & 0x1FFFFF) << 22; // Allocate 21 bits for Y, shift left by 22 bits
+		Key |= (static_cast<uint64_t>(Z) & 0x3FFFFF);       // Allocate 22 bits for Z, no shift needed
+		return Key;
 	}
 
 	FORCEINLINE F3DVector32 operator+(const uint_fast64_t Value) const
@@ -240,13 +243,13 @@ struct FOctreeNode
 		return (MortonCode & MortonMask) & ParentMask ;
 	}
 
-	void SetFilled(const bool Value)
+	FORCEINLINE void SetFilled(const bool Value)
 	{
 		if (Value) MortonCode |= BoolFilledMask;
 		else MortonCode &= ~BoolFilledMask;
 	}
 
-	void SetOccluded(const bool Value)
+	FORCEINLINE void SetOccluded(const bool Value)
 	{
 		if (Value) MortonCode |= BoolOccludedMask;
 		else MortonCode &= ~BoolOccludedMask;
@@ -315,7 +318,7 @@ struct FChunk
 	}
 };
 
-typedef ankerl::unordered_dense::map<std::string, FChunk> FChunkMap;
+typedef ankerl::unordered_dense::map<uint_fast64_t, FChunk> FChunkMap;
 
 // The navigation-mesh is a hashmap of chunks, each being a SVO tree.
 typedef TSharedPtr<FChunkMap> FNavMesh;

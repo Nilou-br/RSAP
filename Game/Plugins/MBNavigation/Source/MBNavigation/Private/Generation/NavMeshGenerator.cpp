@@ -53,6 +53,8 @@ void UNavMeshGenerator::CalculateNodeSizes()
 		NodeSizes.Add(FNavMeshSettings::ChunkSize >> LayerIndex);
 		NodeHalveSizes.Add(NodeSizes[LayerIndex] >> 1);
 		NodeQuarterSizes.Add(NodeSizes[LayerIndex] >> 2);
+
+		CollisionBoxes.Add(FCollisionShape::MakeBox(FVector(NodeHalveSizes[LayerIndex])));
 	}
 }
 
@@ -132,10 +134,11 @@ void UNavMeshGenerator::RasterizeStaticOctree(FChunk* Chunk)
  */
 void UNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, const uint8 LayerIndex)
 {
-	const F3DVector16 NodeLocalLoc = Node.GetLocalLocation();
-	const F3DVector32 NodeGlobalLoc = Node.GetGlobalLocation(Chunk->Location);
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("RasterizeStaticNode");
 	
-	if(!HasOverlap(NodeGlobalLoc, LayerIndex)) return;
+	const F3DVector16 NodeLocalLoc = Node.GetLocalLocation();
+	
+	if(!HasOverlap(Node.GetGlobalLocation(Chunk->Location), LayerIndex)) return;
 	Node.SetOccluded(true);
 	
 	// Stop recursion if end reached.
@@ -160,14 +163,8 @@ void UNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 		FOctreeNode NewNode(ChildNodeLocalX, ChildNodeLocalY, ChildNodeLocalZ);
 		const auto [NodePairIterator, IsInserted] = ChildLayer.emplace(NewNode.GetMortonCode(), NewNode);
 
-		if (!IsInserted) {
-			UE_LOG(LogNavMeshGenerator, Error, TEXT("Error emplacing child-node into the FNodesMap in ::RasterizeStaticNode"));
-			return;
-		}
-
 		// Get reference to stored child-node.
 		FOctreeNode& ChildNode = NodePairIterator->second;
-		ChildNode.ChildIndex = i; // todo might not be needed
 		
 		// Determine the chunk-border of this child-node.
 		if(Node.ChunkBorder)
@@ -183,6 +180,7 @@ void UNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 		// Add this child-node's layer-index to the neighbouring nodes ( since nodes located positively from this one are not yet generated ).
 		for (uint8 n = 0; n < 3; ++n)
 		{
+			TRACE_CPUPROFILER_EVENT_SCOPE_STR("FindNeighbour loop");
 			FOctreeNode FoundNeighbour = FOctreeNode();
 			if(FindNeighbour(ChildNode, Chunk->Location, 0b000100 >> n, ChildLayerIndex, FoundNeighbour))
 			{
@@ -197,11 +195,11 @@ void UNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 
 bool UNavMeshGenerator::HasOverlap(const F3DVector32 &NodeGlobalLocation, const uint8 LayerIndex)
 {
-	return World->OverlapAnyTestByChannel(
+	return World->OverlapBlockingTestByChannel(
 		FVector(NodeGlobalLocation.X + NodeHalveSizes[LayerIndex], NodeGlobalLocation.Y + NodeHalveSizes[LayerIndex], NodeGlobalLocation.Z + NodeHalveSizes[LayerIndex]),
 		FQuat::Identity,
 		ECollisionChannel::ECC_WorldStatic,
-		FCollisionShape::MakeBox(FVector(NodeHalveSizes[LayerIndex]))
+		CollisionBoxes[LayerIndex]
 	);
 }
 
@@ -218,12 +216,6 @@ bool UNavMeshGenerator::HasOverlap(const F3DVector32 &NodeGlobalLocation, const 
  */
 bool UNavMeshGenerator::FindNeighbour(const FOctreeNode& Node, F3DVector32 ChunkLocation, const uint8 Direction, const uint8 LayerIndex, FOctreeNode& OutNeighbour)
 {
-	if(!NavMesh.IsValid())
-	{
-		UE_LOG(LogNavMeshGenerator, Warning, TEXT("Invalid navmesh in ::FindNeighbour"));
-		return false;
-	}
-
 	if(Node.ChunkBorder & Direction)
 	{
 		ChunkLocation.X -= (Direction == 0b000100) ? NodeSizes[0] : 0;
@@ -231,23 +223,9 @@ bool UNavMeshGenerator::FindNeighbour(const FOctreeNode& Node, F3DVector32 Chunk
 		ChunkLocation.Z -= (Direction == 0b000001) ? NodeSizes[0] : 0;
 	}
 
-	/*const FChunk Chunk = NavMesh->find(ChunkLocation.ToKey())
-	if(!)
-
-	for (int i = 0; i < 10; ++i)
-	{
-		// todo subtract correct value
-		NeighbourLocalLocation.X -= (Direction == 0b000100) ? NodeSizes[LayerIndex] : 0;
-		NeighbourLocalLocation.Y -= (Direction == 0b000010) ? NodeSizes[LayerIndex] : 0;
-		NeighbourLocalLocation.Z -= (Direction == 0b000001) ? NodeSizes[LayerIndex] : 0;
-
-		// todo check found chunk
-		const auto FoundNeighbour = NavMesh->Find(ChunkLocation.ToKey())->Octrees[0]->Layers[LayerIndex].find(NeighbourLocalLocation.ToMortonCode());
-		if (FoundNeighbour != NavMesh->Find(ChunkLocation.ToKey())->Octrees[0]->Layers[LayerIndex].end()) {
-			OutNeighbour = FoundNeighbour->second;
-			return true;
-		}
-	}*/
+	const uint_fast64_t Key = ChunkLocation.ToKey();
+	const auto ChunkIterator = NavMesh->find(Key);
+	if(ChunkIterator == NavMesh->end()) return false;
 
 	return false;
 }

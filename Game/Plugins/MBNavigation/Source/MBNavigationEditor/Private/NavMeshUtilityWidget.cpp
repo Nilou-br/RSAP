@@ -1,6 +1,9 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #include "NavMeshUtilityWidget.h"
+
+#include <ranges>
+
 #include "NavMeshTypes.h"
 #include "WorldNavigationManager.h"
 #include "Generation/NavMeshGenerator.h"
@@ -62,10 +65,8 @@ void UNavMeshEditorUtilityWidget::GenerateNavMesh(const float VoxelSizeExponentF
 	UE_LOG(LogTemp, Log, TEXT("VoxelSizeExponent: %i"), FNavMeshSettings::VoxelSizeExponent)
 	UE_LOG(LogTemp, Log, TEXT("StaticDepth: %i"), FNavMeshSettings::StaticDepth)
 	
-	for (const auto &Pair : *NavMesh)
+	for (const auto &Chunk : std::views::values(*NavMesh))
 	{
-		const FChunk& Chunk = Pair.second;
-
 		TArray<FNodesMap> Layers = Chunk.Octrees[0].Get()->Layers;
 		for (int LayerIndex = 0; LayerIndex < 10; ++LayerIndex)
 		{

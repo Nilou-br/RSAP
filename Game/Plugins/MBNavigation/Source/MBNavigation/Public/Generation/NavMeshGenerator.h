@@ -40,6 +40,7 @@ private:
 	TArray<int32> NodeSizes;
 	TArray<int32> NodeHalveSizes;
 	TArray<int32> NodeQuarterSizes;
+	TArray<FCollisionShape> CollisionBoxes;
 
 	const uint8 DynamicDepth = 10;
 };
