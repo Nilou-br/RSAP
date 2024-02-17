@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "NavMeshSettings.h"
 #include "NavMeshTypes.h"
 #include "NavMeshUpdater.generated.h"
 
@@ -16,7 +17,15 @@ class MBNAVIGATION_API UNavMeshUpdater : public UObject
 	GENERATED_BODY()
 	
 public:
-	void Initialize(UWorld* InWorld) { World = InWorld; }
+	FORCEINLINE void Initialize(UWorld* InWorld, const UNavMeshSettings* NavMeshSettings)
+	{
+		World = InWorld;
+		FNavMeshData::Initialize(NavMeshSettings);
+	}
+	FORCEINLINE void Deinitialize()
+	{
+		World = nullptr;
+	}
 
 private:
 	UPROPERTY()

@@ -1,19 +1,13 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-#include "Generation/NavMeshGenerator.h"
+#include "NavMeshGenerator.h"
 #include "NavMeshTypes.h"
-#include <chrono>
 #include "unordered_dense.h"
+#include <chrono>
 
 DEFINE_LOG_CATEGORY(LogNavMeshGenerator)
 
 
-
-void UNavMeshGenerator::Initialize(UWorld* InWorld, const uint8 VoxelSizeExponentFloat, const uint8 StaticDepthFloat)
-{
-	World = InWorld;
-	FNavMeshSettings::Initialize(VoxelSizeExponentFloat, StaticDepthFloat);
-}
 
 FNavMesh UNavMeshGenerator::Generate(const FBox &LevelBoundaries)
 {
@@ -31,12 +25,12 @@ FNavMesh UNavMeshGenerator::Generate(const FBox &LevelBoundaries)
 	CalculateNodeSizes();
 
 	// Start generation
-	NavMesh = MakeShared<FChunkMap>();
+	NavMesh = FNavMesh();
 	GenerateChunks(LevelBoundaries);
 
 #if WITH_EDITOR
 	const float DurationSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - StartTime).count() / 1000.0f;
-	UE_LOG(LogNavMeshGenerator, Log, TEXT("Generation took : %f seconds"), DurationSeconds);
+	UE_LOG(LogNavMeshGenerator, Log, TEXT("Generation took : '%f' seconds"), DurationSeconds);
 #endif
 	
 	return NavMesh;
@@ -50,7 +44,7 @@ void UNavMeshGenerator::CalculateNodeSizes()
 {
 	for (uint8 LayerIndex = 0; LayerIndex < DynamicDepth; ++LayerIndex)
 	{
-		NodeSizes.Add(FNavMeshSettings::ChunkSize >> LayerIndex);
+		NodeSizes.Add(FNavMeshData::ChunkSize >> LayerIndex);
 		NodeHalveSizes.Add(NodeSizes[LayerIndex] >> 1);
 		NodeQuarterSizes.Add(NodeSizes[LayerIndex] >> 2);
 
@@ -64,7 +58,8 @@ void UNavMeshGenerator::CalculateNodeSizes()
  */
 void UNavMeshGenerator::GenerateChunks(const FBox &LevelBoundaries)
 {
-	const int32 ChunkSize = FNavMeshSettings::ChunkSize;
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("GenerateChunks");
+	const int32 ChunkSize = FNavMeshData::ChunkSize;
 	const FVector LevelMin = LevelBoundaries.Min;
 	const FVector LevelMax = LevelBoundaries.Max;
 
@@ -86,7 +81,13 @@ void UNavMeshGenerator::GenerateChunks(const FBox &LevelBoundaries)
 		((ChunksMaxLoc.Y - ChunksMinLoc.Y) / ChunkSize) *
 		((ChunksMaxLoc.Z - ChunksMinLoc.Z) / ChunkSize);
 	
-	NavMesh->reserve(TotalChunks);
+	NavMesh.reserve(TotalChunks);
+	
+	if(TotalChunks == 0)
+	{
+		UE_LOG(LogNavMeshGenerator, Warning, TEXT("Aborting generation due to a likely NaN value on the level-boundaries."))
+		return;
+	}
 
 	// Fill navmesh with chunks.
 	for (int32 x = ChunksMinLoc.X; x < ChunksMaxLoc.X; x += ChunkSize) {
@@ -94,7 +95,7 @@ void UNavMeshGenerator::GenerateChunks(const FBox &LevelBoundaries)
 			for (int32 z = ChunksMinLoc.Z; z < ChunksMaxLoc.Z; z += ChunkSize)
 			{
 				F3DVector32 ChunkLocation = F3DVector32(x, y, z);
-				auto [ChunkIterator, IsInserted] = NavMesh->emplace(ChunkLocation.ToKey(), FChunk(ChunkLocation));
+				auto [ChunkIterator, IsInserted] = NavMesh.emplace(ChunkLocation.ToKey(), FChunk(ChunkLocation));
 
 				if(IsInserted) RasterizeStaticOctree(&ChunkIterator->second);
 			}
@@ -142,7 +143,7 @@ void UNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 	Node.SetOccluded(true);
 	
 	// Stop recursion if end reached.
-	if(LayerIndex >= FNavMeshSettings::StaticDepth) return;
+	if(LayerIndex >= FNavMeshData::StaticDepth) return;
 	Node.SetFilled(true);
 	
 	const uint8 ChildLayerIndex = LayerIndex+1;
@@ -180,11 +181,29 @@ void UNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 		// Add this child-node's layer-index to the neighbouring nodes ( since nodes located positively from this one are not yet generated ).
 		for (uint8 n = 0; n < 3; ++n)
 		{
-			TRACE_CPUPROFILER_EVENT_SCOPE_STR("FindNeighbour loop");
-			FOctreeNode FoundNeighbour = FOctreeNode();
-			if(FindNeighbour(ChildNode, Chunk->Location, 0b000100 >> n, ChildLayerIndex, FoundNeighbour))
+			FOctreeNode FoundNeighbour;
+			uint8 FoundNeighbourIndex;
+			const uint8 Direction = 0b000100 >> n;
+			
+			if(FindNeighbour(ChildNode, Chunk->Location, 0b000100 >> n, ChildLayerIndex, FoundNeighbour, FoundNeighbourIndex))
 			{
-				
+				switch (Direction)
+				{
+					case 0b000100:
+						ChildNode.Neighbours.NeighbourX_N = FoundNeighbourIndex;
+						FoundNeighbour.Neighbours.NeighbourX_P = ChildLayerIndex;
+						break;
+					case 0b000010:
+						ChildNode.Neighbours.NeighbourY_N = FoundNeighbourIndex;
+						FoundNeighbour.Neighbours.NeighbourY_P = ChildLayerIndex;
+						break;
+					case 0b000001:
+						ChildNode.Neighbours.NeighbourZ_N = FoundNeighbourIndex;
+						FoundNeighbour.Neighbours.NeighbourZ_P = ChildLayerIndex;
+						break;
+					default:
+						break;
+				}
 			}
 		}
 
@@ -207,15 +226,20 @@ bool UNavMeshGenerator::HasOverlap(const F3DVector32 &NodeGlobalLocation, const 
  * Find a neighbour of the given node in the given direction.
  * 
  * @param Node: node to get the neighbour of.
- * @param Direction: 6 bit direction you want to find the neighbour in, in the form of '+xyz-xyz' for the 6 bits.
- * @param ChunkLocation: location of the chunk the Node is in.
- * @param LayerIndex: index of the node you want to find the neighbour of.
+ * @param Direction: 6 bit direction in which you want to find the neighbour in; in the form of '+xyz-xyz' for the 6 bits.
+ * @param ChunkLocation: location of the chunk the given Node is in.
+ * @param LayerIndex: layer-index of the given Node.
  * @param OutNeighbour: out-parameter for the found neighbour.
+ * @param OutNeighbourIndex: out-parameter for the layer-index of the found neighbour.
  *
  * @return true if a neighbour has been found.
+ *
+ * todo currently only handles negative direction. Maybe rename or add positive direction if needed?
  */
-bool UNavMeshGenerator::FindNeighbour(const FOctreeNode& Node, F3DVector32 ChunkLocation, const uint8 Direction, const uint8 LayerIndex, FOctreeNode& OutNeighbour)
+bool UNavMeshGenerator::FindNeighbour(const FOctreeNode& Node, F3DVector32 ChunkLocation, const uint8 Direction, const uint8 LayerIndex, FOctreeNode& OutNeighbour, uint8& OutNeighbourIndex)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("FindNeighbour method");
+	
 	if(Node.ChunkBorder & Direction)
 	{
 		ChunkLocation.X -= (Direction == 0b000100) ? NodeSizes[0] : 0;
@@ -223,9 +247,34 @@ bool UNavMeshGenerator::FindNeighbour(const FOctreeNode& Node, F3DVector32 Chunk
 		ChunkLocation.Z -= (Direction == 0b000001) ? NodeSizes[0] : 0;
 	}
 
+	// Find chunk the neighbour is in.
 	const uint_fast64_t Key = ChunkLocation.ToKey();
-	const auto ChunkIterator = NavMesh->find(Key);
-	if(ChunkIterator == NavMesh->end()) return false;
+	const auto ChunkIterator = NavMesh.find(Key);
+	if(ChunkIterator == NavMesh.end()) return false;
+	const FChunk& Chunk = ChunkIterator->second;
 
+	// Check each layer starting from the Node's current layer down until the lowest resolution node.
+	// Nodes can only have neighbours the same size, or bigger, than itself.
+	uint_fast32_t MortonCode = Node.GetMortonCode();
+	for (int i = LayerIndex; i >= 0; --i)
+	{
+		// Try to find neighbour
+		const auto NodeIterator = Chunk.Octrees[0]->Layers[i].find(MortonCode);
+		if(NodeIterator == Chunk.Octrees[0]->Layers[i].end())
+		{
+			// Remove certain amount of bits of the end of the Node's morton-code to get the parent.
+			MortonCode &=  ~((1 << Node.LayerShiftAmount[i])-1);
+
+			// Continue the loop using the parent's morton-code to find the neighbour.
+			continue;
+		};
+
+		// Set out parameter and return a success.
+		OutNeighbour = NodeIterator->second;
+		OutNeighbourIndex = i;
+		return true;
+	}
+
+	// Should not be reached since a chunk always has the root node on layer 0.
 	return false;
 }

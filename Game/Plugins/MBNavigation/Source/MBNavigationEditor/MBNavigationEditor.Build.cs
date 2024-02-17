@@ -26,7 +26,8 @@ public class MBNavigationEditor : ModuleRules
                 "LevelEditor",
                 "ToolMenus",
                 "MBNavigation",
-                "EditorStyle"
+                "EditorStyle",
+                "EditorSubsystem"
             }
         );
     }
