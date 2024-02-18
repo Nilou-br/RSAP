@@ -24,7 +24,7 @@ public:
 
 	// Size the voxels/nodes will increase by exponentially. Base voxel-size is 1cm.
 	UPROPERTY(VisibleAnywhere, Category="Data")
-	uint8 VoxelSizeExponent = 2;
+	uint8 VoxelSizeExponent = 3;
 
 	// How deep the static-nodes will be rasterized in the octree.
 	UPROPERTY(VisibleAnywhere, Category="Data")

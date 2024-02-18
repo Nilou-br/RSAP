@@ -17,15 +17,8 @@ class MBNAVIGATION_API UNavMeshUpdater : public UObject
 	GENERATED_BODY()
 	
 public:
-	FORCEINLINE void Initialize(UWorld* InWorld, const UNavMeshSettings* NavMeshSettings)
-	{
-		World = InWorld;
-		FNavMeshData::Initialize(NavMeshSettings);
-	}
-	FORCEINLINE void Deinitialize()
-	{
-		World = nullptr;
-	}
+	FORCEINLINE void Initialize(UWorld* InWorld) { World = InWorld; }
+	FORCEINLINE void Deinitialize() { World = nullptr; }
 
 private:
 	UPROPERTY()

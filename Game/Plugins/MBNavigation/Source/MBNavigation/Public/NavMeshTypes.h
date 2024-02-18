@@ -14,12 +14,13 @@
  */
 struct FNavMeshData
 {
-	static inline uint8 VoxelSizeExponent = 2;
+	static inline uint8 VoxelSizeExponent = 3;
 	static inline uint8 StaticDepth = 6;
 	static inline constexpr uint8 DynamicDepth = 10;
 	static inline uint32 ChunkSize = 1024 << VoxelSizeExponent;
 	static inline int32 NodeSizes[10];
 	static inline int32 NodeHalveSizes[10];
+	static inline FCollisionShape CollisionBoxes[10];
 	
 	static void Initialize(const UNavMeshSettings* NavMeshSettings)
 	{
@@ -28,11 +29,12 @@ struct FNavMeshData
 
 		// Set ChunkSize to the power of VoxelSizeExponent.
 		ChunkSize = 1024 << VoxelSizeExponent;
-
+		
 		for (uint8 LayerIndex = 0; LayerIndex < DynamicDepth; ++LayerIndex)
 		{
 			NodeSizes[LayerIndex] = ChunkSize >> LayerIndex;
 			NodeHalveSizes[LayerIndex] = NodeSizes[LayerIndex] >> 1;
+			CollisionBoxes[LayerIndex] = FCollisionShape::MakeBox(FVector(NodeHalveSizes[LayerIndex]));
 		}
 	}
 };
@@ -76,7 +78,6 @@ struct F3DVector16
 
 /**
  * Coordinates used for chunks or nodes that exist in global-space which don't need floating point precision.
- * All chunks / nodes don't require floating point precision for their coordinates.
  */
 struct F3DVector32
 {
@@ -136,6 +137,9 @@ struct F3DVector32
 
 	explicit F3DVector32(const int32 InX, const int32 InY, const int32 InZ)
 		: X(InX), Y(InY), Z(InZ) {}
+
+	explicit F3DVector32()
+		: X(0), Y(0), Z(0) {}
 
 	FORCEINLINE FVector ToVector() const
 	{
@@ -227,7 +231,7 @@ struct FOctreeNode
 	FORCEINLINE uint_fast32_t GetParentMortonCode(const uint8 LayerIndex) const
 	{
 		const uint_fast32_t ParentMask = ~((1 << LayerShiftAmount[LayerIndex-1]) - 1);
-		return (MortonCode & MortonMask) & ParentMask ;
+		return (MortonCode & MortonMask) & ParentMask;
 	}
 
 	FORCEINLINE void SetFilled(const bool Value)
@@ -251,6 +255,70 @@ struct FOctreeNode
 	bool GetOccluded() const
 	{
 		return MortonCode & BoolOccludedMask;
+	}
+
+	std::array<F3DVector32, 6> GetNeighbourGlobalCenterLocations(const uint8 LayerIndex, const F3DVector32& ChunkLocation) const
+	{
+		std::array<F3DVector32, 6> NeighbourLocations;
+
+		int Index = 0;
+		for (int Direction = 0b000001; Direction <= 0b100000; Direction<<=1, ++Index)
+		{
+			F3DVector32 NeighbourLocation = GetGlobalLocation(ChunkLocation);
+			int_fast16_t OffsetX = 0;
+			int_fast16_t OffsetY = 0;
+			int_fast16_t OffsetZ = 0;
+
+			// Get the layer-index of the neighbour in the current direction.
+			uint8 NeighbourLayerIndex = 0;
+			switch (Direction) {
+			case 0b000001:
+				NeighbourLayerIndex = Neighbours.NeighbourZ_N;
+				OffsetZ -= FNavMeshData::NodeSizes[NeighbourLayerIndex];
+				if(ChunkBorder & Direction) OffsetZ -= FNavMeshData::NodeSizes[0];
+				break;
+			case 0b000010:
+				NeighbourLayerIndex = Neighbours.NeighbourY_N;
+				OffsetY -= FNavMeshData::NodeSizes[NeighbourLayerIndex];
+				if(ChunkBorder & Direction) OffsetY -= FNavMeshData::NodeSizes[0];
+				break;
+			case 0b000100:
+				NeighbourLayerIndex = Neighbours.NeighbourX_N;
+				OffsetX -= FNavMeshData::NodeSizes[NeighbourLayerIndex];
+				if(ChunkBorder & Direction) OffsetX -= FNavMeshData::NodeSizes[0];
+				break;
+			case 0b001000:
+				NeighbourLayerIndex = Neighbours.NeighbourZ_P;
+				OffsetZ = FNavMeshData::NodeSizes[NeighbourLayerIndex];
+				if(ChunkBorder & Direction) OffsetZ += FNavMeshData::NodeSizes[0];
+				break;
+			case 0b010000:
+				NeighbourLayerIndex = Neighbours.NeighbourY_P;
+				OffsetY = FNavMeshData::NodeSizes[NeighbourLayerIndex];
+				if(ChunkBorder & Direction) OffsetY += FNavMeshData::NodeSizes[0];
+				break;
+			case 0b100000:
+				NeighbourLayerIndex = Neighbours.NeighbourX_P;
+				OffsetX = FNavMeshData::NodeSizes[NeighbourLayerIndex];
+				if(ChunkBorder & Direction) OffsetX += FNavMeshData::NodeSizes[0];
+				break;
+			default:
+				break;
+			}
+
+			// Get the morton-code of the parent of the current-node that is on the same layer as the neighbour.
+			const uint_fast32_t ParentMask = ~((1 << LayerShiftAmount[NeighbourLayerIndex]) - 1);
+
+			// Get global location of the parent using this mask.
+			F3DVector16 ParentLocalLocation;
+			libmorton::morton3D_32_decode((MortonCode & MortonMask) & ParentMask, ParentLocalLocation.X, ParentLocalLocation.Y, ParentLocalLocation.Z);
+			const F3DVector32 ParentGlobalLocation = ChunkLocation + ParentLocalLocation;
+
+			// Get neighbour location by adding the offset on the parents global location.
+			NeighbourLocations[Index] = F3DVector32(ParentGlobalLocation.X+OffsetX, ParentGlobalLocation.Y+OffsetY, ParentGlobalLocation.Z+OffsetZ)+FNavMeshData::NodeHalveSizes[NeighbourLayerIndex];
+		}
+
+		return NeighbourLocations;
 	}
 };
 

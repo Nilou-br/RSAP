@@ -10,19 +10,6 @@ void UNavMeshDebugger::DrawNearbyVoxels(FNavMesh& NavMesh) const
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("DrawNearbyVoxels");
 	
-	TArray<FColor> LayerColors;
-	LayerColors.Emplace(51, 102, 255);
-	LayerColors.Emplace(102, 102, 255);
-	LayerColors.Emplace(153, 102, 255);
-	LayerColors.Emplace(204, 51, 255);
-	LayerColors.Emplace(255, 0, 255);
-	LayerColors.Emplace(255, 51, 204);
-	LayerColors.Emplace(255, 51, 153);
-	LayerColors.Emplace(255, 0, 102);
-	LayerColors.Emplace(204, 0, 0);
-	LayerColors.Emplace(128, 0, 0);
-	
-	
 	// Get editor-world camera
 	const FViewport* ActiveViewport = GEditor->GetActiveViewport();
 	if(!ActiveViewport) return;
@@ -30,9 +17,9 @@ void UNavMeshDebugger::DrawNearbyVoxels(FNavMesh& NavMesh) const
 	const FEditorViewportClient* EditorViewClient = static_cast<FEditorViewportClient*>(ActiveViewport->GetClient());
 	if(!EditorViewClient) return;
 	
-	FVector CameraLocation = EditorViewClient->GetViewLocation();
-	FRotator CameraRotation = EditorViewClient->GetViewRotation();
-	FVector CameraForwardVector = FRotationMatrix(CameraRotation).GetUnitAxis(EAxis::X);
+	const FVector CameraLocation = EditorViewClient->GetViewLocation();
+	const FRotator CameraRotation = EditorViewClient->GetViewRotation();
+	const FVector CameraForwardVector = FRotationMatrix(CameraRotation).GetUnitAxis(EAxis::X);
 	
 	// Draw all voxels of the highest-resolution layer.
 	for (const auto &Chunk : std::views::values(NavMesh))
@@ -46,7 +33,7 @@ void UNavMeshDebugger::DrawNearbyVoxels(FNavMesh& NavMesh) const
 				if(const FVector NodeGlobalLocation = Node.GetGlobalLocation(Chunk.Location).ToVector();
 					LayerIndex == FNavMeshData::StaticDepth
 					&& Node.GetOccluded()
-					&& FVector::Dist(CameraLocation, NodeGlobalLocation) < 1000.f)
+					&& FVector::Dist(CameraLocation, NodeGlobalLocation) < 10000.f)
 				{
 					// Draw node if it is in front of the camera.
 					const FVector DirectionToTarget = (NodeGlobalLocation - CameraLocation).GetSafeNormal();

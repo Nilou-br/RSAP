@@ -16,40 +16,23 @@ class MBNAVIGATION_API UNavMeshGenerator : public UObject
 	GENERATED_BODY()
 	
 public:
-	FORCEINLINE void Initialize(UWorld* InWorld, const UNavMeshSettings* NavMeshSettings)
-	{
-		World = InWorld;
-		FNavMeshData::Initialize(NavMeshSettings);
-	}
-	FORCEINLINE void Deinitialize()
-	{
-		World = nullptr;
-	}
+	FORCEINLINE void Initialize(UWorld* InWorld) { World = InWorld; }
+	FORCEINLINE void Deinitialize() { World = nullptr; }
+	
 	FNavMesh Generate(const FBox &LevelBoundaries);
 
 private:
-
-	// Pre-generation methods
-	void CalculateNodeSizes();
 
 	// Generation methods
 	void GenerateChunks(const FBox &LevelBoundaries);
 	void RasterizeStaticOctree(FChunk* Chunk);
 	void RasterizeStaticNode(FChunk* Chunk, FOctreeNode &Node, const uint8 LayerIndex);
-
-	FORCEINLINE bool HasOverlap(const F3DVector32 &NodeGlobalLocation, const uint8 LayerIndex);
+	bool HasOverlap(const F3DVector32 &NodeGlobalLocation, const uint8 LayerIndex);
 	bool FindNeighbour(const FOctreeNode& Node, F3DVector32 ChunkLocation, const uint8 Direction, const uint8 LayerIndex, FOctreeNode& OutNeighbour, uint8& OutNeighbourIndex);
 
-	// Variables set during initialization
+	// Variables
 	UPROPERTY()
 	UWorld* World;
-
-	// Variables used during generation
+	
 	FNavMesh NavMesh;
-	TArray<int32> NodeSizes;
-	TArray<int32> NodeHalveSizes;
-	TArray<int32> NodeQuarterSizes;
-	TArray<FCollisionShape> CollisionBoxes;
-
-	const uint8 DynamicDepth = 10;
 };

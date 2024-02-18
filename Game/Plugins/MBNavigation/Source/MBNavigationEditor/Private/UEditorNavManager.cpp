@@ -40,9 +40,7 @@ void UEditorNavManager::Deinitialize()
  */
 void UEditorNavManager::Tick(float DeltaTime)
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Tick");
 	if(!MovingActorsTransform.Num()) return;
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Tick MovingActors");
 
 	TArray<AActor*> Actors;
 	MovingActorsTransform.GenerateKeyArray(Actors);
@@ -136,17 +134,23 @@ void UEditorNavManager::OnMapOpened(const FString& Filename, bool bAsTemplate)
 	if(!bHasSettings)
 	{
 		NavMeshSettings = NewObject<UNavMeshSettings>(EditorWorld->PersistentLevel, UNavMeshSettings::StaticClass());
-		EditorWorld->PersistentLevel->AddAssetUserData(NavMeshSettings); // Store settings on level.
+		EditorWorld->PersistentLevel->AddAssetUserData(NavMeshSettings);
 	}
 
-	NavMeshGenerator->Initialize(EditorWorld, NavMeshSettings);
-	NavMeshUpdater->Initialize(EditorWorld, NavMeshSettings);
-	NavMeshDebugger->Initialize(EditorWorld, NavMeshSettings);
+	FNavMeshData::Initialize(NavMeshSettings);
+	NavMeshGenerator->Initialize(EditorWorld);
+	NavMeshUpdater->Initialize(EditorWorld);
+	NavMeshDebugger->Initialize(EditorWorld);
 
 	if(!bHasSettings)
 	{
 		// todo show generation window?
 		NavMesh = NavMeshGenerator->Generate(GetLevelBoundaries());
+		NavMeshDebugger->DrawNearbyVoxels(NavMesh);
+	}
+	else
+	{
+		// Fetch navmesh using FArchive and draw it.	
 	}
 }
 
@@ -202,6 +206,11 @@ void UEditorNavManager::UpdateNavmeshSettings(const float VoxelSizeExponentFloat
 	NavMeshSettings->VoxelSizeExponent = VoxelSizeExponent;
 	NavMeshSettings->StaticDepth = StaticDepth;
 	NavMeshSettings->bDisplayDebug = bDisplayDebug; // todo maybe make this a button on the toolbar?
+	EditorWorld->PersistentLevel->AddAssetUserData(NavMeshSettings);
+
+	NavMeshGenerator->Initialize(EditorWorld);
+	NavMeshUpdater->Initialize(EditorWorld);
+	NavMeshDebugger->Initialize(EditorWorld);
 
 	if(bShouldRegenerate)
 	{
@@ -210,7 +219,10 @@ void UEditorNavManager::UpdateNavmeshSettings(const float VoxelSizeExponentFloat
 	}
 
 	FlushPersistentDebugLines(EditorWorld);
-	if(NavMeshSettings->bDisplayDebug) NavMeshDebugger->DrawNearbyVoxels(NavMesh);
+	if(NavMeshSettings->bDisplayDebug)
+	{
+		NavMeshDebugger->DrawNearbyVoxels(NavMesh);
+	}
 }
 
 void UEditorNavManager::GenerateNavmesh()
@@ -220,8 +232,8 @@ void UEditorNavManager::GenerateNavmesh()
 
 FBox UEditorNavManager::GetLevelBoundaries() const
 {
-	FVector LevelMin = FVector();
-	FVector LevelMax = FVector();
+	FVector LevelMin(0, 0, 0);
+	FVector LevelMax(0, 0, 0);
 	
 	TArray<AActor*> FoundActors;
 	UGameplayStatics::GetAllActorsOfClass(EditorWorld, AStaticMeshActor::StaticClass(), FoundActors);

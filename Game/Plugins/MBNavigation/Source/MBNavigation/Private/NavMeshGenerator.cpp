@@ -13,16 +13,13 @@ FNavMesh UNavMeshGenerator::Generate(const FBox &LevelBoundaries)
 {
 	if(!World)
 	{
-		UE_LOG(LogNavMeshGenerator, Error, TEXT("Invalid 'UWorld' instance. Make sure you call the initialize method first with a valid UWorld instance."))
+		UE_LOG(LogNavMeshGenerator, Error, TEXT("Invalid 'World'. Cannot generate the navmesh without an existing world."))
 		return FNavMesh();
 	}
 
 #if WITH_EDITOR
 	const auto StartTime = std::chrono::high_resolution_clock::now();
 #endif
-
-	// Pre calculate the node-sizes for each layer.
-	CalculateNodeSizes();
 
 	// Start generation
 	NavMesh = FNavMesh();
@@ -36,29 +33,12 @@ FNavMesh UNavMeshGenerator::Generate(const FBox &LevelBoundaries)
 	return NavMesh;
 }
 
-/**
- * Calculates the node-sizes for each layer in the tree.
- * Result stored in NodeSizes/NodeHalveSizes/NodeQuarterSizes.
- */
-void UNavMeshGenerator::CalculateNodeSizes()
-{
-	for (uint8 LayerIndex = 0; LayerIndex < DynamicDepth; ++LayerIndex)
-	{
-		NodeSizes.Add(FNavMeshData::ChunkSize >> LayerIndex);
-		NodeHalveSizes.Add(NodeSizes[LayerIndex] >> 1);
-		NodeQuarterSizes.Add(NodeSizes[LayerIndex] >> 2);
-
-		CollisionBoxes.Add(FCollisionShape::MakeBox(FVector(NodeHalveSizes[LayerIndex])));
-	}
-}
-
 /*
  * Create a grid of chunks filling the entire area of the level-boundaries.
  * Chunks are be placed so that their origin align with the world coordinates x0,y0,z0.
  */
 void UNavMeshGenerator::GenerateChunks(const FBox &LevelBoundaries)
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("GenerateChunks");
 	const int32 ChunkSize = FNavMeshData::ChunkSize;
 	const FVector LevelMin = LevelBoundaries.Min;
 	const FVector LevelMax = LevelBoundaries.Max;
@@ -86,6 +66,7 @@ void UNavMeshGenerator::GenerateChunks(const FBox &LevelBoundaries)
 	if(TotalChunks == 0)
 	{
 		UE_LOG(LogNavMeshGenerator, Warning, TEXT("Aborting generation due to a likely NaN value on the level-boundaries."))
+		UE_LOG(LogNavMeshGenerator, Warning, TEXT("If you see this warning, please try generating again."))
 		return;
 	}
 
@@ -135,9 +116,9 @@ void UNavMeshGenerator::RasterizeStaticOctree(FChunk* Chunk)
  */
 void UNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, const uint8 LayerIndex)
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("RasterizeStaticNode");
-	
 	const F3DVector16 NodeLocalLoc = Node.GetLocalLocation();
+
+	FCollisionShape CollisionShape = FNavMeshData::CollisionBoxes[LayerIndex];
 	
 	if(!HasOverlap(Node.GetGlobalLocation(Chunk->Location), LayerIndex)) return;
 	Node.SetOccluded(true);
@@ -148,7 +129,7 @@ void UNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 	
 	const uint8 ChildLayerIndex = LayerIndex+1;
 	FNodesMap& ChildLayer = Chunk->Octrees[0].Get()->Layers[ChildLayerIndex];
-	const int_fast16_t ChildOffset = NodeHalveSizes[LayerIndex];
+	const int_fast16_t ChildOffset = FNavMeshData::NodeHalveSizes[LayerIndex];
 
 	// Reserve memory for 8 child-nodes on the child-layer and create them one by one.
 	ChildLayer.reserve(8);
@@ -160,7 +141,7 @@ void UNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 		const uint_fast16_t ChildNodeLocalY = NodeLocalLoc.Y + ((i & 2) ? ChildOffset : 0);
 		const uint_fast16_t ChildNodeLocalZ = NodeLocalLoc.Z + ((i & 4) ? ChildOffset : 0);
 
-		// Add child-node to current-layer and get its reference
+		// Add child-node to current-layer and get its reference.
 		FOctreeNode NewNode(ChildNodeLocalX, ChildNodeLocalY, ChildNodeLocalZ);
 		const auto [NodePairIterator, IsInserted] = ChildLayer.emplace(NewNode.GetMortonCode(), NewNode);
 
@@ -215,10 +196,10 @@ void UNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 bool UNavMeshGenerator::HasOverlap(const F3DVector32 &NodeGlobalLocation, const uint8 LayerIndex)
 {
 	return World->OverlapBlockingTestByChannel(
-		FVector(NodeGlobalLocation.X + NodeHalveSizes[LayerIndex], NodeGlobalLocation.Y + NodeHalveSizes[LayerIndex], NodeGlobalLocation.Z + NodeHalveSizes[LayerIndex]),
+		FVector(NodeGlobalLocation.X + FNavMeshData::NodeHalveSizes[LayerIndex], NodeGlobalLocation.Y + FNavMeshData::NodeHalveSizes[LayerIndex], NodeGlobalLocation.Z + FNavMeshData::NodeHalveSizes[LayerIndex]),
 		FQuat::Identity,
 		ECollisionChannel::ECC_WorldStatic,
-		CollisionBoxes[LayerIndex]
+		FNavMeshData::CollisionBoxes[LayerIndex]
 	);
 }
 
@@ -238,13 +219,11 @@ bool UNavMeshGenerator::HasOverlap(const F3DVector32 &NodeGlobalLocation, const 
  */
 bool UNavMeshGenerator::FindNeighbour(const FOctreeNode& Node, F3DVector32 ChunkLocation, const uint8 Direction, const uint8 LayerIndex, FOctreeNode& OutNeighbour, uint8& OutNeighbourIndex)
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("FindNeighbour method");
-	
 	if(Node.ChunkBorder & Direction)
 	{
-		ChunkLocation.X -= (Direction == 0b000100) ? NodeSizes[0] : 0;
-		ChunkLocation.Y -= (Direction == 0b000010) ? NodeSizes[0] : 0;
-		ChunkLocation.Z -= (Direction == 0b000001) ? NodeSizes[0] : 0;
+		ChunkLocation.X -= (Direction == 0b000100) ? FNavMeshData::NodeSizes[0] : 0;
+		ChunkLocation.Y -= (Direction == 0b000010) ? FNavMeshData::NodeSizes[0] : 0;
+		ChunkLocation.Z -= (Direction == 0b000001) ? FNavMeshData::NodeSizes[0] : 0;
 	}
 
 	// Find chunk the neighbour is in.
