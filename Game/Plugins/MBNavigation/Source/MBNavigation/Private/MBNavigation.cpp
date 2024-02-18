@@ -1,8 +1,11 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "MBNavigation.h"
+#include "NavMeshTypes.h"
 
 #define LOCTEXT_NAMESPACE "FMBNavigationModule"
+
+
 
 void FMBNavigationModule::StartupModule()
 {
@@ -13,6 +16,11 @@ void FMBNavigationModule::ShutdownModule()
 {
 	// This function may be called during shutdown to clean up your module.  For modules that support dynamic reloading,
 	// we call this function before unloading the module.
+}
+
+void FMBNavigationModule::InitializeNavMeshSettings(const UNavMeshSettings* NavMeshData)
+{
+	FNavMeshData::Initialize(NavMeshData);
 }
 
 #undef LOCTEXT_NAMESPACE

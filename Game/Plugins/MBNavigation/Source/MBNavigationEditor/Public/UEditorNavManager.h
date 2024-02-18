@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "MBNavigation.h"
 #include "NavMeshTypes.h"
 #include "UEditorNavManager.generated.h"
 
@@ -37,6 +38,7 @@ protected:
 private:
 	void SetDelegates();
 	void ClearDelegates();
+	void InitStaticNavMeshData();
 
 	// Delegates
 	FDelegateHandle OnMapLoadDelegateHandle;
@@ -70,10 +72,11 @@ private:
 	UPROPERTY()
 	TMap<AActor*, FTransform> MovingActorsTransform;
 
-	FNavMesh NavMesh;
-
 	UPROPERTY()
 	UNavMeshSettings* NavMeshSettings;
+
+	FNavMesh NavMesh;
+	FMBNavigationModule MainModule;
 	
 
 public:

@@ -3,6 +3,7 @@
 #include "UEditorNavManager.h"
 #include "UObject/ObjectSaveContext.h"
 #include "Editor.h"
+#include "MBNavigation.h"
 #include "Engine/Level.h"
 #include "Engine/World.h"
 #include "Engine/StaticMeshActor.h"
@@ -20,7 +21,8 @@ void UEditorNavManager::Initialize(FSubsystemCollectionBase& Collection)
 	Super::Initialize(Collection);
 
 	SetDelegates();
-	
+
+	MainModule = FModuleManager::LoadModuleChecked<FMBNavigationModule>("MBNavigation");
 	NavMeshGenerator = NewObject<UNavMeshGenerator>();
 	NavMeshUpdater = NewObject<UNavMeshUpdater>();
 	NavMeshDebugger = NewObject<UNavMeshDebugger>();
@@ -113,6 +115,17 @@ void UEditorNavManager::ClearDelegates()
 	OnEndObjectMovementDelegateHandle.Reset();
 }
 
+/**
+ * We have to initialize the static variables in FNavMeshData in all modules that require it.
+ * It just so happens that the navmesh-generator/updater and the navmesh-debugger exist in different modules.
+ */
+void UEditorNavManager::InitStaticNavMeshData()
+{
+	if(!NavMeshSettings) return;
+	FNavMeshData::Initialize(NavMeshSettings);
+	MainModule.InitializeNavMeshSettings(NavMeshSettings);
+}
+
 void UEditorNavManager::OnMapLoad(const FString& Filename, FCanLoadMap& OutCanLoadMap)
 {
 	UE_LOG(LogTemp, Log, TEXT("OnMapLoad"));
@@ -136,8 +149,8 @@ void UEditorNavManager::OnMapOpened(const FString& Filename, bool bAsTemplate)
 		NavMeshSettings = NewObject<UNavMeshSettings>(EditorWorld->PersistentLevel, UNavMeshSettings::StaticClass());
 		EditorWorld->PersistentLevel->AddAssetUserData(NavMeshSettings);
 	}
-
-	FNavMeshData::Initialize(NavMeshSettings);
+	InitStaticNavMeshData();
+	
 	NavMeshGenerator->Initialize(EditorWorld);
 	NavMeshUpdater->Initialize(EditorWorld);
 	NavMeshDebugger->Initialize(EditorWorld);
@@ -207,10 +220,7 @@ void UEditorNavManager::UpdateNavmeshSettings(const float VoxelSizeExponentFloat
 	NavMeshSettings->StaticDepth = StaticDepth;
 	NavMeshSettings->bDisplayDebug = bDisplayDebug; // todo maybe make this a button on the toolbar?
 	EditorWorld->PersistentLevel->AddAssetUserData(NavMeshSettings);
-
-	NavMeshGenerator->Initialize(EditorWorld);
-	NavMeshUpdater->Initialize(EditorWorld);
-	NavMeshDebugger->Initialize(EditorWorld);
+	InitStaticNavMeshData();
 
 	if(bShouldRegenerate)
 	{
