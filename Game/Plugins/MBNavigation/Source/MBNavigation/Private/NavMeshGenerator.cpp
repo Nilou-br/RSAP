@@ -11,6 +11,7 @@ DEFINE_LOG_CATEGORY(LogNavMeshGenerator)
 
 FNavMesh UNavMeshGenerator::Generate(const FBox &LevelBoundaries)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("NavMesh Generate");
 	if(!World)
 	{
 		UE_LOG(LogNavMeshGenerator, Error, TEXT("Invalid 'World'. Cannot generate the navmesh without an existing world."))
@@ -39,6 +40,7 @@ FNavMesh UNavMeshGenerator::Generate(const FBox &LevelBoundaries)
  */
 void UNavMeshGenerator::GenerateChunks(const FBox &LevelBoundaries)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("GenerateChunks");
 	const int32 ChunkSize = FNavMeshData::ChunkSize;
 	const FVector LevelMin = LevelBoundaries.Min;
 	const FVector LevelMax = LevelBoundaries.Max;
@@ -116,6 +118,7 @@ void UNavMeshGenerator::RasterizeStaticOctree(FChunk* Chunk)
  */
 void UNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, const uint8 LayerIndex)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("RasterizeStaticNode");
 	const F3DVector16 NodeLocalLoc = Node.GetLocalLocation();
 
 	FCollisionShape CollisionShape = FNavMeshData::CollisionBoxes[LayerIndex];
@@ -195,6 +198,7 @@ void UNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 
 bool UNavMeshGenerator::HasOverlap(const F3DVector32 &NodeGlobalLocation, const uint8 LayerIndex)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("HasOverlap");
 	return World->OverlapBlockingTestByChannel(
 		FVector(NodeGlobalLocation.X + FNavMeshData::NodeHalveSizes[LayerIndex], NodeGlobalLocation.Y + FNavMeshData::NodeHalveSizes[LayerIndex], NodeGlobalLocation.Z + FNavMeshData::NodeHalveSizes[LayerIndex]),
 		FQuat::Identity,
@@ -219,6 +223,7 @@ bool UNavMeshGenerator::HasOverlap(const F3DVector32 &NodeGlobalLocation, const 
  */
 bool UNavMeshGenerator::FindNeighbour(const FOctreeNode& Node, F3DVector32 ChunkLocation, const uint8 Direction, const uint8 LayerIndex, FOctreeNode& OutNeighbour, uint8& OutNeighbourIndex)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("FindNeighbour");
 	if(Node.ChunkBorder & Direction)
 	{
 		ChunkLocation.X -= (Direction == 0b000100) ? FNavMeshData::NodeSizes[0] : 0;

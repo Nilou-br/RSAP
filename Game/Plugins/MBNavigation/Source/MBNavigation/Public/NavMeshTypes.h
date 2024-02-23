@@ -257,14 +257,13 @@ struct FOctreeNode
 		return MortonCode & BoolOccludedMask;
 	}
 
-	std::array<F3DVector32, 6> GetNeighbourGlobalCenterLocations(const uint8 LayerIndex, const F3DVector32& ChunkLocation) const
+	std::array<F3DVector32, 6> GetNeighbourGlobalLocations(const uint8 LayerIndex, const F3DVector32& ChunkLocation) const
 	{
 		std::array<F3DVector32, 6> NeighbourLocations;
 
 		int Index = 0;
 		for (int Direction = 0b000001; Direction <= 0b100000; Direction<<=1, ++Index)
 		{
-			F3DVector32 NeighbourLocation = GetGlobalLocation(ChunkLocation);
 			int_fast16_t OffsetX = 0;
 			int_fast16_t OffsetY = 0;
 			int_fast16_t OffsetZ = 0;
@@ -320,6 +319,40 @@ struct FOctreeNode
 
 		return NeighbourLocations;
 	}
+
+	std::array<uint8, 6> GetNeighboursArray() const
+	{
+		std::array<uint8, 6> NeighboursArray;
+
+		int Index = 0;
+		for (int Direction = 0b000001; Direction <= 0b100000; Direction<<=1, ++Index)
+		{
+			switch (Direction) {
+			case 0b000001:
+				NeighboursArray[Index] = Neighbours.NeighbourZ_N;
+				break;
+			case 0b000010:
+				NeighboursArray[Index] = Neighbours.NeighbourY_N;
+				break;
+			case 0b000100:
+				NeighboursArray[Index] = Neighbours.NeighbourX_N;
+				break;
+			case 0b001000:
+				NeighboursArray[Index] = Neighbours.NeighbourZ_P;
+				break;
+			case 0b010000:
+				NeighboursArray[Index] = Neighbours.NeighbourY_P;
+				break;
+			case 0b100000:
+				NeighboursArray[Index] = Neighbours.NeighbourX_P;
+				break;
+			default:
+				break;
+			}
+		}
+
+		return NeighboursArray;
+	}
 };
 
 typedef ankerl::unordered_dense::map<uint_fast32_t, FOctreeNode> FNodesMap;
@@ -358,6 +391,13 @@ struct FChunk
 	
 	FChunk(const F3DVector32 &InLocation)
 		: Location(InLocation)
+	{
+		// Create the static octree, this octree should always exist.
+		Octrees.Add(MakeShared<FOctree>());
+	}
+
+	FChunk()
+		: Location(0, 0, 0)
 	{
 		// Create the static octree, this octree should always exist.
 		Octrees.Add(MakeShared<FOctree>());

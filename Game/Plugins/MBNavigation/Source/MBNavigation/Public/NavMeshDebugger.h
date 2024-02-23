@@ -8,19 +8,19 @@
 
 
 UCLASS()
-class UNavMeshDebugger : public UObject
+class MBNAVIGATION_API UNavMeshDebugger : public UObject
 {
 	GENERATED_BODY()
 	
 public:
-	FORCEINLINE void Initialize(UWorld* InWorld) { World = InWorld; }
+	FORCEINLINE void Initialize(const UWorld* InWorld) { World = InWorld; }
 	FORCEINLINE void Deinitialize() { World = nullptr; }
 	
 	void DrawNearbyVoxels(FNavMesh& NavMesh) const;
 	void DrawNearbyNeighbours(FNavMesh& NavMesh) const;
 
 	UPROPERTY()
-	UWorld* World;
+	const UWorld* World;
 
 private:
 	static inline constexpr FColor LayerColors[10] = {

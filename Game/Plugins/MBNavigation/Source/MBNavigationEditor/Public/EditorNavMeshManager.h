@@ -4,7 +4,7 @@
 
 #include "MBNavigation.h"
 #include "NavMeshTypes.h"
-#include "UEditorNavManager.generated.h"
+#include "EditorNavMeshManager.generated.h"
 
 class UNavMeshGenerator;
 class UNavMeshUpdater;
@@ -22,7 +22,7 @@ DECLARE_LOG_CATEGORY_EXTERN(LogEditorNavManager, Log, All);
  * - <b>Switches</b> the navmesh when changing levels.
  */
 UCLASS()
-class UEditorNavManager final : public UEditorSubsystem, public FTickableEditorObject
+class UEditorNavMeshManager final : public UEditorSubsystem, public FTickableEditorObject
 {
 	GENERATED_BODY()
 	

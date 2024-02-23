@@ -1,22 +1,23 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-#include "UEditorNavManager.h"
-#include "UObject/ObjectSaveContext.h"
+#include "EditorNavMeshManager.h"
 #include "Editor.h"
 #include "MBNavigation.h"
-#include "Engine/Level.h"
-#include "Engine/World.h"
-#include "Engine/StaticMeshActor.h"
+#include "NavMeshDebugger.h"
 #include "NavMeshGenerator.h"
 #include "NavMeshUpdater.h"
-#include "NavMeshDebugger.h"
+#include "Serialize.h"
+#include "Engine/Level.h"
+#include "Engine/StaticMeshActor.h"
+#include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
+#include "UObject/ObjectSaveContext.h"
 
 DEFINE_LOG_CATEGORY(LogEditorNavManager)
 
 
 
-void UEditorNavManager::Initialize(FSubsystemCollectionBase& Collection)
+void UEditorNavMeshManager::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 
@@ -28,7 +29,7 @@ void UEditorNavManager::Initialize(FSubsystemCollectionBase& Collection)
 	NavMeshDebugger = NewObject<UNavMeshDebugger>();
 }
 
-void UEditorNavManager::Deinitialize()
+void UEditorNavMeshManager::Deinitialize()
 {
 	ClearDelegates();
 	
@@ -40,7 +41,7 @@ void UEditorNavManager::Deinitialize()
  * 
  * Will update the chunk(s) of the navmesh any actor has moved in since last frame.
  */
-void UEditorNavManager::Tick(float DeltaTime)
+void UEditorNavMeshManager::Tick(float DeltaTime)
 {
 	if(!MovingActorsTransform.Num()) return;
 
@@ -67,30 +68,30 @@ void UEditorNavManager::Tick(float DeltaTime)
 	}
 }
 
-void UEditorNavManager::SetDelegates()
+void UEditorNavMeshManager::SetDelegates()
 {
 	// Opening level
-	OnMapLoadDelegateHandle = FEditorDelegates::OnMapLoad.AddUObject(this, &UEditorNavManager::OnMapLoad);
-	OnMapOpenedDelegateHandle = FEditorDelegates::OnMapOpened.AddUObject(this, &UEditorNavManager::OnMapOpened);
+	OnMapLoadDelegateHandle = FEditorDelegates::OnMapLoad.AddUObject(this, &UEditorNavMeshManager::OnMapLoad);
+	OnMapOpenedDelegateHandle = FEditorDelegates::OnMapOpened.AddUObject(this, &UEditorNavMeshManager::OnMapOpened);
 	
 	// Level save
-	PreSaveWorldDelegateHandle = FEditorDelegates::PreSaveWorldWithContext.AddUObject(this, &UEditorNavManager::PreWorldSaved);
-	PostSaveWorldDelegateHandle = FEditorDelegates::PostSaveWorldWithContext.AddUObject(this, &UEditorNavManager::PostWorldSaved);
+	PreSaveWorldDelegateHandle = FEditorDelegates::PreSaveWorldWithContext.AddUObject(this, &UEditorNavMeshManager::PreWorldSaved);
+	PostSaveWorldDelegateHandle = FEditorDelegates::PostSaveWorldWithContext.AddUObject(this, &UEditorNavMeshManager::PostWorldSaved);
 
 	// Drop actor in level.
-	OnNewActorsDroppedDelegateHandle = FEditorDelegates::OnNewActorsDropped.AddUObject(this, &UEditorNavManager::OnNewActorsDropped);
+	OnNewActorsDroppedDelegateHandle = FEditorDelegates::OnNewActorsDropped.AddUObject(this, &UEditorNavMeshManager::OnNewActorsDropped);
 
 	// Begin / end dragging object in level.
-	OnBeginObjectMovementDelegateHandle = GEditor->OnBeginObjectMovement().AddUObject(this, &UEditorNavManager::OnBeginObjectMovement);
-	OnEndObjectMovementDelegateHandle = GEditor->OnEndObjectMovement().AddUObject(this, &UEditorNavManager::OnEndObjectMovement);
+	OnBeginObjectMovementDelegateHandle = GEditor->OnBeginObjectMovement().AddUObject(this, &UEditorNavMeshManager::OnBeginObjectMovement);
+	OnEndObjectMovementDelegateHandle = GEditor->OnEndObjectMovement().AddUObject(this, &UEditorNavMeshManager::OnEndObjectMovement);
 
 	// Camera movement
-	OnCameraMovedDelegateHandle = FEditorDelegates::OnEditorCameraMoved.AddUObject(this, &UEditorNavManager::OnCameraMoved);
+	OnCameraMovedDelegateHandle = FEditorDelegates::OnEditorCameraMoved.AddUObject(this, &UEditorNavMeshManager::OnCameraMoved);
 
 	// todo when level is deleted, also delete stored navmesh.
 }
 
-void UEditorNavManager::ClearDelegates()
+void UEditorNavMeshManager::ClearDelegates()
 {
 	// Opening level
 	FEditorDelegates::OnMapLoad.Remove(OnMapLoadDelegateHandle);
@@ -119,14 +120,14 @@ void UEditorNavManager::ClearDelegates()
  * We have to initialize the static variables in FNavMeshData in all modules that require it.
  * It just so happens that the navmesh-generator/updater and the navmesh-debugger exist in different modules.
  */
-void UEditorNavManager::InitStaticNavMeshData()
+void UEditorNavMeshManager::InitStaticNavMeshData()
 {
 	if(!NavMeshSettings) return;
 	FNavMeshData::Initialize(NavMeshSettings);
 	MainModule.InitializeNavMeshSettings(NavMeshSettings);
 }
 
-void UEditorNavManager::OnMapLoad(const FString& Filename, FCanLoadMap& OutCanLoadMap)
+void UEditorNavMeshManager::OnMapLoad(const FString& Filename, FCanLoadMap& OutCanLoadMap)
 {
 	UE_LOG(LogTemp, Log, TEXT("OnMapLoad"));
 
@@ -135,9 +136,22 @@ void UEditorNavManager::OnMapLoad(const FString& Filename, FCanLoadMap& OutCanLo
 	NavMeshGenerator->Deinitialize();
 	NavMeshUpdater->Deinitialize();
 	NavMeshDebugger->Deinitialize();
+
+	const FString FilePath = FPaths::ProjectSavedDir() / TEXT("NavMeshData.bin");
+	FArchive* FileArchive = IFileManager::Get().CreateFileReader(*FilePath);
+	if (FileArchive)
+	{
+		*FileArchive << NavMesh;
+		FileArchive->Close();
+		delete FileArchive;
+	}
+	else
+	{
+		UE_LOG(LogEditorNavManager, Warning, TEXT("Failed to load navmesh data from file: %s"), *FilePath);
+	}
 }
 
-void UEditorNavManager::OnMapOpened(const FString& Filename, bool bAsTemplate)
+void UEditorNavMeshManager::OnMapOpened(const FString& Filename, bool bAsTemplate)
 {
 	EditorWorld = GEditor->GetEditorWorldContext().World();
 
@@ -167,34 +181,34 @@ void UEditorNavManager::OnMapOpened(const FString& Filename, bool bAsTemplate)
 	}
 }
 
-void UEditorNavManager::PreWorldSaved(UWorld* World, FObjectPreSaveContext ObjectPreSaveContext)
+void UEditorNavMeshManager::PreWorldSaved(UWorld* World, FObjectPreSaveContext ObjectPreSaveContext)
 {
 	// todo store navmesh changes using FArchive in the .bin files.
 	NavMeshSettings->ID = FGuid::NewGuid();
 	World->PersistentLevel->AddAssetUserData(NavMeshSettings);
 }
 
-void UEditorNavManager::PostWorldSaved(UWorld* World, FObjectPostSaveContext ObjectSaveContext)
+void UEditorNavMeshManager::PostWorldSaved(UWorld* World, FObjectPostSaveContext ObjectSaveContext)
 {
 	if(!ObjectSaveContext.SaveSucceeded()) return;
 }
 
-void UEditorNavManager::OnNewActorsDropped(const TArray<UObject*>& Objects, const TArray<AActor*>& Actors)
+void UEditorNavMeshManager::OnNewActorsDropped(const TArray<UObject*>& Objects, const TArray<AActor*>& Actors)
 {
 	UE_LOG(LogTemp, Log, TEXT("Actor(s) placed"));
 }
 
-void UEditorNavManager::OnBeginObjectMovement(UObject& Object)
+void UEditorNavMeshManager::OnBeginObjectMovement(UObject& Object)
 {
 	if (AActor* Actor = Cast<AActor>(&Object)) MovingActorsTransform.Add(Actor, Actor->GetTransform());
 }
 
-void UEditorNavManager::OnEndObjectMovement(UObject& Object)
+void UEditorNavMeshManager::OnEndObjectMovement(UObject& Object)
 {
 	if (const AActor* Actor = Cast<AActor>(&Object)) MovingActorsTransform.Remove(Actor);
 }
 
-void UEditorNavManager::OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation,
+void UEditorNavMeshManager::OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation,
 	ELevelViewportType LevelViewportType, int32)
 {
 	if(NavMeshSettings->bDisplayDebug)
@@ -204,7 +218,7 @@ void UEditorNavManager::OnCameraMoved(const FVector& CameraLocation, const FRota
 	}
 }
 
-void UEditorNavManager::UpdateNavmeshSettings(const float VoxelSizeExponentFloat, const float StaticDepthFloat, const bool bDisplayDebug)
+void UEditorNavMeshManager::UpdateNavmeshSettings(const float VoxelSizeExponentFloat, const float StaticDepthFloat, const bool bDisplayDebug)
 {
 	if(!EditorWorld)
 	{
@@ -226,6 +240,16 @@ void UEditorNavManager::UpdateNavmeshSettings(const float VoxelSizeExponentFloat
 	{
 		// todo show confirmation window.
 		GenerateNavmesh();
+
+		// Save navmesh
+		const FString FilePath = FPaths::ProjectSavedDir() / TEXT("NavMeshData.bin");
+		FArchive* FileArchive = IFileManager::Get().CreateFileWriter(*FilePath);
+		if (FileArchive)
+		{
+			*FileArchive << NavMesh;
+			FileArchive->Close();
+			delete FileArchive;
+		}
 	}
 
 	FlushPersistentDebugLines(EditorWorld);
@@ -235,12 +259,12 @@ void UEditorNavManager::UpdateNavmeshSettings(const float VoxelSizeExponentFloat
 	}
 }
 
-void UEditorNavManager::GenerateNavmesh()
+void UEditorNavMeshManager::GenerateNavmesh()
 {
 	NavMesh = NavMeshGenerator->Generate(GetLevelBoundaries());
 }
 
-FBox UEditorNavManager::GetLevelBoundaries() const
+FBox UEditorNavMeshManager::GetLevelBoundaries() const
 {
 	FVector LevelMin(0, 0, 0);
 	FVector LevelMax(0, 0, 0);
