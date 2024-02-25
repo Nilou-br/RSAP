@@ -19,6 +19,8 @@ FString To6BitBinaryString(uint8 Value) {
 void UNavMeshDebugger::DrawNearbyVoxels(FNavMesh& NavMesh) const
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("DrawNearbyVoxels");
+
+	FlushPersistentDebugLines(World);
 	
 	// Get editor-world camera
 	const FViewport* ActiveViewport = GEditor->GetActiveViewport();

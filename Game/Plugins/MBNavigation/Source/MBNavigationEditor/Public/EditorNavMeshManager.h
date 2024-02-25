@@ -38,7 +38,10 @@ protected:
 private:
 	void SetDelegates();
 	void ClearDelegates();
+	void LoadNavMeshSettings();
 	void InitStaticNavMeshData();
+	void GenerateNavmesh();
+	FBox GetLevelBoundaries() const;
 
 	// Delegates
 	FDelegateHandle OnMapLoadDelegateHandle;
@@ -82,7 +85,7 @@ private:
 public:
 	UFUNCTION(BlueprintCallable, Category="Settings")
 	void UpdateNavmeshSettings(const float VoxelSizeExponentFloat, const float StaticDepthFloat,  const bool bDisplayDebug);
-	
-	void GenerateNavmesh();
-	FBox GetLevelBoundaries() const;
+
+	UFUNCTION(BlueprintCallable, Category="Settings")
+	UNavMeshSettings* GetNavMeshSettings() const { return NavMeshSettings; }
 };

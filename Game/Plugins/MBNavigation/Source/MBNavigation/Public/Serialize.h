@@ -3,6 +3,8 @@
 #include "NavMeshTypes.h"
 
 
+MBNAVIGATION_API void SaveNavMesh(FNavMesh& NavMesh, FGuid& ID);
+MBNAVIGATION_API bool LoadNavMesh(FNavMesh& OutNavMesh, FGuid& OutID);
 
 MBNAVIGATION_API FArchive& operator<<(FArchive& Ar, F3DVector16& Vector16);
 MBNAVIGATION_API FArchive& operator<<(FArchive& Ar, F3DVector32& Vector32);

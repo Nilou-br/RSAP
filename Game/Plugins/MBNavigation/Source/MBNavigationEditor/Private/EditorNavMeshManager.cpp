@@ -116,6 +116,17 @@ void UEditorNavMeshManager::ClearDelegates()
 	OnEndObjectMovementDelegateHandle.Reset();
 }
 
+void UEditorNavMeshManager::LoadNavMeshSettings()
+{
+	// Create new UNavMeshSettings if this level doesn't have it yet.
+	NavMeshSettings = EditorWorld->PersistentLevel->GetAssetUserData<UNavMeshSettings>();
+	if(!NavMeshSettings)
+	{
+		NavMeshSettings = NewObject<UNavMeshSettings>(EditorWorld->PersistentLevel, UNavMeshSettings::StaticClass());
+		EditorWorld->PersistentLevel->AddAssetUserData(NavMeshSettings);
+	}
+}
+
 /**
  * We have to initialize the static variables in FNavMeshData in all modules that require it.
  * It just so happens that the navmesh-generator/updater and the navmesh-debugger exist in different modules.
@@ -136,56 +147,48 @@ void UEditorNavMeshManager::OnMapLoad(const FString& Filename, FCanLoadMap& OutC
 	NavMeshGenerator->Deinitialize();
 	NavMeshUpdater->Deinitialize();
 	NavMeshDebugger->Deinitialize();
-
-	const FString FilePath = FPaths::ProjectSavedDir() / TEXT("NavMeshData.bin");
-	FArchive* FileArchive = IFileManager::Get().CreateFileReader(*FilePath);
-	if (FileArchive)
-	{
-		*FileArchive << NavMesh;
-		FileArchive->Close();
-		delete FileArchive;
-	}
-	else
-	{
-		UE_LOG(LogEditorNavManager, Warning, TEXT("Failed to load navmesh data from file: %s"), *FilePath);
-	}
+	NavMesh.clear();
 }
 
 void UEditorNavMeshManager::OnMapOpened(const FString& Filename, bool bAsTemplate)
 {
 	EditorWorld = GEditor->GetEditorWorldContext().World();
-
-	// Create new UNavMeshSettings if this level doesn't have it yet.
-	NavMeshSettings = EditorWorld->PersistentLevel->GetAssetUserData<UNavMeshSettings>();
-	const bool bHasSettings = NavMeshSettings ? true : false;
-	if(!bHasSettings)
-	{
-		NavMeshSettings = NewObject<UNavMeshSettings>(EditorWorld->PersistentLevel, UNavMeshSettings::StaticClass());
-		EditorWorld->PersistentLevel->AddAssetUserData(NavMeshSettings);
-	}
-	InitStaticNavMeshData();
-	
 	NavMeshGenerator->Initialize(EditorWorld);
 	NavMeshUpdater->Initialize(EditorWorld);
 	NavMeshDebugger->Initialize(EditorWorld);
 
-	if(!bHasSettings)
+	LoadNavMeshSettings();
+	InitStaticNavMeshData();
+	
+	FGuid StoredID;
+	LoadNavMesh(NavMesh, StoredID);
+	
+	if(!NavMesh.empty())
 	{
-		// todo show generation window?
-		NavMesh = NavMeshGenerator->Generate(GetLevelBoundaries());
-		NavMeshDebugger->DrawNearbyVoxels(NavMesh);
+		if(NavMeshSettings->ID != StoredID)
+		{
+			UE_LOG(LogEditorNavManager, Warning, TEXT("Cached navmesh is not in-sync with this level's state. Regeneration required."));
+		}
+		else return;
 	}
-	else
+
+	// Generate the navmesh when the actors are initialized next frame.
+	EditorWorld->GetTimerManager().SetTimerForNextTick([this]()
 	{
-		// Fetch navmesh using FArchive and draw it.	
-	}
+		UE_LOG(LogEditorNavManager, Log, TEXT("Generating navmesh for this level..."));
+		GenerateNavmesh();
+		SaveNavMesh(NavMesh, NavMeshSettings->ID);
+		
+		if(NavMeshSettings->bDisplayDebug) NavMeshDebugger->DrawNearbyVoxels(NavMesh);
+	});
 }
 
 void UEditorNavMeshManager::PreWorldSaved(UWorld* World, FObjectPreSaveContext ObjectPreSaveContext)
 {
-	// todo store navmesh changes using FArchive in the .bin files.
+	// todo check 'AddAssetUserData(NavMeshSettings)' if it is correct.
 	NavMeshSettings->ID = FGuid::NewGuid();
 	World->PersistentLevel->AddAssetUserData(NavMeshSettings);
+	SaveNavMesh(NavMesh, NavMeshSettings->ID);
 }
 
 void UEditorNavMeshManager::PostWorldSaved(UWorld* World, FObjectPostSaveContext ObjectSaveContext)
@@ -195,7 +198,7 @@ void UEditorNavMeshManager::PostWorldSaved(UWorld* World, FObjectPostSaveContext
 
 void UEditorNavMeshManager::OnNewActorsDropped(const TArray<UObject*>& Objects, const TArray<AActor*>& Actors)
 {
-	UE_LOG(LogTemp, Log, TEXT("Actor(s) placed"));
+	UE_LOG(LogEditorNavManager, Log, TEXT("Actor(s) placed"));
 }
 
 void UEditorNavMeshManager::OnBeginObjectMovement(UObject& Object)
@@ -213,7 +216,6 @@ void UEditorNavMeshManager::OnCameraMoved(const FVector& CameraLocation, const F
 {
 	if(NavMeshSettings->bDisplayDebug)
 	{
-		FlushPersistentDebugLines(EditorWorld);
 		NavMeshDebugger->DrawNearbyVoxels(NavMesh);
 	}
 }
@@ -241,18 +243,14 @@ void UEditorNavMeshManager::UpdateNavmeshSettings(const float VoxelSizeExponentF
 		// todo show confirmation window.
 		GenerateNavmesh();
 
+		// todo, level should be saved along with the navmesh so that they are in-sync.
+		// todo maybe ask user to save level before starting generation?
 		// Save navmesh
-		const FString FilePath = FPaths::ProjectSavedDir() / TEXT("NavMeshData.bin");
-		FArchive* FileArchive = IFileManager::Get().CreateFileWriter(*FilePath);
-		if (FileArchive)
-		{
-			*FileArchive << NavMesh;
-			FileArchive->Close();
-			delete FileArchive;
-		}
+		NavMeshSettings->ID = FGuid::NewGuid();
+		EditorWorld->PersistentLevel->AddAssetUserData(NavMeshSettings);
+		SaveNavMesh(NavMesh, NavMeshSettings->ID);
 	}
-
-	FlushPersistentDebugLines(EditorWorld);
+	
 	if(NavMeshSettings->bDisplayDebug)
 	{
 		NavMeshDebugger->DrawNearbyVoxels(NavMesh);

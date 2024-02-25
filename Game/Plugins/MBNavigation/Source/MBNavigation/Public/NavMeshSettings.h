@@ -23,14 +23,14 @@ public:
 	FGuid ID;
 
 	// Size the voxels/nodes will increase by exponentially. Base voxel-size is 1cm.
-	UPROPERTY(VisibleAnywhere, Category="Data")
-	uint8 VoxelSizeExponent = 3;
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category="Data")
+	uint8 VoxelSizeExponent = 2;
 
 	// How deep the static-nodes will be rasterized in the octree.
-	UPROPERTY(VisibleAnywhere, Category="Data")
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category="Data")
 	uint8 StaticDepth = 6;
 
 	// If the navmesh should be visible using debug-lines.
-	UPROPERTY(VisibleAnywhere, Category="Data")
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category="Data")
 	bool bDisplayDebug = false;
 };

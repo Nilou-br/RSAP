@@ -4,6 +4,38 @@ template FArchive& SerializeMap<FArchive, uint_fast64_t, FChunk>(FArchive&, anke
 template FArchive& SerializeMap<FArchive, uint_fast32_t, FOctreeNode>(FArchive&, ankerl::unordered_dense::map<uint_fast32_t, FOctreeNode>&);
 
 
+void SaveNavMesh(FNavMesh& NavMesh, FGuid& ID)
+{
+	const FString FilePath = FPaths::ProjectSavedDir() / TEXT("NavMeshData.bin");
+	FArchive* FileArchive = IFileManager::Get().CreateFileWriter(*FilePath);
+	if (!FileArchive)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Failed to save navmesh data to file: %s"), *FilePath);
+		return;
+	}
+
+	*FileArchive << ID;
+	*FileArchive << NavMesh;
+	FileArchive->Close();
+	delete FileArchive;
+}
+
+bool LoadNavMesh(FNavMesh& OutNavMesh, FGuid& OutID)
+{
+	const FString FilePath = FPaths::ProjectSavedDir() / TEXT("NavMeshData.bin");
+	FArchive* FileArchive = IFileManager::Get().CreateFileReader(*FilePath);
+	if (!FileArchive)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Failed to load navmesh data from file: %s"), *FilePath);
+		return false;
+	}
+
+	*FileArchive << OutID;
+	*FileArchive << OutNavMesh;
+	FileArchive->Close();
+	delete FileArchive;
+	return true;
+}
 
 FArchive& operator<<(FArchive& Ar, F3DVector16& Vector16)
 {

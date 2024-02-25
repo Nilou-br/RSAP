@@ -33,19 +33,9 @@ void UWorldNavMeshManager::OnWorldInitializedActors(const FActorsInitializedPara
 {
 	const UWorld* World = GetWorld();
 	if(!World || World->WorldType == EWorldType::Editor) return;
-
-	FNavMesh NavMesh;
-	const FString FilePath = FPaths::ProjectSavedDir() / TEXT("NavMeshData.bin");
-	FArchive* FileArchive = IFileManager::Get().CreateFileReader(*FilePath);
-	if (!FileArchive)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Failed to load navmesh data from file: %s"), *FilePath);
-		return;
-	}
 	
-	*FileArchive << NavMesh;
-	FileArchive->Close();
-	delete FileArchive;
+	FNavMesh NavMesh;
+	if(FGuid ID; !LoadNavMesh(NavMesh, ID)) return;
 
 #if WITH_EDITOR
 	NavMeshDebugger->Initialize(World);
