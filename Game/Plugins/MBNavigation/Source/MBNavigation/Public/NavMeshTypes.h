@@ -14,10 +14,11 @@
  */
 struct FNavMeshData
 {
-	static inline uint8 VoxelSizeExponent = 3;
+	static inline uint8 VoxelSizeExponent = 2;
 	static inline uint8 StaticDepth = 6;
 	static inline constexpr uint8 DynamicDepth = 10;
 	static inline uint32 ChunkSize = 1024 << VoxelSizeExponent;
+	static inline uint8 KeyShift = 12;
 	static inline int32 NodeSizes[10];
 	static inline int32 NodeHalveSizes[10];
 	static inline FCollisionShape CollisionBoxes[10];
@@ -26,9 +27,8 @@ struct FNavMeshData
 	{
 		VoxelSizeExponent = NavMeshSettings->VoxelSizeExponent;
 		StaticDepth = NavMeshSettings->StaticDepth;
-
-		// Set ChunkSize to the power of VoxelSizeExponent.
 		ChunkSize = 1024 << VoxelSizeExponent;
+		KeyShift = 10 + VoxelSizeExponent;
 		
 		for (uint8 LayerIndex = 0; LayerIndex < DynamicDepth; ++LayerIndex)
 		{
@@ -77,30 +77,49 @@ struct F3DVector16
 };
 
 /**
- * Coordinates used for chunks or nodes that exist in global-space which don't need floating point precision.
+ * Coordinates used for chunks or nodes that exist in global-space.
  */
 struct F3DVector32
 {
 	int_fast32_t X;
 	int_fast32_t Y;
 	int_fast32_t Z;
-
-	// Creates key from the Chunk's coordinates, usable for hashmaps. todo far-away chunks won't fit into 21 bits.
-	FORCEINLINE uint_fast64_t ToKey() const
-	{
-		uint_fast64_t Key = 0;
-		Key |= (static_cast<uint64_t>(X) & 0x1FFFFF) << 43; // Allocate 21 bits for X, shift left by 43 bits
-		Key |= (static_cast<uint64_t>(Y) & 0x1FFFFF) << 22; // Allocate 21 bits for Y, shift left by 22 bits
-		Key |= (static_cast<uint64_t>(Z) & 0x3FFFFF);       // Allocate 22 bits for Z, no shift needed
-		return Key;
+	
+	// Creates key from the coordinates, usable for hashmaps.
+	// The F3DVector32 can have max 31 bits per axis to support this method.
+	FORCEINLINE uint64_t ToKey() const {
+		auto Encode = [](const int_fast32_t Val) -> uint64_t {
+			uint64_t Result = (Val >> FNavMeshData::KeyShift) & 0xFFFFF; // Get the first 20 bits
+			Result |= ((Val < 0) ? 1ULL : 0ULL) << 20; // Add sign bit
+			return Result;
+		};
+        
+		return (Encode(X) << 42) | (Encode(Y) << 21) | Encode(Z);
 	}
 
-	FORCEINLINE F3DVector32 operator+(const uint_fast64_t Value) const
+	// Creates a F3DVector32 from a previously generated Key.
+	static F3DVector32 FromKey(const uint64_t Key) {
+		auto Decode = [](const uint64_t Val) -> int_fast32_t {
+			int_fast32_t Result = Val & 0xFFFFF; // Get the 20 bits
+			if (Val & (1 << 20)) { // Check sign bit
+				Result |= 0xFFF00000; // Apply sign if necessary
+			}
+			return Result << FNavMeshData::KeyShift; // Shift back
+		};
+
+		F3DVector32 Vector32;
+		Vector32.X = Decode((Key >> 42) & 0x1FFFFF);
+		Vector32.Y = Decode((Key >> 21) & 0x1FFFFF);
+		Vector32.Z = Decode(Key & 0x1FFFFF);
+		return Vector32;
+	}
+
+	FORCEINLINE F3DVector32 operator+(const uint_fast32_t Value) const
 	{
 		return F3DVector32(X + Value, Y + Value, Z + Value);
 	}
 
-	FORCEINLINE F3DVector32 operator-(const uint_fast64_t Value) const
+	FORCEINLINE F3DVector32 operator-(const uint_fast32_t Value) const
 	{
 		return F3DVector32(X - Value, Y - Value, Z - Value);
 	}
@@ -144,7 +163,7 @@ struct F3DVector32
 	FORCEINLINE FVector ToVector() const
 	{
 		return FVector(X, Y, Z);
-	};
+	}
 };
 
 // todo
@@ -189,7 +208,7 @@ struct FOctreeNode
 
 	uint_fast32_t MortonCode;
 	FOctreeNeighbours Neighbours;
-	uint16 DynamicIndex: 12;
+	uint16 DynamicIndex: 12; // todo: if changing this value, also update serialization method.
 	uint8 ChunkBorder: 6;
 
 	FOctreeNode(uint_fast16_t NodeLocationX, uint_fast16_t NodeLocationY, uint_fast16_t NodeLocationZ):
@@ -386,7 +405,7 @@ struct FOctree
  */
 struct FChunk
 {
-	F3DVector32 Location; // Located at the negative most voxel's center point, which makes the morton-codes align.
+	F3DVector32 Location; // Located at the negative most location.
 	TArray<TSharedPtr<FOctree>> Octrees;
 	
 	FChunk(const F3DVector32 &InLocation)

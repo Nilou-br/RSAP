@@ -131,8 +131,7 @@ void UEditorNavMeshManager::LoadNavMeshSettings()
 }
 
 /**
- * We have to initialize the static variables in FNavMeshData in all modules that require it.
- * It just so happens that the navmesh-generator/updater and the navmesh-debugger exist in different modules.
+ * Initializes the static variables in FNavMeshData in all modules that require it.
  */
 void UEditorNavMeshManager::InitStaticNavMeshData()
 {
@@ -143,9 +142,6 @@ void UEditorNavMeshManager::InitStaticNavMeshData()
 
 void UEditorNavMeshManager::SaveNavMesh()
 {
-	// todo check 'AddAssetUserData(NavMeshSettings)' if it is correct.
-	NavMeshSettings->ID = FGuid::NewGuid();
-	EditorWorld->PersistentLevel->AddAssetUserData(NavMeshSettings);
 	SerializeNavMesh(NavMesh, NavMeshSettings->ID);
 }
 
@@ -190,14 +186,19 @@ void UEditorNavMeshManager::OnMapOpened(const FString& Filename, bool bAsTemplat
 	EditorWorld->GetTimerManager().SetTimerForNextTick([this]()
 	{
 		GenerateNavmesh();
-		SaveNavMesh();
+		if(EditorWorld->GetOuter()->MarkPackageDirty())
+		{
+			UE_LOG(LogEditorNavManager, Log, TEXT("Marked level as dirty. Navmesh will be saved upon saving the level."))
+		}
 		if(NavMeshSettings->bDisplayDebug) NavMeshDebugger->DrawNearbyVoxels(NavMesh);
 	});
 }
 
 void UEditorNavMeshManager::PreWorldSaved(UWorld* World, FObjectPreSaveContext ObjectPreSaveContext)
 {
-	// SaveNavMesh();
+	// Store any changes on the NavMeshSettings on the level before the actual world/level save occurs.
+	NavMeshSettings->ID = FGuid::NewGuid();
+	EditorWorld->PersistentLevel->AddAssetUserData(NavMeshSettings);
 }
 
 void UEditorNavMeshManager::PostWorldSaved(UWorld* World, FObjectPostSaveContext ObjectSaveContext)
@@ -255,20 +256,22 @@ void UEditorNavMeshManager::UpdateNavmeshSettings(const float VoxelSizeExponentF
 	NavMeshSettings->VoxelSizeExponent = VoxelSizeExponent;
 	NavMeshSettings->StaticDepth = StaticDepth;
 	NavMeshSettings->bDisplayDebug = bDisplayDebug; // todo maybe make this a button on the toolbar?
-	EditorWorld->PersistentLevel->AddAssetUserData(NavMeshSettings);
 	InitStaticNavMeshData();
 
 	if(bShouldRegenerate)
 	{
-		// todo show confirmation window.
 		GenerateNavmesh();
-
-		// todo, level should be saved along with the navmesh so that they are in-sync.
-		// todo maybe ask user to save level before starting generation?
-		// Save navmesh
-		SaveNavMesh();
+		
+		// Don't save the navmesh if the level has unsaved changes, it will be saved when the user saves the level manually.
+		if(const UPackage* Package = Cast<UPackage>(EditorWorld->GetOuter());
+			!Package->IsDirty() && Package->MarkPackageDirty())
+		{
+			UE_LOG(LogEditorNavManager, Log, TEXT("Marked level as dirty. Navmesh will be saved upon saving the level."))
+		}
+		
 	}
-	
+
+	FlushPersistentDebugLines(EditorWorld);
 	if(NavMeshSettings->bDisplayDebug)
 	{
 		NavMeshDebugger->DrawNearbyVoxels(NavMesh);

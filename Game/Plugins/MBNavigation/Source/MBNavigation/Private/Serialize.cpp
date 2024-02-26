@@ -1,7 +1,8 @@
-﻿#include "Serialize.h"
+﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-template FArchive& SerializeMap<FArchive, uint_fast64_t, FChunk>(FArchive&, ankerl::unordered_dense::map<uint_fast64_t, FChunk>&);
-template FArchive& SerializeMap<FArchive, uint_fast32_t, FOctreeNode>(FArchive&, ankerl::unordered_dense::map<uint_fast32_t, FOctreeNode>&);
+#include "Serialize.h"
+#include <ranges>
+
 
 
 void SerializeNavMesh(FNavMesh& NavMesh, FGuid& ID)
@@ -37,67 +38,73 @@ bool DeserializeNavMesh(FNavMesh& OutNavMesh, FGuid& OutID)
 	return true;
 }
 
-FArchive& operator<<(FArchive& Ar, F3DVector16& Vector16)
-{
-	uint32 X = Vector16.X;
-	uint32 Y = Vector16.Y;
-	uint32 Z = Vector16.Z;
-	Ar << X << Y << Z;
-
-	if (Ar.IsLoading())
-	{
-		Vector16.X = X;
-		Vector16.Y = Y;
-		Vector16.Z = Z;
-	}
-
-	return Ar;
-}
-
 FArchive& operator<<(FArchive& Ar, F3DVector32& Vector32)
 {
-	Ar << Vector32.X;
-	Ar << Vector32.Y;
-	Ar << Vector32.Z;
+	if (Ar.IsSaving())
+	{
+		uint_fast64_t Key = Vector32.ToKey();
+		Ar << Key;
+	}
+	else if(Ar.IsLoading())
+	{
+		uint_fast64_t Key;
+		Ar << Key;
+		Vector32 = F3DVector32::FromKey(Key);
+	}
 	return Ar;
 }
 
 FArchive& operator<<(FArchive& Ar, FOctreeNeighbours& OctreeNeighbours)
 {
-	uint32 NeighbourX_P = OctreeNeighbours.NeighbourX_P;
-	uint32 NeighbourX_N = OctreeNeighbours.NeighbourX_N;
-	uint32 NeighbourY_P = OctreeNeighbours.NeighbourY_P;
-	uint32 NeighbourY_N = OctreeNeighbours.NeighbourY_N;
-	uint32 NeighbourZ_P = OctreeNeighbours.NeighbourZ_P;
-	uint32 NeighbourZ_N = OctreeNeighbours.NeighbourZ_N;
-	Ar << NeighbourX_P << NeighbourX_N << NeighbourY_P << NeighbourY_N << NeighbourZ_P << NeighbourZ_N;
-
-	if (Ar.IsLoading())
+	if (Ar.IsSaving())
 	{
-		OctreeNeighbours.NeighbourX_P = NeighbourX_P;
-		OctreeNeighbours.NeighbourX_N = NeighbourX_N;
-		OctreeNeighbours.NeighbourY_P = NeighbourY_P;
-		OctreeNeighbours.NeighbourY_N = NeighbourY_N;
-		OctreeNeighbours.NeighbourZ_P = NeighbourZ_P;
-		OctreeNeighbours.NeighbourZ_N = NeighbourZ_N;
+		// Pack the 6 neighbour indices into a single uint32
+		uint32 PackedNeighbours =
+			(static_cast<uint32>(OctreeNeighbours.NeighbourX_P) << 28) |
+			(static_cast<uint32>(OctreeNeighbours.NeighbourX_N) << 24) |
+			(static_cast<uint32>(OctreeNeighbours.NeighbourY_P) << 20) |
+			(static_cast<uint32>(OctreeNeighbours.NeighbourY_N) << 16) |
+			(static_cast<uint32>(OctreeNeighbours.NeighbourZ_P) << 12) |
+			(static_cast<uint32>(OctreeNeighbours.NeighbourZ_N) << 8);
+		Ar << PackedNeighbours;
+	}
+	else if (Ar.IsLoading())
+	{
+		uint32 PackedNeighbours;
+		Ar << PackedNeighbours;
+
+		// Unpack the neighbour indices from the PackedNeighbours
+		OctreeNeighbours.NeighbourX_P = (PackedNeighbours >> 28) & 0xF;
+		OctreeNeighbours.NeighbourX_N = (PackedNeighbours >> 24) & 0xF;
+		OctreeNeighbours.NeighbourY_P = (PackedNeighbours >> 20) & 0xF;
+		OctreeNeighbours.NeighbourY_N = (PackedNeighbours >> 16) & 0xF;
+		OctreeNeighbours.NeighbourZ_P = (PackedNeighbours >> 12) & 0xF;
+		OctreeNeighbours.NeighbourZ_N = (PackedNeighbours >> 8) & 0xF;
 	}
 
 	return Ar;
 }
+
 
 FArchive& operator<<(FArchive& Ar, FOctreeNode& OctreeNode)
 {
 	Ar << OctreeNode.MortonCode;
 	Ar << OctreeNode.Neighbours;
 
-	uint32 DynamicIndex = OctreeNode.DynamicIndex;
-	uint32 ChunkBorder = OctreeNode.ChunkBorder;
-	Ar << ChunkBorder << DynamicIndex;
-
-	if (Ar.IsLoading())
+	if (Ar.IsSaving())
 	{
-		OctreeNode.DynamicIndex = DynamicIndex;
-		OctreeNode.ChunkBorder = ChunkBorder;
+		// Packing DynamicIndex and ChunkBorder
+		uint32 PackedData = (static_cast<uint32>(OctreeNode.DynamicIndex) << 6) | static_cast<uint32>(OctreeNode.ChunkBorder);
+		Ar << PackedData;
+	}
+	else if (Ar.IsLoading())
+	{
+		uint32 PackedData;
+		Ar << PackedData;
+
+		// Unpacking DynamicIndex and ChunkBorder
+		OctreeNode.DynamicIndex = (PackedData >> 6) & 0xFFF;
+		OctreeNode.ChunkBorder = PackedData & 0x3F;
 	}
 	
 	return Ar;
@@ -105,7 +112,28 @@ FArchive& operator<<(FArchive& Ar, FOctreeNode& OctreeNode)
 
 FArchive& operator<<(FArchive& Ar, FNodesMap& NodesMap)
 {
-	return SerializeMap<FArchive, uint_fast32_t, FOctreeNode>(Ar, NodesMap);
+	// return SerializeMap<FArchive, uint_fast32_t, FOctreeNode>(Ar, NodesMap);
+
+	size_t Size = NodesMap.size();
+	Ar << Size;
+	if(Ar.IsSaving())
+	{
+		for(FOctreeNode& Node : NodesMap | std::views::values)
+		{
+			Ar << Node;
+		}
+	}
+	else if (Ar.IsLoading())
+	{
+		NodesMap.clear();
+		for(size_t i = 0; i < Size; ++i)
+		{
+			FOctreeNode Node;
+			Ar << Node;
+			NodesMap[Node.MortonCode] = Node;
+		}
+	}
+	return Ar;
 }
 
 FArchive& operator<<(FArchive& Ar, TSharedPtr<FOctree>& Octree)
@@ -120,8 +148,7 @@ FArchive& operator<<(FArchive& Ar, TSharedPtr<FOctree>& Octree)
 		Ar << Octree->Layers[i];
 	}
 	
-	// Serialize leaf nodes if any
-	// Example: Ar << Octree->Leafs; (Assuming Leafs is a serializable type)
+	// todo Serialize leaf nodes if any
 
 	return Ar;
 }
@@ -138,32 +165,25 @@ FArchive& operator<<(FArchive& Ar, FChunk& Chunk)
 
 FArchive& operator<<(FArchive& Ar, FNavMesh& NavMesh)
 {
-	return SerializeMap<FArchive, uint_fast64_t, FChunk>(Ar, NavMesh);
-}
+	// return SerializeMap<FArchive, uint_fast64_t, FChunk>(Ar, NavMesh);
 
-
-
-template<typename Archive, typename KeyType, typename ValueType>
-Archive& SerializeMap(Archive& Ar, ankerl::unordered_dense::map<KeyType, ValueType>& Map)
-{
-	size_t Size = Map.size();
+	size_t Size = NavMesh.size();
 	Ar << Size;
-	if (Ar.IsLoading())
+	if(Ar.IsSaving())
 	{
-		Map.clear();
-		for(size_t i = 0; i < Size; ++i)
+		for(FChunk& Chunk : NavMesh | std::views::values)
 		{
-			KeyType Key;
-			ValueType Value;
-			Ar << Key << Value;
-			Map[Key] = Value;
+			Ar << Chunk;
 		}
 	}
-	else // Saving
+	else if (Ar.IsLoading())
 	{
-		for(auto& Pair : Map)
+		NavMesh.clear();
+		for(size_t i = 0; i < Size; ++i)
 		{
-			Ar << Pair.first << Pair.second;
+			FChunk Value;
+			Ar << Value;
+			NavMesh[Value.Location.ToKey()] = Value;
 		}
 	}
 	return Ar;
