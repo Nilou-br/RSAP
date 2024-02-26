@@ -13,14 +13,16 @@ class MBNAVIGATION_API UNavMeshDebugger : public UObject
 	GENERATED_BODY()
 	
 public:
-	FORCEINLINE void Initialize(const UWorld* InWorld) { World = InWorld; }
+	FORCEINLINE void Initialize(const UWorld* InWorld);
 	FORCEINLINE void Deinitialize() { World = nullptr; }
 	
 	void DrawNearbyVoxels(FNavMesh& NavMesh) const;
+	void DrawNearbyVoxels(FNavMesh& NavMesh, const FVector& CameraLocation, const FRotator& CameraRotation) const;
 	void DrawNearbyNeighbours(FNavMesh& NavMesh) const;
 
 	UPROPERTY()
 	const UWorld* World;
+	bool bIsEditorWorld;
 
 private:
 	static inline constexpr FColor LayerColors[10] = {

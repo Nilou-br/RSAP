@@ -229,7 +229,7 @@ void UEditorNavMeshManager::OnCameraMoved(const FVector& CameraLocation, const F
 {
 	if(NavMeshSettings->bDisplayDebug)
 	{
-		NavMeshDebugger->DrawNearbyVoxels(NavMesh);
+		NavMeshDebugger->DrawNearbyVoxels(NavMesh, CameraLocation, CameraRotation);
 	}
 }
 

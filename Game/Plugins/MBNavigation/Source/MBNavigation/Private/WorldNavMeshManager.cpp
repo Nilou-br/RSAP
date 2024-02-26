@@ -29,18 +29,40 @@ void UWorldNavMeshManager::Deinitialize()
 	Super::Deinitialize();
 }
 
+void UWorldNavMeshManager::Tick(float DeltaTime)
+{
+	if(!bWorldReady) return;
+
+	const APlayerController* PlayerController = World->GetFirstPlayerController();
+	if(!PlayerController) return;
+		
+	const APlayerCameraManager* CameraManager = PlayerController->PlayerCameraManager;
+	if(!CameraManager) return;
+
+	const FVector CameraLocation = CameraManager->GetCameraLocation();
+	const FRotator CameraRotation = CameraManager->GetCameraRotation();
+
+	if(CameraLocation == LastCameraLocation && CameraRotation == LastCameraRotation) return;
+	
+#if WITH_EDITOR
+	NavMeshDebugger->DrawNearbyVoxels(NavMesh, CameraLocation, CameraRotation);
+#endif
+
+	LastCameraLocation = CameraLocation;
+	LastCameraRotation = CameraRotation;
+}
+
 void UWorldNavMeshManager::OnWorldInitializedActors(const FActorsInitializedParams& ActorsInitializedParams)
 {
-	const UWorld* World = GetWorld();
+	World = GetWorld();
 	if(!World || World->WorldType == EWorldType::Editor) return;
-	
-	FNavMesh NavMesh;
 	if(FGuid ID; !DeserializeNavMesh(NavMesh, ID)) return;
+
+	// todo check navmesh?
 
 #if WITH_EDITOR
 	NavMeshDebugger->Initialize(World);
-	NavMeshDebugger->DrawNearbyVoxels(NavMesh);
 #endif
 	
-	
+	bWorldReady = true;
 }
