@@ -40,6 +40,7 @@ private:
 	void ClearDelegates();
 	void LoadNavMeshSettings();
 	void InitStaticNavMeshData();
+	void SaveNavMesh();
 	void GenerateNavmesh();
 	FBox GetLevelBoundaries() const;
 
@@ -60,6 +61,8 @@ private:
 	FORCEINLINE void OnEndObjectMovement(UObject& Object);
 	FDelegateHandle OnCameraMovedDelegateHandle;
 	void OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation, ELevelViewportType LevelViewportType, int32);
+	FDelegateHandle OnAssetsDeletedDelegateHandle;
+	void OnAssetsDeleted(const TArray<UClass*>& DeletedAssetClasses);
 
 	// Variables
 	UPROPERTY()

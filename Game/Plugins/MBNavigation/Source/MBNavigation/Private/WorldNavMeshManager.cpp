@@ -35,7 +35,7 @@ void UWorldNavMeshManager::OnWorldInitializedActors(const FActorsInitializedPara
 	if(!World || World->WorldType == EWorldType::Editor) return;
 	
 	FNavMesh NavMesh;
-	if(FGuid ID; !LoadNavMesh(NavMesh, ID)) return;
+	if(FGuid ID; !DeserializeNavMesh(NavMesh, ID)) return;
 
 #if WITH_EDITOR
 	NavMeshDebugger->Initialize(World);

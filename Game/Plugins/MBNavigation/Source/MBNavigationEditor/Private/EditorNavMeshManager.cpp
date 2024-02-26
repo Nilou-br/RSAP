@@ -43,6 +43,7 @@ void UEditorNavMeshManager::Deinitialize()
  */
 void UEditorNavMeshManager::Tick(float DeltaTime)
 {
+	// todo sometimes causes a crash
 	if(!MovingActorsTransform.Num()) return;
 
 	TArray<AActor*> Actors;
@@ -87,6 +88,8 @@ void UEditorNavMeshManager::SetDelegates()
 
 	// Camera movement
 	OnCameraMovedDelegateHandle = FEditorDelegates::OnEditorCameraMoved.AddUObject(this, &UEditorNavMeshManager::OnCameraMoved);
+
+	FEditorDelegates::OnAssetsDeleted.AddUObject(this, &UEditorNavMeshManager::OnAssetsDeleted);
 
 	// todo when level is deleted, also delete stored navmesh.
 }
@@ -138,6 +141,14 @@ void UEditorNavMeshManager::InitStaticNavMeshData()
 	MainModule.InitializeNavMeshSettings(NavMeshSettings);
 }
 
+void UEditorNavMeshManager::SaveNavMesh()
+{
+	// todo check 'AddAssetUserData(NavMeshSettings)' if it is correct.
+	NavMeshSettings->ID = FGuid::NewGuid();
+	EditorWorld->PersistentLevel->AddAssetUserData(NavMeshSettings);
+	SerializeNavMesh(NavMesh, NavMeshSettings->ID);
+}
+
 void UEditorNavMeshManager::OnMapLoad(const FString& Filename, FCanLoadMap& OutCanLoadMap)
 {
 	UE_LOG(LogTemp, Log, TEXT("OnMapLoad"));
@@ -159,41 +170,42 @@ void UEditorNavMeshManager::OnMapOpened(const FString& Filename, bool bAsTemplat
 
 	LoadNavMeshSettings();
 	InitStaticNavMeshData();
-	
-	FGuid StoredID;
-	LoadNavMesh(NavMesh, StoredID);
+
+	// Get cached navmesh.
+	FGuid CachedID;
+	DeserializeNavMesh(NavMesh, CachedID);
 	
 	if(!NavMesh.empty())
 	{
-		if(NavMeshSettings->ID != StoredID)
+		// If the cached ID is not the same, then the navmesh and the level are not in sync, so we just regenerate a new one.
+		// This should only happen in rare cases where the level is shared outside of version-control where the serialized .bin file does not exist on receiving user's end.
+		if(NavMeshSettings->ID != CachedID)
 		{
 			UE_LOG(LogEditorNavManager, Warning, TEXT("Cached navmesh is not in-sync with this level's state. Regeneration required."));
 		}
 		else return;
 	}
 
-	// Generate the navmesh when the actors are initialized next frame.
+	// Generate the navmesh after the actors are initialized, which is next frame ( OnWorldInitializedActors does not work in editor-world ).
 	EditorWorld->GetTimerManager().SetTimerForNextTick([this]()
 	{
-		UE_LOG(LogEditorNavManager, Log, TEXT("Generating navmesh for this level..."));
 		GenerateNavmesh();
-		SaveNavMesh(NavMesh, NavMeshSettings->ID);
-		
+		SaveNavMesh();
 		if(NavMeshSettings->bDisplayDebug) NavMeshDebugger->DrawNearbyVoxels(NavMesh);
 	});
 }
 
 void UEditorNavMeshManager::PreWorldSaved(UWorld* World, FObjectPreSaveContext ObjectPreSaveContext)
 {
-	// todo check 'AddAssetUserData(NavMeshSettings)' if it is correct.
-	NavMeshSettings->ID = FGuid::NewGuid();
-	World->PersistentLevel->AddAssetUserData(NavMeshSettings);
-	SaveNavMesh(NavMesh, NavMeshSettings->ID);
+	// SaveNavMesh();
 }
 
 void UEditorNavMeshManager::PostWorldSaved(UWorld* World, FObjectPostSaveContext ObjectSaveContext)
 {
-	if(!ObjectSaveContext.SaveSucceeded()) return;
+	if(ObjectSaveContext.SaveSucceeded())
+	{
+		SaveNavMesh();
+	}
 }
 
 void UEditorNavMeshManager::OnNewActorsDropped(const TArray<UObject*>& Objects, const TArray<AActor*>& Actors)
@@ -220,11 +232,19 @@ void UEditorNavMeshManager::OnCameraMoved(const FVector& CameraLocation, const F
 	}
 }
 
+void UEditorNavMeshManager::OnAssetsDeleted(const TArray<UClass*>& DeletedAssetClasses)
+{
+	for (const auto AssetClass : DeletedAssetClasses)
+	{
+		UE_LOG(LogEditorNavManager, Log, TEXT("'%s' deleted"), *AssetClass->GetName());
+	}
+}
+
 void UEditorNavMeshManager::UpdateNavmeshSettings(const float VoxelSizeExponentFloat, const float StaticDepthFloat, const bool bDisplayDebug)
 {
 	if(!EditorWorld)
 	{
-		UE_LOG(LogEditorNavManager, Log, TEXT("Cannot update the navmesh-settings because there is no active world."));
+		UE_LOG(LogEditorNavManager, Error, TEXT("Cannot update the navmesh-settings because there is no active world."));
 		return;
 	}
 	
@@ -246,9 +266,7 @@ void UEditorNavMeshManager::UpdateNavmeshSettings(const float VoxelSizeExponentF
 		// todo, level should be saved along with the navmesh so that they are in-sync.
 		// todo maybe ask user to save level before starting generation?
 		// Save navmesh
-		NavMeshSettings->ID = FGuid::NewGuid();
-		EditorWorld->PersistentLevel->AddAssetUserData(NavMeshSettings);
-		SaveNavMesh(NavMesh, NavMeshSettings->ID);
+		SaveNavMesh();
 	}
 	
 	if(NavMeshSettings->bDisplayDebug)
@@ -259,6 +277,7 @@ void UEditorNavMeshManager::UpdateNavmeshSettings(const float VoxelSizeExponentF
 
 void UEditorNavMeshManager::GenerateNavmesh()
 {
+	UE_LOG(LogEditorNavManager, Log, TEXT("Generating navmesh for this level..."));
 	NavMesh = NavMeshGenerator->Generate(GetLevelBoundaries());
 }
 

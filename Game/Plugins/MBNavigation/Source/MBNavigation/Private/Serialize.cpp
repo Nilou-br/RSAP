@@ -4,7 +4,7 @@ template FArchive& SerializeMap<FArchive, uint_fast64_t, FChunk>(FArchive&, anke
 template FArchive& SerializeMap<FArchive, uint_fast32_t, FOctreeNode>(FArchive&, ankerl::unordered_dense::map<uint_fast32_t, FOctreeNode>&);
 
 
-void SaveNavMesh(FNavMesh& NavMesh, FGuid& ID)
+void SerializeNavMesh(FNavMesh& NavMesh, FGuid& ID)
 {
 	const FString FilePath = FPaths::ProjectSavedDir() / TEXT("NavMeshData.bin");
 	FArchive* FileArchive = IFileManager::Get().CreateFileWriter(*FilePath);
@@ -20,7 +20,7 @@ void SaveNavMesh(FNavMesh& NavMesh, FGuid& ID)
 	delete FileArchive;
 }
 
-bool LoadNavMesh(FNavMesh& OutNavMesh, FGuid& OutID)
+bool DeserializeNavMesh(FNavMesh& OutNavMesh, FGuid& OutID)
 {
 	const FString FilePath = FPaths::ProjectSavedDir() / TEXT("NavMeshData.bin");
 	FArchive* FileArchive = IFileManager::Get().CreateFileReader(*FilePath);
