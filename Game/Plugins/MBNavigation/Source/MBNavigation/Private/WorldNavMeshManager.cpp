@@ -1,7 +1,6 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #include "WorldNavMeshManager.h"
-#include "NavMeshTypes.h"
 #include "Serialize.h"
 
 #if WITH_EDITOR
@@ -45,7 +44,7 @@ void UWorldNavMeshManager::Tick(float DeltaTime)
 	if(CameraLocation == LastCameraLocation && CameraRotation == LastCameraRotation) return;
 	
 #if WITH_EDITOR
-	NavMeshDebugger->DrawNearbyVoxels(NavMesh, CameraLocation, CameraRotation);
+	NavMeshDebugger->Draw(NavMesh, CameraLocation, CameraRotation);
 #endif
 
 	LastCameraLocation = CameraLocation;
@@ -57,7 +56,6 @@ void UWorldNavMeshManager::OnWorldInitializedActors(const FActorsInitializedPara
 	World = GetWorld();
 	if(!World || World->WorldType == EWorldType::Editor) return;
 	if(FGuid ID; !DeserializeNavMesh(NavMesh, ID)) return;
-
 	// todo check navmesh?
 
 #if WITH_EDITOR

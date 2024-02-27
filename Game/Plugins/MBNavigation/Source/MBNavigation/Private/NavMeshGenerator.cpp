@@ -120,8 +120,6 @@ void UNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("RasterizeStaticNode");
 	const F3DVector16 NodeLocalLoc = Node.GetLocalLocation();
-
-	FCollisionShape CollisionShape = FNavMeshData::CollisionBoxes[LayerIndex];
 	
 	if(!HasOverlap(Node.GetGlobalLocation(Chunk->Location), LayerIndex)) return;
 	Node.SetOccluded(true);

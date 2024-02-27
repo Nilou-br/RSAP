@@ -9,13 +9,16 @@ class UNavMeshSettings;
 
 
 
-class MBNAVIGATION_API FMBNavigationModule : public IModuleInterface
+class MBNAVIGATION_API FMBNavigationModule final : public IModuleInterface
 {
 public:
-
-	/** IModuleInterface implementation */
+	
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
 
-	void InitializeNavMeshSettings(const UNavMeshSettings* NavMeshData);
+	static void InitializeNavMeshSettings(const UNavMeshSettings* NavMeshData);
+	static void InitializeNavMeshDebugSettings(
+		const bool bDebugEnabled, const bool bDisplayNodes,
+		const bool bDisplayNodeBorder, const bool bDisplayRelations,
+		const bool bDisplayPaths, const bool bDisplayChunks);
 };

@@ -8,29 +8,25 @@
 
 
 
-FString To6BitBinaryString(uint8 Value) {
-	// Use bitset to convert the value to binary and extract the 6 least significant bits
+FString To6BitBinaryString(const uint8 Value) {
 	const std::bitset<8> Bits(Value);
 	const std::string BinaryString = Bits.to_string();
-	// Since we're only interested in the 6 LSBs, remove the 2 MSBs
 	return FString(BinaryString.substr(2, 6).c_str());
 }
 
 void UNavMeshDebugger::Initialize(const UWorld* InWorld)
 {
 	World = InWorld;
-	bIsEditorWorld = World->WorldType == EWorldType::Editor;
 }
 
-void UNavMeshDebugger::DrawNearbyVoxels(FNavMesh& NavMesh) const
+void UNavMeshDebugger::Draw(const FNavMesh& NavMesh)
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("DrawNearbyVoxels");
-	FlushPersistentDebugLines(World);
-
+	if(!FNavMeshDebugSettings::bDebugEnabled) return;
+	
 	FVector CameraLocation;
 	FRotator CameraRotation;
 	
-	if(bIsEditorWorld)
+	if(World->WorldType == EWorldType::Editor)
 	{
 		// Get editor-world camera
 		const FViewport* ActiveViewport = GEditor->GetActiveViewport();
@@ -42,7 +38,7 @@ void UNavMeshDebugger::DrawNearbyVoxels(FNavMesh& NavMesh) const
 		CameraLocation = EditorViewClient->GetViewLocation();
 		CameraRotation = EditorViewClient->GetViewRotation();
 	}
-	else // PIE or Game
+	else // PIE
 	{
 		const APlayerController* PlayerController = World->GetFirstPlayerController();
 		if(!PlayerController) return;
@@ -53,9 +49,47 @@ void UNavMeshDebugger::DrawNearbyVoxels(FNavMesh& NavMesh) const
 		CameraLocation = CameraManager->GetCameraLocation();
 		CameraRotation = CameraManager->GetCameraRotation();
 	}
-	const FVector CameraForwardVector = FRotationMatrix(CameraRotation).GetUnitAxis(EAxis::X);
 	
-	// Draw all voxels of the highest-resolution layer.
+	const FVector CameraForwardVector = FRotationMatrix(CameraRotation).GetUnitAxis(EAxis::X);
+	PerformConditionalDraw(NavMesh, CameraLocation, CameraForwardVector);
+}
+
+void UNavMeshDebugger::Draw(const FNavMesh& NavMesh, const FVector& CameraLocation, const FRotator& CameraRotation)
+{
+	if(!FNavMeshDebugSettings::bDebugEnabled) return;
+	
+	const FVector CameraForwardVector = FRotationMatrix(CameraRotation).GetUnitAxis(EAxis::X);
+	PerformConditionalDraw(NavMesh, CameraLocation, CameraForwardVector);
+}
+
+void UNavMeshDebugger::PerformConditionalDraw(const FNavMesh& NavMesh, const FVector& CameraLocation, const FVector& CameraForwardVector)
+{
+	FlushPersistentDebugLines(World);
+	FlushDebugStrings(World);
+	// todo: change to list of callbacks that are called during the loop.
+	
+	if (FNavMeshDebugSettings::bDisplayNodes) {
+		DrawNodes(NavMesh, CameraLocation, CameraForwardVector);
+	}
+	if (FNavMeshDebugSettings::bDisplayNodeBorder) {
+		DrawNodeBorders(NavMesh, CameraLocation, CameraForwardVector);
+	}
+	if (FNavMeshDebugSettings::bDisplayRelations) {
+		DrawRelations(NavMesh, CameraLocation, CameraForwardVector);
+	}
+	if (FNavMeshDebugSettings::bDisplayPaths) {
+		DrawPaths(NavMesh, CameraLocation, CameraForwardVector);
+	}
+	if (FNavMeshDebugSettings::bDisplayChunks) {
+		DrawChunks(NavMesh, CameraLocation, CameraForwardVector);
+	}
+}
+
+void UNavMeshDebugger::DrawNodes(const FNavMesh& NavMesh, const FVector& CameraLocation, const FVector& CameraForwardVector)
+{
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("DrawNodes");
+	
+	
 	for (const auto &Chunk : std::views::values(NavMesh))
 	{
 		TArray<FNodesMap> Layers = Chunk.Octrees[0].Get()->Layers;
@@ -64,21 +98,17 @@ void UNavMeshDebugger::DrawNearbyVoxels(FNavMesh& NavMesh) const
 			FNodesMap Layer = Layers[LayerIndex];
 			for (const FOctreeNode &Node : std::views::values(Layers[LayerIndex]))
 			{
+				if(!Node.IsOccluded()) continue;
+				
 				if(const FVector NodeGlobalCenterLocation = (Node.GetGlobalLocation(Chunk.Location) + FNavMeshData::NodeHalveSizes[LayerIndex]).ToVector();
 					LayerIndex == FNavMeshData::StaticDepth
-					&& Node.GetOccluded()
 					&& FVector::Dist(CameraLocation, NodeGlobalCenterLocation) < 10000.f)
 				{
 					// Draw node if it is in front of the camera.
 					const FVector DirectionToTarget = (NodeGlobalCenterLocation - CameraLocation).GetSafeNormal();
 					if(FVector::DotProduct(CameraForwardVector, DirectionToTarget) > 0)
 					{
-						// Draw node/voxel
 						DrawDebugBox(World, NodeGlobalCenterLocation, FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), LayerColors[LayerIndex], true);
-
-						// Draw node info as text in the world
-						FString BitString = To6BitBinaryString(Node.ChunkBorder);
-						DrawDebugString(World, NodeGlobalCenterLocation, BitString, 0, FColor::Red, -1, false, 3);
 					}
 				}
 			}
@@ -86,14 +116,9 @@ void UNavMeshDebugger::DrawNearbyVoxels(FNavMesh& NavMesh) const
 	}
 }
 
-void UNavMeshDebugger::DrawNearbyVoxels(FNavMesh& NavMesh, const FVector& CameraLocation, const FRotator& CameraRotation) const
+void UNavMeshDebugger::DrawNodeBorders(const FNavMesh& NavMesh, const FVector& CameraLocation,
+	const FVector& CameraForwardVector)
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("DrawNearbyVoxels");
-	FlushPersistentDebugLines(World);
-	
-	const FVector CameraForwardVector = FRotationMatrix(CameraRotation).GetUnitAxis(EAxis::X);
-	
-	// Draw all voxels of the highest-resolution layer.
 	for (const auto &Chunk : std::views::values(NavMesh))
 	{
 		TArray<FNodesMap> Layers = Chunk.Octrees[0].Get()->Layers;
@@ -102,37 +127,46 @@ void UNavMeshDebugger::DrawNearbyVoxels(FNavMesh& NavMesh, const FVector& Camera
 			FNodesMap Layer = Layers[LayerIndex];
 			for (const FOctreeNode &Node : std::views::values(Layers[LayerIndex]))
 			{
+				if(!Node.IsOccluded()) continue;
+				
 				if(const FVector NodeGlobalCenterLocation = (Node.GetGlobalLocation(Chunk.Location) + FNavMeshData::NodeHalveSizes[LayerIndex]).ToVector();
-					LayerIndex == FNavMeshData::StaticDepth
-					&& Node.GetOccluded()
-					&& FVector::Dist(CameraLocation, NodeGlobalCenterLocation) < 10000.f)
+					FVector::Dist(CameraLocation, NodeGlobalCenterLocation) < FNavMeshData::NodeSizes[LayerIndex] << 3)
 				{
 					// Draw node if it is in front of the camera.
 					const FVector DirectionToTarget = (NodeGlobalCenterLocation - CameraLocation).GetSafeNormal();
 					if(FVector::DotProduct(CameraForwardVector, DirectionToTarget) > 0)
 					{
-						// Draw node/voxel
-						DrawDebugBox(World, NodeGlobalCenterLocation, FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), LayerColors[LayerIndex], true);
-
-						// Draw node info as text in the world
+						// Draw node chunk-border as 6bit string.
 						FString BitString = To6BitBinaryString(Node.ChunkBorder);
-						DrawDebugString(World, NodeGlobalCenterLocation, BitString, 0, FColor::Red, -1, false, 3);
-						continue;
-
-						// Draw neighbour lines
-						std::array<F3DVector32, 6> NeighbourGlobalLocations = Node.GetNeighbourGlobalLocations(LayerIndex, Chunk.Location);
-						std::array<uint8, 6> NeighboursArray = Node.GetNeighboursArray();
-
-						for (int NeighbourArrIndex = 0; NeighbourArrIndex < 6; ++NeighbourArrIndex)
-						{
-							if(NeighboursArray[NeighbourArrIndex] == LayerIndex)
-							{
-								DrawDebugLine(World, NodeGlobalCenterLocation, (NeighbourGlobalLocations[NeighbourArrIndex] + FNavMeshData::NodeHalveSizes[LayerIndex]).ToVector(), FColor::White, true);
-							}
-						}
+						DrawDebugString(World, NodeGlobalCenterLocation, BitString, 0, FColor::Red, -1, false, 1);
 					}
 				}
 			}
+		}
+	}
+}
+
+void UNavMeshDebugger::DrawRelations(const FNavMesh& NavMesh, const FVector& CameraLocation,
+	const FVector& CameraForwardVector)
+{
+	
+}
+
+void UNavMeshDebugger::DrawPaths(const FNavMesh& NavMesh, const FVector& CameraLocation,
+	const FVector& CameraForwardVector)
+{
+}
+
+void UNavMeshDebugger::DrawChunks(const FNavMesh& NavMesh, const FVector& CameraLocation,
+	const FVector& CameraForwardVector)
+{
+	for (const auto &Chunk : std::views::values(NavMesh))
+	{
+		const FVector ChunkGlobalCenterLocation = (Chunk.Location + FNavMeshData::NodeHalveSizes[0]).ToVector();
+		const FVector DirectionToTarget = (ChunkGlobalCenterLocation - CameraLocation).GetSafeNormal();
+		if(FVector::DotProduct(CameraForwardVector, DirectionToTarget) > 0)
+		{
+			DrawDebugBox(World, ChunkGlobalCenterLocation, FVector(FNavMeshData::NodeHalveSizes[0]), FColor::Black, true);
 		}
 	}
 }

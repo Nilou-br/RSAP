@@ -29,8 +29,4 @@ public:
 	// How deep the static-nodes will be rasterized in the octree.
 	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category="Data")
 	uint8 StaticDepth = 6;
-
-	// If the navmesh should be visible using debug-lines.
-	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category="Data")
-	bool bDisplayDebug = false;
 };

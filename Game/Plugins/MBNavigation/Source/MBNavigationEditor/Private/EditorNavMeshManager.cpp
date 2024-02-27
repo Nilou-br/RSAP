@@ -5,6 +5,7 @@
 #include "MBNavigation.h"
 #include "NavMeshDebugger.h"
 #include "NavMeshGenerator.h"
+#include "NavMeshSettings.h"
 #include "NavMeshUpdater.h"
 #include "Serialize.h"
 #include "Engine/Level.h"
@@ -62,10 +63,9 @@ void UEditorNavMeshManager::Tick(float DeltaTime)
 
 		UE_LOG(LogEditorNavManager, Log, TEXT("Actor has moved..."));
 		*StoredTransform = CurrentTransform;
-
-		FlushPersistentDebugLines(EditorWorld);
+		
 		GenerateNavmesh();
-		if(NavMeshSettings->bDisplayDebug) NavMeshDebugger->DrawNearbyVoxels(NavMesh);
+		NavMeshDebugger->Draw(NavMesh);
 	}
 }
 
@@ -190,7 +190,7 @@ void UEditorNavMeshManager::OnMapOpened(const FString& Filename, bool bAsTemplat
 		{
 			UE_LOG(LogEditorNavManager, Log, TEXT("Marked level as dirty. Navmesh will be saved upon saving the level."))
 		}
-		if(NavMeshSettings->bDisplayDebug) NavMeshDebugger->DrawNearbyVoxels(NavMesh);
+		NavMeshDebugger->Draw(NavMesh);
 	});
 }
 
@@ -225,12 +225,9 @@ void UEditorNavMeshManager::OnEndObjectMovement(UObject& Object)
 }
 
 void UEditorNavMeshManager::OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation,
-	ELevelViewportType LevelViewportType, int32)
+	ELevelViewportType LevelViewportType, int32) const
 {
-	if(NavMeshSettings->bDisplayDebug)
-	{
-		NavMeshDebugger->DrawNearbyVoxels(NavMesh, CameraLocation, CameraRotation);
-	}
+	NavMeshDebugger->Draw(NavMesh, CameraLocation, CameraRotation);
 }
 
 void UEditorNavMeshManager::OnAssetsDeleted(const TArray<UClass*>& DeletedAssetClasses)
@@ -241,7 +238,7 @@ void UEditorNavMeshManager::OnAssetsDeleted(const TArray<UClass*>& DeletedAssetC
 	}
 }
 
-void UEditorNavMeshManager::UpdateNavmeshSettings(const float VoxelSizeExponentFloat, const float StaticDepthFloat, const bool bDisplayDebug)
+void UEditorNavMeshManager::UpdateGenerationSettings(const float VoxelSizeExponentFloat, const float StaticDepthFloat)
 {
 	if(!EditorWorld)
 	{
@@ -255,7 +252,6 @@ void UEditorNavMeshManager::UpdateNavmeshSettings(const float VoxelSizeExponentF
 
 	NavMeshSettings->VoxelSizeExponent = VoxelSizeExponent;
 	NavMeshSettings->StaticDepth = StaticDepth;
-	NavMeshSettings->bDisplayDebug = bDisplayDebug; // todo maybe make this a button on the toolbar?
 	InitStaticNavMeshData();
 
 	if(bShouldRegenerate)
@@ -268,14 +264,22 @@ void UEditorNavMeshManager::UpdateNavmeshSettings(const float VoxelSizeExponentF
 		{
 			UE_LOG(LogEditorNavManager, Log, TEXT("Marked level as dirty. Navmesh will be saved upon saving the level."))
 		}
-		
 	}
+	
+	NavMeshDebugger->Draw(NavMesh);
+}
 
+void UEditorNavMeshManager::UpdateDebugSettings (
+	const bool bDebugEnabled, const bool bDisplayNodes,
+	const bool bDisplayNodeBorder, const bool bDisplayRelations,
+	const bool bDisplayPaths, const bool bDisplayChunks)
+{
 	FlushPersistentDebugLines(EditorWorld);
-	if(NavMeshSettings->bDisplayDebug)
-	{
-		NavMeshDebugger->DrawNearbyVoxels(NavMesh);
-	}
+	FlushDebugStrings(EditorWorld);
+	
+	FNavMeshDebugSettings::Initialize(bDebugEnabled, bDisplayNodes, bDisplayNodeBorder, bDisplayRelations, bDisplayPaths, bDisplayChunks);
+	MainModule.InitializeNavMeshDebugSettings(bDebugEnabled, bDisplayNodes, bDisplayNodeBorder, bDisplayRelations, bDisplayPaths, bDisplayChunks);
+	NavMeshDebugger->Draw(NavMesh);
 }
 
 void UEditorNavMeshManager::GenerateNavmesh()

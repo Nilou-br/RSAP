@@ -11,6 +11,8 @@
  * Used to store static values that will be used often during generation where performance is critical.
  *
  * Uses UNavMeshSettings for initializing these values.
+ *
+ * Call Initialize everytime a level is opened.
  */
 struct FNavMeshData
 {
@@ -36,6 +38,37 @@ struct FNavMeshData
 			NodeHalveSizes[LayerIndex] = NodeSizes[LayerIndex] >> 1;
 			CollisionBoxes[LayerIndex] = FCollisionShape::MakeBox(FVector(NodeHalveSizes[LayerIndex]));
 		}
+	}
+};
+
+/**
+ * Same as FNavMeshData but stores static debug values instead.
+ *
+ * Used by the debugger to determine what to draw.
+ */
+struct FNavMeshDebugSettings
+{
+	static inline bool bDebugEnabled = false;
+	static inline bool bDisplayNodes = false;
+	static inline bool bDisplayNodeBorder = false;
+	static inline bool bDisplayRelations = false;
+	static inline bool bDisplayPaths = false;
+	static inline bool bDisplayChunks = false;
+
+	static void Initialize(
+		const bool InbDebugEnabled = false,
+		const bool InbDisplayNodes = false,
+		const bool InbDisplayNodeBorder = false,
+		const bool InbDisplayRelations = false,
+		const bool InbDisplayPaths = false,
+		const bool InbDisplayChunks = false)
+	{
+		bDebugEnabled = InbDebugEnabled;
+		bDisplayNodes = InbDisplayNodes;
+		bDisplayNodeBorder = InbDisplayNodeBorder;
+		bDisplayRelations = InbDisplayRelations;
+		bDisplayPaths = InbDisplayPaths;
+		bDisplayChunks = InbDisplayChunks;
 	}
 };
 
@@ -201,15 +234,13 @@ struct FOctreeNeighbours
  */
 struct FOctreeNode
 {
-	static constexpr uint_fast32_t BoolFilledMask = 1u << 30; // Filled boolean mask on the MortonCode
-	static constexpr uint_fast32_t BoolOccludedMask = 1u << 31; // Occluded boolean mask on the MortonCode
-	static constexpr uint_fast32_t MortonMask = (1u << 30) - 1;
 	static constexpr int LayerShiftAmount[11] = {30, 30, 27, 24, 21, 18, 15, 12, 9, 6, 3};
 
 	uint_fast32_t MortonCode;
 	FOctreeNeighbours Neighbours;
 	uint16 DynamicIndex: 12; // todo: if changing this value, also update serialization method.
 	uint8 ChunkBorder: 6;
+	uint8 Booleans: 2;
 
 	FOctreeNode(uint_fast16_t NodeLocationX, uint_fast16_t NodeLocationY, uint_fast16_t NodeLocationZ):
 		Neighbours(), DynamicIndex(0), ChunkBorder(0)
@@ -228,7 +259,7 @@ struct FOctreeNode
 	FORCEINLINE F3DVector16 GetLocalLocation() const
 	{
 		F3DVector16 NodeLocalLocation = F3DVector16();
-		libmorton::morton3D_32_decode(MortonCode & MortonMask, NodeLocalLocation.X, NodeLocalLocation.Y, NodeLocalLocation.Z);
+		libmorton::morton3D_32_decode(MortonCode, NodeLocalLocation.X, NodeLocalLocation.Y, NodeLocalLocation.Z);
 
 		// Left bit-shift using the Voxel-Size-Exponent into local-space.
 		NodeLocalLocation.X <<= FNavMeshData::VoxelSizeExponent;
@@ -244,36 +275,35 @@ struct FOctreeNode
 
 	FORCEINLINE uint_fast32_t GetMortonCode() const
 	{
-		return MortonCode & MortonMask;
+		return MortonCode;
 	}
 
 	FORCEINLINE uint_fast32_t GetParentMortonCode(const uint8 LayerIndex) const
 	{
 		const uint_fast32_t ParentMask = ~((1 << LayerShiftAmount[LayerIndex-1]) - 1);
-		return (MortonCode & MortonMask) & ParentMask;
+		return MortonCode & ParentMask;
 	}
 
 	FORCEINLINE void SetFilled(const bool Value)
 	{
-		if (Value) MortonCode |= BoolFilledMask;
-		else MortonCode &= ~BoolFilledMask;
+		if (Value) Booleans |= 0b01;
+		else Booleans &= ~0b01;
 	}
 
 	FORCEINLINE void SetOccluded(const bool Value)
 	{
-		if (Value) MortonCode |= BoolOccludedMask;
-		else MortonCode &= ~BoolOccludedMask;
+		if (Value) Booleans |= 0b10;
+		else Booleans &= ~0b10;
+	}
+	
+	FORCEINLINE bool IsFilled() const
+	{
+		return Booleans & 0b01;
 	}
 
-	// Get boolean values
-	bool GetFilled() const
+	FORCEINLINE bool IsOccluded() const
 	{
-		return MortonCode & BoolFilledMask;
-	}
-
-	bool GetOccluded() const
-	{
-		return MortonCode & BoolOccludedMask;
+		return Booleans & 0b10;
 	}
 
 	std::array<F3DVector32, 6> GetNeighbourGlobalLocations(const uint8 LayerIndex, const F3DVector32& ChunkLocation) const
@@ -329,7 +359,7 @@ struct FOctreeNode
 
 			// Get global location of the parent using this mask.
 			F3DVector16 ParentLocalLocation;
-			libmorton::morton3D_32_decode((MortonCode & MortonMask) & ParentMask, ParentLocalLocation.X, ParentLocalLocation.Y, ParentLocalLocation.Z);
+			libmorton::morton3D_32_decode(MortonCode & ParentMask, ParentLocalLocation.X, ParentLocalLocation.Y, ParentLocalLocation.Z);
 			const F3DVector32 ParentGlobalLocation = ChunkLocation + ParentLocalLocation;
 
 			// Get neighbour location by adding the offset on the parents global location.

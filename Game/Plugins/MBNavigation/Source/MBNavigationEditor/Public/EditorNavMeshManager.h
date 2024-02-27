@@ -60,7 +60,7 @@ private:
 	FDelegateHandle OnEndObjectMovementDelegateHandle;
 	FORCEINLINE void OnEndObjectMovement(UObject& Object);
 	FDelegateHandle OnCameraMovedDelegateHandle;
-	void OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation, ELevelViewportType LevelViewportType, int32);
+	void OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation, ELevelViewportType LevelViewportType, int32) const;
 	FDelegateHandle OnAssetsDeletedDelegateHandle;
 	void OnAssetsDeleted(const TArray<UClass*>& DeletedAssetClasses);
 
@@ -87,7 +87,13 @@ private:
 
 public:
 	UFUNCTION(BlueprintCallable, Category="Settings")
-	void UpdateNavmeshSettings(const float VoxelSizeExponentFloat, const float StaticDepthFloat,  const bool bDisplayDebug);
+	void UpdateGenerationSettings(const float VoxelSizeExponentFloat, const float StaticDepthFloat);
+
+	UFUNCTION(BlueprintCallable, Category="Settings")
+	void UpdateDebugSettings(
+		const bool bDebugEnabled, const bool bDisplayNodes,
+		const bool bDisplayNodeBorder, const bool bDisplayRelations,
+		const bool bDisplayPaths, const bool bDisplayChunks);
 
 	UFUNCTION(BlueprintCallable, Category="Settings")
 	UNavMeshSettings* GetNavMeshSettings() const { return NavMeshSettings; }

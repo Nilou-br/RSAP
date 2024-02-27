@@ -85,7 +85,6 @@ FArchive& operator<<(FArchive& Ar, FOctreeNeighbours& OctreeNeighbours)
 	return Ar;
 }
 
-
 FArchive& operator<<(FArchive& Ar, FOctreeNode& OctreeNode)
 {
 	Ar << OctreeNode.MortonCode;
@@ -93,8 +92,10 @@ FArchive& operator<<(FArchive& Ar, FOctreeNode& OctreeNode)
 
 	if (Ar.IsSaving())
 	{
-		// Packing DynamicIndex and ChunkBorder
-		uint32 PackedData = (static_cast<uint32>(OctreeNode.DynamicIndex) << 6) | static_cast<uint32>(OctreeNode.ChunkBorder);
+		// Ensure Booleans are correctly set before packing
+		// Remove or adjust the following line according to your application logic.
+		if(OctreeNode.DynamicIndex) OctreeNode.Booleans = 0;
+		uint32 PackedData = (static_cast<uint32>(OctreeNode.Booleans) << 6) | static_cast<uint32>(OctreeNode.ChunkBorder);
 		Ar << PackedData;
 	}
 	else if (Ar.IsLoading())
@@ -102,11 +103,11 @@ FArchive& operator<<(FArchive& Ar, FOctreeNode& OctreeNode)
 		uint32 PackedData;
 		Ar << PackedData;
 
-		// Unpacking DynamicIndex and ChunkBorder
-		OctreeNode.DynamicIndex = (PackedData >> 6) & 0xFFF;
+		// Correctly unpack ChunkBorder and the Booleans
+		OctreeNode.Booleans = (PackedData >> 6) & 0x03;
 		OctreeNode.ChunkBorder = PackedData & 0x3F;
 	}
-	
+
 	return Ar;
 }
 

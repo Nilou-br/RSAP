@@ -15,16 +15,22 @@ class MBNAVIGATION_API UNavMeshDebugger : public UObject
 public:
 	FORCEINLINE void Initialize(const UWorld* InWorld);
 	FORCEINLINE void Deinitialize() { World = nullptr; }
-	
-	void DrawNearbyVoxels(FNavMesh& NavMesh) const;
-	void DrawNearbyVoxels(FNavMesh& NavMesh, const FVector& CameraLocation, const FRotator& CameraRotation) const;
-	void DrawNearbyNeighbours(FNavMesh& NavMesh) const;
 
-	UPROPERTY()
-	const UWorld* World;
-	bool bIsEditorWorld;
+	void Draw(const FNavMesh& NavMesh);
+	void Draw(const FNavMesh& NavMesh, const FVector& CameraLocation, const FRotator& CameraRotation);
+	void UpdateSettings(const FNavMeshDebugSettings InNavMeshDebugSettings){ NavMeshDebugSettings = InNavMeshDebugSettings;	}
 
 private:
+	void PerformConditionalDraw(const FNavMesh& NavMesh, const FVector& CameraLocation, const FVector& CameraForwardVector);
+	void DrawNodes(const FNavMesh& NavMesh, const FVector& CameraLocation, const FVector& CameraForwardVector);
+	void DrawNodeBorders(const FNavMesh& NavMesh, const FVector& CameraLocation, const FVector& CameraForwardVector);
+	void DrawRelations(const FNavMesh& NavMesh, const FVector& CameraLocation, const FVector& CameraForwardVector);
+	void DrawPaths(const FNavMesh& NavMesh, const FVector& CameraLocation, const FVector& CameraForwardVector);
+	void DrawChunks(const FNavMesh& NavMesh, const FVector& CameraLocation, const FVector& CameraForwardVector);
+	
+	UPROPERTY() const UWorld* World;
+	FNavMeshDebugSettings NavMeshDebugSettings;
+	
 	static inline constexpr FColor LayerColors[10] = {
 		{51, 102, 255},
 		{102, 102, 255},

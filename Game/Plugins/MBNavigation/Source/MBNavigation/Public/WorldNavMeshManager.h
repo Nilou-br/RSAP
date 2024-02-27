@@ -1,14 +1,14 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
+#include "NavMeshDebugger.h"
 #include "NavMeshTypes.h"
-
 #include "WorldNavMeshManager.generated.h"
 
 
 
 UCLASS()
-class UWorldNavMeshManager : public UWorldSubsystem, public FTickableGameObject
+class MBNAVIGATION_API UWorldNavMeshManager : public UWorldSubsystem, public FTickableGameObject
 {
 	GENERATED_BODY()
 
@@ -36,7 +36,7 @@ private:
 
 #if WITH_EDITORONLY_DATA
 	UPROPERTY()
-	class UNavMeshDebugger* NavMeshDebugger;
+	UNavMeshDebugger* NavMeshDebugger;
 #endif
 	
 };
