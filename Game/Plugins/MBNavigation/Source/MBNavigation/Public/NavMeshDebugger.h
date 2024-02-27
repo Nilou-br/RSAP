@@ -23,8 +23,6 @@ public:
 private:
 	void PerformConditionalDraw(const FNavMesh& NavMesh, const FVector& CameraLocation, const FVector& CameraForwardVector);
 	void DrawNodes(const FNavMesh& NavMesh, const FVector& CameraLocation, const FVector& CameraForwardVector);
-	void DrawNodeBorders(const FNavMesh& NavMesh, const FVector& CameraLocation, const FVector& CameraForwardVector);
-	void DrawRelations(const FNavMesh& NavMesh, const FVector& CameraLocation, const FVector& CameraForwardVector);
 	void DrawPaths(const FNavMesh& NavMesh, const FVector& CameraLocation, const FVector& CameraForwardVector);
 	void DrawChunks(const FNavMesh& NavMesh, const FVector& CameraLocation, const FVector& CameraForwardVector);
 	

@@ -66,16 +66,11 @@ void UNavMeshDebugger::PerformConditionalDraw(const FNavMesh& NavMesh, const FVe
 {
 	FlushPersistentDebugLines(World);
 	FlushDebugStrings(World);
-	// todo: change to list of callbacks that are called during the loop.
 	
-	if (FNavMeshDebugSettings::bDisplayNodes) {
+	if (FNavMeshDebugSettings::bDisplayNodes ||
+		FNavMeshDebugSettings::bDisplayNodeBorder ||
+		FNavMeshDebugSettings::bDisplayRelations) {
 		DrawNodes(NavMesh, CameraLocation, CameraForwardVector);
-	}
-	if (FNavMeshDebugSettings::bDisplayNodeBorder) {
-		DrawNodeBorders(NavMesh, CameraLocation, CameraForwardVector);
-	}
-	if (FNavMeshDebugSettings::bDisplayRelations) {
-		DrawRelations(NavMesh, CameraLocation, CameraForwardVector);
 	}
 	if (FNavMeshDebugSettings::bDisplayPaths) {
 		DrawPaths(NavMesh, CameraLocation, CameraForwardVector);
@@ -99,57 +94,28 @@ void UNavMeshDebugger::DrawNodes(const FNavMesh& NavMesh, const FVector& CameraL
 			for (const FOctreeNode &Node : std::views::values(Layers[LayerIndex]))
 			{
 				if(!Node.IsOccluded()) continue;
+
+				// Continue if distance between camera and node is larger than the calculated distance for this specific node's layer.
+				const FVector NodeGlobalCenterLocation = (Node.GetGlobalLocation(Chunk.Location) + FNavMeshData::NodeHalveSizes[LayerIndex]).ToVector();
+				if(FVector::Dist(CameraLocation, NodeGlobalCenterLocation) > (FNavMeshData::NodeSizes[LayerIndex] << 2) + 200 - 16 * LayerIndex) continue;
 				
-				if(const FVector NodeGlobalCenterLocation = (Node.GetGlobalLocation(Chunk.Location) + FNavMeshData::NodeHalveSizes[LayerIndex]).ToVector();
-					LayerIndex == FNavMeshData::StaticDepth
-					&& FVector::Dist(CameraLocation, NodeGlobalCenterLocation) < 10000.f)
+				// Continue if (roughly*) not in field of view.
+				const FVector DirectionToTarget = (NodeGlobalCenterLocation - CameraLocation).GetSafeNormal();
+				if(FVector::DotProduct(CameraForwardVector, DirectionToTarget) < 0) continue;
+				
+				if(FNavMeshDebugSettings::bDisplayNodes)
 				{
-					// Draw node if it is in front of the camera.
-					const FVector DirectionToTarget = (NodeGlobalCenterLocation - CameraLocation).GetSafeNormal();
-					if(FVector::DotProduct(CameraForwardVector, DirectionToTarget) > 0)
-					{
-						DrawDebugBox(World, NodeGlobalCenterLocation, FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), LayerColors[LayerIndex], true);
-					}
+					DrawDebugBox(World, NodeGlobalCenterLocation, FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), LayerColors[LayerIndex], true);
 				}
+				if(FNavMeshDebugSettings::bDisplayNodeBorder)
+				{
+					FString BitString = To6BitBinaryString(Node.ChunkBorder);
+					DrawDebugString(World, NodeGlobalCenterLocation, BitString, nullptr, FColor::Red, -1, false, 1);
+				}
+				
 			}
 		}
 	}
-}
-
-void UNavMeshDebugger::DrawNodeBorders(const FNavMesh& NavMesh, const FVector& CameraLocation,
-	const FVector& CameraForwardVector)
-{
-	for (const auto &Chunk : std::views::values(NavMesh))
-	{
-		TArray<FNodesMap> Layers = Chunk.Octrees[0].Get()->Layers;
-		for (int LayerIndex = 0; LayerIndex < 10; ++LayerIndex)
-		{
-			FNodesMap Layer = Layers[LayerIndex];
-			for (const FOctreeNode &Node : std::views::values(Layers[LayerIndex]))
-			{
-				if(!Node.IsOccluded()) continue;
-				
-				if(const FVector NodeGlobalCenterLocation = (Node.GetGlobalLocation(Chunk.Location) + FNavMeshData::NodeHalveSizes[LayerIndex]).ToVector();
-					FVector::Dist(CameraLocation, NodeGlobalCenterLocation) < FNavMeshData::NodeSizes[LayerIndex] << 3)
-				{
-					// Draw node if it is in front of the camera.
-					const FVector DirectionToTarget = (NodeGlobalCenterLocation - CameraLocation).GetSafeNormal();
-					if(FVector::DotProduct(CameraForwardVector, DirectionToTarget) > 0)
-					{
-						// Draw node chunk-border as 6bit string.
-						FString BitString = To6BitBinaryString(Node.ChunkBorder);
-						DrawDebugString(World, NodeGlobalCenterLocation, BitString, 0, FColor::Red, -1, false, 1);
-					}
-				}
-			}
-		}
-	}
-}
-
-void UNavMeshDebugger::DrawRelations(const FNavMesh& NavMesh, const FVector& CameraLocation,
-	const FVector& CameraForwardVector)
-{
-	
 }
 
 void UNavMeshDebugger::DrawPaths(const FNavMesh& NavMesh, const FVector& CameraLocation,

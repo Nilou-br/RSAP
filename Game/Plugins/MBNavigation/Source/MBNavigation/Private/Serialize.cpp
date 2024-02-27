@@ -94,18 +94,20 @@ FArchive& operator<<(FArchive& Ar, FOctreeNode& OctreeNode)
 	{
 		// Ensure Booleans are correctly set before packing
 		// Remove or adjust the following line according to your application logic.
-		if(OctreeNode.DynamicIndex) OctreeNode.Booleans = 0;
-		uint32 PackedData = (static_cast<uint32>(OctreeNode.Booleans) << 6) | static_cast<uint32>(OctreeNode.ChunkBorder);
-		Ar << PackedData;
+		// if(OctreeNode.DynamicIndex) OctreeNode.Booleans = 0;
+		// uint32 PackedData = (static_cast<uint32>(OctreeNode.Booleans) << 6) | static_cast<uint32>(OctreeNode.ChunkBorder);
+		uint32 ChunkBorder = OctreeNode.ChunkBorder;
+		Ar << ChunkBorder;
 	}
 	else if (Ar.IsLoading())
 	{
-		uint32 PackedData;
-		Ar << PackedData;
-
+		uint32 ChunkBorder;
+		Ar << ChunkBorder;
+		OctreeNode.ChunkBorder = ChunkBorder;
+		
 		// Correctly unpack ChunkBorder and the Booleans
-		OctreeNode.Booleans = (PackedData >> 6) & 0x03;
-		OctreeNode.ChunkBorder = PackedData & 0x3F;
+		// OctreeNode.Booleans = (PackedData >> 6) & 0x03;
+		// OctreeNode.ChunkBorder = PackedData & 0x3F;
 	}
 
 	return Ar;
@@ -113,8 +115,6 @@ FArchive& operator<<(FArchive& Ar, FOctreeNode& OctreeNode)
 
 FArchive& operator<<(FArchive& Ar, FNodesMap& NodesMap)
 {
-	// return SerializeMap<FArchive, uint_fast32_t, FOctreeNode>(Ar, NodesMap);
-
 	size_t Size = NodesMap.size();
 	Ar << Size;
 	if(Ar.IsSaving())
@@ -144,7 +144,7 @@ FArchive& operator<<(FArchive& Ar, TSharedPtr<FOctree>& Octree)
 		Octree = MakeShared<FOctree>();
 	}
 	
-	for (int32 i = 0; i < Octree->Layers.Num(); ++i)
+	for (uint8 i = 0; i < Octree->Layers.Num(); ++i)
 	{
 		Ar << Octree->Layers[i];
 	}
@@ -166,8 +166,6 @@ FArchive& operator<<(FArchive& Ar, FChunk& Chunk)
 
 FArchive& operator<<(FArchive& Ar, FNavMesh& NavMesh)
 {
-	// return SerializeMap<FArchive, uint_fast64_t, FChunk>(Ar, NavMesh);
-
 	size_t Size = NavMesh.size();
 	Ar << Size;
 	if(Ar.IsSaving())
