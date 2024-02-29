@@ -7,15 +7,25 @@
 #include "NavMeshSettings.h"
 #include "unordered_dense.h"
 
+#define DIRECTION_X_NEGATIVE 0b100000
+#define DIRECTION_Y_NEGATIVE 0b010000
+#define DIRECTION_Z_NEGATIVE 0b001000
+#define DIRECTION_X_POSITIVE 0b000100
+#define DIRECTION_Y_POSITIVE 0b000010
+#define DIRECTION_Z_POSITIVE 0b000001
+
+
+
 /**
  * Used to store static values that will be used often during generation where performance is critical.
  *
  * Uses UNavMeshSettings for initializing these values.
  *
- * Call Initialize everytime a level is opened.
+ * Initialize should be called everytime a new level is opened with the settings for that level.
  */
 struct FNavMeshData
 {
+	static inline constexpr uint16 MortonOffsets[10] = {1024, 512, 256, 128, 64, 32, 16, 8, 4, 2};
 	static inline uint8 VoxelSizeExponent = 2;
 	static inline uint8 StaticDepth = 6;
 	static inline constexpr uint8 DynamicDepth = 10;
@@ -91,6 +101,21 @@ struct F3DVector16
 	FORCEINLINE F3DVector16 operator+(const uint_fast16_t Value) const
 	{
 		return F3DVector16(X + Value, Y + Value, Z + Value);
+	}
+
+	FORCEINLINE F3DVector16 operator+(const F3DVector16& OtherVector) const
+	{
+		return F3DVector16(X + OtherVector.X, Y + OtherVector.Y, Z + OtherVector.Z);
+	}
+
+	FORCEINLINE F3DVector16 operator-(const uint_fast16_t Value) const
+	{
+		return F3DVector16(X - Value, Y - Value, Z - Value);
+	}
+
+	FORCEINLINE F3DVector16 operator-(const F3DVector16& OtherVector) const
+	{
+		return F3DVector16(X - OtherVector.X, Y - OtherVector.Y, Z - OtherVector.Z);
 	}
 
 	explicit F3DVector16(const uint16 InX, const uint16 InY, const uint16 InZ)
@@ -210,14 +235,22 @@ struct FOctreeLeaf
  */
 struct FOctreeNeighbours
 {
-	uint_fast8_t NeighbourX_P : 4; // X positive
-	uint_fast8_t NeighbourX_N : 4; // X negative
-	
-	uint_fast8_t NeighbourY_P : 4; // Y positive
-	uint_fast8_t NeighbourY_N : 4; // Y negative
-	
-	uint_fast8_t NeighbourZ_P : 4; // Z positive
-	uint_fast8_t NeighbourZ_N : 4; // Z negative
+	uint_fast8_t NeighbourX_N: 4; // X negative
+	uint_fast8_t NeighbourY_N: 4; // Y negative
+	uint_fast8_t NeighbourZ_N: 4; // Z negative
+	uint_fast8_t NeighbourX_P: 4; // X positive
+	uint_fast8_t NeighbourY_P: 4; // Y positive
+	uint_fast8_t NeighbourZ_P: 4; // Z positive
+};
+
+/**
+ * Necessary data for finding any given node.
+ */
+struct FNodeLookupData
+{
+	uint_fast32_t MortonCode;
+	uint_fast8_t LayerIndex;
+	uint64_t ChunkKey;
 };
 
 /**
@@ -280,10 +313,21 @@ struct FOctreeNode
 		return MortonCode & MortonMask;
 	}
 
+	FORCEINLINE static uint_fast32_t GetMortonCodeFromLocalLocation(const F3DVector16 LocalLocation)
+	{
+		return libmorton::morton3D_32_encode(LocalLocation.X, LocalLocation.Y, LocalLocation.Z);
+	}
+
+	// Remove certain amount of bits of the end of the Node's morton-code to get the parent.
 	FORCEINLINE uint_fast32_t GetParentMortonCode(const uint8 LayerIndex) const
 	{
 		const uint_fast32_t ParentMask = ~((1 << LayerShiftAmount[LayerIndex-1]) - 1);
 		return GetMortonCode() & ParentMask;
+	}
+	FORCEINLINE static uint_fast32_t GetParentMortonCode(const uint_fast32_t MortonCode, const uint8 LayerIndex)
+	{
+		const uint_fast32_t ParentMask = ~((1 << LayerShiftAmount[LayerIndex-1]) - 1);
+		return MortonCode & ParentMask;
 	}
 
 	FORCEINLINE void SetFilled(const bool Value)
@@ -308,101 +352,120 @@ struct FOctreeNode
 		return MortonCode & BoolOccludedMask;
 	}
 
-	std::array<F3DVector32, 6> GetNeighbourGlobalLocations(const uint8 LayerIndex, const F3DVector32& ChunkLocation) const
+	std::array<FNodeLookupData, 6> GetNeighboursLookupData(const F3DVector32& ChunkLocation) const
 	{
-		std::array<F3DVector32, 6> NeighbourLocations;
+		std::array<FNodeLookupData, 6> NeighboursLookupData;
 
 		int Index = 0;
-		for (int Direction = 0b000001; Direction <= 0b100000; Direction<<=1, ++Index)
+		for (int Direction = 0b100000; Direction <= 0b000001; Direction>>=1, ++Index)
 		{
-			int_fast16_t OffsetX = 0;
-			int_fast16_t OffsetY = 0;
-			int_fast16_t OffsetZ = 0;
+			int_fast16_t MortonOffsetX = 0;
+			int_fast16_t MortonOffsetY = 0;
+			int_fast16_t MortonOffsetZ = 0;
+			F3DVector32 ChunkOffset;
 
 			// Get the layer-index of the neighbour in the current direction.
+			// Set any Morton/Chunk offset if this neighbour is located in another chunk.
+			// todo: Chunk-Key calculation can be done without having to add to vectors,
+			// todo: but instead get the coordinate, bit shift by 42,21 or 0 depending on axis and add that value to key
 			uint8 NeighbourLayerIndex = 0;
 			switch (Direction) {
-			case 0b000001:
-				NeighbourLayerIndex = Neighbours.NeighbourZ_N;
-				OffsetZ -= FNavMeshData::NodeSizes[NeighbourLayerIndex];
-				if(ChunkBorder & Direction) OffsetZ -= FNavMeshData::NodeSizes[0];
-				break;
-			case 0b000010:
-				NeighbourLayerIndex = Neighbours.NeighbourY_N;
-				OffsetY -= FNavMeshData::NodeSizes[NeighbourLayerIndex];
-				if(ChunkBorder & Direction) OffsetY -= FNavMeshData::NodeSizes[0];
-				break;
-			case 0b000100:
+			case DIRECTION_X_NEGATIVE:
 				NeighbourLayerIndex = Neighbours.NeighbourX_N;
-				OffsetX -= FNavMeshData::NodeSizes[NeighbourLayerIndex];
-				if(ChunkBorder & Direction) OffsetX -= FNavMeshData::NodeSizes[0];
+				if(!(ChunkBorder & Direction)) break;
+				MortonOffsetX = FNavMeshData::MortonOffsets[NeighbourLayerIndex];
+				ChunkOffset = F3DVector32(-FNavMeshData::NodeSizes[NeighbourLayerIndex], 0, 0);
 				break;
-			case 0b001000:
-				NeighbourLayerIndex = Neighbours.NeighbourZ_P;
-				OffsetZ = FNavMeshData::NodeSizes[NeighbourLayerIndex];
-				if(ChunkBorder & Direction) OffsetZ += FNavMeshData::NodeSizes[0];
+			case DIRECTION_Y_NEGATIVE:
+				NeighbourLayerIndex = Neighbours.NeighbourY_N;
+				if(!(ChunkBorder & Direction)) break;
+				MortonOffsetY = FNavMeshData::MortonOffsets[NeighbourLayerIndex];
+				ChunkOffset = F3DVector32(0, -FNavMeshData::NodeSizes[NeighbourLayerIndex], 0);
 				break;
-			case 0b010000:
-				NeighbourLayerIndex = Neighbours.NeighbourY_P;
-				OffsetY = FNavMeshData::NodeSizes[NeighbourLayerIndex];
-				if(ChunkBorder & Direction) OffsetY += FNavMeshData::NodeSizes[0];
+			case DIRECTION_Z_NEGATIVE:
+				NeighbourLayerIndex = Neighbours.NeighbourZ_N;
+				if(!(ChunkBorder & Direction)) break;
+				MortonOffsetZ = FNavMeshData::MortonOffsets[NeighbourLayerIndex];
+				ChunkOffset = F3DVector32(0, 0, -FNavMeshData::NodeSizes[NeighbourLayerIndex]);
 				break;
-			case 0b100000:
+			case DIRECTION_X_POSITIVE:
 				NeighbourLayerIndex = Neighbours.NeighbourX_P;
-				OffsetX = FNavMeshData::NodeSizes[NeighbourLayerIndex];
-				if(ChunkBorder & Direction) OffsetX += FNavMeshData::NodeSizes[0];
+				if(!(ChunkBorder & Direction)) break;
+				MortonOffsetX = -FNavMeshData::MortonOffsets[NeighbourLayerIndex];
+				ChunkOffset = F3DVector32(FNavMeshData::NodeSizes[NeighbourLayerIndex], 0, 0);
+				break;
+			case DIRECTION_Y_POSITIVE:
+				NeighbourLayerIndex = Neighbours.NeighbourY_P;
+				if(!(ChunkBorder & Direction)) break;
+				MortonOffsetY = -FNavMeshData::MortonOffsets[NeighbourLayerIndex];
+				ChunkOffset = F3DVector32(0, FNavMeshData::NodeSizes[NeighbourLayerIndex], 0);
+				break;
+			case DIRECTION_Z_POSITIVE:
+				NeighbourLayerIndex = Neighbours.NeighbourZ_P;
+				if(!(ChunkBorder & Direction)) break;
+				MortonOffsetZ = -FNavMeshData::MortonOffsets[NeighbourLayerIndex];
+				ChunkOffset = F3DVector32(0, 0, FNavMeshData::NodeSizes[NeighbourLayerIndex]);
 				break;
 			default:
 				break;
 			}
+			
+			// Set the key of the chunk the neighbour is in, and the layer-index.
+			NeighboursLookupData[Index].ChunkKey = (ChunkLocation + ChunkOffset).ToKey();
+			NeighboursLookupData[Index].LayerIndex = NeighbourLayerIndex;
 
-			// Get the morton-code of the parent of the current-node that is on the same layer as the neighbour.
+			// Get the morton-code of the parent that is on the same layer as the neighbour.
 			const uint_fast32_t ParentMask = ~((1 << LayerShiftAmount[NeighbourLayerIndex]) - 1);
+			const uint_fast32_t ParentMortonCode = GetMortonCode() & ParentMask;
 
-			// Get global location of the parent using this mask.
+			// Get local location of the parent.
 			F3DVector16 ParentLocalLocation;
-			libmorton::morton3D_32_decode(GetMortonCode() & ParentMask, ParentLocalLocation.X, ParentLocalLocation.Y, ParentLocalLocation.Z);
-			const F3DVector32 ParentGlobalLocation = ChunkLocation + ParentLocalLocation;
+			libmorton::morton3D_32_decode(ParentMortonCode, ParentLocalLocation.X, ParentLocalLocation.Y, ParentLocalLocation.Z);
 
-			// Get neighbour location by adding the offset on the parents global location.
-			NeighbourLocations[Index] = F3DVector32(ParentGlobalLocation.X+OffsetX, ParentGlobalLocation.Y+OffsetY, ParentGlobalLocation.Z+OffsetZ)+FNavMeshData::NodeHalveSizes[NeighbourLayerIndex];
+			// Get local location of the neighbour by adding the MortonOffset
+			F3DVector16 NeighbourLocalLocation = ParentLocalLocation;
+			NeighbourLocalLocation.X += MortonOffsetX;
+			NeighbourLocalLocation.Y += MortonOffsetY;
+			NeighbourLocalLocation.Z += MortonOffsetZ;
+			
+			NeighboursLookupData[Index].MortonCode = libmorton::morton3D_32_encode(NeighbourLocalLocation.X, NeighbourLocalLocation.Y, NeighbourLocalLocation.Z);
 		}
 
-		return NeighbourLocations;
+		return NeighboursLookupData;
 	}
 
-	std::array<uint8, 6> GetNeighboursArray() const
+	std::array<uint8, 6> GetNeighbourLayerIndexes() const
 	{
-		std::array<uint8, 6> NeighboursArray;
+		std::array<uint8, 6> NeighbourLayerIndexes;
 
 		int Index = 0;
-		for (int Direction = 0b000001; Direction <= 0b100000; Direction<<=1, ++Index)
+		for (int Direction = 0b100000; Direction >= 0b000001; Direction>>=1, ++Index)
 		{
 			switch (Direction) {
-			case 0b000001:
-				NeighboursArray[Index] = Neighbours.NeighbourZ_N;
+			case DIRECTION_X_NEGATIVE:
+				NeighbourLayerIndexes[Index] = Neighbours.NeighbourX_N;
 				break;
-			case 0b000010:
-				NeighboursArray[Index] = Neighbours.NeighbourY_N;
+			case DIRECTION_Y_NEGATIVE:
+				NeighbourLayerIndexes[Index] = Neighbours.NeighbourY_N;
 				break;
-			case 0b000100:
-				NeighboursArray[Index] = Neighbours.NeighbourX_N;
+			case DIRECTION_Z_NEGATIVE:
+				NeighbourLayerIndexes[Index] = Neighbours.NeighbourZ_N;
 				break;
-			case 0b001000:
-				NeighboursArray[Index] = Neighbours.NeighbourZ_P;
+			case DIRECTION_X_POSITIVE:
+				NeighbourLayerIndexes[Index] = Neighbours.NeighbourX_P;
 				break;
-			case 0b010000:
-				NeighboursArray[Index] = Neighbours.NeighbourY_P;
+			case DIRECTION_Y_POSITIVE:
+				NeighbourLayerIndexes[Index] = Neighbours.NeighbourY_P;
 				break;
-			case 0b100000:
-				NeighboursArray[Index] = Neighbours.NeighbourX_P;
+			case DIRECTION_Z_POSITIVE:
+				NeighbourLayerIndexes[Index] = Neighbours.NeighbourZ_P;
 				break;
 			default:
 				break;
 			}
 		}
 
-		return NeighboursArray;
+		return NeighbourLayerIndexes;
 	}
 };
 

@@ -22,9 +22,9 @@ public:
 
 private:
 	void PerformConditionalDraw(const FNavMesh& NavMesh, const FVector& CameraLocation, const FVector& CameraForwardVector);
-	void DrawNodes(const FNavMesh& NavMesh, const FVector& CameraLocation, const FVector& CameraForwardVector);
-	void DrawPaths(const FNavMesh& NavMesh, const FVector& CameraLocation, const FVector& CameraForwardVector);
-	void DrawChunks(const FNavMesh& NavMesh, const FVector& CameraLocation, const FVector& CameraForwardVector);
+	void DrawNodes(const FNavMesh& NavMesh, const FVector& CameraLocation, const FVector& CameraForwardVector) const;
+	void DrawPaths(const FNavMesh& NavMesh, const FVector& CameraLocation, const FVector& CameraForwardVector) const;
+	void DrawChunks(const FNavMesh& NavMesh, const FVector& CameraLocation, const FVector& CameraForwardVector) const;
 	
 	UPROPERTY() const UWorld* World;
 	FNavMeshDebugSettings NavMeshDebugSettings;
