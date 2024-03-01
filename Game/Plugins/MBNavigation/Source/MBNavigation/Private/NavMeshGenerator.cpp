@@ -366,8 +366,6 @@ void UNavMeshGenerator::RecursiveSetChildNodesRelation(const FOctreeNode* Node, 
 	for (auto ChildMortonCode : ChildMortonCodes)
 	{
 		const auto NodeIterator = Chunk.Octrees[0]->Layers[ChildLayerIndex].find(ChildMortonCode);
-		// if(NodeIterator == Chunk.Octrees[0]->Layers[ChildLayerIndex].end) return; // This line can be used if converting octree to sparse-octree.
-
 		FOctreeNode* ChildNode = &NodeIterator->second;
 		ChildNode->Neighbours.SetFromDirection(LayerIndexToSet, Direction);
 		RecursiveSetChildNodesRelation(ChildNode, Chunk, ChildLayerIndex, LayerIndexToSet, Direction);

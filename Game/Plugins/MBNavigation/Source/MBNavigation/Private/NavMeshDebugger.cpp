@@ -5,7 +5,7 @@
 #include <ranges>
 #include <string>
 #include "NavMeshTypes.h"
-
+#include "NavMeshUtils.h"
 
 
 FString To6BitBinaryString(const uint8 Value) {
@@ -84,39 +84,47 @@ void UNavMeshDebugger::DrawNodes(const FNavMesh& NavMesh, const FVector& CameraL
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("DrawNodes");
 	
-	
+	UE_LOG(LogTemp, Warning, TEXT("---"))
+	uint32 FoundNodeIndex = 0;
 	for (const auto &Chunk : std::views::values(NavMesh))
 	{
 		TArray<FNodesMap> Layers = Chunk.Octrees[0].Get()->Layers;
 		for (int LayerIndex = 0; LayerIndex < 10; ++LayerIndex)
 		{
 			FNodesMap Layer = Layers[LayerIndex];
-			for (const FOctreeNode &Node : std::views::values(Layers[LayerIndex]))
+			uint32 NodeIndex = 0;
+			for (const FOctreeNode Node : std::views::values(Layers[LayerIndex]))
 			{
+				if(LayerIndex == 1 && NodeIndex == 4 && Node.ChunkBorder == 49)
+				{
+					if(FoundNodeIndex == 1)
+					{
+						UE_LOG(LogTemp, Warning, TEXT("Node"))
+					}
+					FoundNodeIndex++;
+				}
 				// if(!Node.IsOccluded()) continue;
+				// if(LayerIndex != FNavMeshData::StaticDepth) continue;
 
 				// Continue if distance between camera and node is larger than the calculated distance for this specific node's layer.
 				const FVector NodeGlobalCenterLocation = (Node.GetGlobalLocation(Chunk.Location) + FNavMeshData::NodeHalveSizes[LayerIndex]).ToVector();
 				if(FVector::Dist(CameraLocation, NodeGlobalCenterLocation) > (FNavMeshData::NodeSizes[LayerIndex] << 2) + 200 - 16 * LayerIndex) continue;
 				
-				// Continue if (roughly*) not in field of view.
+				// Continue if not in field of view.
 				if(const FVector DirectionToTarget = (NodeGlobalCenterLocation - CameraLocation).GetSafeNormal();
 					FVector::DotProduct(CameraForwardVector, DirectionToTarget) < 0) continue;
 				
 				if(FNavMeshDebugSettings::bDisplayNodes)
 				{
-					DrawDebugBox(World, NodeGlobalCenterLocation, FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), LayerColors[LayerIndex], true, -1, 0, LayerIndex/2);
+					DrawDebugBox(World, NodeGlobalCenterLocation, FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), LayerColors[LayerIndex], true, -1, 0, 5.5-LayerIndex/2);
 				}
 				if(FNavMeshDebugSettings::bDisplayNodeBorder)
 				{
 					FString BitString = To6BitBinaryString(Node.ChunkBorder);
 					DrawDebugString(World, NodeGlobalCenterLocation, BitString, nullptr, FColor::Red, -1, false, 1);
-				}
 
-				if(FNavMeshDebugSettings::bDisplayRelations)
-				{
-					if(FVector::Dist(CameraLocation, NodeGlobalCenterLocation) > 100) continue;
-					
+
+					// todo put in own branch
 					std::array<uint8, 6> NeighbourLayerIndexes = Node.GetNeighbourLayerIndexes();
 					int NeighbourIndex = 0;
 					for (int Direction = 0b100000; Direction >= 0b000001; Direction>>=1, ++NeighbourIndex)
@@ -146,32 +154,34 @@ void UNavMeshDebugger::DrawNodes(const FNavMesh& NavMesh, const FVector& CameraL
 							break;
 						}
 
+						if(FVector::Dist(CameraLocation, NodeGlobalCenterLocation + CenterOffset.ToVector()) > 600) continue;
 						FString LayerString = NeighbourLayerIndexes[NeighbourIndex] != LAYER_INDEX_INVALID ? FString::FromInt(NeighbourLayerIndexes[NeighbourIndex]) : FString("None");
 						DrawDebugString(World, NodeGlobalCenterLocation + CenterOffset.ToVector(), LayerString, nullptr, FColor::White, -1, false, 1);
 					}
-						
-					continue;
-
-					
-					for (const auto [NeighbourMortonCode, NeighbourLayerIndex, NeighbourChunkKey] : Node.GetNeighboursLookupData(Chunk.Location))
+				}
+				
+				if(FNavMeshDebugSettings::bDisplayRelations)
+				{
+					std::array<FNodeLookupData, 6> NeighboursLookupData = GetNeighboursLookupData(Node, Chunk.Location);
+					for (const auto NeighbourLookupData : NeighboursLookupData)
 					{
-						if(NeighbourLayerIndex >= 10)
-						{
-							continue;
-						}
+						if(NeighbourLookupData.LayerIndex == LAYER_INDEX_INVALID) continue;
 						
 						// Find chunk the neighbour is in.
-						const auto ChunkIterator = NavMesh.find(NeighbourChunkKey);
+						const auto ChunkIterator = NavMesh.find(NeighbourLookupData.ChunkKey);
 						if(ChunkIterator == NavMesh.end()) continue;
 						const FChunk& NeighbourChunk = ChunkIterator->second;
 						
-						const auto NeighbourIterator = NeighbourChunk.Octrees[0]->Layers[NeighbourLayerIndex].find(NeighbourMortonCode);
-						if(NeighbourIterator == Chunk.Octrees[0]->Layers[NeighbourLayerIndex].end()) continue;
-
-						const F3DVector32 NeighbourGlobalCenterLocation = NeighbourIterator->second.GetGlobalLocation(NeighbourChunk.Location);
-						DrawDebugLine(World, NodeGlobalCenterLocation, NeighbourGlobalCenterLocation.ToVector(), FColor::White, true);
+						const auto NeighbourIterator = NeighbourChunk.Octrees[0]->Layers[NeighbourLookupData.LayerIndex].find(NeighbourLookupData.MortonCode);
+						if(NeighbourIterator == Chunk.Octrees[0]->Layers[NeighbourLookupData.LayerIndex].end()) continue;
+						const FOctreeNode& NeighbourNode = NeighbourIterator->second;
+						
+						const F3DVector32 NeighbourGlobalCenterLocation = NeighbourNode.GetGlobalLocation(NeighbourChunk.Location) + FNavMeshData::NodeHalveSizes[NeighbourLookupData.LayerIndex];
+						DrawDebugLine(World, NodeGlobalCenterLocation, NeighbourGlobalCenterLocation.ToVector(), LayerColors[LayerIndex], true, -1, 11, 1.5);
 					}
 				}
+
+				NodeIndex++;
 			}
 		}
 	}

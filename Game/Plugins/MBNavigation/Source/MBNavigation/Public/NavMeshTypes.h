@@ -31,7 +31,7 @@ struct FNavMeshData
 	static inline uint8 VoxelSizeExponent = 2;
 	static inline uint8 StaticDepth = 6;
 	static inline constexpr uint8 DynamicDepth = 10;
-	static inline uint32 ChunkSize = 1024 << VoxelSizeExponent;
+	static inline int32 ChunkSize = 1024 << VoxelSizeExponent;
 	static inline uint8 KeyShift = 12;
 	static inline int32 NodeSizes[10];
 	static inline int32 NodeHalveSizes[10];
@@ -88,16 +88,24 @@ struct FNavMeshDebugSettings
  * Used to represent the location of a node within a chunk's local-space.
  * A chunk's origin will be in its negative-most corner meaning that all node's inside it have positive coordinates.
  */
-struct F3DVector16
+struct F3DVector16 // todo rename to F3DVector10
 {
-	uint_fast16_t X;
-	uint_fast16_t Y;
-	uint_fast16_t Z;
+	uint_fast16_t X: 10;
+	uint_fast16_t Y: 10;
+	uint_fast16_t Z: 10;
 
 	// Keep in mind that the morton-code supports 10 bits per axis.
 	FORCEINLINE uint_fast32_t ToMortonCode() const
 	{
 		return libmorton::morton3D_32_encode(X, Y, Z);
+	}
+	FORCEINLINE static F3DVector16 FromMortonCode(const uint_fast32_t MortonCode)
+	{
+		uint_fast16_t OutX;
+		uint_fast16_t OutY;
+		uint_fast16_t OutZ;
+		libmorton::morton3D_32_decode(MortonCode, OutX, OutY, OutZ);
+		return F3DVector16(OutX, OutY, OutZ);
 	}
 
 	FORCEINLINE F3DVector16 operator+(const uint_fast16_t Value) const
@@ -184,22 +192,22 @@ struct F3DVector32
 		return F3DVector32(X - Value, Y - Value, Z - Value);
 	}
 
-	FORCEINLINE F3DVector32 operator+(const F3DVector16 LocalCoordinate) const
+	FORCEINLINE F3DVector32 operator+(const F3DVector16& LocalCoordinate) const
 	{
 		return F3DVector32(X + LocalCoordinate.X, Y + LocalCoordinate.Y, Z + LocalCoordinate.Z);
 	}
 
-	FORCEINLINE F3DVector32 operator-(const F3DVector16 LocalCoordinate) const
+	FORCEINLINE F3DVector32 operator-(const F3DVector16& LocalCoordinate) const
 	{
 		return F3DVector32(X - LocalCoordinate.X, Y - LocalCoordinate.Y, Z - LocalCoordinate.Z);
 	}
 
-	FORCEINLINE F3DVector32 operator+(const F3DVector32 GlobalCoordinate) const
+	FORCEINLINE F3DVector32 operator+(const F3DVector32& GlobalCoordinate) const
 	{
 		return F3DVector32(X + GlobalCoordinate.X, Y + GlobalCoordinate.Y, Z + GlobalCoordinate.Z);
 	}
 
-	FORCEINLINE F3DVector32 operator-(const F3DVector32 GlobalCoordinate) const
+	FORCEINLINE F3DVector32 operator-(const F3DVector32& GlobalCoordinate) const
 	{
 		return F3DVector32(X - GlobalCoordinate.X, Y - GlobalCoordinate.Y, Z - GlobalCoordinate.Z);
 	}
@@ -237,12 +245,33 @@ struct FOctreeLeaf
  */
 struct FOctreeNeighbours
 {
-	uint_fast8_t NeighbourX_N: 4 = LAYER_INDEX_INVALID; // X negative
-	uint_fast8_t NeighbourY_N: 4 = LAYER_INDEX_INVALID; // Y negative
-	uint_fast8_t NeighbourZ_N: 4 = LAYER_INDEX_INVALID; // Z negative
-	uint_fast8_t NeighbourX_P: 4 = LAYER_INDEX_INVALID; // X positive
-	uint_fast8_t NeighbourY_P: 4 = LAYER_INDEX_INVALID; // Y positive
-	uint_fast8_t NeighbourZ_P: 4 = LAYER_INDEX_INVALID; // Z positive
+	uint8 NeighbourX_N: 4 = LAYER_INDEX_INVALID; // X negative
+	uint8 NeighbourY_N: 4 = LAYER_INDEX_INVALID; // Y negative
+	uint8 NeighbourZ_N: 4 = LAYER_INDEX_INVALID; // Z negative
+	uint8 NeighbourX_P: 4 = LAYER_INDEX_INVALID; // X positive
+	uint8 NeighbourY_P: 4 = LAYER_INDEX_INVALID; // Y positive
+	uint8 NeighbourZ_P: 4 = LAYER_INDEX_INVALID; // Z positive
+
+	FORCEINLINE uint8 GetFromDirection(const uint8 Direction) const
+	{
+		switch (Direction)
+		{
+		case DIRECTION_X_NEGATIVE:
+			return NeighbourX_N;
+		case DIRECTION_Y_NEGATIVE:
+			return NeighbourY_N;
+		case DIRECTION_Z_NEGATIVE:
+			return NeighbourZ_N;
+		case DIRECTION_X_POSITIVE:
+			return NeighbourX_P;
+		case DIRECTION_Y_POSITIVE:
+			return NeighbourY_P;
+		case DIRECTION_Z_POSITIVE:
+			return NeighbourZ_P;
+		default:
+			return LAYER_INDEX_INVALID;
+		}
+	}
 
 	FORCEINLINE void SetFromDirection(const uint8 LayerIndex, const uint8 Direction)
 	{
@@ -270,6 +299,27 @@ struct FOctreeNeighbours
 			break;
 		}
 	}
+
+	FORCEINLINE bool IsNeighbourValid(const uint8 Direction) const
+	{
+		switch (Direction)
+		{
+		case DIRECTION_X_NEGATIVE:
+			return NeighbourX_N != LAYER_INDEX_INVALID;
+		case DIRECTION_Y_NEGATIVE:
+			return NeighbourY_N != LAYER_INDEX_INVALID;
+		case DIRECTION_Z_NEGATIVE:
+			return NeighbourZ_N != LAYER_INDEX_INVALID;
+		case DIRECTION_X_POSITIVE:
+			return NeighbourX_P != LAYER_INDEX_INVALID;
+		case DIRECTION_Y_POSITIVE:
+			return NeighbourY_P != LAYER_INDEX_INVALID;
+		case DIRECTION_Z_POSITIVE:
+			return NeighbourZ_P != LAYER_INDEX_INVALID;
+		default:
+			return false;
+		}
+	}
 };
 
 /**
@@ -278,8 +328,10 @@ struct FOctreeNeighbours
 struct FNodeLookupData
 {
 	uint_fast32_t MortonCode;
-	uint_fast8_t LayerIndex;
+	uint8 LayerIndex;
 	uint64_t ChunkKey;
+
+	FNodeLookupData(): MortonCode(0), LayerIndex(LAYER_INDEX_INVALID), ChunkKey(0){}
 };
 
 /**
@@ -299,37 +351,38 @@ struct FOctreeNode
 	static constexpr uint_fast32_t BoolFilledMask = 1u << 30; // Filled boolean mask on the MortonCode
 	static constexpr uint_fast32_t BoolOccludedMask = 1u << 31; // Occluded boolean mask on the MortonCode
 	static constexpr uint_fast32_t MortonMask = (1u << 30) - 1;
-	static constexpr int LayerShiftAmount[11] = {30, 30, 27, 24, 21, 18, 15, 12, 9, 6, 3};
+	static constexpr int LayerShiftAmount[10] = {30, 30, 27, 24, 21, 18, 15, 12, 9, 6}; // todo change to make 30, 27, 24 etc...
+	static constexpr int ParentShiftAmount[10] = {30, 27, 24, 21, 18, 15, 12, 9, 6, 3};
 
 	uint_fast32_t MortonCode;
 	FOctreeNeighbours Neighbours;
 	uint8 ChunkBorder: 6; // todo might not be needed because can be tracked in navigation algo?
 	// todo 8 bits for dynamic index for each neighbour + child + parent???? 128 dynamic-objects a chunk (first bit for static octree)
 
-	FOctreeNode(uint_fast16_t NodeLocationX, uint_fast16_t NodeLocationY, uint_fast16_t NodeLocationZ):
-		Neighbours(), ChunkBorder(0)
+	FOctreeNode(uint_fast16_t NodeLocalLocationX, uint_fast16_t NodeLocalLocationY, uint_fast16_t NodeLocalLocationZ):
+		ChunkBorder(0)
 	{
 		// Right bit-shift using the Voxel-Size-Exponent into morton-space.
-		NodeLocationX >>= FNavMeshData::VoxelSizeExponent;
-		NodeLocationY >>= FNavMeshData::VoxelSizeExponent;
-		NodeLocationZ >>= FNavMeshData::VoxelSizeExponent;
-		MortonCode = libmorton::morton3D_32_encode(NodeLocationX, NodeLocationY, NodeLocationZ);
+		NodeLocalLocationX >>= FNavMeshData::VoxelSizeExponent;
+		NodeLocalLocationY >>= FNavMeshData::VoxelSizeExponent;
+		NodeLocalLocationZ >>= FNavMeshData::VoxelSizeExponent;
+		MortonCode = libmorton::morton3D_32_encode(NodeLocalLocationX, NodeLocalLocationY, NodeLocalLocationZ);
 	}
 
 	FOctreeNode():
-		MortonCode(0), Neighbours(), ChunkBorder(0)
+		MortonCode(0), ChunkBorder(0)
 	{}
 
 	FORCEINLINE F3DVector16 GetLocalLocation() const
 	{
-		F3DVector16 NodeLocalLocation = F3DVector16();
-		libmorton::morton3D_32_decode(GetMortonCode(), NodeLocalLocation.X, NodeLocalLocation.Y, NodeLocalLocation.Z);
+		uint_fast16_t TempX, TempY, TempZ;
+		libmorton::morton3D_32_decode(GetMortonCode(), TempX, TempY, TempZ);
 
 		// Left bit-shift using the Voxel-Size-Exponent into local-space.
-		NodeLocalLocation.X <<= FNavMeshData::VoxelSizeExponent;
-		NodeLocalLocation.Y <<= FNavMeshData::VoxelSizeExponent;
-		NodeLocalLocation.Z <<= FNavMeshData::VoxelSizeExponent;
-		return NodeLocalLocation;
+		TempX <<= FNavMeshData::VoxelSizeExponent;
+		TempY <<= FNavMeshData::VoxelSizeExponent;
+		TempZ <<= FNavMeshData::VoxelSizeExponent;
+		return F3DVector16(TempX, TempY, TempZ);
 	}
 	
 	FORCEINLINE F3DVector32 GetGlobalLocation(const F3DVector32 &ChunkLocation) const
@@ -346,16 +399,16 @@ struct FOctreeNode
 	{
 		return libmorton::morton3D_32_encode(LocalLocation.X, LocalLocation.Y, LocalLocation.Z);
 	}
-
-	// Remove certain amount of bits of the end of the Node's morton-code to get the parent.
+	
 	FORCEINLINE uint_fast32_t GetParentMortonCode(const uint8 LayerIndex) const
 	{
-		const uint_fast32_t ParentMask = ~((1 << LayerShiftAmount[LayerIndex-1]) - 1);
+		const uint_fast32_t ParentMask = ~((1 << ParentShiftAmount[LayerIndex-1]) - 1);
 		return GetMortonCode() & ParentMask;
 	}
-	FORCEINLINE static uint_fast32_t GetParentMortonCode(const uint_fast32_t MortonCode, const uint8 LayerIndex)
+	
+	FORCEINLINE static uint_fast32_t GetParentMortonCode(const uint_fast32_t MortonCode, const uint8 ParentLayerIndex)
 	{
-		const uint_fast32_t ParentMask = ~((1 << LayerShiftAmount[LayerIndex-1]) - 1);
+		const uint_fast32_t ParentMask = ~((1 << ParentShiftAmount[ParentLayerIndex-1]) - 1);
 		return MortonCode & ParentMask;
 	}
 
@@ -379,88 +432,6 @@ struct FOctreeNode
 	FORCEINLINE bool IsOccluded() const
 	{
 		return MortonCode & BoolOccludedMask;
-	}
-
-	std::array<FNodeLookupData, 6> GetNeighboursLookupData(const F3DVector32& ChunkLocation) const
-	{
-		std::array<FNodeLookupData, 6> NeighboursLookupData;
-
-		int Index = 0;
-		for (int Direction = 0b100000; Direction <= 0b000001; Direction>>=1, ++Index)
-		{
-			int_fast16_t MortonOffsetX = 0;
-			int_fast16_t MortonOffsetY = 0;
-			int_fast16_t MortonOffsetZ = 0;
-			F3DVector32 ChunkOffset;
-
-			// Get the layer-index of the neighbour in the current direction.
-			// Set any Morton/Chunk offset if this neighbour is located in another chunk.
-			// todo: Chunk-Key calculation can be done without having to add to vectors,
-			// todo: but instead get the coordinate, bit shift by 42,21 or 0 depending on axis and add that value to key
-			uint8 NeighbourLayerIndex = 0;
-			switch (Direction) {
-			case DIRECTION_X_NEGATIVE:
-				NeighbourLayerIndex = Neighbours.NeighbourX_N;
-				if(!(ChunkBorder & Direction)) break;
-				MortonOffsetX = FNavMeshData::MortonOffsets[NeighbourLayerIndex];
-				ChunkOffset = F3DVector32(-FNavMeshData::NodeSizes[NeighbourLayerIndex], 0, 0);
-				break;
-			case DIRECTION_Y_NEGATIVE:
-				NeighbourLayerIndex = Neighbours.NeighbourY_N;
-				if(!(ChunkBorder & Direction)) break;
-				MortonOffsetY = FNavMeshData::MortonOffsets[NeighbourLayerIndex];
-				ChunkOffset = F3DVector32(0, -FNavMeshData::NodeSizes[NeighbourLayerIndex], 0);
-				break;
-			case DIRECTION_Z_NEGATIVE:
-				NeighbourLayerIndex = Neighbours.NeighbourZ_N;
-				if(!(ChunkBorder & Direction)) break;
-				MortonOffsetZ = FNavMeshData::MortonOffsets[NeighbourLayerIndex];
-				ChunkOffset = F3DVector32(0, 0, -FNavMeshData::NodeSizes[NeighbourLayerIndex]);
-				break;
-			case DIRECTION_X_POSITIVE:
-				NeighbourLayerIndex = Neighbours.NeighbourX_P;
-				if(!(ChunkBorder & Direction)) break;
-				MortonOffsetX = -FNavMeshData::MortonOffsets[NeighbourLayerIndex];
-				ChunkOffset = F3DVector32(FNavMeshData::NodeSizes[NeighbourLayerIndex], 0, 0);
-				break;
-			case DIRECTION_Y_POSITIVE:
-				NeighbourLayerIndex = Neighbours.NeighbourY_P;
-				if(!(ChunkBorder & Direction)) break;
-				MortonOffsetY = -FNavMeshData::MortonOffsets[NeighbourLayerIndex];
-				ChunkOffset = F3DVector32(0, FNavMeshData::NodeSizes[NeighbourLayerIndex], 0);
-				break;
-			case DIRECTION_Z_POSITIVE:
-				NeighbourLayerIndex = Neighbours.NeighbourZ_P;
-				if(!(ChunkBorder & Direction)) break;
-				MortonOffsetZ = -FNavMeshData::MortonOffsets[NeighbourLayerIndex];
-				ChunkOffset = F3DVector32(0, 0, FNavMeshData::NodeSizes[NeighbourLayerIndex]);
-				break;
-			default:
-				break;
-			}
-			
-			// Set the key of the chunk the neighbour is in, and the layer-index.
-			NeighboursLookupData[Index].ChunkKey = (ChunkLocation + ChunkOffset).ToKey();
-			NeighboursLookupData[Index].LayerIndex = NeighbourLayerIndex;
-
-			// Get the morton-code of the parent that is on the same layer as the neighbour.
-			const uint_fast32_t ParentMask = ~((1 << LayerShiftAmount[NeighbourLayerIndex]) - 1);
-			const uint_fast32_t ParentMortonCode = GetMortonCode() & ParentMask;
-
-			// Get local location of the parent.
-			F3DVector16 ParentLocalLocation;
-			libmorton::morton3D_32_decode(ParentMortonCode, ParentLocalLocation.X, ParentLocalLocation.Y, ParentLocalLocation.Z);
-
-			// Get local location of the neighbour by adding the MortonOffset
-			F3DVector16 NeighbourLocalLocation = ParentLocalLocation;
-			NeighbourLocalLocation.X += MortonOffsetX;
-			NeighbourLocalLocation.Y += MortonOffsetY;
-			NeighbourLocalLocation.Z += MortonOffsetZ;
-			
-			NeighboursLookupData[Index].MortonCode = libmorton::morton3D_32_encode(NeighbourLocalLocation.X, NeighbourLocalLocation.Y, NeighbourLocalLocation.Z);
-		}
-
-		return NeighboursLookupData;
 	}
 
 	std::array<uint8, 6> GetNeighbourLayerIndexes() const

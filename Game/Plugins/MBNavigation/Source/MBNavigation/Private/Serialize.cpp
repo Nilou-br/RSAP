@@ -42,12 +42,12 @@ FArchive& operator<<(FArchive& Ar, F3DVector32& Vector32)
 {
 	if (Ar.IsSaving())
 	{
-		uint_fast64_t Key = Vector32.ToKey();
+		uint64_t Key = Vector32.ToKey();
 		Ar << Key;
 	}
 	else if(Ar.IsLoading())
 	{
-		uint_fast64_t Key;
+		uint64_t Key;
 		Ar << Key;
 		Vector32 = F3DVector32::FromKey(Key);
 	}
@@ -60,12 +60,12 @@ FArchive& operator<<(FArchive& Ar, FOctreeNeighbours& OctreeNeighbours)
 	{
 		// Pack the 6 neighbour indices into a single uint32
 		uint32 PackedNeighbours =
-			(static_cast<uint32>(OctreeNeighbours.NeighbourX_P) << 28) |
-			(static_cast<uint32>(OctreeNeighbours.NeighbourX_N) << 24) |
-			(static_cast<uint32>(OctreeNeighbours.NeighbourY_P) << 20) |
-			(static_cast<uint32>(OctreeNeighbours.NeighbourY_N) << 16) |
-			(static_cast<uint32>(OctreeNeighbours.NeighbourZ_P) << 12) |
-			(static_cast<uint32>(OctreeNeighbours.NeighbourZ_N) << 8);
+			(static_cast<uint32>(OctreeNeighbours.NeighbourX_N) << 28) |
+			(static_cast<uint32>(OctreeNeighbours.NeighbourY_N) << 24) |
+			(static_cast<uint32>(OctreeNeighbours.NeighbourZ_N) << 20) |
+			(static_cast<uint32>(OctreeNeighbours.NeighbourX_P) << 16) |
+			(static_cast<uint32>(OctreeNeighbours.NeighbourY_P) << 12) |
+			(static_cast<uint32>(OctreeNeighbours.NeighbourZ_P) << 8);
 		Ar << PackedNeighbours;
 	}
 	else if (Ar.IsLoading())
@@ -74,12 +74,12 @@ FArchive& operator<<(FArchive& Ar, FOctreeNeighbours& OctreeNeighbours)
 		Ar << PackedNeighbours;
 
 		// Unpack the neighbour indices from the PackedNeighbours
-		OctreeNeighbours.NeighbourX_P = (PackedNeighbours >> 28) & 0xF;
-		OctreeNeighbours.NeighbourX_N = (PackedNeighbours >> 24) & 0xF;
-		OctreeNeighbours.NeighbourY_P = (PackedNeighbours >> 20) & 0xF;
-		OctreeNeighbours.NeighbourY_N = (PackedNeighbours >> 16) & 0xF;
-		OctreeNeighbours.NeighbourZ_P = (PackedNeighbours >> 12) & 0xF;
-		OctreeNeighbours.NeighbourZ_N = (PackedNeighbours >> 8) & 0xF;
+		OctreeNeighbours.NeighbourX_N = (PackedNeighbours >> 28) & 0xF;
+		OctreeNeighbours.NeighbourY_N = (PackedNeighbours >> 24) & 0xF;
+		OctreeNeighbours.NeighbourZ_N = (PackedNeighbours >> 20) & 0xF;
+		OctreeNeighbours.NeighbourX_P = (PackedNeighbours >> 16) & 0xF;
+		OctreeNeighbours.NeighbourY_P = (PackedNeighbours >> 12) & 0xF;
+		OctreeNeighbours.NeighbourZ_P = (PackedNeighbours >> 8) & 0xF;
 	}
 
 	return Ar;
@@ -131,7 +131,7 @@ FArchive& operator<<(FArchive& Ar, FNodesMap& NodesMap)
 		{
 			FOctreeNode Node;
 			Ar << Node;
-			NodesMap[Node.MortonCode] = Node;
+			NodesMap.emplace(Node.GetMortonCode(), Node);
 		}
 	}
 	return Ar;
@@ -182,7 +182,7 @@ FArchive& operator<<(FArchive& Ar, FNavMesh& NavMesh)
 		{
 			FChunk Value;
 			Ar << Value;
-			NavMesh[Value.Location.ToKey()] = Value;
+			NavMesh.emplace(Value.Location.ToKey(), Value);
 		}
 	}
 	return Ar;
