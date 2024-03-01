@@ -28,7 +28,9 @@ private:
 	void RasterizeStaticOctree(FChunk* Chunk);
 	void RasterizeStaticNode(FChunk* Chunk, FOctreeNode &Node, const uint8 LayerIndex);
 	FORCEINLINE bool HasOverlap(const F3DVector32 &NodeGlobalLocation, const uint8 LayerIndex);
-	void SetNeighbourRelations(FOctreeNode& Node, const F3DVector32& ChunkLocation, const uint8 LayerIndex);
+	void SetNegativeNeighbourRelations(const FChunk* Chunk);
+	void SetNodeRelations(FOctreeNode& Node, const F3DVector32& ChunkLocation, const uint8 LayerIndex);
+	void RecursiveSetChildNodesRelation(const FOctreeNode* Node, const FChunk& Chunk, const uint8 LayerIndex, const uint8 LayerIndexToSet, const uint8 Direction);
 
 	// Variables
 	UPROPERTY()

@@ -105,7 +105,7 @@ void UNavMeshDebugger::DrawNodes(const FNavMesh& NavMesh, const FVector& CameraL
 				
 				if(FNavMeshDebugSettings::bDisplayNodes)
 				{
-					DrawDebugBox(World, NodeGlobalCenterLocation, FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), LayerColors[LayerIndex], true);
+					DrawDebugBox(World, NodeGlobalCenterLocation, FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), LayerColors[LayerIndex], true, -1, 0, LayerIndex/2);
 				}
 				if(FNavMeshDebugSettings::bDisplayNodeBorder)
 				{
@@ -115,7 +115,7 @@ void UNavMeshDebugger::DrawNodes(const FNavMesh& NavMesh, const FVector& CameraL
 
 				if(FNavMeshDebugSettings::bDisplayRelations)
 				{
-					if(FVector::Dist(CameraLocation, NodeGlobalCenterLocation) > (FNavMeshData::NodeSizes[LayerIndex]) + 200 - 14 * LayerIndex) continue;
+					if(FVector::Dist(CameraLocation, NodeGlobalCenterLocation) > 100) continue;
 					
 					std::array<uint8, 6> NeighbourLayerIndexes = Node.GetNeighbourLayerIndexes();
 					int NeighbourIndex = 0;
@@ -125,28 +125,29 @@ void UNavMeshDebugger::DrawNodes(const FNavMesh& NavMesh, const FVector& CameraL
 						
 						switch (Direction) {
 						case DIRECTION_X_NEGATIVE:
-							CenterOffset = F3DVector32(-FNavMeshData::NodeHalveSizes[LayerIndex] + 20, 0, 0);
+							CenterOffset = F3DVector32(-FNavMeshData::NodeHalveSizes[LayerIndex] + 5, 0, 0);
 							break;
 						case DIRECTION_Y_NEGATIVE:
-							CenterOffset = F3DVector32(0, -FNavMeshData::NodeHalveSizes[LayerIndex] + 20, 0);
+							CenterOffset = F3DVector32(0, -FNavMeshData::NodeHalveSizes[LayerIndex] + 5, 0);
 							break;
 						case DIRECTION_Z_NEGATIVE:
-							CenterOffset = F3DVector32(0, 0, -FNavMeshData::NodeHalveSizes[LayerIndex] + 20);
+							CenterOffset = F3DVector32(0, 0, -FNavMeshData::NodeHalveSizes[LayerIndex] + 5);
 							break;
 						case DIRECTION_X_POSITIVE:
-							CenterOffset = F3DVector32(FNavMeshData::NodeHalveSizes[LayerIndex] - 20, 0, 0);
+							CenterOffset = F3DVector32(FNavMeshData::NodeHalveSizes[LayerIndex] - 5, 0, 0);
 							break;
 						case DIRECTION_Y_POSITIVE:
-							CenterOffset = F3DVector32(0, FNavMeshData::NodeHalveSizes[LayerIndex] - 20, 0);
+							CenterOffset = F3DVector32(0, FNavMeshData::NodeHalveSizes[LayerIndex] - 5, 0);
 							break;
 						case DIRECTION_Z_POSITIVE:
-							CenterOffset = F3DVector32(0, 0, FNavMeshData::NodeHalveSizes[LayerIndex] - 20);
+							CenterOffset = F3DVector32(0, 0, FNavMeshData::NodeHalveSizes[LayerIndex] - 5);
 							break;
 						default:
 							break;
 						}
 
-						DrawDebugString(World, NodeGlobalCenterLocation + CenterOffset.ToVector(), FString::FromInt(NeighbourLayerIndexes[NeighbourIndex]), nullptr, FColor::Red, -1, false, 1);
+						FString LayerString = NeighbourLayerIndexes[NeighbourIndex] != LAYER_INDEX_INVALID ? FString::FromInt(NeighbourLayerIndexes[NeighbourIndex]) : FString("None");
+						DrawDebugString(World, NodeGlobalCenterLocation + CenterOffset.ToVector(), LayerString, nullptr, FColor::White, -1, false, 1);
 					}
 						
 					continue;
@@ -190,7 +191,7 @@ void UNavMeshDebugger::DrawChunks(const FNavMesh& NavMesh, const FVector& Camera
 		const FVector DirectionToTarget = (ChunkGlobalCenterLocation - CameraLocation).GetSafeNormal();
 		if(FVector::DotProduct(CameraForwardVector, DirectionToTarget) > 0)
 		{
-			DrawDebugBox(World, ChunkGlobalCenterLocation, FVector(FNavMeshData::NodeHalveSizes[0]), FColor::Black, true);
+			DrawDebugBox(World, ChunkGlobalCenterLocation, FVector(FNavMeshData::NodeHalveSizes[0]), FColor::Black, true, -1, 11, 5);
 		}
 	}
 }

@@ -4,6 +4,7 @@
 #include "NavMeshTypes.h"
 #include "unordered_dense.h"
 #include <chrono>
+#include <ranges>
 
 DEFINE_LOG_CATEGORY(LogNavMeshGenerator)
 
@@ -84,7 +85,9 @@ void UNavMeshGenerator::GenerateChunks(const FBox& LevelBoundaries)
 				F3DVector32 ChunkLocation = F3DVector32(x, y, z);
 				auto [ChunkIterator, IsInserted] = NavMesh.emplace(ChunkLocation.ToKey(), FChunk(ChunkLocation));
 
-				if (IsInserted) RasterizeStaticOctree(&ChunkIterator->second);
+				FChunk* Chunk = &ChunkIterator->second;
+				RasterizeStaticOctree(Chunk);
+				SetNegativeNeighbourRelations(Chunk);
 			}
 		}
 	}
@@ -126,7 +129,7 @@ void UNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 	const F3DVector16 NodeLocalLoc = Node.GetLocalLocation();
 
 	// Set neighbour relations.
-	SetNeighbourRelations(Node, Chunk->Location, LayerIndex);
+	// SetNeighbourRelations(Node, Chunk->Location, LayerIndex);
 
 	// If overlapping any static object.
 	if (!HasOverlap(Node.GetGlobalLocation(Chunk->Location), LayerIndex)) return;
@@ -157,11 +160,11 @@ void UNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 		FOctreeNode& ChildNode = NodePairIterator->second;
 
 		// Determine the chunk-border of this child-node.
-		if (Node.ChunkBorder) // if parent touches a border, then at-least one child also does.
+		if (Node.ChunkBorder) // if parent touches a border, then at-least 4 of its children also do.
 		{
-			ChildNode.ChunkBorder |= (i & 1) ? DIRECTION_X_POSITIVE : DIRECTION_X_NEGATIVE; // -X : +X
-			ChildNode.ChunkBorder |= (i & 2) ? DIRECTION_Y_POSITIVE : DIRECTION_Y_NEGATIVE; // -Y : +Y
-			ChildNode.ChunkBorder |= (i & 4) ? DIRECTION_Z_POSITIVE : DIRECTION_Z_NEGATIVE; // -Z : +Z
+			ChildNode.ChunkBorder |= (i & 1) ? DIRECTION_X_POSITIVE : DIRECTION_X_NEGATIVE;
+			ChildNode.ChunkBorder |= (i & 2) ? DIRECTION_Y_POSITIVE : DIRECTION_Y_NEGATIVE;
+			ChildNode.ChunkBorder |= (i & 4) ? DIRECTION_Z_POSITIVE : DIRECTION_Z_NEGATIVE;
 			ChildNode.ChunkBorder &= Node.ChunkBorder; // Can only be against the same border(s) as the parent.
 		}
 
@@ -184,17 +187,44 @@ bool UNavMeshGenerator::HasOverlap(const F3DVector32& NodeGlobalLocation, const 
 }
 
 /**
- * Sets the neighbour relations of the given node.
- * @note Make sure this is called during the generation method in order from the most negative to most
- * @note positive node because this method will look in each negative direction for already generated nodes.
+ * Sets all the neighbour relations on the nodes within the static octree of the given chunk.
+ * 
+ * If a neighbour is found, it's layer-index will be added to the node's neighbours,
+ * and vice versa the node's layer-index on the found-neighbour
+ *
+ * Only neighbouring node's on the same-layer as, or higher than ( lower res ), will be added as a neighbour on a node.
+ * This means that node's cannot have neighbours smaller in size than themselves.
+ *
+ * @note should be called during the generation loop from negative most to positive most chunk.
+ * 
+ * @param Chunk Chunk holding the nodes you want to set the relations of.
+ */
+void UNavMeshGenerator::SetNegativeNeighbourRelations(const FChunk* Chunk)
+{
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("SetNegativeNeighbourRelations");
+
+	// Loop through all static nodes sorted by morton-code.
+	uint8 LayerIndex = 0;
+	for (FNodesMap& NodesMap : Chunk->Octrees[0]->Layers)
+	{
+		for (auto& Node : NodesMap | std::views::values)
+		{
+			SetNodeRelations(Node, Chunk->Location, LayerIndex);
+		}
+		LayerIndex++;
+	}
+}
+
+/**
+ * Sets the neighbour relations in the negative direction of the given node.
  * 
  * @param Node: Node to set the relations of.
  * @param ChunkLocation: location of the chunk the given Node is in.
  * @param LayerIndex: layer-index of the given Node.
  */
-void UNavMeshGenerator::SetNeighbourRelations(FOctreeNode& Node, const F3DVector32& ChunkLocation, const uint8 LayerIndex)
+void UNavMeshGenerator::SetNodeRelations(FOctreeNode& Node, const F3DVector32& ChunkLocation, const uint8 LayerIndex)
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("FindNeighbour");
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("SetNeighbourRelations");
 
 	const F3DVector16 NodeLocalLocation = Node.GetLocalLocation();
 	for (uint8 n = 0; n < 3; ++n)
@@ -205,7 +235,7 @@ void UNavMeshGenerator::SetNeighbourRelations(FOctreeNode& Node, const F3DVector
 
 		// Apply offset to the local-location based on direction.
 		// Apply additional offset if the direction is pointing to another chunk.
-		// (Apply additional offset first to prevent unsigned-integer underflow)
+		// (Additional offset is applied first to prevent unsigned-integer underflow)
 		switch (Direction)
 		{
 		case DIRECTION_X_NEGATIVE:
@@ -239,10 +269,10 @@ void UNavMeshGenerator::SetNeighbourRelations(FOctreeNode& Node, const F3DVector
 		// Find chunk the neighbour is in.
 		const uint_fast64_t Key = CurrChunkLocation.ToKey();
 		const auto ChunkIterator = NavMesh.find(Key);
-		if (ChunkIterator == NavMesh.end()) continue; // todo maybe set LayerIndex to a value indicating it is invalid?
-		const FChunk& Chunk = ChunkIterator->second;
+		if (ChunkIterator == NavMesh.end()) continue;
+		const FChunk& NeighbourChunk = ChunkIterator->second;
 
-		// Get morton-code from the calculated location.
+		// Get morton-code we want to start checking from the calculated location.
 		uint_fast32_t MortonCodeToCheck = FOctreeNode::GetMortonCodeFromLocalLocation(LocalLocationToCheck);
 
 		// Check each layer starting from the Node's current layer down until the lowest resolution node.
@@ -250,33 +280,36 @@ void UNavMeshGenerator::SetNeighbourRelations(FOctreeNode& Node, const F3DVector
 		for (int LayerIndexToCheck = LayerIndex; LayerIndexToCheck >= 0; --LayerIndexToCheck)
 		{
 			// Try to find neighbour
-			const auto NodeIterator = Chunk.Octrees[0]->Layers[LayerIndexToCheck].find(MortonCodeToCheck);
-			if (NodeIterator == Chunk.Octrees[0]->Layers[LayerIndexToCheck].end()) // If not found.
+			const auto NodeIterator = NeighbourChunk.Octrees[0]->Layers[LayerIndexToCheck].find(MortonCodeToCheck);
+			if (NodeIterator == NeighbourChunk.Octrees[0]->Layers[LayerIndexToCheck].end()) // If not found.
 			{
 				// Continue the loop by setting the MortonCodeToCheck to the parent's morton-code.
 				// This way you will eventually find the node located in this direction.
 				MortonCodeToCheck = FOctreeNode::GetParentMortonCode(MortonCodeToCheck, LayerIndexToCheck);
 				continue;
 			}
-
-			const uint8 FoundNeighbourLayerIndex = LayerIndexToCheck;
+			const uint8 NeighbourLayerIndex = LayerIndexToCheck;
 
 			// Get the found neighbour from iterator and set the FoundNeighbourLayerIndex on the Node.Neighbours for this direction,
 			// and the Node's layer-index to the Neighbouring-Node.Neighbours for opposite direction ( where we are looking from ).
-			FOctreeNode& NeighbourNode = NodeIterator->second;
+			// If the neighbour has any children, then call RecursiveSetChildNodesRelation.
+			FOctreeNode* NeighbourNode = &NodeIterator->second;
 			switch (Direction)
 			{
 			case DIRECTION_X_NEGATIVE:
-				Node.Neighbours.NeighbourX_N = FoundNeighbourLayerIndex;
-				NeighbourNode.Neighbours.NeighbourX_P = LayerIndex;
+				Node.Neighbours.NeighbourX_N = NeighbourLayerIndex;
+				NeighbourNode->Neighbours.NeighbourX_P = LayerIndex;
+				RecursiveSetChildNodesRelation(NeighbourNode, NeighbourChunk, NeighbourLayerIndex, LayerIndex, DIRECTION_X_POSITIVE);
 				break;
 			case DIRECTION_Y_NEGATIVE:
-				Node.Neighbours.NeighbourY_N = FoundNeighbourLayerIndex;
-				NeighbourNode.Neighbours.NeighbourY_P = LayerIndex;
+				Node.Neighbours.NeighbourY_N = NeighbourLayerIndex;
+				NeighbourNode->Neighbours.NeighbourY_P = LayerIndex;
+				RecursiveSetChildNodesRelation(NeighbourNode, NeighbourChunk, NeighbourLayerIndex, LayerIndex, DIRECTION_Y_POSITIVE);
 				break;
 			case DIRECTION_Z_NEGATIVE:
-				Node.Neighbours.NeighbourZ_N = FoundNeighbourLayerIndex;
-				NeighbourNode.Neighbours.NeighbourZ_P = LayerIndex;
+				Node.Neighbours.NeighbourZ_N = NeighbourLayerIndex;
+				NeighbourNode->Neighbours.NeighbourZ_P = LayerIndex;
+				RecursiveSetChildNodesRelation(NeighbourNode, NeighbourChunk, NeighbourLayerIndex, LayerIndex, DIRECTION_Z_POSITIVE);	
 				break;
 			default:
 				break;
@@ -284,6 +317,59 @@ void UNavMeshGenerator::SetNeighbourRelations(FOctreeNode& Node, const F3DVector
 			
 			break;
 		}
-		
+	}
+}
+
+/**
+ * Recursively sets all child node's Neighbour in given Direction to the given LayerIndex,
+ * where the children are against the edge of the given Node in given Direction.
+ *
+ * @param Node The Node where its children will have their Neighbour in given Direction set to LayerIndexToSet.
+ * @param Chunk The Chunk the Node is in.
+ * @param LayerIndex Layer-index of the given Node.
+ * @param LayerIndexToSet LayerIndex of the Neighbour that will be set on the children.
+ * @param Direction Direction of Neighbour.
+ * 
+ */
+void UNavMeshGenerator::RecursiveSetChildNodesRelation(const FOctreeNode* Node, const FChunk& Chunk, const uint8 LayerIndex, const uint8 LayerIndexToSet, const uint8 Direction)
+{
+	if(!Node->IsFilled()) return;
+	
+	const F3DVector16 ParentLocalLocation = Node->GetLocalLocation();
+	const uint8 ChildLayerIndex = LayerIndex+1;
+	const uint16 MortonOffset = FNavMeshData::MortonOffsets[ChildLayerIndex];
+	std::array<uint_fast32_t, 4> ChildMortonCodes;
+	switch (Direction)
+	{
+	case DIRECTION_X_POSITIVE:
+		ChildMortonCodes[0] = (ParentLocalLocation+F3DVector16(MortonOffset,		0,				0)).ToMortonCode();				// 2nd child
+		ChildMortonCodes[1] = (ParentLocalLocation+F3DVector16(MortonOffset,		MortonOffset,	0)).ToMortonCode();				// 4th child
+		ChildMortonCodes[2] = (ParentLocalLocation+F3DVector16(MortonOffset,		0,				MortonOffset)).ToMortonCode();	// 6th child
+		ChildMortonCodes[3] = (ParentLocalLocation+F3DVector16(MortonOffset,		MortonOffset,	MortonOffset)).ToMortonCode();	// 8th child
+		break;
+	case DIRECTION_Y_POSITIVE:
+		ChildMortonCodes[0] = (ParentLocalLocation+F3DVector16(0,				MortonOffset,	0)).ToMortonCode();				// 3rd child
+		ChildMortonCodes[1] = (ParentLocalLocation+F3DVector16(MortonOffset,		MortonOffset,	0)).ToMortonCode();				// 4th child
+		ChildMortonCodes[2] = (ParentLocalLocation+F3DVector16(0,				MortonOffset,	MortonOffset)).ToMortonCode();	// 7th child
+		ChildMortonCodes[3] = (ParentLocalLocation+F3DVector16(MortonOffset,		MortonOffset,	MortonOffset)).ToMortonCode();	// 8th child
+		break;
+	case DIRECTION_Z_POSITIVE:
+		ChildMortonCodes[0] = (ParentLocalLocation+F3DVector16(0,				0,				MortonOffset)).ToMortonCode();	// 5th child
+		ChildMortonCodes[1] = (ParentLocalLocation+F3DVector16(MortonOffset,		0,				MortonOffset)).ToMortonCode();	// 6th child
+		ChildMortonCodes[2] = (ParentLocalLocation+F3DVector16(0,				MortonOffset,	MortonOffset)).ToMortonCode();	// 7th child
+		ChildMortonCodes[3] = (ParentLocalLocation+F3DVector16(MortonOffset,		MortonOffset,	MortonOffset)).ToMortonCode();	// 8th child
+		break;
+	default:
+		break;
+	}
+	
+	for (auto ChildMortonCode : ChildMortonCodes)
+	{
+		const auto NodeIterator = Chunk.Octrees[0]->Layers[ChildLayerIndex].find(ChildMortonCode);
+		// if(NodeIterator == Chunk.Octrees[0]->Layers[ChildLayerIndex].end) return; // This line can be used if converting octree to sparse-octree.
+
+		FOctreeNode* ChildNode = &NodeIterator->second;
+		ChildNode->Neighbours.SetFromDirection(LayerIndexToSet, Direction);
+		RecursiveSetChildNodesRelation(ChildNode, Chunk, ChildLayerIndex, LayerIndexToSet, Direction);
 	}
 }

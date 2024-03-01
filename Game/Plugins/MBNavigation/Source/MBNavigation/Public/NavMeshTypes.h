@@ -14,6 +14,8 @@
 #define DIRECTION_Y_POSITIVE 0b000010
 #define DIRECTION_Z_POSITIVE 0b000001
 
+#define LAYER_INDEX_INVALID 11
+
 
 
 /**
@@ -235,12 +237,39 @@ struct FOctreeLeaf
  */
 struct FOctreeNeighbours
 {
-	uint_fast8_t NeighbourX_N: 4; // X negative
-	uint_fast8_t NeighbourY_N: 4; // Y negative
-	uint_fast8_t NeighbourZ_N: 4; // Z negative
-	uint_fast8_t NeighbourX_P: 4; // X positive
-	uint_fast8_t NeighbourY_P: 4; // Y positive
-	uint_fast8_t NeighbourZ_P: 4; // Z positive
+	uint_fast8_t NeighbourX_N: 4 = LAYER_INDEX_INVALID; // X negative
+	uint_fast8_t NeighbourY_N: 4 = LAYER_INDEX_INVALID; // Y negative
+	uint_fast8_t NeighbourZ_N: 4 = LAYER_INDEX_INVALID; // Z negative
+	uint_fast8_t NeighbourX_P: 4 = LAYER_INDEX_INVALID; // X positive
+	uint_fast8_t NeighbourY_P: 4 = LAYER_INDEX_INVALID; // Y positive
+	uint_fast8_t NeighbourZ_P: 4 = LAYER_INDEX_INVALID; // Z positive
+
+	FORCEINLINE void SetFromDirection(const uint8 LayerIndex, const uint8 Direction)
+	{
+		switch (Direction)
+		{
+		case DIRECTION_X_NEGATIVE:
+			NeighbourX_N = LayerIndex;
+			break;
+		case DIRECTION_Y_NEGATIVE:
+			NeighbourY_N = LayerIndex;
+			break;
+		case DIRECTION_Z_NEGATIVE:
+			NeighbourZ_N = LayerIndex;
+			break;
+		case DIRECTION_X_POSITIVE:
+			NeighbourX_P = LayerIndex;
+			break;
+		case DIRECTION_Y_POSITIVE:
+			NeighbourY_P = LayerIndex;
+			break;
+		case DIRECTION_Z_POSITIVE:
+			NeighbourZ_P = LayerIndex;
+			break;
+		default:
+			break;
+		}
+	}
 };
 
 /**
@@ -274,11 +303,11 @@ struct FOctreeNode
 
 	uint_fast32_t MortonCode;
 	FOctreeNeighbours Neighbours;
-	uint16 DynamicIndex: 12;
-	uint8 ChunkBorder: 6;
+	uint8 ChunkBorder: 6; // todo might not be needed because can be tracked in navigation algo?
+	// todo 8 bits for dynamic index for each neighbour + child + parent???? 128 dynamic-objects a chunk (first bit for static octree)
 
 	FOctreeNode(uint_fast16_t NodeLocationX, uint_fast16_t NodeLocationY, uint_fast16_t NodeLocationZ):
-		Neighbours(), DynamicIndex(0), ChunkBorder(0)
+		Neighbours(), ChunkBorder(0)
 	{
 		// Right bit-shift using the Voxel-Size-Exponent into morton-space.
 		NodeLocationX >>= FNavMeshData::VoxelSizeExponent;
@@ -288,7 +317,7 @@ struct FOctreeNode
 	}
 
 	FOctreeNode():
-		MortonCode(0), Neighbours(), DynamicIndex(0), ChunkBorder(0)
+		MortonCode(0), Neighbours(), ChunkBorder(0)
 	{}
 
 	FORCEINLINE F3DVector16 GetLocalLocation() const
