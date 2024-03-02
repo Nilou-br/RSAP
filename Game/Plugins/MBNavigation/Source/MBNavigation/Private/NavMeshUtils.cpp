@@ -44,26 +44,26 @@ std::array<FNodeLookupData, 6> GetNeighboursLookupData(const FOctreeNode& Node, 
         
         // Calculate the local location of the neighbour.
         const uint_fast32_t ParentMortonCode = Node.GetMortonCode() & ~((1 << FOctreeNode::ParentShiftAmount[NeighbourLayerIndex]) - 1);
-        const F3DVector16 ParentLocalLocation = F3DVector16::FromMortonCode(ParentMortonCode);
-        F3DVector16 NeighbourLocalLocation;
+        const F3DVector10 ParentLocalLocation = F3DVector10::FromMortonCode(ParentMortonCode);
+        F3DVector10 NeighbourLocalLocation;
         switch (Direction) {
         case DIRECTION_X_NEGATIVE:
-            NeighbourLocalLocation = ParentLocalLocation - F3DVector16(FNavMeshData::MortonOffsets[NeighbourLayerIndex], 0, 0);
+            NeighbourLocalLocation = ParentLocalLocation - F3DVector10(FNavMeshData::MortonOffsets[NeighbourLayerIndex], 0, 0);
             break;
         case DIRECTION_Y_NEGATIVE:
-            NeighbourLocalLocation = ParentLocalLocation - F3DVector16(0, FNavMeshData::MortonOffsets[NeighbourLayerIndex], 0);
+            NeighbourLocalLocation = ParentLocalLocation - F3DVector10(0, FNavMeshData::MortonOffsets[NeighbourLayerIndex], 0);
             break;
         case DIRECTION_Z_NEGATIVE:
-            NeighbourLocalLocation = ParentLocalLocation - F3DVector16(0, 0, FNavMeshData::MortonOffsets[NeighbourLayerIndex]);
+            NeighbourLocalLocation = ParentLocalLocation - F3DVector10(0, 0, FNavMeshData::MortonOffsets[NeighbourLayerIndex]);
             break;
         case DIRECTION_X_POSITIVE:
-            NeighbourLocalLocation = ParentLocalLocation + F3DVector16(FNavMeshData::MortonOffsets[NeighbourLayerIndex], 0, 0);
+            NeighbourLocalLocation = ParentLocalLocation + F3DVector10(FNavMeshData::MortonOffsets[NeighbourLayerIndex], 0, 0);
             break;
         case DIRECTION_Y_POSITIVE:
-            NeighbourLocalLocation = ParentLocalLocation + F3DVector16(0, FNavMeshData::MortonOffsets[NeighbourLayerIndex], 0);
+            NeighbourLocalLocation = ParentLocalLocation + F3DVector10(0, FNavMeshData::MortonOffsets[NeighbourLayerIndex], 0);
             break;
         case DIRECTION_Z_POSITIVE:
-            NeighbourLocalLocation = ParentLocalLocation + F3DVector16(0, 0, FNavMeshData::MortonOffsets[NeighbourLayerIndex]);
+            NeighbourLocalLocation = ParentLocalLocation + F3DVector10(0, 0, FNavMeshData::MortonOffsets[NeighbourLayerIndex]);
             break;
         default:
             break;

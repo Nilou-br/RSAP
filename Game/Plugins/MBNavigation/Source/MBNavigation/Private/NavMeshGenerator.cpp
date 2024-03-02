@@ -126,7 +126,7 @@ void UNavMeshGenerator::RasterizeStaticOctree(FChunk* Chunk)
 void UNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, const uint8 LayerIndex)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("RasterizeStaticNode");
-	const F3DVector16 NodeLocalLoc = Node.GetLocalLocation();
+	const F3DVector10 NodeLocalLoc = Node.GetLocalLocation();
 
 	// Set neighbour relations.
 	// SetNeighbourRelations(Node, Chunk->Location, LayerIndex);
@@ -226,7 +226,7 @@ void UNavMeshGenerator::SetNodeRelations(FOctreeNode& Node, const F3DVector32& C
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("SetNeighbourRelations");
 
-	const F3DVector16 NodeLocalLocation = Node.GetLocalLocation();
+	const F3DVector10 NodeLocalLocation = Node.GetLocalLocation();
 	for (uint8 n = 0; n < 3; ++n)
 	{
 		const uint8 Direction = 0b100000 >> n;
@@ -259,25 +259,25 @@ void UNavMeshGenerator::SetNodeRelations(FOctreeNode& Node, const F3DVector32& C
 		}
 
 		// Get the location we want to check by applying an offset based on its layer ( the size of the node in global space ).
-		F3DVector16 LocalLocationToCheck;
+		F3DVector10 LocalLocationToCheck;
 		switch (Direction) {
 		case DIRECTION_X_NEGATIVE:
-			LocalLocationToCheck = NodeLocalLocation - F3DVector16(FNavMeshData::MortonOffsets[LayerIndex], 0, 0);
+			LocalLocationToCheck = NodeLocalLocation - F3DVector10(FNavMeshData::MortonOffsets[LayerIndex], 0, 0);
 			break;
 		case DIRECTION_Y_NEGATIVE:
-			LocalLocationToCheck = NodeLocalLocation - F3DVector16(0, FNavMeshData::MortonOffsets[LayerIndex], 0);
+			LocalLocationToCheck = NodeLocalLocation - F3DVector10(0, FNavMeshData::MortonOffsets[LayerIndex], 0);
 			break;
 		case DIRECTION_Z_NEGATIVE:
-			LocalLocationToCheck = NodeLocalLocation - F3DVector16(0, 0, FNavMeshData::MortonOffsets[LayerIndex]);
+			LocalLocationToCheck = NodeLocalLocation - F3DVector10(0, 0, FNavMeshData::MortonOffsets[LayerIndex]);
 			break;
 		case DIRECTION_X_POSITIVE:
-			LocalLocationToCheck = NodeLocalLocation + F3DVector16(FNavMeshData::MortonOffsets[LayerIndex], 0, 0);
+			LocalLocationToCheck = NodeLocalLocation + F3DVector10(FNavMeshData::MortonOffsets[LayerIndex], 0, 0);
 			break;
 		case DIRECTION_Y_POSITIVE:
-			LocalLocationToCheck = NodeLocalLocation + F3DVector16(0, FNavMeshData::MortonOffsets[LayerIndex], 0);
+			LocalLocationToCheck = NodeLocalLocation + F3DVector10(0, FNavMeshData::MortonOffsets[LayerIndex], 0);
 			break;
 		case DIRECTION_Z_POSITIVE:
-			LocalLocationToCheck = NodeLocalLocation + F3DVector16(0, 0, FNavMeshData::MortonOffsets[LayerIndex]);
+			LocalLocationToCheck = NodeLocalLocation + F3DVector10(0, 0, FNavMeshData::MortonOffsets[LayerIndex]);
 			break;
 		default:
 			break;
@@ -352,29 +352,29 @@ void UNavMeshGenerator::RecursiveSetChildNodesRelation(const FOctreeNode* Node, 
 {
 	if(!Node->IsFilled()) return;
 	
-	const F3DVector16 ParentLocalLocation = Node->GetLocalLocation();
+	const F3DVector10 ParentLocalLocation = Node->GetLocalLocation();
 	const uint8 ChildLayerIndex = LayerIndex+1;
 	const uint16 MortonOffset = FNavMeshData::MortonOffsets[ChildLayerIndex];
 	std::array<uint_fast32_t, 4> ChildMortonCodes;
 	switch (Direction)
 	{
 	case DIRECTION_X_POSITIVE:
-		ChildMortonCodes[0] = (ParentLocalLocation+F3DVector16(MortonOffset,		0,				0)).ToMortonCode();				// 2nd child
-		ChildMortonCodes[1] = (ParentLocalLocation+F3DVector16(MortonOffset,		MortonOffset,	0)).ToMortonCode();				// 4th child
-		ChildMortonCodes[2] = (ParentLocalLocation+F3DVector16(MortonOffset,		0,				MortonOffset)).ToMortonCode();	// 6th child
-		ChildMortonCodes[3] = (ParentLocalLocation+F3DVector16(MortonOffset,		MortonOffset,	MortonOffset)).ToMortonCode();	// 8th child
+		ChildMortonCodes[0] = (ParentLocalLocation+F3DVector10(MortonOffset,		0,				0)).ToMortonCode();				// 2nd child
+		ChildMortonCodes[1] = (ParentLocalLocation+F3DVector10(MortonOffset,		MortonOffset,	0)).ToMortonCode();				// 4th child
+		ChildMortonCodes[2] = (ParentLocalLocation+F3DVector10(MortonOffset,		0,				MortonOffset)).ToMortonCode();	// 6th child
+		ChildMortonCodes[3] = (ParentLocalLocation+F3DVector10(MortonOffset,		MortonOffset,	MortonOffset)).ToMortonCode();	// 8th child
 		break;
 	case DIRECTION_Y_POSITIVE:
-		ChildMortonCodes[0] = (ParentLocalLocation+F3DVector16(0,				MortonOffset,	0)).ToMortonCode();				// 3rd child
-		ChildMortonCodes[1] = (ParentLocalLocation+F3DVector16(MortonOffset,		MortonOffset,	0)).ToMortonCode();				// 4th child
-		ChildMortonCodes[2] = (ParentLocalLocation+F3DVector16(0,				MortonOffset,	MortonOffset)).ToMortonCode();	// 7th child
-		ChildMortonCodes[3] = (ParentLocalLocation+F3DVector16(MortonOffset,		MortonOffset,	MortonOffset)).ToMortonCode();	// 8th child
+		ChildMortonCodes[0] = (ParentLocalLocation+F3DVector10(0,				MortonOffset,	0)).ToMortonCode();				// 3rd child
+		ChildMortonCodes[1] = (ParentLocalLocation+F3DVector10(MortonOffset,		MortonOffset,	0)).ToMortonCode();				// 4th child
+		ChildMortonCodes[2] = (ParentLocalLocation+F3DVector10(0,				MortonOffset,	MortonOffset)).ToMortonCode();	// 7th child
+		ChildMortonCodes[3] = (ParentLocalLocation+F3DVector10(MortonOffset,		MortonOffset,	MortonOffset)).ToMortonCode();	// 8th child
 		break;
 	case DIRECTION_Z_POSITIVE:
-		ChildMortonCodes[0] = (ParentLocalLocation+F3DVector16(0,				0,				MortonOffset)).ToMortonCode();	// 5th child
-		ChildMortonCodes[1] = (ParentLocalLocation+F3DVector16(MortonOffset,		0,				MortonOffset)).ToMortonCode();	// 6th child
-		ChildMortonCodes[2] = (ParentLocalLocation+F3DVector16(0,				MortonOffset,	MortonOffset)).ToMortonCode();	// 7th child
-		ChildMortonCodes[3] = (ParentLocalLocation+F3DVector16(MortonOffset,		MortonOffset,	MortonOffset)).ToMortonCode();	// 8th child
+		ChildMortonCodes[0] = (ParentLocalLocation+F3DVector10(0,				0,				MortonOffset)).ToMortonCode();	// 5th child
+		ChildMortonCodes[1] = (ParentLocalLocation+F3DVector10(MortonOffset,		0,				MortonOffset)).ToMortonCode();	// 6th child
+		ChildMortonCodes[2] = (ParentLocalLocation+F3DVector10(0,				MortonOffset,	MortonOffset)).ToMortonCode();	// 7th child
+		ChildMortonCodes[3] = (ParentLocalLocation+F3DVector10(MortonOffset,		MortonOffset,	MortonOffset)).ToMortonCode();	// 8th child
 		break;
 	default:
 		break;

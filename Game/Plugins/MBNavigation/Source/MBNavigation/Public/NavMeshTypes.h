@@ -90,7 +90,7 @@ struct FNavMeshDebugSettings
  *
  * Any axis value can safely under/over-flow because it will always be a valid location in the chunk/octree.
  */
-struct F3DVector16 // todo rename to F3DVector10
+struct F3DVector10
 {
 	uint_fast16_t X: 10;
 	uint_fast16_t Y: 10;
@@ -102,46 +102,46 @@ struct F3DVector16 // todo rename to F3DVector10
 		return libmorton::morton3D_32_encode(X, Y, Z);
 	}
 	
-	FORCEINLINE static F3DVector16 FromMortonCode(const uint_fast32_t MortonCode)
+	FORCEINLINE static F3DVector10 FromMortonCode(const uint_fast32_t MortonCode)
 	{
 		uint_fast16_t OutX;
 		uint_fast16_t OutY;
 		uint_fast16_t OutZ;
 		libmorton::morton3D_32_decode(MortonCode, OutX, OutY, OutZ);
-		return F3DVector16(OutX, OutY, OutZ);
+		return F3DVector10(OutX, OutY, OutZ);
 	}
 
-	FORCEINLINE F3DVector16 operator+(const uint_fast16_t Value) const
+	FORCEINLINE F3DVector10 operator+(const uint_fast16_t Value) const
 	{
-		return F3DVector16(X + Value, Y + Value, Z + Value);
+		return F3DVector10(X + Value, Y + Value, Z + Value);
 	}
 
-	FORCEINLINE F3DVector16 operator+(const F3DVector16& OtherVector) const
+	FORCEINLINE F3DVector10 operator+(const F3DVector10& OtherVector) const
 	{
-		return F3DVector16(X + OtherVector.X, Y + OtherVector.Y, Z + OtherVector.Z);
+		return F3DVector10(X + OtherVector.X, Y + OtherVector.Y, Z + OtherVector.Z);
 	}
 
-	FORCEINLINE F3DVector16 operator-(const uint_fast16_t Value) const
+	FORCEINLINE F3DVector10 operator-(const uint_fast16_t Value) const
 	{
-		return F3DVector16(X - Value, Y - Value, Z - Value);
+		return F3DVector10(X - Value, Y - Value, Z - Value);
 	}
 
-	FORCEINLINE F3DVector16 operator-(const F3DVector16& OtherVector) const
+	FORCEINLINE F3DVector10 operator-(const F3DVector10& OtherVector) const
 	{
-		return F3DVector16(X - OtherVector.X, Y - OtherVector.Y, Z - OtherVector.Z);
+		return F3DVector10(X - OtherVector.X, Y - OtherVector.Y, Z - OtherVector.Z);
 	}
 
-	FORCEINLINE bool operator==(const F3DVector16& OtherVector) const {
+	FORCEINLINE bool operator==(const F3DVector10& OtherVector) const {
 		return X == OtherVector.X && Y == OtherVector.Y && Z == OtherVector.Z;
 	}
 
-	explicit F3DVector16(const uint16 InX, const uint16 InY, const uint16 InZ)
+	explicit F3DVector10(const uint16 InX, const uint16 InY, const uint16 InZ)
 		: X(InX), Y(InY), Z(InZ) {}
 
-	explicit F3DVector16(const uint_fast16_t InX, const uint_fast16_t InY, const uint_fast16_t InZ)
+	explicit F3DVector10(const uint_fast16_t InX, const uint_fast16_t InY, const uint_fast16_t InZ)
 		: X(InX), Y(InY), Z(InZ) {}
 
-	F3DVector16()
+	F3DVector10()
 		:X(0), Y(0), Z(0)
 	{}
 
@@ -199,12 +199,12 @@ struct F3DVector32
 		return F3DVector32(X - Value, Y - Value, Z - Value);
 	}
 
-	FORCEINLINE F3DVector32 operator+(const F3DVector16& LocalCoordinate) const
+	FORCEINLINE F3DVector32 operator+(const F3DVector10& LocalCoordinate) const
 	{
 		return F3DVector32(X + LocalCoordinate.X, Y + LocalCoordinate.Y, Z + LocalCoordinate.Z);
 	}
 
-	FORCEINLINE F3DVector32 operator-(const F3DVector16& LocalCoordinate) const
+	FORCEINLINE F3DVector32 operator-(const F3DVector10& LocalCoordinate) const
 	{
 		return F3DVector32(X - LocalCoordinate.X, Y - LocalCoordinate.Y, Z - LocalCoordinate.Z);
 	}
@@ -386,7 +386,7 @@ struct FOctreeNode
 		MortonCode(0), ChunkBorder(0)
 	{}
 
-	FORCEINLINE F3DVector16 GetLocalLocation() const
+	FORCEINLINE F3DVector10 GetLocalLocation() const
 	{
 		uint_fast16_t TempX, TempY, TempZ;
 		libmorton::morton3D_32_decode(GetMortonCode(), TempX, TempY, TempZ);
@@ -395,7 +395,7 @@ struct FOctreeNode
 		TempX <<= FNavMeshData::VoxelSizeExponent;
 		TempY <<= FNavMeshData::VoxelSizeExponent;
 		TempZ <<= FNavMeshData::VoxelSizeExponent;
-		return F3DVector16(TempX, TempY, TempZ);
+		return F3DVector10(TempX, TempY, TempZ);
 	}
 	
 	FORCEINLINE F3DVector32 GetGlobalLocation(const F3DVector32 &ChunkLocation) const
@@ -408,7 +408,7 @@ struct FOctreeNode
 		return MortonCode & MortonMask;
 	}
 
-	FORCEINLINE static uint_fast32_t GetMortonCodeFromLocalLocation(const F3DVector16 LocalLocation)
+	FORCEINLINE static uint_fast32_t GetMortonCodeFromLocalLocation(const F3DVector10 LocalLocation)
 	{
 		return libmorton::morton3D_32_encode(LocalLocation.X, LocalLocation.Y, LocalLocation.Z);
 	}
