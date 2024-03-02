@@ -87,6 +87,8 @@ struct FNavMeshDebugSettings
 /**
  * Used to represent the location of a node within a chunk's local-space.
  * A chunk's origin will be in its negative-most corner meaning that all node's inside it have positive coordinates.
+ *
+ * Any axis value can safely under/over-flow because it will always be a valid location in the chunk/octree.
  */
 struct F3DVector16 // todo rename to F3DVector10
 {
@@ -99,6 +101,7 @@ struct F3DVector16 // todo rename to F3DVector10
 	{
 		return libmorton::morton3D_32_encode(X, Y, Z);
 	}
+	
 	FORCEINLINE static F3DVector16 FromMortonCode(const uint_fast32_t MortonCode)
 	{
 		uint_fast16_t OutX;
@@ -126,6 +129,10 @@ struct F3DVector16 // todo rename to F3DVector10
 	FORCEINLINE F3DVector16 operator-(const F3DVector16& OtherVector) const
 	{
 		return F3DVector16(X - OtherVector.X, Y - OtherVector.Y, Z - OtherVector.Z);
+	}
+
+	FORCEINLINE bool operator==(const F3DVector16& OtherVector) const {
+		return X == OtherVector.X && Y == OtherVector.Y && Z == OtherVector.Z;
 	}
 
 	explicit F3DVector16(const uint16 InX, const uint16 InY, const uint16 InZ)
@@ -210,6 +217,10 @@ struct F3DVector32
 	FORCEINLINE F3DVector32 operator-(const F3DVector32& GlobalCoordinate) const
 	{
 		return F3DVector32(X - GlobalCoordinate.X, Y - GlobalCoordinate.Y, Z - GlobalCoordinate.Z);
+	}
+
+	FORCEINLINE bool operator==(const F3DVector32& OtherVector) const {
+		return X == OtherVector.X && Y == OtherVector.Y && Z == OtherVector.Z;
 	}
 
 	explicit F3DVector32(const FVector &InVector)
@@ -340,11 +351,13 @@ struct FNodeLookupData
  * - MortonCode: represents its location in a single value.
  *   Allows for memory coherency, and bitwise-operations to quickly calculate neighbours etc.
  * - Neighbours: Stores a 4 bit layer-index for locating each neighbour in the octree.
- * - DynamicIndex: Represents the octree the children of this node are stored on, 0 being the static octree.
+ * - DynamicIndex: Represents the octree the children of this node are stored on, 0 being the static octree. todo remove
  * - ChunkBorder: Bitmask for determining the border this voxel is next to.
  *   Used to efficiently calculate the next chunk.
- * - IsOccluded: If the node is occluded.
- * - IsFilled: If the node has children.
+ * - IsOccluded(): If the node is occluded.
+ * - IsFilled(): If the node has children.
+ *
+ * todo change to class.
  */
 struct FOctreeNode
 {

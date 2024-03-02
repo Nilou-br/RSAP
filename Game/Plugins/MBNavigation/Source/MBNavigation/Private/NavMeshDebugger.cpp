@@ -178,6 +178,11 @@ void UNavMeshDebugger::DrawNodes(const FNavMesh& NavMesh, const FVector& CameraL
 						
 						const F3DVector32 NeighbourGlobalCenterLocation = NeighbourNode.GetGlobalLocation(NeighbourChunk.Location) + FNavMeshData::NodeHalveSizes[NeighbourLookupData.LayerIndex];
 						DrawDebugLine(World, NodeGlobalCenterLocation, NeighbourGlobalCenterLocation.ToVector(), LayerColors[LayerIndex], true, -1, 11, 1.5);
+
+						if(LayerIndex == 0 && NeighbourGlobalCenterLocation.X == 256)
+						{
+							UE_LOG(LogTemp, Warning, TEXT("Layer 0 Node")) // todo here
+						}
 					}
 				}
 

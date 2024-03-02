@@ -15,11 +15,9 @@ std::array<FNodeLookupData, 6> GetNeighboursLookupData(const FOctreeNode& Node, 
             continue;
         }
 
+        // Calculate ChunkOffset if the direction goes into a different chunk.
         F3DVector32 ChunkOffset(0, 0, 0);
-        const bool bIsDifferentChunk = Node.ChunkBorder & Direction;
-
-        // Calculate ChunkOffset based on direction and if it's a different chunk
-        if (bIsDifferentChunk) {
+        if (Node.ChunkBorder & Direction) {
             switch (Direction) {
                 case DIRECTION_X_NEGATIVE:
                     ChunkOffset.X = -FNavMeshData::ChunkSize;
@@ -44,14 +42,10 @@ std::array<FNodeLookupData, 6> GetNeighboursLookupData(const FOctreeNode& Node, 
             }
         }
         
-        NeighboursLookupData[Index].ChunkKey = (ChunkLocation + ChunkOffset).ToKey();
-        NeighboursLookupData[Index].LayerIndex = NeighbourLayerIndex;
-
-        const uint_fast32_t ParentMortonCode = Node.GetMortonCode() & ~((1 << FOctreeNode::ParentShiftAmount[NeighbourLayerIndex]) - 1); // 536870912 = X0, Y0, Z 512
+        // Calculate the local location of the neighbour.
+        const uint_fast32_t ParentMortonCode = Node.GetMortonCode() & ~((1 << FOctreeNode::ParentShiftAmount[NeighbourLayerIndex]) - 1);
         const F3DVector16 ParentLocalLocation = F3DVector16::FromMortonCode(ParentMortonCode);
         F3DVector16 NeighbourLocalLocation;
-
-        // Calculate morton-code offset
         switch (Direction) {
         case DIRECTION_X_NEGATIVE:
             NeighbourLocalLocation = ParentLocalLocation - F3DVector16(FNavMeshData::MortonOffsets[NeighbourLayerIndex], 0, 0);
@@ -75,6 +69,8 @@ std::array<FNodeLookupData, 6> GetNeighboursLookupData(const FOctreeNode& Node, 
             break;
         }
 
+        NeighboursLookupData[Index].ChunkKey = (ChunkLocation + ChunkOffset).ToKey();
+        NeighboursLookupData[Index].LayerIndex = NeighbourLayerIndex;
         NeighboursLookupData[Index].MortonCode = NeighbourLocalLocation.ToMortonCode();
     }
 

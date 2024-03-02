@@ -229,52 +229,69 @@ void UNavMeshGenerator::SetNodeRelations(FOctreeNode& Node, const F3DVector32& C
 	const F3DVector16 NodeLocalLocation = Node.GetLocalLocation();
 	for (uint8 n = 0; n < 3; ++n)
 	{
-		F3DVector32 CurrChunkLocation = ChunkLocation;
-		F3DVector16 LocalLocationToCheck = NodeLocalLocation; // Used to find any neighbours.
 		const uint8 Direction = 0b100000 >> n;
 
-		// Apply offset to the local-location based on direction.
-		// Apply additional offset if the direction is pointing to another chunk.
-		// (Additional offset is applied first to prevent unsigned-integer underflow)
-		switch (Direction)
-		{
-		case DIRECTION_X_NEGATIVE:
-			if (Node.ChunkBorder & Direction)
-			{
-				LocalLocationToCheck = LocalLocationToCheck + F3DVector16(FNavMeshData::MortonOffsets[0], 0, 0);
-				CurrChunkLocation.X -= FNavMeshData::NodeSizes[0];
+		// Calculate ChunkOffset if the direction goes into a different chunk.
+		F3DVector32 ChunkOffset(0, 0, 0);
+		if (Node.ChunkBorder & Direction) {
+			switch (Direction) {
+			case DIRECTION_X_NEGATIVE:
+				ChunkOffset.X = -FNavMeshData::ChunkSize;
+				break;
+			case DIRECTION_Y_NEGATIVE:
+				ChunkOffset.Y = -FNavMeshData::ChunkSize;
+				break;
+			case DIRECTION_Z_NEGATIVE:
+				ChunkOffset.Z = -FNavMeshData::ChunkSize;
+				break;
+			case DIRECTION_X_POSITIVE:
+				ChunkOffset.X = FNavMeshData::ChunkSize;
+				break;
+			case DIRECTION_Y_POSITIVE:
+				ChunkOffset.Y = FNavMeshData::ChunkSize;
+				break;
+			case DIRECTION_Z_POSITIVE:
+				ChunkOffset.Z = FNavMeshData::ChunkSize;
+				break;
+			default:
+				break;
 			}
-			LocalLocationToCheck = LocalLocationToCheck - F3DVector16(FNavMeshData::MortonOffsets[LayerIndex], 0, 0);
+		}
+
+		// Get the location we want to check by applying an offset based on its layer ( the size of the node in global space ).
+		F3DVector16 LocalLocationToCheck;
+		switch (Direction) {
+		case DIRECTION_X_NEGATIVE:
+			LocalLocationToCheck = NodeLocalLocation - F3DVector16(FNavMeshData::MortonOffsets[LayerIndex], 0, 0);
 			break;
 		case DIRECTION_Y_NEGATIVE:
-			if (Node.ChunkBorder & Direction)
-			{
-				LocalLocationToCheck = LocalLocationToCheck + F3DVector16(0, FNavMeshData::MortonOffsets[0], 0);
-				CurrChunkLocation.Y -= FNavMeshData::NodeSizes[0];
-			}
-			LocalLocationToCheck = LocalLocationToCheck - F3DVector16(0, FNavMeshData::MortonOffsets[LayerIndex], 0);
+			LocalLocationToCheck = NodeLocalLocation - F3DVector16(0, FNavMeshData::MortonOffsets[LayerIndex], 0);
 			break;
 		case DIRECTION_Z_NEGATIVE:
-			if (Node.ChunkBorder & Direction)
-			{
-				LocalLocationToCheck = LocalLocationToCheck + F3DVector16(0, 0, FNavMeshData::MortonOffsets[0]);
-				CurrChunkLocation.Z -= FNavMeshData::NodeSizes[0];
-			}
-			LocalLocationToCheck = LocalLocationToCheck - F3DVector16(0, 0, FNavMeshData::MortonOffsets[LayerIndex]);
+			LocalLocationToCheck = NodeLocalLocation - F3DVector16(0, 0, FNavMeshData::MortonOffsets[LayerIndex]);
+			break;
+		case DIRECTION_X_POSITIVE:
+			LocalLocationToCheck = NodeLocalLocation + F3DVector16(FNavMeshData::MortonOffsets[LayerIndex], 0, 0);
+			break;
+		case DIRECTION_Y_POSITIVE:
+			LocalLocationToCheck = NodeLocalLocation + F3DVector16(0, FNavMeshData::MortonOffsets[LayerIndex], 0);
+			break;
+		case DIRECTION_Z_POSITIVE:
+			LocalLocationToCheck = NodeLocalLocation + F3DVector16(0, 0, FNavMeshData::MortonOffsets[LayerIndex]);
 			break;
 		default:
 			break;
 		}
 
 		// Find chunk the neighbour is in.
-		const uint_fast64_t Key = CurrChunkLocation.ToKey();
+		const uint_fast64_t Key = (ChunkLocation + ChunkOffset).ToKey();
 		const auto ChunkIterator = NavMesh.find(Key);
 		if (ChunkIterator == NavMesh.end()) continue;
 		const FChunk& NeighbourChunk = ChunkIterator->second;
 
 		// Get morton-code we want to start checking from the calculated location.
 		uint_fast32_t MortonCodeToCheck = FOctreeNode::GetMortonCodeFromLocalLocation(LocalLocationToCheck);
-
+		
 		// Check each layer starting from the Node's current layer down until the lowest resolution node.
 		// Nodes can only have neighbours the same size, or bigger, than itself.
 		for (int LayerIndexToCheck = LayerIndex; LayerIndexToCheck >= 0; --LayerIndexToCheck)
@@ -298,17 +315,17 @@ void UNavMeshGenerator::SetNodeRelations(FOctreeNode& Node, const F3DVector32& C
 			{
 			case DIRECTION_X_NEGATIVE:
 				Node.Neighbours.NeighbourX_N = NeighbourLayerIndex;
-				NeighbourNode->Neighbours.NeighbourX_P = LayerIndex;
+				NeighbourNode->Neighbours.NeighbourX_P = LayerIndexToCheck;
 				RecursiveSetChildNodesRelation(NeighbourNode, NeighbourChunk, NeighbourLayerIndex, LayerIndex, DIRECTION_X_POSITIVE);
 				break;
 			case DIRECTION_Y_NEGATIVE:
 				Node.Neighbours.NeighbourY_N = NeighbourLayerIndex;
-				NeighbourNode->Neighbours.NeighbourY_P = LayerIndex;
+				NeighbourNode->Neighbours.NeighbourY_P = LayerIndexToCheck;
 				RecursiveSetChildNodesRelation(NeighbourNode, NeighbourChunk, NeighbourLayerIndex, LayerIndex, DIRECTION_Y_POSITIVE);
 				break;
 			case DIRECTION_Z_NEGATIVE:
 				Node.Neighbours.NeighbourZ_N = NeighbourLayerIndex;
-				NeighbourNode->Neighbours.NeighbourZ_P = LayerIndex;
+				NeighbourNode->Neighbours.NeighbourZ_P = LayerIndexToCheck;
 				RecursiveSetChildNodesRelation(NeighbourNode, NeighbourChunk, NeighbourLayerIndex, LayerIndex, DIRECTION_Z_POSITIVE);	
 				break;
 			default:
@@ -369,5 +386,10 @@ void UNavMeshGenerator::RecursiveSetChildNodesRelation(const FOctreeNode* Node, 
 		FOctreeNode* ChildNode = &NodeIterator->second;
 		ChildNode->Neighbours.SetFromDirection(LayerIndexToSet, Direction);
 		RecursiveSetChildNodesRelation(ChildNode, Chunk, ChildLayerIndex, LayerIndexToSet, Direction);
+	}
+
+	if(LayerIndex == 1 && LayerIndexToSet == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("here"))
 	}
 }
