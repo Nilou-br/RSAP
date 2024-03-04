@@ -387,9 +387,4 @@ void UNavMeshGenerator::RecursiveSetChildNodesRelation(const FOctreeNode* Node, 
 		ChildNode->Neighbours.SetFromDirection(LayerIndexToSet, Direction);
 		RecursiveSetChildNodesRelation(ChildNode, Chunk, ChildLayerIndex, LayerIndexToSet, Direction);
 	}
-
-	if(LayerIndex == 1 && LayerIndexToSet == 0)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("here"))
-	}
 }

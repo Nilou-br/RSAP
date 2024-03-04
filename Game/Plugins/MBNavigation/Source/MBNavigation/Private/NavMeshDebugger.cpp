@@ -84,25 +84,14 @@ void UNavMeshDebugger::DrawNodes(const FNavMesh& NavMesh, const FVector& CameraL
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("DrawNodes");
 	
-	UE_LOG(LogTemp, Warning, TEXT("---"))
-	uint32 FoundNodeIndex = 0;
 	for (const auto &Chunk : std::views::values(NavMesh))
 	{
 		TArray<FNodesMap> Layers = Chunk.Octrees[0].Get()->Layers;
 		for (int LayerIndex = 0; LayerIndex < 10; ++LayerIndex)
 		{
 			FNodesMap Layer = Layers[LayerIndex];
-			uint32 NodeIndex = 0;
 			for (const FOctreeNode Node : std::views::values(Layers[LayerIndex]))
 			{
-				if(LayerIndex == 1 && NodeIndex == 4 && Node.ChunkBorder == 49)
-				{
-					if(FoundNodeIndex == 1)
-					{
-						UE_LOG(LogTemp, Warning, TEXT("Node"))
-					}
-					FoundNodeIndex++;
-				}
 				// if(!Node.IsOccluded()) continue;
 				// if(LayerIndex != FNavMeshData::StaticDepth) continue;
 
@@ -116,7 +105,7 @@ void UNavMeshDebugger::DrawNodes(const FNavMesh& NavMesh, const FVector& CameraL
 				
 				if(FNavMeshDebugSettings::bDisplayNodes)
 				{
-					DrawDebugBox(World, NodeGlobalCenterLocation, FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), LayerColors[LayerIndex], true, -1, 0, 5.5-LayerIndex/2);
+					DrawDebugBox(World, NodeGlobalCenterLocation, FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), LayerColors[LayerIndex], true, -1, 0, 2);
 				}
 				if(FNavMeshDebugSettings::bDisplayNodeBorder)
 				{
@@ -177,16 +166,9 @@ void UNavMeshDebugger::DrawNodes(const FNavMesh& NavMesh, const FVector& CameraL
 						const FOctreeNode& NeighbourNode = NeighbourIterator->second;
 						
 						const F3DVector32 NeighbourGlobalCenterLocation = NeighbourNode.GetGlobalLocation(NeighbourChunk.Location) + FNavMeshData::NodeHalveSizes[NeighbourLookupData.LayerIndex];
-						DrawDebugLine(World, NodeGlobalCenterLocation, NeighbourGlobalCenterLocation.ToVector(), LayerColors[LayerIndex], true, -1, 11, 1.5);
-
-						if(LayerIndex == 0 && NeighbourGlobalCenterLocation.X == 256)
-						{
-							UE_LOG(LogTemp, Warning, TEXT("Layer 0 Node")) // todo here
-						}
+						DrawDebugLine(World, NodeGlobalCenterLocation, NeighbourGlobalCenterLocation.ToVector(), FColor::White, true, -1, 11, 1);
 					}
 				}
-
-				NodeIndex++;
 			}
 		}
 	}
