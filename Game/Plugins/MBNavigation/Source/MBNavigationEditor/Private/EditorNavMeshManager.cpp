@@ -14,6 +14,7 @@
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 #include "UObject/ObjectSaveContext.h"
+#include "Editor/Transactor.h"
 
 DEFINE_LOG_CATEGORY(LogEditorNavManager)
 
@@ -285,7 +286,8 @@ void UEditorNavMeshManager::CheckMovingSMActors()
 
 	if(UpdatedTransforms.Num())
 	{
-		
+		GenerateNavmesh();
+		NavMeshDebugger->Draw(NavMesh);
 	}
 }
 
@@ -367,10 +369,9 @@ void UEditorNavMeshManager::OnActorMoved(AActor* Actor)
 {
 	if (const AStaticMeshActor* SMActor = Cast<AStaticMeshActor>(Actor))
 	{
-		// TArray<const AStaticMeshActor*> Actors;
-		// Actors.Add(SMActor);
-		// ActorRedoCache.Empty();
-		// ActorUndoCache.Add(new FUndoRedoData(EChangedActorType::Moved, Actors)); // todo check for memory leak.
+		TArray<const AStaticMeshActor*> Actors;
+		Actors.Add(SMActor);
+		AddSnapshot(FUndoRedoSnapshot(ESnapshotType::Moved, Actors));
 	}
 }
 
@@ -405,6 +406,8 @@ void UEditorNavMeshManager::OnEndObjectMovement(UObject& Object)
 	if(MovedActors.Num())
 	{
 		AddSnapshot(FUndoRedoSnapshot(ESnapshotType::Moved, MovedActors));
+		GenerateNavmesh();
+		NavMeshDebugger->Draw(NavMesh);
 	}
 }
 
@@ -482,76 +485,88 @@ void UEditorNavMeshManager::OnActorSelectionChanged(const TArray<UObject*>& Acto
 void UEditorNavMeshManager::OnPostUndoRedo()
 {
 	if(UndoRedoSnapshots.Num() == 0) return;
+
+	// todo, if index > 0, then we can check if selected actors equal the previous snapshot. g.e. '0' if UndoRedoIndex == '1'.
+
+
 	
-	// Check for any undo
-	if(UndoRedoIndex > -1)
+	// 0: If the UndoRedoIndex is greater than 1, go to step 1. If the UndoRedoIndex does not equal the last-index of the snapshots, go to step 2. Otherwise go to 3.
+	// 1: First check the previous (undo) snapshot, if the ActorPtr values equal that of the snapshot, then that undo was done and set UndoRedoIndex-1; otherwise go to step 2.
+	// 2: If 1 returned false, then check the next snapshot (redo), if the ActorPtr values equal that of the snapshot, then that redo was done and set UndoRedoIndex+1; otherwise go to step 3.
+	// 3: If neither are true, then check if the current-snapshot does not equal what is stored in the ActorPtr values.
+
+
+	
+	if(UndoRedoIndex > 0)
 	{
-		const FUndoRedoSnapshot LatestSnapshot = UndoRedoSnapshots[UndoRedoIndex];
-		if(!CheckActorsExistInSnapshot(LatestSnapshot, SelectedActorsNames)) return;
-
-		// All selected actors are in the latest-snapshot,
-		// check if the state of these actors differ from the latest snapshot.
-		const bool bActorStateDiffer = CheckSnapshotMatching(LatestSnapshot, SelectedActors);
-
-		if(CheckSnapshotMatching(LatestSnapshot, SelectedActors))
+		// Check if the previous (undo) snapshot state is the same as its affected actors.
+		if(IsSnapshotActive(UndoRedoSnapshots[UndoRedoIndex-1]))
 		{
-			UE_LOG(LogEditorNavManager, Warning, TEXT("Undo found!"))
-			UndoRedoIndex--;
+			UE_LOG(LogEditorNavManager, Log, TEXT("Undo snapshot now active."));
+			UndoRedoIndex--; // Set undo snapshot as the active state
 			GenerateNavmesh();
 			NavMeshDebugger->Draw(NavMesh);
 			return;
 		}
 	}
 	
-	// Check for any redo
-	const int32 LastRedoIndex = UndoRedoIndex+1;
-	if(LastRedoIndex >= UndoRedoSnapshots.Num()) return;
-	const FUndoRedoSnapshot LastRedoSnapshot = UndoRedoSnapshots[LastRedoIndex];
-	if(!CheckActorsExistInSnapshot(LastRedoSnapshot, PrevSelectedActorsNames)) return;
-
-	// All selected actors are in the last-redo-snapshot, so check if the state of these actors differ from the latest snapshot.
-	bool bShouldRedo = false;
-	if(LastRedoSnapshot.SnapshotType == ESnapshotType::Deleted)
+	if(UndoRedoIndex != UndoRedoSnapshots.Num()-1)
 	{
-		// Check if all actors in snapshot are deleted.
-		for (auto Iterator : LastRedoSnapshot.TransformSnapshots)
+		// Check if the next (redo) snapshot state is the same as its affected actors.
+		if(IsSnapshotActive(UndoRedoSnapshots[UndoRedoIndex+1]))
 		{
-			if(Iterator.Value.ActorPtr.IsValid()) break; // All actors needs to be invalid
-			bShouldRedo = true;
-			break;
+			UE_LOG(LogEditorNavManager, Log, TEXT("Redo snapshot now active."));
+			UndoRedoIndex++; // Set redo snapshot as the active state
+			GenerateNavmesh();
+			NavMeshDebugger->Draw(NavMesh);
+			return;
 		}
 	}
 
-	if(!bShouldRedo) return;
-	UE_LOG(LogEditorNavManager, Warning, TEXT("Undo found!"))
-	UndoRedoIndex++;
-	GenerateNavmesh();
-	NavMeshDebugger->Draw(NavMesh);
-}
-
-bool UEditorNavMeshManager::CheckActorsExistInSnapshot(const FUndoRedoSnapshot& Snapshot, TArray<FString>& ActorNames)
-{
-	if(ActorNames.Num() != Snapshot.TransformSnapshots.Num()) return false;
-
-	for (const FString ActorName : ActorNames)
+	// Check if the current snapshot state is different from the actual state of the actors.
+	if(UndoRedoIndex >= 0 && !IsSnapshotActive(UndoRedoSnapshots[UndoRedoIndex]))
 	{
-		if (!Snapshot.TransformSnapshots.Contains(ActorName)) return false;
+		UE_LOG(LogEditorNavManager, Log, TEXT("UndoRedoIndex set to -1."));
+		UndoRedoIndex--; // Set undo snapshot as the active state
+		GenerateNavmesh();
+		NavMeshDebugger->Draw(NavMesh);
 	}
-	return true;
+
+	// No changes
 }
 
-bool UEditorNavMeshManager::CheckSnapshotMatching(const FUndoRedoSnapshot& Snapshot,
-	TArray<const AStaticMeshActor*>& Actors)
+bool UEditorNavMeshManager::IsSnapshotActive(const FUndoRedoSnapshot& Snapshot)
 {
-	if(Snapshot.SnapshotType == ESnapshotType::Deleted)
-	{
-		// Check if all actors in snapshot are alive again.
+	switch (Snapshot.SnapshotType) {
+	case ESnapshotType::Moved:
+		// Return true if all actors current transform equal the transform stored in the snapshot.
+		for (const auto Iterator : Snapshot.TransformSnapshots)
+		{
+			const FTransformSnapshot* TransformSnapshot = &Iterator.Value;
+			if(!TransformSnapshot->ActorPtr.IsValid()) return false;
+			if(!TransformSnapshot->ActorPtr.Get()->GetTransform().Equals(TransformSnapshot->Transform)) return false;
+		}
+		return true;
+		
+	case ESnapshotType::Placed:
+		break;
+		
+	case ESnapshotType::Pasted:
+		break;
+		
+	case ESnapshotType::Duplicated:
+		break;
+		
+	case ESnapshotType::Deleted:
+		// Return true if all actors in snapshot are invalid.
 		for (auto Iterator : Snapshot.TransformSnapshots)
 		{
-			if(!Iterator.Value.ActorPtr.IsValid()) return false; // All actors needs to be valid
+			if(Iterator.Value.ActorPtr.IsValid()) return false;
 		}
 		return true;
 	}
+
+	return false;
 }
 
 /* --- End delegate handles --- */

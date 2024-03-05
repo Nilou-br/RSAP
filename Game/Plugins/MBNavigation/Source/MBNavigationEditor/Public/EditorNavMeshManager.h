@@ -44,13 +44,10 @@ struct FTransformSnapshot
 	}
 };
 
-/**
- * 
- */
 struct FUndoRedoSnapshot
 {
 	ESnapshotType SnapshotType;
-	TMap<FString, FTransformSnapshot> TransformSnapshots;
+	TMap<FString, FTransformSnapshot> TransformSnapshots; // todo to FUndoRedoActor
 
 	FUndoRedoSnapshot(const ESnapshotType InE_SnapshotType, TArray<const AStaticMeshActor*>& Actors):
 		SnapshotType(InE_SnapshotType)
@@ -130,9 +127,9 @@ private:
 	}
 	FORCEINLINE void ClearRedoSnapshots()
 	{
-		const uint32 LastIndex = UndoRedoSnapshots.Num()-1;
+		const int32 LastIndex = UndoRedoSnapshots.Num()-1;
 		if(UndoRedoIndex == LastIndex) return;
-		const uint32 Difference = LastIndex - UndoRedoIndex;
+		const int32 Difference = LastIndex - UndoRedoIndex;
 		UndoRedoSnapshots.RemoveAt(UndoRedoIndex+1, Difference, false);
 	}
 
@@ -196,8 +193,7 @@ private:
 	/* End delegates */
 	
 
-	bool CheckActorsExistInSnapshot(const FUndoRedoSnapshot& Snapshot, TArray<FString>& ActorNames);
-	bool CheckSnapshotMatching(const FUndoRedoSnapshot& Snapshot, TArray<const AStaticMeshActor*>& Actors);
+	bool IsSnapshotActive(const FUndoRedoSnapshot& Snapshot);
 	
 	void HandleSMActorsMoved(const TArray<const AStaticMeshActor*>& SMActors);
 	void HandleNewSMActorsAdded(const TArray<const AStaticMeshActor*>& SMActors);
