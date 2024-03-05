@@ -40,7 +40,7 @@ void UEditorNavMeshManager::Deinitialize()
 
 void UEditorNavMeshManager::Tick(float DeltaTime)
 {
-	if(MovingActorsTransforms.Num()) CheckMovingSMActors();
+	if(MovingActorsTransformPairs.Num()) CheckMovingSMActors();
 }
 
 void UEditorNavMeshManager::SetDelegates()
@@ -257,43 +257,36 @@ FBox UEditorNavMeshManager::GetLevelBoundaries() const
 // todo refactor
 void UEditorNavMeshManager::CheckMovingSMActors()
 {
-	bool bHasAnyMoved = false;
 	TArray<TWeakObjectPtr<AStaticMeshActor>> KeysToRemove;
-	TArray<const AStaticMeshActor*> MovedSMActors;
+	TArray<FTransformPair*> UpdatedTransforms;
 	
-	for (const auto& Pair : MovingActorsTransforms)
+	for (auto& Iterator : MovingActorsTransformPairs)
 	{
-		if (!Pair.Key.IsValid())
+		if (!Iterator.Key.IsValid())
 		{
-			KeysToRemove.Add(Pair.Key);
+			KeysToRemove.Add(Iterator.Key);
 			continue;
 		}
-		const AStaticMeshActor* SMActor = Pair.Key.Get();
-		FTransform StoredTransform = Pair.Value;
-		FTransform CurrentTransform = SMActor->GetTransform();
-		if(StoredTransform.Equals(CurrentTransform)) continue;
 		
-		MovingActorsTransforms[Pair.Key] = CurrentTransform;
-		MovedSMActors.Add(SMActor);
-		bHasAnyMoved = true;
+		const AStaticMeshActor* SMActor = Iterator.Key.Get();
+		FTransformPair* TransformPair = &Iterator.Value;
+		FTransform CurrentTransform = SMActor->GetTransform();
+		
+		if(TransformPair->EndTransform.Equals(CurrentTransform)) continue;
+		TransformPair->EndTransform = CurrentTransform;
+		UpdatedTransforms.Add(TransformPair);
 	}
 
-	// Remove invalid pairs
+	// Remove invalid actors in MovingActorsTransformPairs
 	for (const TWeakObjectPtr<AStaticMeshActor>& Key : KeysToRemove)
 	{
-		MovingActorsTransforms.Remove(Key);
-		BeginEndMovingActorsTransforms.Remove(Key);
+		MovingActorsTransformPairs.Remove(Key);
 	}
 
-	// todo refactor
-	for (const auto& Pair : BeginEndMovingActorsTransforms)
+	if(UpdatedTransforms.Num())
 	{
-		FTransform CurrentTransform = Pair.Key->GetTransform();
-		if(CurrentTransform.Equals(Pair.Value.ToTransform)) continue;
-		BeginEndMovingActorsTransforms[Pair.Key].ToTransform = CurrentTransform;
+		
 	}
-
-	if(bHasAnyMoved) HandleSMActorsMoved(MovedSMActors);
 }
 
 
@@ -374,10 +367,10 @@ void UEditorNavMeshManager::OnActorMoved(AActor* Actor)
 {
 	if (const AStaticMeshActor* SMActor = Cast<AStaticMeshActor>(Actor))
 	{
-		TArray<const AStaticMeshActor*> Actors;
-		Actors.Add(SMActor);
-		ActorRedoCache.Empty();
-		ActorUndoCache.Add(new FUndoRedoData(EChangedActorType::Moved, Actors)); // todo check for memory leak.
+		// TArray<const AStaticMeshActor*> Actors;
+		// Actors.Add(SMActor);
+		// ActorRedoCache.Empty();
+		// ActorUndoCache.Add(new FUndoRedoData(EChangedActorType::Moved, Actors)); // todo check for memory leak.
 	}
 }
 
@@ -390,35 +383,28 @@ void UEditorNavMeshManager::OnBeginObjectMovement(UObject& Object)
 {
 	if (AStaticMeshActor* Actor = Cast<AStaticMeshActor>(&Object))
 	{
-		MovingActorsTransforms.Add(TWeakObjectPtr<AStaticMeshActor>(Actor), Actor->GetTransform());
-		BeginEndMovingActorsTransforms.Add(TWeakObjectPtr<AStaticMeshActor>(Actor),
-			FFromToTransformPair(Actor->GetTransform(), Actor->GetTransform()));
+		MovingActorsTransformPairs.Add(TWeakObjectPtr<AStaticMeshActor>(Actor),
+			FTransformPair(Actor->GetTransform(), Actor->GetTransform()));
 	}
 }
 
 void UEditorNavMeshManager::OnEndObjectMovement(UObject& Object)
 {
-	if (AStaticMeshActor* Actor = Cast<AStaticMeshActor>(&Object))
+	if(MovingActorsTransformPairs.Num()) return;
+	
+	TArray<const AStaticMeshActor*> MovedActors;
+	for (auto& Iterator : MovingActorsTransformPairs)
 	{
-		MovingActorsTransforms.Remove(TWeakObjectPtr<AStaticMeshActor>(Actor));
+		const FTransformPair* TransformPair = &Iterator.Value;
+		if(TransformPair->BeginTransform.Equals(TransformPair->EndTransform)) continue;
+		MovedActors.Add(Iterator.Key.Get());
+	}
 
-		// todo refactor
-		TArray<const AStaticMeshActor*> MovedActors;
-		bool bHasAnyMoved = false;
-		for (const auto& Pair : BeginEndMovingActorsTransforms)
-		{
-			FTransform CurrentTransform = Pair.Key->GetTransform();
-			if(CurrentTransform.Equals(Pair.Value.ToTransform)) continue;
-			const AStaticMeshActor* MovedActor = Pair.Key.Get();
-			MovedActors.Add(MovedActor);
-			bHasAnyMoved = true;
-		}
+	MovingActorsTransformPairs.Empty();
 
-		if(bHasAnyMoved)
-		{
-			ActorRedoCache.Empty();
-			ActorUndoCache.Add(new FUndoRedoData(EChangedActorType::Moved, MovedActors)); // todo check for memory leak.
-		}
+	if(MovedActors.Num())
+	{
+		AddSnapshot(FUndoRedoSnapshot(ESnapshotType::Moved, MovedActors));
 	}
 }
 
@@ -462,132 +448,109 @@ void UEditorNavMeshManager::OnDuplicateActorsEnd()
 void UEditorNavMeshManager::OnDeleteActorsBegin()
 {
 	UE_LOG(LogEditorNavManager, Log, TEXT("Delete Actors Begin"));
-
-	
+	AddSnapshot(FUndoRedoSnapshot(ESnapshotType::Deleted, SelectedActors));
 }
 
 void UEditorNavMeshManager::OnDeleteActorsEnd()
 {
 	UE_LOG(LogEditorNavManager, Log, TEXT("Delete Actors End"));
+	GenerateNavmesh();
+	NavMeshDebugger->Draw(NavMesh);
 }
 
 void UEditorNavMeshManager::OnActorSelectionChanged(const TArray<UObject*>& Actors, bool)
 {
-	SelectedSMActors.Empty();
+	PrevSelectedActorsNames = SelectedActorsNames;
+	SelectedActors.Empty();
+	SelectedActorsNames.Empty();
 	TArray<const AStaticMeshActor*> SMActors;
 	for (UObject* Actor : Actors)
 	{
 		if(const AStaticMeshActor* SMActor = Cast<AStaticMeshActor>(Actor))
 		{
-			SelectedSMActors.Add(SMActor);
+			SelectedActors.Add(SMActor);
+			SelectedActorsNames.Add(SMActor->GetName());
 			UE_LOG(LogEditorNavManager, Log, TEXT("SMActor: '%s' is selected."), *SMActor->GetName())
 		}
 	}
 }
 
-// todo: refactor this method
+/**
+ * Checks if the current selected actors matches an undo or redo snapshot.
+ * Updates the navmesh if a match has been found.
+ */
 void UEditorNavMeshManager::OnPostUndoRedo()
 {
-	if(!ActorUndoCache.IsEmpty())
+	if(UndoRedoSnapshots.Num() == 0) return;
+	
+	// Check for any undo
+	if(UndoRedoIndex > -1)
 	{
-		FUndoRedoData* LastUndoData = ActorUndoCache.Last();
-		if(LastUndoData->ChangedActorsData.Num() == SelectedSMActors.Num())
-		{
-			// Check if selected-actors are the same as the ones in the last ActorUndoCache.
-			bool bMismatchFound = false;
-			for (const AStaticMeshActor* SelectedActor : SelectedSMActors)
-			{
-				bool bFound = false;
-				for (FUndoRedoActorData UndoActorData : LastUndoData->ChangedActorsData)
-				{
-					if(SelectedActor != UndoActorData.ActorPtr.Get()) continue;
-					bFound = true;
-					break;
-				}
-				if(bFound) continue;
-				bMismatchFound = true;
-			}
-		
-			if(!bMismatchFound)
-			{
-				// Now we can solely use the LastUndoData since it has reference(s) to the same selected actor(s)
-				TArray<FFromToTransformPair> FromToTransformPairs;
-				switch (LastUndoData->E_ChangedActorType) {
-				case EChangedActorType::Moved:
-					for (FUndoRedoActorData& UndoActorData : LastUndoData->ChangedActorsData)
-					{
-						if(!UndoActorData.ActorPtr.IsValid()) break;
-						const AStaticMeshActor* Actor = UndoActorData.ActorPtr.Get();
-						const FTransform CurrentTransform = Actor->GetTransform();
-						if (CurrentTransform.Equals(UndoActorData.TransformSnapshot)) break;
+		const FUndoRedoSnapshot LatestSnapshot = UndoRedoSnapshots[UndoRedoIndex];
+		if(!CheckActorsExistInSnapshot(LatestSnapshot, SelectedActorsNames)) return;
 
-						FromToTransformPairs.Add(FFromToTransformPair(UndoActorData.TransformSnapshot, CurrentTransform));
-						UndoActorData.TransformSnapshot = CurrentTransform;
-					}
-					ActorRedoCache.Add(ActorUndoCache.Pop());
-					// todo Method handle moved here
-					GenerateNavmesh();
-					NavMeshDebugger->Draw(NavMesh);
-					return;
-				case EChangedActorType::Placed:
-					return;
-				case EChangedActorType::Pasted:
-					return;
-				case EChangedActorType::Duplicated:
-					return;
-				case EChangedActorType::Deleted:
-					return;
-				}
-			}
+		// All selected actors are in the latest-snapshot,
+		// check if the state of these actors differ from the latest snapshot.
+		const bool bActorStateDiffer = CheckSnapshotMatching(LatestSnapshot, SelectedActors);
+
+		if(CheckSnapshotMatching(LatestSnapshot, SelectedActors))
+		{
+			UE_LOG(LogEditorNavManager, Warning, TEXT("Undo found!"))
+			UndoRedoIndex--;
+			GenerateNavmesh();
+			NavMeshDebugger->Draw(NavMesh);
+			return;
 		}
 	}
+	
+	// Check for any redo
+	const int32 LastRedoIndex = UndoRedoIndex+1;
+	if(LastRedoIndex >= UndoRedoSnapshots.Num()) return;
+	const FUndoRedoSnapshot LastRedoSnapshot = UndoRedoSnapshots[LastRedoIndex];
+	if(!CheckActorsExistInSnapshot(LastRedoSnapshot, PrevSelectedActorsNames)) return;
 
-	if(ActorRedoCache.IsEmpty()) return;
-	FUndoRedoData* LastRedoData = ActorRedoCache.Last();
-	if(LastRedoData->ChangedActorsData.Num() != SelectedSMActors.Num()) return;
-
-	// Check if selected-actors are the same as the ones in the last ActorUndoCache.
-	bool bMismatchFound = false;
-	for (const AStaticMeshActor* SelectedActor : SelectedSMActors)
+	// All selected actors are in the last-redo-snapshot, so check if the state of these actors differ from the latest snapshot.
+	bool bShouldRedo = false;
+	if(LastRedoSnapshot.SnapshotType == ESnapshotType::Deleted)
 	{
-		bool bFound = false;
-		for (FUndoRedoActorData RedoActorData : LastRedoData->ChangedActorsData)
+		// Check if all actors in snapshot are deleted.
+		for (auto Iterator : LastRedoSnapshot.TransformSnapshots)
 		{
-			if(SelectedActor != RedoActorData.ActorPtr.Get()) continue;
-			bFound = true;
+			if(Iterator.Value.ActorPtr.IsValid()) break; // All actors needs to be invalid
+			bShouldRedo = true;
 			break;
 		}
-		if(bFound) continue;
-		bMismatchFound = true;
 	}
-	if(bMismatchFound) return;
 
-	TArray<FFromToTransformPair> FromToTransformPairs;
-	switch (LastRedoData->E_ChangedActorType) {
-	case EChangedActorType::Moved:
-		for (FUndoRedoActorData& RedoActorData : LastRedoData->ChangedActorsData)
+	if(!bShouldRedo) return;
+	UE_LOG(LogEditorNavManager, Warning, TEXT("Undo found!"))
+	UndoRedoIndex++;
+	GenerateNavmesh();
+	NavMeshDebugger->Draw(NavMesh);
+}
+
+bool UEditorNavMeshManager::CheckActorsExistInSnapshot(const FUndoRedoSnapshot& Snapshot, TArray<FString>& ActorNames)
+{
+	if(ActorNames.Num() != Snapshot.TransformSnapshots.Num()) return false;
+
+	for (const FString ActorName : ActorNames)
+	{
+		if (!Snapshot.TransformSnapshots.Contains(ActorName)) return false;
+	}
+	return true;
+}
+
+bool UEditorNavMeshManager::CheckSnapshotMatching(const FUndoRedoSnapshot& Snapshot,
+	TArray<const AStaticMeshActor*>& Actors)
+{
+	if(Snapshot.SnapshotType == ESnapshotType::Deleted)
+	{
+		// Check if all actors in snapshot are alive again.
+		for (auto Iterator : Snapshot.TransformSnapshots)
 		{
-			if(!RedoActorData.ActorPtr.IsValid()) break;
-			const AStaticMeshActor* Actor = RedoActorData.ActorPtr.Get();
-			const FTransform CurrentTransform = Actor->GetTransform();
-			if (CurrentTransform.Equals(RedoActorData.TransformSnapshot)) break;
-
-			FromToTransformPairs.Add(FFromToTransformPair(RedoActorData.TransformSnapshot, CurrentTransform));
-			RedoActorData.TransformSnapshot = CurrentTransform;
+			if(!Iterator.Value.ActorPtr.IsValid()) return false; // All actors needs to be valid
 		}
-		ActorUndoCache.Add(ActorRedoCache.Pop());
-		// todo Method handle moved here
-		GenerateNavmesh();
-		NavMeshDebugger->Draw(NavMesh);
-		return;
-	case EChangedActorType::Placed:
-		return;
-	case EChangedActorType::Pasted:
-		return;
-	case EChangedActorType::Duplicated:
-		return;
-	case EChangedActorType::Deleted:
-		return;
+		return true;
 	}
 }
 

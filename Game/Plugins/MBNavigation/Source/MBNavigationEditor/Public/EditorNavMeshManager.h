@@ -23,7 +23,7 @@ DECLARE_LOG_CATEGORY_EXTERN(LogEditorNavManager, Log, All);
  * - Duplicated: New Actor has placed in the level after duplicating an existing Actor.
  * - Deleted: Existing Actor has been removed from the level.
  */
-enum class EChangedActorType
+enum class ESnapshotType
 {
 	Moved,
 	Placed,
@@ -32,48 +32,44 @@ enum class EChangedActorType
 	Deleted
 };
 
-/**
- * Keeps track of the actual actor for validation and to check its current transform,
- * and a snapshot of the transform it had when it was stored in the undo/redo cache.
- */
-struct FUndoRedoActorData
+struct FTransformSnapshot
 {
 	TWeakObjectPtr<const AStaticMeshActor> ActorPtr;
-	FTransform TransformSnapshot;
+	FTransform Transform;
 
-	explicit FUndoRedoActorData(const AStaticMeshActor* Actor)
+	explicit FTransformSnapshot(const AStaticMeshActor* Actor)
 	{
 		ActorPtr = Actor;
-		TransformSnapshot = Actor->GetActorTransform();
+		Transform = Actor->GetActorTransform();
 	}
 };
 
 /**
- * Type used for undo/redo cache.
+ * 
  */
-struct FUndoRedoData
+struct FUndoRedoSnapshot
 {
-	EChangedActorType E_ChangedActorType;
-	TArray<FUndoRedoActorData> ChangedActorsData;
+	ESnapshotType SnapshotType;
+	TMap<FString, FTransformSnapshot> TransformSnapshots;
 
-	FUndoRedoData(const EChangedActorType InE_SMActorChangedType, const TArray<const AStaticMeshActor*>& Actors):
-		E_ChangedActorType(InE_SMActorChangedType)
+	FUndoRedoSnapshot(const ESnapshotType InE_SnapshotType, TArray<const AStaticMeshActor*>& Actors):
+		SnapshotType(InE_SnapshotType)
 	{
-		ChangedActorsData.Reserve(Actors.Num());
+		TransformSnapshots.Reserve(Actors.Num());
 		for (const AStaticMeshActor* Actor : Actors)
 		{
-			ChangedActorsData.Emplace(FUndoRedoActorData(Actor));
+			TransformSnapshots.Emplace(Actor->GetName(), Actor);
 		}
 	}
 };
 
-struct FFromToTransformPair
+struct FTransformPair
 {
-	FTransform FromTransform;
-	FTransform ToTransform;
+	FTransform BeginTransform;
+	FTransform EndTransform;
 	
-	FFromToTransformPair(const FTransform& FromTransform, const FTransform& ToTransform):
-		FromTransform(FromTransform), ToTransform(ToTransform)
+	FTransformPair(const FTransform& BeginTransform, const FTransform& EndTransform):
+		BeginTransform(BeginTransform), EndTransform(EndTransform)
 	{}
 };
 
@@ -122,6 +118,26 @@ public:
 private:
 	FBox GetLevelBoundaries() const;
 	void CheckMovingSMActors();
+
+	/**
+	 * Adds a new SM-actor snapshot after clearing the redo snapshots.
+	 */
+	FORCEINLINE void AddSnapshot(const FUndoRedoSnapshot& ActorSnapshot)
+	{
+		ClearRedoSnapshots();
+		UndoRedoSnapshots.Add(ActorSnapshot);
+		UndoRedoIndex++;
+	}
+	FORCEINLINE void ClearRedoSnapshots()
+	{
+		const uint32 LastIndex = UndoRedoSnapshots.Num()-1;
+		if(UndoRedoIndex == LastIndex) return;
+		const uint32 Difference = LastIndex - UndoRedoIndex;
+		UndoRedoSnapshots.RemoveAt(UndoRedoIndex+1, Difference, false);
+	}
+
+
+	/* Delegates */
 	
 	// Level delegates
 	FDelegateHandle OnMapLoadDelegateHandle;
@@ -177,6 +193,12 @@ private:
 	FDelegateHandle OnPostUndoRedoDelegateHandle;
 	void OnPostUndoRedo();
 
+	/* End delegates */
+	
+
+	bool CheckActorsExistInSnapshot(const FUndoRedoSnapshot& Snapshot, TArray<FString>& ActorNames);
+	bool CheckSnapshotMatching(const FUndoRedoSnapshot& Snapshot, TArray<const AStaticMeshActor*>& Actors);
+	
 	void HandleSMActorsMoved(const TArray<const AStaticMeshActor*>& SMActors);
 	void HandleNewSMActorsAdded(const TArray<const AStaticMeshActor*>& SMActors);
 	void HandleSMActorsDeleted(const TArray<FTransform>& Transforms);
@@ -190,10 +212,11 @@ private:
 	FNavMesh NavMesh;
 	FMBNavigationModule MainModule;
 
-	UPROPERTY() TArray<const AStaticMeshActor*> SelectedSMActors;
-	TMap<TWeakObjectPtr<AStaticMeshActor>, FTransform> MovingActorsTransforms;
-	TMap<TWeakObjectPtr<AStaticMeshActor>, FFromToTransformPair> BeginEndMovingActorsTransforms;
-	TArray<FUndoRedoData*> ActorUndoCache;
-	TArray<FUndoRedoData*> ActorRedoCache;
+	UPROPERTY() TArray<FString> PrevSelectedActorsNames;
+	UPROPERTY() TArray<FString> SelectedActorsNames;
+	UPROPERTY() TArray<const AStaticMeshActor*> SelectedActors;
+	TMap<TWeakObjectPtr<AStaticMeshActor>, FTransformPair> MovingActorsTransformPairs; // todo maybe FTransformPair * ? 
+	TArray<FUndoRedoSnapshot> UndoRedoSnapshots;
+	int32 UndoRedoIndex = -1;
 	TArray<FTransform> DeletedSMActorsTransforms;
 };
