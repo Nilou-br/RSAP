@@ -425,27 +425,37 @@ void UEditorNavMeshManager::OnNewActorsDropped(const TArray<UObject*>& Objects, 
 			SMActors.Add(SMActor);
 		}
 	}
-	if(SMActors.Num()) HandleNewSMActorsAdded(SMActors);
+	if(SMActors.Num())
+	{
+		AddSnapshot(FUndoRedoSnapshot(ESnapshotType::Placed, SMActors));
+		HandleNewSMActorsAdded(SMActors);
+	}
 }
 
 void UEditorNavMeshManager::OnPasteActorsBegin()
 {
 	UE_LOG(LogEditorNavManager, Log, TEXT("Paste Actors Begin"));
+	AddSnapshot(FUndoRedoSnapshot(ESnapshotType::Pasted, SelectedActors));
 }
 
 void UEditorNavMeshManager::OnPasteActorsEnd()
 {
 	UE_LOG(LogEditorNavManager, Log, TEXT("Paste Actors End"));
+	GenerateNavmesh();
+	NavMeshDebugger->Draw(NavMesh);
 }
 
 void UEditorNavMeshManager::OnDuplicateActorsBegin()
 {
 	UE_LOG(LogEditorNavManager, Log, TEXT("Duplicate Actors Begin"));
+	AddSnapshot(FUndoRedoSnapshot(ESnapshotType::Duplicated, SelectedActors));
 }
 
 void UEditorNavMeshManager::OnDuplicateActorsEnd()
 {
 	UE_LOG(LogEditorNavManager, Log, TEXT("Duplicate Actors End"));
+	GenerateNavmesh();
+	NavMeshDebugger->Draw(NavMesh);
 }
 
 void UEditorNavMeshManager::OnDeleteActorsBegin()
@@ -479,23 +489,13 @@ void UEditorNavMeshManager::OnActorSelectionChanged(const TArray<UObject*>& Acto
 }
 
 /**
- * Checks if the current selected actors matches an undo or redo snapshot.
+ * Checks if any changes have been made in in the static-mesh-actors during this undo/redo operation.
+ * Sets 
  * Updates the navmesh if a match has been found.
  */
 void UEditorNavMeshManager::OnPostUndoRedo()
 {
 	if(UndoRedoSnapshots.Num() == 0) return;
-
-	// todo, if index > 0, then we can check if selected actors equal the previous snapshot. g.e. '0' if UndoRedoIndex == '1'.
-
-
-	
-	// 0: If the UndoRedoIndex is greater than 1, go to step 1. If the UndoRedoIndex does not equal the last-index of the snapshots, go to step 2. Otherwise go to 3.
-	// 1: First check the previous (undo) snapshot, if the ActorPtr values equal that of the snapshot, then that undo was done and set UndoRedoIndex-1; otherwise go to step 2.
-	// 2: If 1 returned false, then check the next snapshot (redo), if the ActorPtr values equal that of the snapshot, then that redo was done and set UndoRedoIndex+1; otherwise go to step 3.
-	// 3: If neither are true, then check if the current-snapshot does not equal what is stored in the ActorPtr values.
-
-
 	
 	if(UndoRedoIndex > 0)
 	{
@@ -503,7 +503,7 @@ void UEditorNavMeshManager::OnPostUndoRedo()
 		if(IsSnapshotActive(UndoRedoSnapshots[UndoRedoIndex-1]))
 		{
 			UE_LOG(LogEditorNavManager, Log, TEXT("Undo snapshot now active."));
-			UndoRedoIndex--; // Set undo snapshot as the active state
+			UndoRedoIndex--; // Set undo snapshot as the active state.
 			GenerateNavmesh();
 			NavMeshDebugger->Draw(NavMesh);
 			return;
@@ -516,30 +516,30 @@ void UEditorNavMeshManager::OnPostUndoRedo()
 		if(IsSnapshotActive(UndoRedoSnapshots[UndoRedoIndex+1]))
 		{
 			UE_LOG(LogEditorNavManager, Log, TEXT("Redo snapshot now active."));
-			UndoRedoIndex++; // Set redo snapshot as the active state
+			UndoRedoIndex++; // Set redo snapshot as the active state.
 			GenerateNavmesh();
 			NavMeshDebugger->Draw(NavMesh);
 			return;
 		}
 	}
 
-	// Check if the current snapshot state is different from the actual state of the actors.
+	// Check if the current snapshot state is different from the actual state of the actors (if there is one).
 	if(UndoRedoIndex >= 0 && !IsSnapshotActive(UndoRedoSnapshots[UndoRedoIndex]))
 	{
 		UE_LOG(LogEditorNavManager, Log, TEXT("UndoRedoIndex set to -1."));
-		UndoRedoIndex--; // Set undo snapshot as the active state
+		UndoRedoIndex--; // Set undo snapshot as the active state (where the snapshot does not actually exist because no changes have been made at that point yet).
 		GenerateNavmesh();
 		NavMeshDebugger->Draw(NavMesh);
 	}
 
-	// No changes
+	// No changes in any actor's transform.
 }
 
 bool UEditorNavMeshManager::IsSnapshotActive(const FUndoRedoSnapshot& Snapshot)
 {
-	switch (Snapshot.SnapshotType) {
-	case ESnapshotType::Moved:
-		// Return true if all actors current transform equal the transform stored in the snapshot.
+	const auto IsValidAndTransformEqual = [Snapshot]()
+	{
+		// Return false if even one of the actor's transform differs from what is stored in this snapshot.
 		for (const auto Iterator : Snapshot.TransformSnapshots)
 		{
 			const FTransformSnapshot* TransformSnapshot = &Iterator.Value;
@@ -547,18 +547,23 @@ bool UEditorNavMeshManager::IsSnapshotActive(const FUndoRedoSnapshot& Snapshot)
 			if(!TransformSnapshot->ActorPtr.Get()->GetTransform().Equals(TransformSnapshot->Transform)) return false;
 		}
 		return true;
+	};
+	
+	switch (Snapshot.SnapshotType) {
+	case ESnapshotType::Moved:
+		return IsValidAndTransformEqual();
 		
 	case ESnapshotType::Placed:
-		break;
+		return IsValidAndTransformEqual();
 		
 	case ESnapshotType::Pasted:
-		break;
+		return IsValidAndTransformEqual();
 		
 	case ESnapshotType::Duplicated:
-		break;
+		return IsValidAndTransformEqual();
 		
 	case ESnapshotType::Deleted:
-		// Return true if all actors in snapshot are invalid.
+		// Return false if even one of the actors is still valid.
 		for (auto Iterator : Snapshot.TransformSnapshots)
 		{
 			if(Iterator.Value.ActorPtr.IsValid()) return false;
