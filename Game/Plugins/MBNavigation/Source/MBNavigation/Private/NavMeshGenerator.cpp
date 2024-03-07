@@ -30,7 +30,7 @@ FNavMesh UNavMeshGenerator::Generate(const FBox& LevelBoundaries)
 #if WITH_EDITOR
 	const float DurationSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(
 		std::chrono::high_resolution_clock::now() - StartTime).count() / 1000.0f;
-	UE_LOG(LogNavMeshGenerator, Log, TEXT("Generation took : '%f' seconds"), DurationSeconds);
+	// UE_LOG(LogNavMeshGenerator, Log, TEXT("Generation took : '%f' seconds"), DurationSeconds);
 #endif
 
 	return NavMesh;
