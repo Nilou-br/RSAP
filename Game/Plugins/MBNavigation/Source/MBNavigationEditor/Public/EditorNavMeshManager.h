@@ -187,7 +187,7 @@ private:
 
 	/* End delegates */
 	
-
+	void HandleUndoRedo();
 	bool IsSnapshotActive(const FUndoRedoSnapshot& Snapshot);
 	
 	void HandleSMActorsMoved(const TArray<AStaticMeshActor*>& SMActors);
@@ -211,4 +211,5 @@ private:
 	int32 UndoRedoIndex = -1;
 	
 	bool bDuplicateOccured;
+	bool bShouldDoubleCheckUndoRedo;
 };
