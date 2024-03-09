@@ -6,6 +6,7 @@
 #include "morton.h"
 #include "NavMeshSettings.h"
 #include "unordered_dense.h"
+#include "Engine/StaticMeshActor.h"
 
 #define DIRECTION_X_NEGATIVE 0b100000
 #define DIRECTION_Y_NEGATIVE 0b010000
@@ -542,3 +543,57 @@ struct FChunk
 
 // The navigation-mesh is a hashmap of chunks, each being a SVO tree.
 typedef ankerl::unordered_dense::map<uint_fast64_t, FChunk> FNavMesh;
+
+
+/**
+ * Stores min/max boundaries where both are rounded down to the nearest integer.
+ * This is more efficient for both cache and calculations.
+ */
+struct FActorBounds
+{
+	F3DVector32 MaxBounds;
+	F3DVector32 MinBounds;
+
+	explicit FActorBounds(const AStaticMeshActor* Actor)
+	{
+		FVector Origin, Extent;
+		Actor->GetActorBounds(false, Origin, Extent, true);
+        
+		// Convert to integer vectors by rounding down (flooring) the components
+		MaxBounds = F3DVector32(FMath::FloorToInt(Origin.X + Extent.X), 
+							   FMath::FloorToInt(Origin.Y + Extent.Y), 
+							   FMath::FloorToInt(Origin.Z + Extent.Z));
+
+		MinBounds = F3DVector32(FMath::FloorToInt(Origin.X - Extent.X), 
+							   FMath::FloorToInt(Origin.Y - Extent.Y), 
+							   FMath::FloorToInt(Origin.Z - Extent.Z));
+	}
+
+	FORCEINLINE bool Equals(const FActorBounds& InActorBounds) const
+	{
+		return	MaxBounds.X == InActorBounds.MaxBounds.X &&
+				MaxBounds.Y == InActorBounds.MaxBounds.Y &&
+				MaxBounds.Z == InActorBounds.MaxBounds.Z &&
+				MinBounds.X == InActorBounds.MinBounds.X &&
+				MinBounds.Y == InActorBounds.MinBounds.Y &&
+				MinBounds.Z == InActorBounds.MinBounds.Z;
+	}
+};
+
+/**
+ * Before and after pair of FActorBounds.
+ */
+struct FActorBoundsPair
+{
+	FActorBounds Before;
+	FActorBounds After;
+	
+	explicit FActorBoundsPair(const AStaticMeshActor* Actor)
+		: Before(Actor), After(Actor)
+	{}
+
+	FORCEINLINE bool AreEqual() const
+	{
+		return Before.Equals(After);
+	}
+};

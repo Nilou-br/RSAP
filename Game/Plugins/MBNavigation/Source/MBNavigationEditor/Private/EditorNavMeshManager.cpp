@@ -18,12 +18,6 @@
 DEFINE_LOG_CATEGORY(LogEditorNavManager)
 
 
-// TODO:
-// When an event such as move, place, paste, delete or duplicate happens, then any chunk(keys!) where the actor(s) moved from and moved to will added to an array of dirty chunk-keys.
-// Dirty chunks will be regenerated when starting PIE, or saving the level.
-// Note: only when saving the level should the navmesh be saved.
-
-
 
 void UEditorNavMeshManager::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -227,7 +221,6 @@ void UEditorNavMeshManager::UpdateDebugSettings (
 
 void UEditorNavMeshManager::PostUndo(bool bSuccess)
 {
-	UE_LOG(LogEditorNavManager, Log, TEXT("Post Undo"));
 	if(!bSuccess || UndoRedoIndex < 0)
 	{
 		FEditorUndoClient::PostUndo(bSuccess);
@@ -255,8 +248,32 @@ void UEditorNavMeshManager::PostUndo(bool bSuccess)
 		{
 			UE_LOG(LogEditorNavManager, Log, TEXT("Active state is back to what is was initially."));
 		}
-		GenerateNavmesh();
-		NavMeshDebugger->Draw(NavMesh);
+		
+		for (int Index = BeforeIndex; Index >= UndoRedoIndex; --Index)
+		{
+			// todo, if index == -1, then use begin transform of first snapshot?
+			if(Index == -1) continue; // remove this
+			
+			const FUndoRedoSnapshot* UndoRedoSnapshot = &UndoRedoSnapshots[Index];
+			for (const auto Iterator : UndoRedoSnapshot->ActorSnapshots)
+			{
+				// The undo goes back in time so we will use the after-ActorState as before, and before-ActorState as after.
+				const FActorSnapshot* ActorSnapshot = &Iterator.Value;
+				
+				switch(UndoRedoSnapshot->SnapshotType) {
+				case ESnapshotType::Moved:
+					break;
+				case ESnapshotType::Placed:
+					break;
+				case ESnapshotType::Pasted:
+					break;
+				case ESnapshotType::Duplicated:
+					break;
+				case ESnapshotType::Deleted:
+					break;
+				}
+			}
+		}
 	}
 	
 	FEditorUndoClient::PostUndo(bSuccess);
@@ -264,37 +281,58 @@ void UEditorNavMeshManager::PostUndo(bool bSuccess)
 
 void UEditorNavMeshManager::PostRedo(bool bSuccess)
 {
-	UE_LOG(LogEditorNavManager, Log, TEXT("Post Redo"));
-	if(!bSuccess || UndoRedoIndex >= UndoRedoSnapshots.Num()-1)
+	if(!bSuccess || UndoRedoIndex >= UndoRedoSnapshots.Num()-1 || !IsSnapshotActive(UndoRedoSnapshots[UndoRedoIndex+1]))
 	{
 		FEditorUndoClient::PostRedo(bSuccess);
 		return;
 	}
-	
 	const int32 BeforeIndex = UndoRedoIndex;
-	if(!IsSnapshotActive(UndoRedoSnapshots[UndoRedoIndex+1])) return;
+
+	// Get how many snapshots were undone at once previously, this is also how many will be redone.
 	UndoRedoIndex = UndoRedoIndex+UndoBatchCounts.Pop();
 	
 	if(const int32 Difference = UndoRedoIndex - BeforeIndex; Difference)
 	{
 		const FString LogString = Difference > 1 ? FString::Printf(TEXT("Redid '%i' operations."), Difference) : "Redid 1 operation.";
 		UE_LOG(LogEditorNavManager, Log, TEXT("%s"), *LogString);
-		GenerateNavmesh();
-		NavMeshDebugger->Draw(NavMesh);
+		
+		for (int Index = BeforeIndex; Index <= UndoRedoIndex; ++Index)
+		{
+			// todo, if index == -1, then use begin transform of first snapshot?
+			if(Index == -1) continue; // remove this
+				
+			const FUndoRedoSnapshot* UndoRedoSnapshot = &UndoRedoSnapshots[Index];
+			for (const auto Iterator : UndoRedoSnapshot->ActorSnapshots)
+			{
+				const FActorSnapshot* ActorSnapshot = &Iterator.Value;
+				switch(UndoRedoSnapshot->SnapshotType) {
+				case ESnapshotType::Moved:
+					break;
+				case ESnapshotType::Placed:
+					break;
+				case ESnapshotType::Pasted:
+					break;
+				case ESnapshotType::Duplicated:
+					break;
+				case ESnapshotType::Deleted:
+					break;
+				}
+			}
+		}
 	}
 	
 	FEditorUndoClient::PostRedo(bSuccess);
 }
 
-void UEditorNavMeshManager::AddSnapshot(const FUndoRedoSnapshot& Snapshot)
+void UEditorNavMeshManager::AddSnapshot(const ESnapshotType SnapshotType, const TArray<FActorSnapshot>& ActorSnapshots)
 {
 	ClearRedoSnapshots();
-	UndoRedoSnapshots.Add(Snapshot);
+	UndoRedoSnapshots.Emplace(SnapshotType, ActorSnapshots);
 	UndoRedoIndex++;
 
 	// Lazy
 	FString SnapshotTypeString;
-	switch (Snapshot.SnapshotType) {
+	switch (SnapshotType) {
 	case ESnapshotType::Moved:
 		SnapshotTypeString = "moved";
 		break;
@@ -312,7 +350,7 @@ void UEditorNavMeshManager::AddSnapshot(const FUndoRedoSnapshot& Snapshot)
 		break;
 	}
 
-	UE_LOG(LogEditorNavManager, Log, TEXT("Added '%s' snapshot for %i actor(s)."), *SnapshotTypeString, Snapshot.ActorSnapshots.Num());
+	UE_LOG(LogEditorNavManager, Log, TEXT("Added '%s' snapshot for %i actor(s)."), *SnapshotTypeString, ActorSnapshots.Num());
 }
 
 void UEditorNavMeshManager::ClearRedoSnapshots()
@@ -348,7 +386,6 @@ FBox UEditorNavMeshManager::GetLevelBoundaries() const
 	return FBox(LevelMin, LevelMax);
 }
 
-// todo refactor
 void UEditorNavMeshManager::CheckMovingActors()
 {
 	if(!SelectedActors.Num())
@@ -358,9 +395,9 @@ void UEditorNavMeshManager::CheckMovingActors()
 	}
 	
 	TArray<TWeakObjectPtr<AStaticMeshActor>> KeysToRemove;
-	TArray<FTransformPair*> UpdatedTransforms;
+	TArray<FActorBoundsPair*> UpdatedBoundsPair;
 	
-	for (auto& Iterator : MovingActorsState)
+	for (auto& Iterator : MovingActorsBoundsPair)
 	{
 		if (!Iterator.Key.IsValid())
 		{
@@ -369,21 +406,21 @@ void UEditorNavMeshManager::CheckMovingActors()
 		}
 		
 		const AStaticMeshActor* SMActor = Iterator.Key.Get();
-		FTransformPair* TransformPair = &Iterator.Value;
-		FTransform CurrentTransform = SMActor->GetTransform();
+		FActorBoundsPair* BoundsPair = &Iterator.Value;
+		const FActorBounds CurrentBounds = FActorBounds(SMActor);
 		
-		if(TransformPair->EndTransform.Equals(CurrentTransform)) continue;
-		TransformPair->EndTransform = CurrentTransform;
-		UpdatedTransforms.Add(TransformPair);
+		if(CurrentBounds.Equals(BoundsPair->After)) continue;
+		BoundsPair->After = CurrentBounds;
+		UpdatedBoundsPair.Add(BoundsPair);
 	}
 
 	// Remove invalid actors in MovingActorsTransformPairs
 	for (const TWeakObjectPtr<AStaticMeshActor>& Key : KeysToRemove)
 	{
-		MovingActorsState.Remove(Key);
+		MovingActorsBoundsPair.Remove(Key);
 	}
 
-	if(UpdatedTransforms.Num())
+	if(UpdatedBoundsPair.Num())
 	{
 		GenerateNavmesh();
 		NavMeshDebugger->Draw(NavMesh);
@@ -472,13 +509,12 @@ void UEditorNavMeshManager::OnObjectMoved(AActor* Actor)
 void UEditorNavMeshManager::OnBeginObjectMovement(UObject& Object)
 {
 	// UE_LOG(LogEditorNavManager, Log, TEXT("Begin Object Movement"));
-	if(bIsMovingActors) MovingActorsState.Empty();
+	if(bIsMovingActors) MovingActorsBoundsPair.Empty();
 	bIsMovingActors = true;
 	
 	if (AStaticMeshActor* Actor = Cast<AStaticMeshActor>(&Object))
 	{
-		MovingActorsState.Add(TWeakObjectPtr<AStaticMeshActor>(Actor),
-			FTransformPair(Actor->GetTransform(), Actor->GetTransform()));
+		MovingActorsBoundsPair.Add(TWeakObjectPtr<AStaticMeshActor>(Actor), FActorBoundsPair(Actor));
 	}
 }
 
@@ -486,23 +522,25 @@ void UEditorNavMeshManager::OnEndObjectMovement(UObject& Object)
 {
 	// UE_LOG(LogEditorNavManager, Log, TEXT("End Object Movement"))
 	bIsMovingActors = false;
-	if(!MovingActorsState.Num()) return;
+	if(!MovingActorsBoundsPair.Num()) return;
 	
-	TArray<AStaticMeshActor*> MovedActors;
-	for (auto& Iterator : MovingActorsState)
+	TArray<FActorSnapshot> SnapshotsToAdd;
+	for (auto& Iterator : MovingActorsBoundsPair)
 	{
-		const FTransformPair* TransformPair = &Iterator.Value;
-		if(TransformPair->BeginTransform.Equals(TransformPair->EndTransform)) continue;
-		MovedActors.Add(Iterator.Key.Get());
+		AStaticMeshActor* MovingActorPtr = Iterator.Key.Get();
+		if(SelectedActors.Find(MovingActorPtr) == INDEX_NONE) continue;
+		FActorBoundsPair BoundsPair = Iterator.Value;
+		if(!BoundsPair.AreEqual())
+		{
+			SnapshotsToAdd.Emplace(MovingActorPtr, BoundsPair);
+		}
 	}
-	MovingActorsState.Empty();
+	MovingActorsBoundsPair.Empty();
 	
-	if(MovedActors.Num())
+	if(SnapshotsToAdd.Num())
 	{
-		AddSnapshot(FUndoRedoSnapshot(ESnapshotType::Moved, MovedActors));
-		
-		GenerateNavmesh();
-		NavMeshDebugger->Draw(NavMesh);
+		AddSnapshot(ESnapshotType::Moved, SnapshotsToAdd);
+		// Don't need to update navmesh here since it already does every tick when an actor has moved.
 	}
 }
 
@@ -518,7 +556,7 @@ void UEditorNavMeshManager::OnNewActorsDropped(const TArray<UObject*>& Objects, 
 	}
 	if(SMActors.Num())
 	{
-		AddSnapshot(FUndoRedoSnapshot(ESnapshotType::Placed, SMActors));
+		AddSnapshot(ESnapshotType::Placed, FActorSnapshot::FromActors(SMActors));
 		
 		GenerateNavmesh();
 		NavMeshDebugger->Draw(NavMesh);
@@ -528,7 +566,7 @@ void UEditorNavMeshManager::OnNewActorsDropped(const TArray<UObject*>& Objects, 
 void UEditorNavMeshManager::OnPasteActorsBegin()
 {
 	UE_LOG(LogEditorNavManager, Log, TEXT("Paste Actors Begin"));
-	AddSnapshot(FUndoRedoSnapshot(ESnapshotType::Pasted, SelectedActors));
+	AddSnapshot(ESnapshotType::Pasted, FActorSnapshot::FromActors(SelectedActors));
 }
 
 void UEditorNavMeshManager::OnPasteActorsEnd()
@@ -543,20 +581,20 @@ void UEditorNavMeshManager::OnDuplicateActorsBegin()
 	// Check if any selected-actor was in moving state when the duplication occurred.
 	if(bIsMovingActors)
 	{
-		// Check if any selected-actor had an actual change in its transform.
-		TArray<AStaticMeshActor*> MovedActors;
-		for (auto Iterator : MovingActorsState)
+		TArray<FActorSnapshot> SnapshotsToAdd;
+		for (auto Iterator : MovingActorsBoundsPair)
 		{
 			AStaticMeshActor* MovingActorPtr = Iterator.Key.Get();
 			if(SelectedActors.Find(MovingActorPtr) == INDEX_NONE) continue;
-			if(!Iterator.Value.BeginTransform.Equals(Iterator.Value.EndTransform))
+			FActorBoundsPair BoundsPair = Iterator.Value;
+			if(!BoundsPair.AreEqual())
 			{
-				MovedActors.Add(MovingActorPtr);
+				SnapshotsToAdd.Emplace(MovingActorPtr, BoundsPair);
 			}
 		}
-		if(MovedActors.Num())
+		if(SnapshotsToAdd.Num())
 		{
-			AddSnapshot(FUndoRedoSnapshot(ESnapshotType::Moved, MovedActors));
+			AddSnapshot(ESnapshotType::Moved, SnapshotsToAdd);
 			// Don't need to update navmesh here since it already does every tick when an actor has moved.
 		}
 	}
@@ -571,7 +609,7 @@ void UEditorNavMeshManager::OnDuplicateActorsEnd()
 
 void UEditorNavMeshManager::OnDeleteActorsBegin()
 {
-	AddSnapshot(FUndoRedoSnapshot(ESnapshotType::Deleted, SelectedActors));
+	AddSnapshot(ESnapshotType::Deleted, FActorSnapshot::FromActors(SelectedActors));
 }
 
 void UEditorNavMeshManager::OnDeleteActorsEnd()
@@ -596,23 +634,16 @@ void UEditorNavMeshManager::OnActorSelectionChanged(const TArray<UObject*>& Acto
 	if(bDuplicateOccured)
 	{
 		// New selected actors are the ones that had the operation applied to them.
-		AddSnapshot(FUndoRedoSnapshot(ESnapshotType::Duplicated, SelectedActors));
+		AddSnapshot(ESnapshotType::Duplicated, FActorSnapshot::FromActors(SelectedActors));
 		bDuplicateOccured = false;
 	}
 
 	if(!bIsMovingActors) return;
-	MovingActorsState.Empty();
+	MovingActorsBoundsPair.Empty();
 	for (AStaticMeshActor* Actor : SelectedActors)
 	{
-		MovingActorsState.Add(TWeakObjectPtr<AStaticMeshActor>(Actor),
-			FTransformPair(Actor->GetTransform(), Actor->GetTransform()));
+		MovingActorsBoundsPair.Add(TWeakObjectPtr<AStaticMeshActor>(Actor), FActorBoundsPair(Actor));
 	}
-}
-
-void UEditorNavMeshManager::OnPostUndoRedo()
-{
-	UE_LOG(LogEditorNavManager, Log, TEXT("OnPostUndoRedo."));
-	// HandleUndoRedo();
 }
 
 /* --- End delegate handles --- */
@@ -625,10 +656,12 @@ bool UEditorNavMeshManager::IsSnapshotActive(const FUndoRedoSnapshot& Snapshot)
 		// Return false if even one of the actor's valid-state or transform differs from what is stored in this snapshot.
 		for (const auto Iterator : Snapshot.ActorSnapshots)
 		{
-			const FActorSnapshot* TransformSnapshot = &Iterator.Value;
-			const bool bIsValid = TransformSnapshot->ActorPtr.IsValid();
-			if(!bIsValid) return false; // todo above line into if here
-			if(!TransformSnapshot->ActorPtr.Get()->GetTransform().Equals(TransformSnapshot->Transform)) return false;
+			const FActorSnapshot* ActorSnapshot = &Iterator.Value;
+			if(!ActorSnapshot->ActorPtr.IsValid()) return false;
+			
+			const FActorBoundsPair* SnapshotBoundsPair = &ActorSnapshot->ActorBoundsPair;
+			const FActorBounds CurrentBounds = FActorBounds(ActorSnapshot->ActorPtr.Get());
+			if(!SnapshotBoundsPair->After.Equals(CurrentBounds)) return false;
 		}
 		return true;
 	};

@@ -32,50 +32,53 @@ enum class ESnapshotType
 	Deleted
 };
 
+/**
+ * Snapshot of an actor that stores information about the state of an actor after an operation had been applied to that actor.
+ * ActorPtr is used to validate the actor and compare its current state with its recorded state after the operation.
+ */
 struct FActorSnapshot
 {
 	TWeakObjectPtr<AStaticMeshActor> ActorPtr;
-	FTransform Transform;
-	FVector MaxBounds;
-	FVector MinBounds;
+	FActorBoundsPair ActorBoundsPair;
 
-	explicit FActorSnapshot(AStaticMeshActor* Actor)
+	explicit FActorSnapshot(const AStaticMeshActor* Actor)
+		: ActorBoundsPair(Actor)
+	{}
+
+	explicit FActorSnapshot(AStaticMeshActor* Actor, const FActorBoundsPair& InActorBoundsPair)
+		: ActorPtr(Actor), ActorBoundsPair(InActorBoundsPair)
+	{}
+
+	// Should be used for actors that have just been added in the world and thus don't have a before state yet.
+	static TArray<FActorSnapshot> FromActors(TArray<AStaticMeshActor*>& Actors)
 	{
-		ActorPtr = Actor;
-		Transform = Actor->GetActorTransform();
-
-		FVector Origin;
-		FVector Extent;
-		Actor->GetActorBounds(false, Origin, Extent, true);
-		MaxBounds = Origin + Extent;
-		MinBounds = Origin - Extent;
+		TArray<FActorSnapshot> CreatedActors;
+		for (const AStaticMeshActor* Actor : Actors)
+		{
+			CreatedActors.Emplace(Actor);
+		}
+		return CreatedActors;
 	}
 };
 
+/**
+ * Used for storing a snapshot of certain operations within the level-editor.
+ * Each operation has a specific type, and a list of actors with their recorded state after this operation.
+ */
 struct FUndoRedoSnapshot
 {
 	ESnapshotType SnapshotType;
-	TMap<FString, FActorSnapshot> ActorSnapshots;
+	TMap<const TWeakObjectPtr<AStaticMeshActor>, FActorSnapshot> ActorSnapshots;
 
-	FUndoRedoSnapshot(const ESnapshotType InE_SnapshotType, const TArray<AStaticMeshActor*>& Actors):
+	FUndoRedoSnapshot(const ESnapshotType InE_SnapshotType, const TArray<FActorSnapshot>& InActorSnapshots):
 		SnapshotType(InE_SnapshotType)
 	{
-		ActorSnapshots.Reserve(Actors.Num());
-		for (AStaticMeshActor* Actor : Actors)
+		ActorSnapshots.Reserve(InActorSnapshots.Num());
+		for (const FActorSnapshot& ActorSnapshot : InActorSnapshots)
 		{
-			ActorSnapshots.Emplace(Actor->GetName(), Actor);
+			ActorSnapshots.Add(ActorSnapshot.ActorPtr, ActorSnapshot);
 		}
 	}
-};
-
-struct FTransformPair
-{
-	FTransform BeginTransform;
-	FTransform EndTransform;
-	
-	FTransformPair(const FTransform& BeginTransform, const FTransform& EndTransform):
-		BeginTransform(BeginTransform), EndTransform(EndTransform)
-	{}
 };
 
 /**
@@ -127,7 +130,7 @@ protected:
 	virtual void PostRedo(bool bSuccess) override;
 
 private:
-	void AddSnapshot(const FUndoRedoSnapshot& Snapshot);
+	void AddSnapshot(const ESnapshotType SnapshotType, const TArray<FActorSnapshot>& ActorSnapshots);
 	void ClearRedoSnapshots();
 	FBox GetLevelBoundaries() const;
 	void CheckMovingActors();
@@ -185,15 +188,10 @@ private:
 	FDelegateHandle OnActorSelectionChangedDelegateHandle;
 	void OnActorSelectionChanged(const TArray<UObject*>& Actors, bool);
 
-	// Undo/redo delegate
-	FDelegateHandle OnPostUndoRedoDelegateHandle;
-	void OnPostUndoRedo();
-
 	/* End delegates */
 	
-	void HandleUndoRedo();
+
 	bool IsSnapshotActive(const FUndoRedoSnapshot& Snapshot);
-	
 	void HandleSMActorsMoved(const TArray<AStaticMeshActor*>& SMActors);
 	void HandleNewSMActorsAdded(const TArray<AStaticMeshActor*>& SMActors);
 	void HandleSMActorsDeleted(const TArray<FTransform>& Transforms);
@@ -208,7 +206,7 @@ private:
 	FMBNavigationModule MainModule;
 
 	bool bIsMovingActors;
-	TMap<TWeakObjectPtr<AStaticMeshActor>, FTransformPair> MovingActorsState;
+	TMap<const TWeakObjectPtr<AStaticMeshActor>, FActorBoundsPair> MovingActorsBoundsPair;
 	
 	UPROPERTY() TArray<AStaticMeshActor*> SelectedActors;
 	TArray<FUndoRedoSnapshot> UndoRedoSnapshots;
