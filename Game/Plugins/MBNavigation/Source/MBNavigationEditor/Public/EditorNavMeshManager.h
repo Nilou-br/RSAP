@@ -86,7 +86,7 @@ struct FTransformPair
  * - <b>Switches</b> the navmesh when changing levels.
  */
 UCLASS()
-class UEditorNavMeshManager final : public UEditorSubsystem, public FTickableEditorObject
+class UEditorNavMeshManager final : public UEditorSubsystem, public FEditorUndoClient, public FTickableEditorObject
 {
 	GENERATED_BODY()
 	
@@ -99,6 +99,8 @@ protected:
 		RETURN_QUICK_DECLARE_CYCLE_STAT(UEditorNavManager, STATGROUP_Tickables);
 	}
 
+	
+
 private:
 	void SetDelegates();
 	void ClearDelegates();
@@ -106,7 +108,7 @@ private:
 	void InitStaticNavMeshData();
 	void GenerateNavmesh();
 	void SaveNavMesh();
-
+	
 public:
 	UFUNCTION(BlueprintCallable, Category="Settings")
 	void UpdateGenerationSettings(const float VoxelSizeExponentFloat, const float StaticDepthFloat);
@@ -120,15 +122,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Settings")
 	UNavMeshSettings* GetNavMeshSettings() const { return NavMeshSettings; }
 
+protected:
+	virtual void PostUndo(bool bSuccess) override;
+	virtual void PostRedo(bool bSuccess) override;
+
 private:
+	void AddSnapshot(const FUndoRedoSnapshot& Snapshot);
+	void ClearRedoSnapshots();
 	FBox GetLevelBoundaries() const;
 	void CheckMovingActors();
 
-	/**
-	 * Adds a new SM-actor snapshot after clearing the redo snapshots.
-	 */
-	void AddSnapshot(const FUndoRedoSnapshot& Snapshot);
-	void ClearRedoSnapshots();
+	
 
 
 	/* Delegates */
@@ -209,7 +213,7 @@ private:
 	UPROPERTY() TArray<AStaticMeshActor*> SelectedActors;
 	TArray<FUndoRedoSnapshot> UndoRedoSnapshots;
 	int32 UndoRedoIndex = -1;
+	TArray<uint8> UndoBatchCounts;
 	
 	bool bDuplicateOccured;
-	bool bShouldDoubleCheckUndoRedo;
 };

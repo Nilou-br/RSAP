@@ -19,10 +19,9 @@ DEFINE_LOG_CATEGORY(LogEditorNavManager)
 
 
 // TODO:
-// Only regen affected chunk if onPostUndoRedo has been called. ( maybe keep list of chunk-keys ).
-// Every chunk that an object has been moved,placed,duplicated,deleted in will regen when starting PIE or building project.
-
-// (maybe) We can still update part of the navmesh using the delegates for moved,dropped,duplicated and deleted.
+// When an event such as move, place, paste, delete or duplicate happens, then any chunk(keys!) where the actor(s) moved from and moved to will added to an array of dirty chunk-keys.
+// Dirty chunks will be regenerated when starting PIE, or saving the level.
+// Note: only when saving the level should the navmesh be saved.
 
 
 
@@ -31,6 +30,7 @@ void UEditorNavMeshManager::Initialize(FSubsystemCollectionBase& Collection)
 	Super::Initialize(Collection);
 
 	SetDelegates();
+	GEditor->RegisterForUndo(this);
 
 	MainModule = FModuleManager::LoadModuleChecked<FMBNavigationModule>("MBNavigation");
 	NavMeshGenerator = NewObject<UNavMeshGenerator>();
@@ -41,6 +41,7 @@ void UEditorNavMeshManager::Initialize(FSubsystemCollectionBase& Collection)
 void UEditorNavMeshManager::Deinitialize()
 {
 	ClearDelegates();
+	GEditor->UnregisterForUndo(this);
 	
 	Super::Deinitialize();
 }
@@ -48,11 +49,6 @@ void UEditorNavMeshManager::Deinitialize()
 void UEditorNavMeshManager::Tick(float DeltaTime)
 {
 	if(bIsMovingActors) CheckMovingActors();
-	if(bShouldDoubleCheckUndoRedo)
-	{
-		FTimerHandle TimerHandle;
-		EditorWorld->GetTimerManager().SetTimer(TimerHandle, [this]() {HandleUndoRedo();}, 0.01f, false);
-	}
 }
 
 void UEditorNavMeshManager::SetDelegates()
@@ -89,10 +85,6 @@ void UEditorNavMeshManager::SetDelegates()
 	// Actor selection delegate
 	FLevelEditorModule& LevelEditorModule = FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor");
 	OnActorSelectionChangedDelegateHandle = LevelEditorModule.OnActorSelectionChanged().AddUObject(this, &ThisClass::OnActorSelectionChanged);
-
-	// Undo / redo delegate
-	OnPostUndoRedoDelegateHandle = FEditorDelegates::PostUndoRedo.AddUObject(this, &ThisClass::OnPostUndoRedo);
-
 
 	
 	// todo OnLevelDeleted / OnApplyObjectToActor
@@ -150,10 +142,6 @@ void UEditorNavMeshManager::ClearDelegates()
 	FLevelEditorModule& LevelEditorModule = FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor");
 	LevelEditorModule.OnActorSelectionChanged().Remove(OnActorSelectionChangedDelegateHandle);
 	OnActorSelectionChangedDelegateHandle.Reset();
-
-	// Undo / redo delegate
-	FEditorDelegates::PostUndoRedo.Remove(OnPostUndoRedoDelegateHandle);
-	OnPostUndoRedoDelegateHandle.Reset();
 
 
 	
@@ -237,6 +225,104 @@ void UEditorNavMeshManager::UpdateDebugSettings (
 	NavMeshDebugger->Draw(NavMesh);
 }
 
+void UEditorNavMeshManager::PostUndo(bool bSuccess)
+{
+	UE_LOG(LogEditorNavManager, Log, TEXT("Post Undo"));
+	if(!bSuccess || UndoRedoIndex < 0)
+	{
+		FEditorUndoClient::PostUndo(bSuccess);
+		return;
+	}
+
+	const int32 BeforeIndex = UndoRedoIndex;
+	std::function<void()> FindFirstActiveUndoSS;
+	FindFirstActiveUndoSS = [&]()
+	{
+		if(IsSnapshotActive(UndoRedoSnapshots[UndoRedoIndex])) return;
+		UndoRedoIndex--;
+		if(UndoRedoIndex < 0) return;
+		FindFirstActiveUndoSS();
+	};
+	FindFirstActiveUndoSS();
+	
+	if(const int32 Difference = BeforeIndex - UndoRedoIndex; Difference)
+	{
+		UndoBatchCounts.Add(Difference);
+		
+		const FString LogString = Difference > 1 ? FString::Printf(TEXT("Undid '%i' operations."), Difference) : "Undid 1 operation.";
+		UE_LOG(LogEditorNavManager, Log, TEXT("%s"), *LogString);
+		if(UndoRedoIndex == -1)
+		{
+			UE_LOG(LogEditorNavManager, Log, TEXT("Active state is back to what is was initially."));
+		}
+		GenerateNavmesh();
+		NavMeshDebugger->Draw(NavMesh);
+	}
+	
+	FEditorUndoClient::PostUndo(bSuccess);
+}
+
+void UEditorNavMeshManager::PostRedo(bool bSuccess)
+{
+	UE_LOG(LogEditorNavManager, Log, TEXT("Post Redo"));
+	if(!bSuccess || UndoRedoIndex >= UndoRedoSnapshots.Num()-1)
+	{
+		FEditorUndoClient::PostRedo(bSuccess);
+		return;
+	}
+	
+	const int32 BeforeIndex = UndoRedoIndex;
+	if(!IsSnapshotActive(UndoRedoSnapshots[UndoRedoIndex+1])) return;
+	UndoRedoIndex = UndoRedoIndex+UndoBatchCounts.Pop();
+	
+	if(const int32 Difference = UndoRedoIndex - BeforeIndex; Difference)
+	{
+		const FString LogString = Difference > 1 ? FString::Printf(TEXT("Redid '%i' operations."), Difference) : "Redid 1 operation.";
+		UE_LOG(LogEditorNavManager, Log, TEXT("%s"), *LogString);
+		GenerateNavmesh();
+		NavMeshDebugger->Draw(NavMesh);
+	}
+	
+	FEditorUndoClient::PostRedo(bSuccess);
+}
+
+void UEditorNavMeshManager::AddSnapshot(const FUndoRedoSnapshot& Snapshot)
+{
+	ClearRedoSnapshots();
+	UndoRedoSnapshots.Add(Snapshot);
+	UndoRedoIndex++;
+
+	// Lazy
+	FString SnapshotTypeString;
+	switch (Snapshot.SnapshotType) {
+	case ESnapshotType::Moved:
+		SnapshotTypeString = "moved";
+		break;
+	case ESnapshotType::Placed:
+		SnapshotTypeString = "placed";
+		break;
+	case ESnapshotType::Pasted:
+		SnapshotTypeString = "pasted";
+		break;
+	case ESnapshotType::Duplicated:
+		SnapshotTypeString = "duplicated";
+		break;
+	case ESnapshotType::Deleted:
+		SnapshotTypeString = "deleted";
+		break;
+	}
+
+	UE_LOG(LogEditorNavManager, Log, TEXT("Added '%s' snapshot for %i actor(s)."), *SnapshotTypeString, Snapshot.ActorSnapshots.Num());
+}
+
+void UEditorNavMeshManager::ClearRedoSnapshots()
+{
+	const int32 LastIndex = UndoRedoSnapshots.Num()-1;
+	if(UndoRedoIndex == LastIndex) return;
+	const int32 Difference = LastIndex - UndoRedoIndex;
+	UndoRedoSnapshots.RemoveAt(UndoRedoIndex+1, Difference, false);
+}
+
 FBox UEditorNavMeshManager::GetLevelBoundaries() const
 {
 	FVector LevelMin(0, 0, 0);
@@ -304,50 +390,13 @@ void UEditorNavMeshManager::CheckMovingActors()
 	}
 }
 
-void UEditorNavMeshManager::AddSnapshot(const FUndoRedoSnapshot& Snapshot)
-{
-	ClearRedoSnapshots();
-	UndoRedoSnapshots.Add(Snapshot);
-	UndoRedoIndex++;
 
-	// Lazy
-	FString SnapshotTypeString;
-	switch (Snapshot.SnapshotType) {
-	case ESnapshotType::Moved:
-		SnapshotTypeString = "moved";
-		break;
-	case ESnapshotType::Placed:
-		SnapshotTypeString = "placed";
-		break;
-	case ESnapshotType::Pasted:
-		SnapshotTypeString = "pasted";
-		break;
-	case ESnapshotType::Duplicated:
-		SnapshotTypeString = "duplicated";
-		break;
-	case ESnapshotType::Deleted:
-		SnapshotTypeString = "deleted";
-		break;
-	}
-
-	UE_LOG(LogEditorNavManager, Log, TEXT("Added '%s' snapshot for %i actor(s)."), *SnapshotTypeString, Snapshot.ActorSnapshots.Num());
-}
-
-void UEditorNavMeshManager::ClearRedoSnapshots()
-{
-	const int32 LastIndex = UndoRedoSnapshots.Num()-1;
-	if(UndoRedoIndex == LastIndex) return;
-	const int32 Difference = LastIndex - UndoRedoIndex;
-	UndoRedoSnapshots.RemoveAt(UndoRedoIndex+1, Difference, false);
-}
 
 
 /* --- Delegate handles --- */
 
 void UEditorNavMeshManager::OnMapLoad(const FString& Filename, FCanLoadMap& OutCanLoadMap)
 {
-	UE_LOG(LogTemp, Log, TEXT("OnMapLoad"));
-
 	NavMeshSettings = nullptr;
 	EditorWorld = nullptr;
 	NavMeshGenerator->Deinitialize();
@@ -560,129 +609,10 @@ void UEditorNavMeshManager::OnActorSelectionChanged(const TArray<UObject*>& Acto
 	}
 }
 
-/**
- * Checks if any changes have been made in in the static-mesh-actors during this undo/redo operation.
- * Sets 
- * Updates the navmesh if a match has been found.
- */
 void UEditorNavMeshManager::OnPostUndoRedo()
 {
 	UE_LOG(LogEditorNavManager, Log, TEXT("OnPostUndoRedo."));
-	HandleUndoRedo();
-}
-
-void UEditorNavMeshManager::HandleUndoRedo()
-{
-	if(UndoRedoIndex == -1 || UndoRedoSnapshots.Num() == 0) return;
-	const int32 BeforeIndex = UndoRedoIndex;
-
-	std::function<bool(int32, int32)> RecurseIsSnapshotActive;
-	RecurseIsSnapshotActive = [&](const int32 Delta, const int32 CurrentIndex) -> bool
-	{
-		// Check if snapshot at 'CurrentIndex' is active.
-		if(IsSnapshotActive(UndoRedoSnapshots[CurrentIndex]))
-		{
-			UndoRedoIndex = CurrentIndex;
-			return true;
-		}
-
-		const int32 NewIndex = CurrentIndex + Delta;
-		if(NewIndex < 0 || NewIndex >= UndoRedoSnapshots.Num())
-		{
-			return false;
-		}
-
-		// Recursive call with updated index
-		return RecurseIsSnapshotActive(Delta, NewIndex);
-	};
-
-	if(IsSnapshotActive(UndoRedoSnapshots[UndoRedoIndex]))
-	{
-		UE_LOG(LogEditorNavManager, Log, TEXT("UndoRedo no changes detected."));
-		return;
-	}
-
-	// Current snapshot is not active, check if any redo snapshot is active and set index to that snapshot.
-	if(UndoRedoIndex < UndoRedoSnapshots.Num()-1 && RecurseIsSnapshotActive(1, UndoRedoIndex))
-	{
-		const int32 Difference = UndoRedoIndex - BeforeIndex;
-		const FString LogString = Difference > 1 ? FString::Printf(TEXT("Redid '%i' operations."), Difference) : "Redid 1 operation.";
-		UE_LOG(LogEditorNavManager, Log, TEXT("%s"), *LogString);
-		GenerateNavmesh();
-		NavMeshDebugger->Draw(NavMesh);
-		return;
-	}
-
-	// No active redo found, so the active state should be one of the undo snapshots.
-	if(UndoRedoIndex > 0 && RecurseIsSnapshotActive(-1, UndoRedoIndex))
-	{
-		const int32 Difference = BeforeIndex - UndoRedoIndex;
-		const FString LogString = Difference > 1 ? FString::Printf(TEXT("Undid '%i' operations."), Difference) : "Undid 1 operation.";
-		UE_LOG(LogEditorNavManager, Log, TEXT("%s"), *LogString);
-		GenerateNavmesh();
-		NavMeshDebugger->Draw(NavMesh);
-		return;
-	}
-
-	
-	// The UndoRedoIndex is 0, OR there has not been any active snapshot found, that the current state was not yet recorded, so we set the index to -1 (init state) explicitly.
-	// This means that we have to set the UndoRedoIndex to -1 (its init state), and call the updater with the start-transform.
-	UndoRedoIndex = -1;
-	if(const int32 Difference = BeforeIndex-UndoRedoIndex; Difference > 0) UE_LOG(LogEditorNavManager, Log, TEXT("Undid '%i' operation(s)."), Difference);
-	UE_LOG(LogEditorNavManager, Log, TEXT("Active snapshot has been set to the initial state."));
-	// todo, each snapshot from BeforeIndex until -1 should have its begin-transform / end-transform checked for updating the navmesh.
-	GenerateNavmesh();
-	NavMeshDebugger->Draw(NavMesh);
-
-
-	return;
-	// First check current snapshot. If it is not active, then recurse through redo. If no redos, then recurse through undos.
-	// Else if current snapshot not active, and the index is 0, then get the 'begin' location on the transform-pair for the updater.
-	
-	// Check if the current snapshot state is different from the actual state of the actors.
-	if(!IsSnapshotActive(UndoRedoSnapshots[UndoRedoIndex]))
-	{
-		// Current snapshot is not active, check if any redo snapshot is active and set index to that snapshot.
-		if(UndoRedoIndex < UndoRedoSnapshots.Num()-1 && RecurseIsSnapshotActive(1, UndoRedoIndex))
-		{
-			const int32 Difference = UndoRedoIndex - BeforeIndex;
-			const FString LogString = Difference > 1 ? FString::Printf(TEXT("Redid last '%i' operations."), Difference) : "Redid last operation.";
-			UE_LOG(LogEditorNavManager, Log, TEXT("%s"), *LogString);
-			GenerateNavmesh();
-			NavMeshDebugger->Draw(NavMesh);
-			return;
-		}
-
-		// No active redo found, so the active state should be one of the undo snapshots.
-		if(UndoRedoIndex > 0 && RecurseIsSnapshotActive(-1, UndoRedoIndex))
-		{
-			const int32 Difference = BeforeIndex - UndoRedoIndex;
-			const FString LogString = Difference > 1 ? FString::Printf(TEXT("Undid last '%i' operations."), Difference) : "Undid last operation.";
-			UE_LOG(LogEditorNavManager, Log, TEXT("%s"), *LogString);
-			GenerateNavmesh();
-			NavMeshDebugger->Draw(NavMesh);
-			return;
-		}
-
-		// The UndoRedoIndex is 0, meaning that there is no recorded snapshot in the undo we could check.
-		// This means that we have to set the UndoRedoIndex to -1 (its init state), and call the updater with the start-transform.
-		UndoRedoIndex--;
-		UE_LOG(LogEditorNavManager, Log, TEXT("Undid last operation. Current state is same as init state."));
-		
-		// todo: get start-transform from current snapshot and use it as argument for the navmesh update method.
-		GenerateNavmesh();
-		NavMeshDebugger->Draw(NavMesh);
-	}
-
-	// If current snapshot is active, then a redo operation could have been made on other actors, so check to be sure.
-	if(UndoRedoIndex < UndoRedoSnapshots.Num()-1 && RecurseIsSnapshotActive(1, UndoRedoIndex))
-	{
-		const int32 Difference = UndoRedoIndex - BeforeIndex;
-		const FString LogString = Difference > 1 ? FString::Printf(TEXT("Redid last '%i' operations."), Difference) : "Redid last operation.";
-		UE_LOG(LogEditorNavManager, Log, TEXT("%s"), *LogString);
-		GenerateNavmesh();
-		NavMeshDebugger->Draw(NavMesh);
-	}
+	// HandleUndoRedo();
 }
 
 /* --- End delegate handles --- */
@@ -692,12 +622,12 @@ bool UEditorNavMeshManager::IsSnapshotActive(const FUndoRedoSnapshot& Snapshot)
 {
 	const auto IsValidAndTransformEqual = [Snapshot]()
 	{
-		// Return false if even one of the actor's transform differs from what is stored in this snapshot.
+		// Return false if even one of the actor's valid-state or transform differs from what is stored in this snapshot.
 		for (const auto Iterator : Snapshot.ActorSnapshots)
 		{
 			const FActorSnapshot* TransformSnapshot = &Iterator.Value;
 			const bool bIsValid = TransformSnapshot->ActorPtr.IsValid();
-			if(!bIsValid) return false; // todo check if this line is even correct lol
+			if(!bIsValid) return false; // todo above line into if here
 			if(!TransformSnapshot->ActorPtr.Get()->GetTransform().Equals(TransformSnapshot->Transform)) return false;
 		}
 		return true;
@@ -718,10 +648,10 @@ bool UEditorNavMeshManager::IsSnapshotActive(const FUndoRedoSnapshot& Snapshot)
 		
 	case ESnapshotType::Deleted:
 		// Return false if even one of the actors is still valid.
-			for (auto Iterator : Snapshot.ActorSnapshots)
-			{
-				if(Iterator.Value.ActorPtr.IsValid()) return false;
-			}
+		for (auto Iterator : Snapshot.ActorSnapshots)
+		{
+			if(Iterator.Value.ActorPtr.IsValid()) return false;
+		}
 		return true;
 	}
 
