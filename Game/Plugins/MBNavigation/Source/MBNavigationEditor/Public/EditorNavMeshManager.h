@@ -18,17 +18,13 @@ DECLARE_LOG_CATEGORY_EXTERN(LogEditorNavManager, Log, All);
 /**
  * Enum for determining the operation that changed a static-mesh-actor.
  * - Moved: Existing Actor has changed location/rotation/scale.
- * - Placed: New Actor has been put in the level.
- * - Pasted: New Actor has been put in the level from a copied Actor.
- * - Duplicated: New Actor has placed in the level after duplicating an existing Actor.
+ * - Placed: New Actor has been put in the level, from either dropping the asset in the viewport or pasting/duplicating an existing one.
  * - Deleted: Existing Actor has been removed from the level.
  */
 enum class ESnapshotType
 {
 	Moved,
-	Placed,
-	Pasted,
-	Duplicated,
+	Placed, // Dropped, pasted, duplicated
 	Deleted
 };
 

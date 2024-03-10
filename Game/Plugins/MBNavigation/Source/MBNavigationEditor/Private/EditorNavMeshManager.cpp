@@ -265,10 +265,6 @@ void UEditorNavMeshManager::PostUndo(bool bSuccess)
 					break;
 				case ESnapshotType::Placed:
 					break;
-				case ESnapshotType::Pasted:
-					break;
-				case ESnapshotType::Duplicated:
-					break;
 				case ESnapshotType::Deleted:
 					break;
 				}
@@ -310,10 +306,6 @@ void UEditorNavMeshManager::PostRedo(bool bSuccess)
 					break;
 				case ESnapshotType::Placed:
 					break;
-				case ESnapshotType::Pasted:
-					break;
-				case ESnapshotType::Duplicated:
-					break;
 				case ESnapshotType::Deleted:
 					break;
 				}
@@ -338,12 +330,6 @@ void UEditorNavMeshManager::AddSnapshot(const ESnapshotType SnapshotType, const 
 		break;
 	case ESnapshotType::Placed:
 		SnapshotTypeString = "placed";
-		break;
-	case ESnapshotType::Pasted:
-		SnapshotTypeString = "pasted";
-		break;
-	case ESnapshotType::Duplicated:
-		SnapshotTypeString = "duplicated";
 		break;
 	case ESnapshotType::Deleted:
 		SnapshotTypeString = "deleted";
@@ -566,7 +552,7 @@ void UEditorNavMeshManager::OnNewActorsDropped(const TArray<UObject*>& Objects, 
 void UEditorNavMeshManager::OnPasteActorsBegin()
 {
 	UE_LOG(LogEditorNavManager, Log, TEXT("Paste Actors Begin"));
-	AddSnapshot(ESnapshotType::Pasted, FActorSnapshot::FromActors(SelectedActors));
+	AddSnapshot(ESnapshotType::Placed, FActorSnapshot::FromActors(SelectedActors));
 }
 
 void UEditorNavMeshManager::OnPasteActorsEnd()
@@ -634,7 +620,7 @@ void UEditorNavMeshManager::OnActorSelectionChanged(const TArray<UObject*>& Acto
 	if(bDuplicateOccured)
 	{
 		// New selected actors are the ones that had the operation applied to them.
-		AddSnapshot(ESnapshotType::Duplicated, FActorSnapshot::FromActors(SelectedActors));
+		AddSnapshot(ESnapshotType::Placed, FActorSnapshot::FromActors(SelectedActors));
 		bDuplicateOccured = false;
 	}
 
@@ -667,16 +653,7 @@ bool UEditorNavMeshManager::IsSnapshotActive(const FUndoRedoSnapshot& Snapshot)
 	};
 	
 	switch (Snapshot.SnapshotType) {
-	case ESnapshotType::Moved:
-		return IsValidAndTransformEqual();
-		
-	case ESnapshotType::Placed:
-		return IsValidAndTransformEqual();
-		
-	case ESnapshotType::Pasted:
-		return IsValidAndTransformEqual();
-		
-	case ESnapshotType::Duplicated:
+	case ESnapshotType::Moved: case ESnapshotType::Placed:
 		return IsValidAndTransformEqual();
 		
 	case ESnapshotType::Deleted:

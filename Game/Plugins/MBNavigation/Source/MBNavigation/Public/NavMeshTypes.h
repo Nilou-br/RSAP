@@ -559,14 +559,14 @@ struct FActorBounds
 		FVector Origin, Extent;
 		Actor->GetActorBounds(false, Origin, Extent, true);
         
-		// Convert to integer vectors by rounding down (flooring) the components
+		// Convert to F3DVector32.
 		MaxBounds = F3DVector32(FMath::FloorToInt(Origin.X + Extent.X), 
-							   FMath::FloorToInt(Origin.Y + Extent.Y), 
-							   FMath::FloorToInt(Origin.Z + Extent.Z));
+								FMath::FloorToInt(Origin.Y + Extent.Y), 
+								FMath::FloorToInt(Origin.Z + Extent.Z));
 
 		MinBounds = F3DVector32(FMath::FloorToInt(Origin.X - Extent.X), 
-							   FMath::FloorToInt(Origin.Y - Extent.Y), 
-							   FMath::FloorToInt(Origin.Z - Extent.Z));
+								FMath::FloorToInt(Origin.Y - Extent.Y), 
+								FMath::FloorToInt(Origin.Z - Extent.Z));
 	}
 
 	FORCEINLINE bool Equals(const FActorBounds& InActorBounds) const
