@@ -20,7 +20,7 @@ public:
 	FORCEINLINE void Initialize(UWorld* InWorld) { World = InWorld; }
 	FORCEINLINE void Deinitialize() { World = nullptr; }
 
-	void ProcessMovement(FActorBoundsPair* ActorStatePair);
+	void ProcessMovement(FBounds& ActorStatePair);
 	
 
 private:

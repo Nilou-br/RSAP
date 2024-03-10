@@ -9,7 +9,7 @@
 DEFINE_LOG_CATEGORY(LogNavMeshGenerator)
 
 
-FNavMesh UNavMeshGenerator::Generate(const FBox& LevelBoundaries)
+FNavMesh UNavMeshGenerator::Generate(const FBounds& LevelBounds)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("NavMesh Generate");
 	if (!World)
@@ -25,7 +25,7 @@ FNavMesh UNavMeshGenerator::Generate(const FBox& LevelBoundaries)
 
 	// Start generation
 	NavMesh = FNavMesh();
-	GenerateChunks(LevelBoundaries);
+	GenerateChunks(LevelBounds);
 
 #if WITH_EDITOR
 	const float DurationSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -40,49 +40,45 @@ FNavMesh UNavMeshGenerator::Generate(const FBox& LevelBoundaries)
  * Create a grid of chunks filling the entire area of the level-boundaries.
  * Chunks are be placed so that their origin align with the world coordinates x0,y0,z0.
  */
-void UNavMeshGenerator::GenerateChunks(const FBox& LevelBoundaries)
+void UNavMeshGenerator::GenerateChunks(const FBounds& LevelBounds)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("GenerateChunks");
-	const int32 ChunkSize = FNavMeshData::ChunkSize;
-	const FVector LevelMin = LevelBoundaries.Min;
-	const FVector LevelMax = LevelBoundaries.Max;
-
-	FVector ChunksMinLoc;
-	FVector ChunksMaxLoc;
+	const F3DVector32 LevelMin = LevelBounds.Min;
+	const F3DVector32 LevelMax = LevelBounds.Max;
 
 	// Determine the min/max coordinates of the chunks.
-	ChunksMinLoc.X = FMath::FloorToFloat(LevelMin.X / ChunkSize) * ChunkSize;
-	ChunksMinLoc.Y = FMath::FloorToFloat(LevelMin.Y / ChunkSize) * ChunkSize;
-	ChunksMinLoc.Z = FMath::FloorToFloat(LevelMin.Z / ChunkSize) * ChunkSize;
+	const int32 Mask = ~((1<<FNavMeshData::KeyShift)-1);
+	F3DVector32 ChunksMinLoc;
+	F3DVector32 ChunksMaxLoc;
+	ChunksMinLoc.X = LevelMin.X & Mask;
+	ChunksMinLoc.Y = LevelMin.Y & Mask;
+	ChunksMinLoc.Z = LevelMin.Z & Mask;
+	ChunksMaxLoc.X = LevelMax.X & Mask;
+	ChunksMaxLoc.Y = LevelMax.Y & Mask;
+	ChunksMaxLoc.Z = LevelMax.Z & Mask;
 
-	ChunksMaxLoc.X = FMath::CeilToFloat(LevelMax.X / ChunkSize) * ChunkSize;
-	ChunksMaxLoc.Y = FMath::CeilToFloat(LevelMax.Y / ChunkSize) * ChunkSize;
-	ChunksMaxLoc.Z = FMath::CeilToFloat(LevelMax.Z / ChunkSize) * ChunkSize;
-
-	// Reserve room for array.
+	// Reserve room for all chunks in navmesh.
 	const uint32 TotalChunks =
-		((ChunksMaxLoc.X - ChunksMinLoc.X) / ChunkSize) *
-		((ChunksMaxLoc.Y - ChunksMinLoc.Y) / ChunkSize) *
-		((ChunksMaxLoc.Z - ChunksMinLoc.Z) / ChunkSize);
-
+		((ChunksMaxLoc.X << FNavMeshData::KeyShift) - (ChunksMinLoc.X << FNavMeshData::KeyShift)) *
+		((ChunksMaxLoc.Y << FNavMeshData::KeyShift) - (ChunksMinLoc.Y << FNavMeshData::KeyShift)) *
+		((ChunksMaxLoc.Z << FNavMeshData::KeyShift) - (ChunksMinLoc.Z << FNavMeshData::KeyShift)) + 1;
 	NavMesh.reserve(TotalChunks);
 
-	if (TotalChunks == 0)
+	if (TotalChunks <= 0)
 	{
-		UE_LOG(LogNavMeshGenerator, Warning,
-		       TEXT("Aborting generation due to a likely NaN value on the level-boundaries."))
+		UE_LOG(LogNavMeshGenerator, Warning, TEXT("Aborting generation due to a likely NaN value on the level-boundaries."))
 		UE_LOG(LogNavMeshGenerator, Warning, TEXT("If you see this warning, please try generating again."))
 		return;
 	}
 
 	// Fill navmesh with chunks.
-	for (int32 x = ChunksMinLoc.X; x < ChunksMaxLoc.X; x += ChunkSize)
+	for (int32 X = ChunksMinLoc.X; X <= ChunksMaxLoc.X; X+=FNavMeshData::ChunkSize)
 	{
-		for (int32 y = ChunksMinLoc.Y; y < ChunksMaxLoc.Y; y += ChunkSize)
+		for (int32 Y = ChunksMinLoc.Y; Y <= ChunksMaxLoc.Y; Y+=FNavMeshData::ChunkSize)
 		{
-			for (int32 z = ChunksMinLoc.Z; z < ChunksMaxLoc.Z; z += ChunkSize)
+			for (int32 Z = ChunksMinLoc.Z; Z <= ChunksMaxLoc.Z; Z+=FNavMeshData::ChunkSize)
 			{
-				F3DVector32 ChunkLocation = F3DVector32(x, y, z);
+				F3DVector32 ChunkLocation = F3DVector32(X, Y, Z);
 				auto [ChunkIterator, IsInserted] = NavMesh.emplace(ChunkLocation.ToKey(), FChunk(ChunkLocation));
 
 				FChunk* Chunk = &ChunkIterator->second;

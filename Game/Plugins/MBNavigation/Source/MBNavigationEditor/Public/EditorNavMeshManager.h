@@ -24,7 +24,7 @@ DECLARE_LOG_CATEGORY_EXTERN(LogEditorNavManager, Log, All);
 enum class ESnapshotType
 {
 	Moved,
-	Placed, // Dropped, pasted, duplicated
+	Added, // Dropped, pasted, duplicated
 	Deleted
 };
 
@@ -35,14 +35,14 @@ enum class ESnapshotType
 struct FActorSnapshot
 {
 	TWeakObjectPtr<AStaticMeshActor> ActorPtr;
-	FActorBoundsPair ActorBoundsPair;
+	FBoundsPair BoundsPair;
 
 	explicit FActorSnapshot(const AStaticMeshActor* Actor)
-		: ActorBoundsPair(Actor)
+		: BoundsPair(Actor)
 	{}
 
-	explicit FActorSnapshot(AStaticMeshActor* Actor, const FActorBoundsPair& InActorBoundsPair)
-		: ActorPtr(Actor), ActorBoundsPair(InActorBoundsPair)
+	explicit FActorSnapshot(AStaticMeshActor* Actor, const FBoundsPair& InActorBoundsPair)
+		: ActorPtr(Actor), BoundsPair(InActorBoundsPair)
 	{}
 
 	// Should be used for actors that have just been added in the world and thus don't have a before state yet.
@@ -128,7 +128,8 @@ protected:
 private:
 	void AddSnapshot(const ESnapshotType SnapshotType, const TArray<FActorSnapshot>& ActorSnapshots);
 	void ClearRedoSnapshots();
-	FBox GetLevelBoundaries() const;
+	static bool IsSnapshotActive(const FUndoRedoSnapshot& Snapshot);
+	FBounds GetLevelBoundaries();
 	void CheckMovingActors();
 
 	
@@ -186,11 +187,6 @@ private:
 
 	/* End delegates */
 	
-
-	bool IsSnapshotActive(const FUndoRedoSnapshot& Snapshot);
-	void HandleSMActorsMoved(const TArray<AStaticMeshActor*>& SMActors);
-	void HandleNewSMActorsAdded(const TArray<AStaticMeshActor*>& SMActors);
-	void HandleSMActorsDeleted(const TArray<FTransform>& Transforms);
 	
 	// Variables
 	UPROPERTY() UWorld* EditorWorld;
@@ -202,12 +198,13 @@ private:
 	FMBNavigationModule MainModule;
 
 	bool bIsMovingActors;
-	TMap<const TWeakObjectPtr<AStaticMeshActor>, FActorBoundsPair> MovingActorsBoundsPair;
+	TMap<TWeakObjectPtr<AStaticMeshActor>, FBoundsPair> MovingActorsBoundsPair;
+	bool bAddActorsOccurred;
 	
 	UPROPERTY() TArray<AStaticMeshActor*> SelectedActors;
 	TArray<FUndoRedoSnapshot> UndoRedoSnapshots;
 	int32 UndoRedoIndex = -1;
 	TArray<uint8> UndoBatchCounts;
-	
-	bool bDuplicateOccured;
+
+	TMap<TWeakObjectPtr<AStaticMeshActor>, FBounds> PreviousActorBounds;
 };

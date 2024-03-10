@@ -189,6 +189,16 @@ struct F3DVector32
 		Vector32.Z = Decode(Key & 0x1FFFFF);
 		return Vector32;
 	}
+	
+	FORCEINLINE F3DVector32 ComponentMin(const F3DVector32& Other) const
+	{
+		return F3DVector32(FMath::Min(X, Other.X), FMath::Min(Y, Other.Y), FMath::Min(Z, Other.Z));
+	}
+
+	FORCEINLINE F3DVector32 ComponentMax(const F3DVector32& Other) const
+	{
+		return F3DVector32(FMath::Max(X, Other.X), FMath::Max(Y, Other.Y), FMath::Max(Z, Other.Z));
+	}
 
 	FORCEINLINE F3DVector32 operator+(const uint_fast32_t Value) const
 	{
@@ -549,47 +559,55 @@ typedef ankerl::unordered_dense::map<uint_fast64_t, FChunk> FNavMesh;
  * Stores min/max boundaries where both are rounded down to the nearest integer.
  * This is more efficient for both cache and calculations.
  */
-struct FActorBounds
+struct FBounds
 {
-	F3DVector32 MaxBounds;
-	F3DVector32 MinBounds;
+	F3DVector32 Max;
+	F3DVector32 Min;
 
-	explicit FActorBounds(const AStaticMeshActor* Actor)
+	FBounds() : Max(F3DVector32()), Min(F3DVector32()) {}
+
+	explicit FBounds(const AActor* Actor)
 	{
 		FVector Origin, Extent;
 		Actor->GetActorBounds(false, Origin, Extent, true);
         
 		// Convert to F3DVector32.
-		MaxBounds = F3DVector32(FMath::FloorToInt(Origin.X + Extent.X), 
-								FMath::FloorToInt(Origin.Y + Extent.Y), 
-								FMath::FloorToInt(Origin.Z + Extent.Z));
+		Max = F3DVector32(	FMath::FloorToInt(Origin.X + Extent.X), 
+							FMath::FloorToInt(Origin.Y + Extent.Y), 
+							FMath::FloorToInt(Origin.Z + Extent.Z));
 
-		MinBounds = F3DVector32(FMath::FloorToInt(Origin.X - Extent.X), 
-								FMath::FloorToInt(Origin.Y - Extent.Y), 
-								FMath::FloorToInt(Origin.Z - Extent.Z));
+		Min = F3DVector32(	FMath::FloorToInt(Origin.X - Extent.X), 
+							FMath::FloorToInt(Origin.Y - Extent.Y), 
+							FMath::FloorToInt(Origin.Z - Extent.Z));
 	}
 
-	FORCEINLINE bool Equals(const FActorBounds& InActorBounds) const
+	FORCEINLINE bool Equals(const FBounds& InActorBounds) const
 	{
-		return	MaxBounds.X == InActorBounds.MaxBounds.X &&
-				MaxBounds.Y == InActorBounds.MaxBounds.Y &&
-				MaxBounds.Z == InActorBounds.MaxBounds.Z &&
-				MinBounds.X == InActorBounds.MinBounds.X &&
-				MinBounds.Y == InActorBounds.MinBounds.Y &&
-				MinBounds.Z == InActorBounds.MinBounds.Z;
+		return	Max.X == InActorBounds.Max.X && Max.Y == InActorBounds.Max.Y && Max.Z == InActorBounds.Max.Z &&
+				Min.X == InActorBounds.Min.X && Min.Y == InActorBounds.Min.Y && Min.Z == InActorBounds.Min.Z;
+	}
+
+	FORCEINLINE bool operator!() const
+	{
+		return	Max.X == 0 && Max.Y == 0 && Max.Z == 0 &&
+				Min.X == 0 && Min.Y == 0 && Min.Z == 0;
 	}
 };
 
 /**
- * Before and after pair of FActorBounds.
+ * Before and after pair of FBounds.
  */
-struct FActorBoundsPair
+struct FBoundsPair
 {
-	FActorBounds Before;
-	FActorBounds After;
+	FBounds Before;
+	FBounds After;
 	
-	explicit FActorBoundsPair(const AStaticMeshActor* Actor)
+	explicit FBoundsPair(const AStaticMeshActor* Actor)
 		: Before(Actor), After(Actor)
+	{}
+
+	explicit FBoundsPair(const FBounds& InBefore, const FBounds& InAfter)
+		: Before(InBefore), After(InAfter)
 	{}
 
 	FORCEINLINE bool AreEqual() const

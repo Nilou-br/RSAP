@@ -19,12 +19,12 @@ public:
 	FORCEINLINE void Initialize(UWorld* InWorld) { World = InWorld; }
 	FORCEINLINE void Deinitialize() { World = nullptr; }
 	
-	FNavMesh Generate(const FBox &LevelBoundaries);
+	FNavMesh Generate(const FBounds& LevelBounds);
 
 private:
 
 	// Generation methods
-	void GenerateChunks(const FBox &LevelBoundaries);
+	void GenerateChunks(const FBounds& LevelBounds);
 	void RasterizeStaticOctree(FChunk* Chunk);
 	void RasterizeStaticNode(FChunk* Chunk, FOctreeNode &Node, const uint8 LayerIndex);
 	FORCEINLINE bool HasOverlap(const F3DVector32 &NodeGlobalLocation, const uint8 LayerIndex);
