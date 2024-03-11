@@ -350,9 +350,9 @@ void UEditorNavMeshManager::CheckMovingActors()
 	}
 	
 	TArray<TWeakObjectPtr<const AActor>> InvalidActors;
-	TArray<FTransformPair*> UpdatedTransforms;
+	bool bUpdateNavmesh = false;
 	
-	for (auto& Iterator : MovingActorsState)
+	for (auto& Iterator : MovingActorsLastTransform)
 	{
 		TWeakObjectPtr<const AActor> ActorPtr = Iterator.Key;
 		if (!ActorPtr.IsValid())
@@ -362,21 +362,21 @@ void UEditorNavMeshManager::CheckMovingActors()
 		}
 
 		const AActor* Actor = ActorPtr.Get();
-		FTransformPair* TransformPair = &Iterator.Value;
-		FTransform CurrentTransform = Actor->GetTransform();
+		const FTransform* PreviousTransform = &Iterator.Value;
+		const FTransform CurrentTransform = Actor->GetTransform();
 		
-		if(TransformPair->EndTransform.Equals(CurrentTransform)) continue;
-		TransformPair->EndTransform = CurrentTransform;
-		UpdatedTransforms.Add(TransformPair);
+		if(PreviousTransform->Equals(CurrentTransform)) continue;
+		MovingActorsLastTransform[ActorPtr] = CurrentTransform;
+		bUpdateNavmesh = true;
 	}
 
 	// Remove invalid actors in MovingActorsState
 	for ( const auto& Actor : InvalidActors)
 	{
-		MovingActorsState.Remove(Actor);
+		MovingActorsLastTransform.Remove(Actor);
 	}
 
-	if(UpdatedTransforms.Num())
+	if(bUpdateNavmesh)
 	{
 		GenerateNavmesh();
 		NavMeshDebugger->Draw(NavMesh);
@@ -459,6 +459,7 @@ void UEditorNavMeshManager::OnCameraMoved(const FVector& CameraLocation, const F
 
 void UEditorNavMeshManager::OnObjectMoved(AActor* Actor)
 {
+	return;
 	if(bIsMovingActors || !Actor->IsA(AStaticMeshActor::StaticClass())) return;
 	UE_LOG(LogEditorNavManager, Log, TEXT("On Actor Moved"))
 	
@@ -473,31 +474,30 @@ void UEditorNavMeshManager::OnObjectMoved(AActor* Actor)
 
 void UEditorNavMeshManager::OnBeginObjectMovement(UObject& Object)
 {
-	// UE_LOG(LogEditorNavManager, Log, TEXT("Begin Object Movement"));
-	if(bIsMovingActors) MovingActorsState.Empty();
+	if(bIsMovingActors) MovingActorsLastTransform.Empty();
 	bIsMovingActors = true;
-	
-	if (AStaticMeshActor* Actor = Cast<AStaticMeshActor>(&Object))
-	{
-		MovingActorsState.Add(TWeakObjectPtr<AStaticMeshActor>(Actor),
-			FTransformPair(Actor->GetTransform(), Actor->GetTransform()));
-	}
+
+	if(!Object.IsA(AStaticMeshActor::StaticClass())) return;
+	const AActor* Actor = Cast<AActor>(&Object);
+	MovingActorsLastTransform.Add(Actor, Actor->GetTransform());
 }
 
 void UEditorNavMeshManager::OnEndObjectMovement(UObject& Object)
 {
-	// UE_LOG(LogEditorNavManager, Log, TEXT("End Object Movement"))
 	bIsMovingActors = false;
-	if(!MovingActorsState.Num()) return;
-	
+
 	TArray<const AActor*> MovedActors;
-	for (auto& Iterator : MovingActorsState)
+	for (const AActor* Actor : SelectedActors)
 	{
-		const FTransformPair* TransformPair = &Iterator.Value;
-		if(TransformPair->BeginTransform.Equals(TransformPair->EndTransform)) continue;
-		MovedActors.Add(Iterator.Key.Get());
+		const FTransform* PreviousTransform = PreviousActorTransforms.Find(Actor);
+		if(!PreviousTransform) continue;
+		
+		const FTransform CurrentTransform = Actor->GetTransform();
+		if(PreviousTransform->Equals(CurrentTransform)) continue;
+		
+		PreviousActorTransforms[Actor] = CurrentTransform;
+		MovedActors.Add(Actor);
 	}
-	MovingActorsState.Empty();
 	
 	if(MovedActors.Num())
 	{
@@ -528,19 +528,21 @@ void UEditorNavMeshManager::OnNewActorsDropped(const TArray<UObject*>& Objects, 
 
 void UEditorNavMeshManager::OnPasteActorsBegin()
 {
-	// Check if any selected-actor was in moving state when the paste occurred.
+	// Check if any selected-actor was in moving state when the duplication occurred.
 	if(!bIsMovingActors) return;
 	
 	// Check if any selected-actor had an actual change in its transform.
 	TArray<const AActor*> MovedActors;
-	for (auto Iterator : MovingActorsState)
+	for (auto& Iterator : PreviousActorTransforms)
 	{
-		const AActor* MovingActor = Iterator.Key.Get();
-		if(SelectedActors.Find(MovingActor) == INDEX_NONE) continue;
-		if(!Iterator.Value.BeginTransform.Equals(Iterator.Value.EndTransform))
-		{
-			MovedActors.Add(MovingActor);
-		}
+		const AActor* Actor = Iterator.Key.Get();
+		if(SelectedActors.Find(Actor) == INDEX_NONE) continue;
+		
+		FTransform CurrentTransform = Actor->GetTransform();
+		if(Iterator.Value.Equals(CurrentTransform)) continue;
+		
+		MovedActors.Add(Actor);
+		PreviousActorTransforms[Iterator.Key] = CurrentTransform;
 	}
 	if(MovedActors.Num())
 	{
@@ -561,14 +563,16 @@ void UEditorNavMeshManager::OnDuplicateActorsBegin()
 	
 	// Check if any selected-actor had an actual change in its transform.
 	TArray<const AActor*> MovedActors;
-	for (auto Iterator : MovingActorsState)
+	for (auto& Iterator : PreviousActorTransforms)
 	{
-		const AActor* MovingActor = Iterator.Key.Get();
-		if(SelectedActors.Find(MovingActor) == INDEX_NONE) continue;
-		if(!Iterator.Value.BeginTransform.Equals(Iterator.Value.EndTransform))
-		{
-			MovedActors.Add(MovingActor);
-		}
+		const AActor* Actor = Iterator.Key.Get();
+		if(SelectedActors.Find(Actor) == INDEX_NONE) continue;
+		
+		FTransform CurrentTransform = Actor->GetTransform();
+		if(Iterator.Value.Equals(CurrentTransform)) continue;
+		
+		MovedActors.Add(Actor);
+		PreviousActorTransforms[Iterator.Key] = CurrentTransform;
 	}
 	if(MovedActors.Num())
 	{
@@ -606,14 +610,14 @@ void UEditorNavMeshManager::OnActorSelectionChanged(const TArray<UObject*>& Acto
 	}
 	SelectedActors = CurrentSelectedActors;
 
-	// OnEndObjectMovement is not triggered when no movement has happened, so I need this check because of that... (thanks UE developers!).
+	// OnEndObjectMovement is not triggered when no movement has happened, so this check is required because of that... (thanks UE developers!)
 	if(bIsMovingActors && !bHasSelectionChanged)
 	{
-		UE_LOG(LogEditorNavManager, Log, TEXT("No movement occurred."));
 		bIsMovingActors = false;
+		UE_LOG(LogEditorNavManager, Log, TEXT("No movement occurred."));
 	}
 
-	// Check if a duplication has occured.
+	// Check if an actor has been added.
 	if(bAddActorOccured)
 	{
 		bAddActorOccured = false;
@@ -626,10 +630,10 @@ void UEditorNavMeshManager::OnActorSelectionChanged(const TArray<UObject*>& Acto
 	}
 
 	if(!bIsMovingActors) return;
-	MovingActorsState.Empty();
+	MovingActorsLastTransform.Empty();
 	for (const AActor* Actor : SelectedActors)
 	{
-		MovingActorsState.Add(Actor, FTransformPair(Actor->GetTransform(), Actor->GetTransform()));
+		MovingActorsLastTransform.Add(Actor,Actor->GetTransform());
 	}
 }
 

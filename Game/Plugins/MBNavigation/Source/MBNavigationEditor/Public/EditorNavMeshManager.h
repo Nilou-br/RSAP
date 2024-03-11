@@ -204,7 +204,7 @@ private:
 	bool bAddActorOccured;
 
 	// Todo change all to AActor? if(!Actor->IsA(AStaticMeshActor::StaticClass())) return;
-	TMap<TWeakObjectPtr<const AActor>, FTransformPair> MovingActorsState;
+	TMap<TWeakObjectPtr<const AActor>, FTransform> MovingActorsLastTransform;
 	TMap<TWeakObjectPtr<const AActor>, FTransform> PreviousActorTransforms;
 	UPROPERTY() TArray<const AActor*> SelectedActors;
 	
