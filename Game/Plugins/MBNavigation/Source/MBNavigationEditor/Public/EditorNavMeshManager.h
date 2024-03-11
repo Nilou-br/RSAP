@@ -27,50 +27,20 @@ enum class ESnapshotType
 	Deleted
 };
 
-struct FActorSnapshot
-{
-	TWeakObjectPtr<const AActor> ActorPtr;
-	FTransform Transform;
-	FVector MaxBounds;
-	FVector MinBounds;
-
-	explicit FActorSnapshot(const AActor* Actor)
-	{
-		ActorPtr = Actor;
-		Transform = Actor->GetActorTransform();
-
-		FVector Origin;
-		FVector Extent;
-		Actor->GetActorBounds(false, Origin, Extent, true);
-		MaxBounds = Origin + Extent;
-		MinBounds = Origin - Extent;
-	}
-};
-
 struct FUndoRedoSnapshot
 {
 	ESnapshotType SnapshotType;
-	TMap<FString, FActorSnapshot> ActorSnapshots;
+	TMap<TWeakObjectPtr<const AActor>, FBounds> ActorBoundsMap;
 
 	FUndoRedoSnapshot(const ESnapshotType InE_SnapshotType, const TArray<const AActor*>& Actors):
 		SnapshotType(InE_SnapshotType)
 	{
-		ActorSnapshots.Reserve(Actors.Num());
+		ActorBoundsMap.Reserve(Actors.Num());
 		for (const AActor* Actor : Actors)
 		{
-			ActorSnapshots.Emplace(Actor->GetName(), Actor);
+			ActorBoundsMap.Emplace(Actor, Actor);
 		}
 	}
-};
-
-struct FTransformPair
-{
-	FTransform BeginTransform;
-	FTransform EndTransform;
-	
-	FTransformPair(const FTransform& BeginTransform, const FTransform& EndTransform):
-		BeginTransform(BeginTransform), EndTransform(EndTransform)
-	{}
 };
 
 /**
@@ -193,10 +163,9 @@ private:
 	
 	bool bIsMovingActors;
 	bool bAddActorOccured;
-
-	// Todo change all to AActor? if(!Actor->IsA(AStaticMeshActor::StaticClass())) return;
-	TMap<TWeakObjectPtr<const AActor>, FTransform> MovingActorsLastTransform;
-	TMap<TWeakObjectPtr<const AActor>, FTransform> PreviousActorTransforms;
+	
+	TMap<TWeakObjectPtr<const AActor>, FBounds> MovingActorBoundsMap;
+	TMap<TWeakObjectPtr<const AActor>, FBounds> PreviousActorBoundsMap;
 	UPROPERTY() TArray<const AActor*> SelectedActors;
 	
 	TArray<FUndoRedoSnapshot> UndoRedoSnapshots;

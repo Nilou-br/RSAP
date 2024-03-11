@@ -542,3 +542,62 @@ struct FChunk
 
 // The navigation-mesh is a hashmap of chunks.
 typedef ankerl::unordered_dense::map<uint_fast64_t, FChunk> FNavMesh;
+
+
+
+/**
+ * Stores min/max boundaries where both are rounded down to the nearest integer.
+ * This is more efficient for both cache and calculations.
+ */
+struct FBounds
+{
+	F3DVector32 Max;
+	F3DVector32 Min;
+
+	FBounds() : Max(F3DVector32()), Min(F3DVector32()) {}
+
+	explicit FBounds(const AActor* Actor)
+	{
+		FVector Origin, Extent;
+		Actor->GetActorBounds(false, Origin, Extent, true);
+        
+		// Convert to F3DVector32.
+		Max = F3DVector32(	FMath::FloorToInt(Origin.X + Extent.X), 
+							FMath::FloorToInt(Origin.Y + Extent.Y), 
+							FMath::FloorToInt(Origin.Z + Extent.Z));
+
+		Min = F3DVector32(	FMath::FloorToInt(Origin.X - Extent.X), 
+							FMath::FloorToInt(Origin.Y - Extent.Y), 
+							FMath::FloorToInt(Origin.Z - Extent.Z));
+	}
+	
+	FORCEINLINE bool Equals(const FBounds& Other) const
+	{
+		return	Max.X == Other.Max.X && Max.Y == Other.Max.Y && Max.Z == Other.Max.Z &&
+				Min.X == Other.Min.X && Min.Y == Other.Min.Y && Min.Z == Other.Min.Z;
+	}
+
+	FORCEINLINE bool operator!() const
+	{
+		return	Max.X == 0 && Max.Y == 0 && Max.Z == 0 &&
+				Min.X == 0 && Min.Y == 0 && Min.Z == 0;
+	}
+};
+
+/**
+ * Before and after pair of FBounds.
+ */
+struct FBoundsPair
+{
+	FBounds Before;
+	FBounds After;
+	
+	FBoundsPair(const FBounds& InBefore, const FBounds& InAfter)
+		: Before(InBefore), After(InAfter)
+	{}
+
+	FORCEINLINE bool AreEqual() const
+	{
+		return Before.Equals(After);
+	}
+};

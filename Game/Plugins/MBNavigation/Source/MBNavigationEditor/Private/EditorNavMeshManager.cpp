@@ -304,7 +304,7 @@ void UEditorNavMeshManager::AddSnapshot(const FUndoRedoSnapshot& Snapshot)
 			break;
 	}
 
-	UE_LOG(LogEditorNavManager, Log, TEXT("Added '%s' snapshot for %i actor(s)."), *SnapshotTypeString, Snapshot.ActorSnapshots.Num());
+	UE_LOG(LogEditorNavManager, Log, TEXT("Added '%s' snapshot for %i actor(s)."), *SnapshotTypeString, Snapshot.ActorBoundsMap.Num());
 }
 
 void UEditorNavMeshManager::ClearRedoSnapshots()
@@ -320,29 +320,28 @@ bool UEditorNavMeshManager::IsSnapshotActive(const FUndoRedoSnapshot& Snapshot)
 	const auto IsValidAndTransformEqual = [Snapshot]()
 	{
 		// Return false if even one of the actor's valid-state or transform differs from what is stored in this snapshot.
-		for (const auto Iterator : Snapshot.ActorSnapshots)
+		for (const auto Iterator : Snapshot.ActorBoundsMap)
 		{
-			const FActorSnapshot* TransformSnapshot = &Iterator.Value;
-			if(!TransformSnapshot->ActorPtr.IsValid()) return false;
-			if(!TransformSnapshot->ActorPtr.Get()->GetTransform().Equals(TransformSnapshot->Transform)) return false;
+			if(!Iterator.Key.IsValid()) return false;
+			const FBounds SnapshotBounds = Iterator.Value;
+			const FBounds CurrentBounds(Iterator.Key.Get());
+			if(!SnapshotBounds.Equals(CurrentBounds)) return false;
 		}
 		return true;
 	};
 	
 	switch (Snapshot.SnapshotType) {
-	case ESnapshotType::Moved: case ESnapshotType::Added:
-		return IsValidAndTransformEqual();
-			
-	case ESnapshotType::Deleted:
-		// Return false if even one of the actors is still valid.
-			for (auto Iterator : Snapshot.ActorSnapshots)
+		case ESnapshotType::Moved: case ESnapshotType::Added:
+			return IsValidAndTransformEqual();
+				
+		case ESnapshotType::Deleted:
+			// Return false if even one of the actors is still valid.
+			for (auto Iterator : Snapshot.ActorBoundsMap)
 			{
-				if(Iterator.Value.ActorPtr.IsValid()) return false;
+				if(Iterator.Key.IsValid()) return false;
 			}
-		return true;
+			return true;
 	}
-
-	
 	return false;
 }
 
@@ -382,7 +381,7 @@ void UEditorNavMeshManager::CheckMovingActors()
 	TArray<TWeakObjectPtr<const AActor>> InvalidActors;
 	bool bUpdateNavmesh = false;
 	
-	for (auto& Iterator : MovingActorsLastTransform)
+	for (auto& Iterator : MovingActorBoundsMap)
 	{
 		TWeakObjectPtr<const AActor> ActorPtr = Iterator.Key;
 		if (!ActorPtr.IsValid())
@@ -392,18 +391,18 @@ void UEditorNavMeshManager::CheckMovingActors()
 		}
 
 		const AActor* Actor = ActorPtr.Get();
-		const FTransform* PreviousTransform = &Iterator.Value;
-		const FTransform CurrentTransform = Actor->GetTransform();
+		const FBounds* PreviousBounds = &Iterator.Value;
+		const FBounds CurrentBounds(Actor);
 		
-		if(PreviousTransform->Equals(CurrentTransform)) continue;
-		MovingActorsLastTransform[ActorPtr] = CurrentTransform;
+		if(PreviousBounds->Equals(CurrentBounds)) continue;
+		MovingActorBoundsMap[ActorPtr] = CurrentBounds;
 		bUpdateNavmesh = true;
 	}
 
 	// Remove invalid actors in MovingActorsState
 	for ( const auto& Actor : InvalidActors)
 	{
-		MovingActorsLastTransform.Remove(Actor);
+		MovingActorBoundsMap.Remove(Actor);
 	}
 
 	if(bUpdateNavmesh)
@@ -449,7 +448,7 @@ void UEditorNavMeshManager::OnMapOpened(const FString& Filename, bool bAsTemplat
 		for (AActor* Actor : FoundActors)
 		{
 			if(!Actor->IsA(AStaticMeshActor::StaticClass())) return;
-			PreviousActorTransforms.Add(Actor, Actor->GetTransform());
+			PreviousActorBoundsMap.Add(Actor, FBounds(Actor));
 		}
 		
 		// If the cached ID is not the same, then the navmesh and the level are not in sync, so we just regenerate a new one.
@@ -488,27 +487,17 @@ void UEditorNavMeshManager::OnCameraMoved(const FVector& CameraLocation, const F
 
 void UEditorNavMeshManager::OnObjectMoved(AActor* Actor)
 {
-	return;
-	if(bIsMovingActors || !Actor->IsA(AStaticMeshActor::StaticClass())) return;
-	UE_LOG(LogEditorNavManager, Log, TEXT("On Actor Moved"))
-	
-	const FTransform* PreviousTransform = PreviousActorTransforms.Find(Actor);
-	if(!PreviousTransform) return;
-	const FTransform CurrentTransform = Actor->GetTransform();
-	if(PreviousTransform->Equals(CurrentTransform)) return;
-	
-	AddSnapshot(FUndoRedoSnapshot(ESnapshotType::Moved, TArray<const AActor*>{Actor}));
 	
 }
 
 void UEditorNavMeshManager::OnBeginObjectMovement(UObject& Object)
 {
-	if(bIsMovingActors) MovingActorsLastTransform.Empty();
+	if(bIsMovingActors) MovingActorBoundsMap.Empty();
 	bIsMovingActors = true;
 
 	if(!Object.IsA(AStaticMeshActor::StaticClass())) return;
 	const AActor* Actor = Cast<AActor>(&Object);
-	MovingActorsLastTransform.Add(Actor, Actor->GetTransform());
+	MovingActorBoundsMap.Add(Actor, FBounds(Actor));
 }
 
 void UEditorNavMeshManager::OnEndObjectMovement(UObject& Object)
@@ -518,13 +507,13 @@ void UEditorNavMeshManager::OnEndObjectMovement(UObject& Object)
 	TArray<const AActor*> MovedActors;
 	for (const AActor* Actor : SelectedActors)
 	{
-		const FTransform* PreviousTransform = PreviousActorTransforms.Find(Actor);
-		if(!PreviousTransform) continue;
+		const FBounds* PreviousBounds = PreviousActorBoundsMap.Find(Actor);
+		if(!PreviousBounds) continue;
 		
-		const FTransform CurrentTransform = Actor->GetTransform();
-		if(PreviousTransform->Equals(CurrentTransform)) continue;
+		const FBounds CurrentBounds(Actor);
+		if(PreviousBounds->Equals(CurrentBounds)) continue;
 		
-		PreviousActorTransforms[Actor] = CurrentTransform;
+		PreviousActorBoundsMap[Actor] = CurrentBounds;
 		MovedActors.Add(Actor);
 	}
 	
@@ -557,21 +546,21 @@ void UEditorNavMeshManager::OnNewActorsDropped(const TArray<UObject*>& Objects, 
 
 void UEditorNavMeshManager::OnPasteActorsBegin()
 {
-	// Check if any selected-actor was in moving state when the duplication occurred.
+	// Check if any selected-actor was in moving state when the paste occurred.
 	if(!bIsMovingActors) return;
 	
 	// Check if any selected-actor had an actual change in its transform.
 	TArray<const AActor*> MovedActors;
-	for (auto& Iterator : PreviousActorTransforms)
+	for (auto& Iterator : PreviousActorBoundsMap)
 	{
 		const AActor* Actor = Iterator.Key.Get();
 		if(SelectedActors.Find(Actor) == INDEX_NONE) continue;
 		
-		FTransform CurrentTransform = Actor->GetTransform();
-		if(Iterator.Value.Equals(CurrentTransform)) continue;
+		const FBounds CurrentBounds(Actor);
+		if(Iterator.Value.Equals(CurrentBounds)) continue;
 		
 		MovedActors.Add(Actor);
-		PreviousActorTransforms[Iterator.Key] = CurrentTransform;
+		PreviousActorBoundsMap[Iterator.Key] = CurrentBounds;
 	}
 	if(MovedActors.Num())
 	{
@@ -592,16 +581,16 @@ void UEditorNavMeshManager::OnDuplicateActorsBegin()
 	
 	// Check if any selected-actor had an actual change in its transform.
 	TArray<const AActor*> MovedActors;
-	for (auto& Iterator : PreviousActorTransforms)
+	for (auto& Iterator : PreviousActorBoundsMap)
 	{
 		const AActor* Actor = Iterator.Key.Get();
 		if(SelectedActors.Find(Actor) == INDEX_NONE) continue;
 		
-		FTransform CurrentTransform = Actor->GetTransform();
-		if(Iterator.Value.Equals(CurrentTransform)) continue;
+		const FBounds CurrentBounds(Actor);
+		if(Iterator.Value.Equals(CurrentBounds)) continue;
 		
 		MovedActors.Add(Actor);
-		PreviousActorTransforms[Iterator.Key] = CurrentTransform;
+		PreviousActorBoundsMap[Iterator.Key] = CurrentBounds;
 	}
 	if(MovedActors.Num())
 	{
@@ -653,7 +642,7 @@ void UEditorNavMeshManager::OnActorSelectionChanged(const TArray<UObject*>& Acto
 
 		for (const AActor* Actor : SelectedActors)
 		{
-			PreviousActorTransforms.Add(Actor, Actor->GetTransform());
+			PreviousActorBoundsMap.Add(Actor, FBounds(Actor));
 		}
 		
 		// New selected actors are the ones that had the operation applied to them.
@@ -664,10 +653,10 @@ void UEditorNavMeshManager::OnActorSelectionChanged(const TArray<UObject*>& Acto
 	}
 
 	if(!bIsMovingActors) return;
-	MovingActorsLastTransform.Empty();
+	MovingActorBoundsMap.Empty();
 	for (const AActor* Actor : SelectedActors)
 	{
-		MovingActorsLastTransform.Add(Actor,Actor->GetTransform());
+		MovingActorBoundsMap.Add(Actor, FBounds(Actor));
 	}
 }
 
