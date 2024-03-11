@@ -540,5 +540,5 @@ struct FChunk
 	}
 };
 
-// The navigation-mesh is a hashmap of chunks, each being a SVO tree.
+// The navigation-mesh is a hashmap of chunks.
 typedef ankerl::unordered_dense::map<uint_fast64_t, FChunk> FNavMesh;

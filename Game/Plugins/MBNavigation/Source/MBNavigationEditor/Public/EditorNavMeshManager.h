@@ -4,7 +4,6 @@
 
 #include "MBNavigation.h"
 #include "NavMeshTypes.h"
-#include "Engine/StaticMeshActor.h"
 #include "EditorNavMeshManager.generated.h"
 
 class UNavMeshGenerator;
@@ -18,10 +17,8 @@ DECLARE_LOG_CATEGORY_EXTERN(LogEditorNavManager, Log, All);
 /**
  * Enum for determining the operation that changed a static-mesh-actor.
  * - Moved: Existing Actor has changed location/rotation/scale.
- * - Placed: New Actor has been put in the level.
- * - Pasted: New Actor has been put in the level from a copied Actor.
- * - Duplicated: New Actor has placed in the level after duplicating an existing Actor.
- * - Deleted: Existing Actor has been removed from the level.
+ * - Added: New Actor has been added in the level by either dropping it in the level, or duplicating/pasting one.
+ * - Deleted: An existing Actor has been removed from the level.
  */
 enum class ESnapshotType
 {
@@ -127,15 +124,14 @@ protected:
 private:
 	void AddSnapshot(const FUndoRedoSnapshot& Snapshot);
 	void ClearRedoSnapshots();
+	bool IsSnapshotActive(const FUndoRedoSnapshot& Snapshot);
 	FBox GetLevelBoundaries() const;
 	void CheckMovingActors();
 
 	
-
-
 	/* Delegates */
 	
-	// Level delegates
+	// Level
 	FDelegateHandle OnMapLoadDelegateHandle;
 	void OnMapLoad(const FString& Filename, FCanLoadMap& OutCanLoadMap);
 	FDelegateHandle OnMapOpenedDelegateHandle;
@@ -145,11 +141,11 @@ private:
 	FDelegateHandle PostSaveWorldDelegateHandle;
 	void PostWorldSaved(UWorld* World, FObjectPostSaveContext ObjectSaveContext);
 	
-	// Camera delegate
+	// Camera
 	FDelegateHandle OnCameraMovedDelegateHandle;
 	void OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation, ELevelViewportType LevelViewportType, int32) const;
 	
-	// Actor movement delegates
+	// Actor movement
 	FDelegateHandle OnObjectMovedDelegateHandle;
 	void OnObjectMoved(AActor* Actor);
 	FDelegateHandle OnBeginObjectMovementDelegateHandle;
@@ -157,39 +153,34 @@ private:
 	FDelegateHandle OnEndObjectMovementDelegateHandle;
 	void OnEndObjectMovement(UObject& Object);
 
-	// Actor dropped delegate
+	// Actor dropped
 	FDelegateHandle OnNewActorsDroppedDelegateHandle;
 	void OnNewActorsDropped(const TArray<UObject*>& Objects, const TArray<AActor*>& Actors);
 
-	// Actor paste delegates
+	// Actor paste
 	FDelegateHandle OnEditPasteActorsBeginDelegateHandle;
 	void OnPasteActorsBegin();
 	FDelegateHandle OnEditPasteActorsEndDelegateHandle;
 	void OnPasteActorsEnd();
 
-	// Actor duplicate delegates
+	// Actor duplicate
 	FDelegateHandle OnDuplicateActorsBeginDelegateHandle;
 	void OnDuplicateActorsBegin();
 	FDelegateHandle OnDuplicateActorsEndDelegateHandle;
 	void OnDuplicateActorsEnd();
 
-	// Actor delete delegates
+	// Actor delete
 	FDelegateHandle OnDeleteActorsBeginDelegateHandle;
 	void OnDeleteActorsBegin();
 	FDelegateHandle OnDeleteActorsEndDelegateHandle;
 	void OnDeleteActorsEnd();
 
-	// Actor selection delegate
+	// Actor selection
 	FDelegateHandle OnActorSelectionChangedDelegateHandle;
 	void OnActorSelectionChanged(const TArray<UObject*>& Actors, bool);
 
 	/* End delegates */
 	
-	bool IsSnapshotActive(const FUndoRedoSnapshot& Snapshot);
-	
-	void HandleSMActorsMoved(const TArray<AStaticMeshActor*>& SMActors);
-	void HandleNewSMActorsAdded(const TArray<AStaticMeshActor*>& SMActors);
-	void HandleSMActorsDeleted(const TArray<FTransform>& Transforms);
 	
 	// Variables
 	UPROPERTY() UWorld* EditorWorld;

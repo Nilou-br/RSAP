@@ -315,6 +315,37 @@ void UEditorNavMeshManager::ClearRedoSnapshots()
 	UndoRedoSnapshots.RemoveAt(UndoRedoIndex+1, Difference, false);
 }
 
+bool UEditorNavMeshManager::IsSnapshotActive(const FUndoRedoSnapshot& Snapshot)
+{
+	const auto IsValidAndTransformEqual = [Snapshot]()
+	{
+		// Return false if even one of the actor's valid-state or transform differs from what is stored in this snapshot.
+		for (const auto Iterator : Snapshot.ActorSnapshots)
+		{
+			const FActorSnapshot* TransformSnapshot = &Iterator.Value;
+			if(!TransformSnapshot->ActorPtr.IsValid()) return false;
+			if(!TransformSnapshot->ActorPtr.Get()->GetTransform().Equals(TransformSnapshot->Transform)) return false;
+		}
+		return true;
+	};
+	
+	switch (Snapshot.SnapshotType) {
+	case ESnapshotType::Moved: case ESnapshotType::Added:
+		return IsValidAndTransformEqual();
+			
+	case ESnapshotType::Deleted:
+		// Return false if even one of the actors is still valid.
+			for (auto Iterator : Snapshot.ActorSnapshots)
+			{
+				if(Iterator.Value.ActorPtr.IsValid()) return false;
+			}
+		return true;
+	}
+
+	
+	return false;
+}
+
 FBox UEditorNavMeshManager::GetLevelBoundaries() const
 {
 	FVector LevelMin(0, 0, 0);
@@ -340,7 +371,6 @@ FBox UEditorNavMeshManager::GetLevelBoundaries() const
 	return FBox(LevelMin, LevelMax);
 }
 
-// todo refactor
 void UEditorNavMeshManager::CheckMovingActors()
 {
 	if(!SelectedActors.Num())
@@ -382,7 +412,6 @@ void UEditorNavMeshManager::CheckMovingActors()
 		NavMeshDebugger->Draw(NavMesh);
 	}
 }
-
 
 
 
@@ -643,69 +672,3 @@ void UEditorNavMeshManager::OnActorSelectionChanged(const TArray<UObject*>& Acto
 }
 
 /* --- End delegate handles --- */
-
-
-bool UEditorNavMeshManager::IsSnapshotActive(const FUndoRedoSnapshot& Snapshot)
-{
-	const auto IsValidAndTransformEqual = [Snapshot]()
-	{
-		// Return false if even one of the actor's valid-state or transform differs from what is stored in this snapshot.
-		for (const auto Iterator : Snapshot.ActorSnapshots)
-		{
-			const FActorSnapshot* TransformSnapshot = &Iterator.Value;
-			if(!TransformSnapshot->ActorPtr.IsValid()) return false;
-			if(!TransformSnapshot->ActorPtr.Get()->GetTransform().Equals(TransformSnapshot->Transform)) return false;
-		}
-		return true;
-	};
-	
-	switch (Snapshot.SnapshotType) {
-		case ESnapshotType::Moved: case ESnapshotType::Added:
-			return IsValidAndTransformEqual();
-			
-		case ESnapshotType::Deleted:
-			// Return false if even one of the actors is still valid.
-			for (auto Iterator : Snapshot.ActorSnapshots)
-			{
-				if(Iterator.Value.ActorPtr.IsValid()) return false;
-			}
-			return true;
-	}
-
-	
-	return false;
-}
-
-void UEditorNavMeshManager::HandleSMActorsMoved(const TArray<AStaticMeshActor*>& SMActors)
-{
-	for (const AStaticMeshActor* SMActor : SMActors)
-	{
-		UE_LOG(LogEditorNavManager, Log, TEXT("SMActor: '%s' has moved."), *SMActor->GetName())
-	}
-
-	GenerateNavmesh();
-	NavMeshDebugger->Draw(NavMesh);
-}
-
-void UEditorNavMeshManager::HandleNewSMActorsAdded(const TArray<AStaticMeshActor*>& SMActors)
-{
-	for (const AStaticMeshActor* SMActor : SMActors)
-	{
-		UE_LOG(LogEditorNavManager, Log, TEXT("SMActor: '%s' has been added."), *SMActor->GetName())
-	}
-	
-	GenerateNavmesh();
-	NavMeshDebugger->Draw(NavMesh);
-}
-
-void UEditorNavMeshManager::HandleSMActorsDeleted(const TArray<FTransform>& Transforms)
-{
-	for (const FTransform Transform : Transforms)
-	{
-		UE_LOG(LogEditorNavManager, Log, TEXT("An actor with location: '%s', rotation: '%s', scale: '%s' has been deleted."),
-			*Transform.GetLocation().ToString(), *Transform.GetRotation().ToString(), *Transform.GetScale3D().ToString())
-	}
-
-	GenerateNavmesh();
-	NavMeshDebugger->Draw(NavMesh);
-}
