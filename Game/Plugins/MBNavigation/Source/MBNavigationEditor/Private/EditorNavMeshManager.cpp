@@ -621,6 +621,11 @@ void UEditorNavMeshManager::OnActorSelectionChanged(const TArray<UObject*>& Acto
 	if(bAddActorOccured)
 	{
 		bAddActorOccured = false;
+
+		for (const AActor* Actor : SelectedActors)
+		{
+			PreviousActorTransforms.Add(Actor, Actor->GetTransform());
+		}
 		
 		// New selected actors are the ones that had the operation applied to them.
 		AddSnapshot(FUndoRedoSnapshot(ESnapshotType::Added, SelectedActors));
