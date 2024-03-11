@@ -345,29 +345,25 @@ bool UEditorNavMeshManager::IsSnapshotActive(const FUndoRedoSnapshot& Snapshot)
 	return false;
 }
 
-FBox UEditorNavMeshManager::GetLevelBoundaries() const
+FBounds UEditorNavMeshManager::GetLevelBoundaries() const
 {
-	FVector LevelMin(0, 0, 0);
-	FVector LevelMax(0, 0, 0);
-	
-	TArray<AActor*> FoundActors;
-	UGameplayStatics::GetAllActorsOfClass(EditorWorld, AStaticMeshActor::StaticClass(), FoundActors);
-	
-	for (const AActor* SMActor : FoundActors)
+	FBounds LevelBounds;
+	for (auto Iterator : PreviousActorBoundsMap)
 	{
-		// Get the bounding box of the actor
-		FBox ActorBox;
-		FVector ActorOrigin;
-		FVector ActorBoxExtent;
-		SMActor->GetActorBounds(true, ActorOrigin, ActorBoxExtent);
-		ActorBox = FBox(ActorOrigin - ActorBoxExtent, ActorOrigin + ActorBoxExtent);
+		FBounds& ActorBounds = Iterator.Value;
+		
+		// First iteration should be set to the ActorBounds.
+		if(!LevelBounds)
+		{
+			LevelBounds = ActorBounds;
+			continue;
+		}
 
-		// Update the current min/max of the bounding box if the boundaries of this mesh are outside the current bounding box.
-		LevelMin = LevelMin.ComponentMin(ActorBox.Min);
-		LevelMax = LevelMax.ComponentMax(ActorBox.Max);
+		// Update the level-bounds if the bounds of this actor are located outside the current level-bounds.
+		LevelBounds.Min = LevelBounds.Min.ComponentMin(ActorBounds.Min);
+		LevelBounds.Max = LevelBounds.Max.ComponentMax(ActorBounds.Max);
 	}
-	
-	return FBox(LevelMin, LevelMax);
+	return LevelBounds;
 }
 
 void UEditorNavMeshManager::CheckMovingActors()

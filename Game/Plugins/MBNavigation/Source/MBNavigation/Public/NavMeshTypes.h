@@ -135,6 +135,11 @@ struct F3DVector10
 		return X == OtherVector.X && Y == OtherVector.Y && Z == OtherVector.Z;
 	}
 
+	FORCEINLINE FVector ToVector() const
+	{
+		return FVector(X, Y, Z);
+	}
+
 	explicit F3DVector10(const uint16 InX, const uint16 InY, const uint16 InZ)
 		: X(InX), Y(InY), Z(InZ) {}
 
@@ -144,11 +149,6 @@ struct F3DVector10
 	F3DVector10()
 		:X(0), Y(0), Z(0)
 	{}
-
-	FORCEINLINE FVector ToVector() const
-	{
-		return FVector(X, Y, Z);
-	}
 };
 
 /**
@@ -189,6 +189,16 @@ struct F3DVector32
 		return Vector32;
 	}
 
+	FORCEINLINE F3DVector32 ComponentMin(const F3DVector32& Other) const
+	{
+		return F3DVector32(FMath::Min(X, Other.X), FMath::Min(Y, Other.Y), FMath::Min(Z, Other.Z));
+	}
+
+	FORCEINLINE F3DVector32 ComponentMax(const F3DVector32& Other) const
+	{
+		return F3DVector32(FMath::Max(X, Other.X), FMath::Max(Y, Other.Y), FMath::Max(Z, Other.Z));
+	}
+
 	FORCEINLINE F3DVector32 operator+(const uint_fast32_t Value) const
 	{
 		return F3DVector32(X + Value, Y + Value, Z + Value);
@@ -223,6 +233,11 @@ struct F3DVector32
 		return X == OtherVector.X && Y == OtherVector.Y && Z == OtherVector.Z;
 	}
 
+	FORCEINLINE FVector ToVector() const
+	{
+		return FVector(X, Y, Z);
+	}
+
 	explicit F3DVector32(const FVector &InVector)
 	{
 		X = static_cast<int_fast32_t>(std::round(InVector.X));
@@ -238,11 +253,6 @@ struct F3DVector32
 
 	explicit F3DVector32()
 		: X(0), Y(0), Z(0) {}
-
-	FORCEINLINE FVector ToVector() const
-	{
-		return FVector(X, Y, Z);
-	}
 };
 
 // todo
@@ -351,7 +361,7 @@ struct FNodeLookupData
  * - MortonCode: represents its location in a single value.
  *   Allows for memory coherency, and bitwise-operations to quickly calculate neighbours etc.
  * - Neighbours: Stores a 4 bit layer-index for locating each neighbour in the octree.
- * - DynamicIndex: Represents the octree the children of this node are stored on, 0 being the static octree. todo remove
+ * - DynamicIndex: Represents the octree the children of this node are stored on, 0 being the static octree. todo remove this, we only need to know d-index of neighbours/children.
  * - ChunkBorder: Bitmask for determining the border this voxel is next to.
  *   Used to efficiently calculate the next chunk.
  * - IsOccluded(): If the node is occluded.

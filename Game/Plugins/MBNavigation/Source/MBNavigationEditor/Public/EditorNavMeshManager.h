@@ -94,8 +94,8 @@ protected:
 private:
 	void AddSnapshot(const FUndoRedoSnapshot& Snapshot);
 	void ClearRedoSnapshots();
-	bool IsSnapshotActive(const FUndoRedoSnapshot& Snapshot);
-	FBox GetLevelBoundaries() const;
+	static bool IsSnapshotActive(const FUndoRedoSnapshot& Snapshot);
+	FBounds GetLevelBoundaries() const;
 	void CheckMovingActors();
 
 	
