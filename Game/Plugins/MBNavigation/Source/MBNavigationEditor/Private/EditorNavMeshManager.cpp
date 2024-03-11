@@ -101,12 +101,10 @@ void UEditorNavMeshManager::ClearDelegates()
 	PreSaveWorldDelegateHandle.Reset();
 	FEditorDelegates::PostSaveWorldWithContext.Remove(PostSaveWorldDelegateHandle);
 	PostSaveWorldDelegateHandle.Reset();
-
 	
 	// Camera delegate
 	FEditorDelegates::OnEditorCameraMoved.Remove(OnCameraMovedDelegateHandle);
 	OnCameraMovedDelegateHandle.Reset();
-
 	
 	// Actor movement delegates
 	GEditor->OnActorMoved().Remove(OnObjectMovedDelegateHandle);
@@ -295,21 +293,15 @@ void UEditorNavMeshManager::AddSnapshot(const FUndoRedoSnapshot& Snapshot)
 	// Lazy
 	FString SnapshotTypeString;
 	switch (Snapshot.SnapshotType) {
-	case ESnapshotType::Moved:
-		SnapshotTypeString = "moved";
-		break;
-	case ESnapshotType::Placed:
-		SnapshotTypeString = "placed";
-		break;
-	case ESnapshotType::Pasted:
-		SnapshotTypeString = "pasted";
-		break;
-	case ESnapshotType::Duplicated:
-		SnapshotTypeString = "duplicated";
-		break;
-	case ESnapshotType::Deleted:
-		SnapshotTypeString = "deleted";
-		break;
+		case ESnapshotType::Moved:
+			SnapshotTypeString = "moved";
+			break;
+		case ESnapshotType::Added:
+			SnapshotTypeString = "added";
+			break;
+		case ESnapshotType::Deleted:
+			SnapshotTypeString = "deleted";
+			break;
 	}
 
 	UE_LOG(LogEditorNavManager, Log, TEXT("Added '%s' snapshot for %i actor(s)."), *SnapshotTypeString, Snapshot.ActorSnapshots.Num());
@@ -357,30 +349,31 @@ void UEditorNavMeshManager::CheckMovingActors()
 		return;
 	}
 	
-	TArray<TWeakObjectPtr<AStaticMeshActor>> KeysToRemove;
+	TArray<TWeakObjectPtr<const AActor>> InvalidActors;
 	TArray<FTransformPair*> UpdatedTransforms;
 	
 	for (auto& Iterator : MovingActorsState)
 	{
-		if (!Iterator.Key.IsValid())
+		TWeakObjectPtr<const AActor> ActorPtr = Iterator.Key;
+		if (!ActorPtr.IsValid())
 		{
-			KeysToRemove.Add(Iterator.Key);
+			InvalidActors.Add(ActorPtr);
 			continue;
 		}
-		
-		const AStaticMeshActor* SMActor = Iterator.Key.Get();
+
+		const AActor* Actor = ActorPtr.Get();
 		FTransformPair* TransformPair = &Iterator.Value;
-		FTransform CurrentTransform = SMActor->GetTransform();
+		FTransform CurrentTransform = Actor->GetTransform();
 		
 		if(TransformPair->EndTransform.Equals(CurrentTransform)) continue;
 		TransformPair->EndTransform = CurrentTransform;
 		UpdatedTransforms.Add(TransformPair);
 	}
 
-	// Remove invalid actors in MovingActorsTransformPairs
-	for (const TWeakObjectPtr<AStaticMeshActor>& Key : KeysToRemove)
+	// Remove invalid actors in MovingActorsState
+	for ( const auto& Actor : InvalidActors)
 	{
-		MovingActorsState.Remove(Key);
+		MovingActorsState.Remove(Actor);
 	}
 
 	if(UpdatedTransforms.Num())
@@ -418,27 +411,27 @@ void UEditorNavMeshManager::OnMapOpened(const FString& Filename, bool bAsTemplat
 	// Get cached navmesh.
 	FGuid CachedID;
 	DeserializeNavMesh(NavMesh, CachedID);
-	
-	if(!NavMesh.empty())
-	{
-		// If the cached ID is not the same, then the navmesh and the level are not in sync, so we just regenerate a new one.
-		// This should only happen in rare cases where the level is shared outside of version-control where the serialized .bin file does not exist on receiving user's end.
-		if(NavMeshSettings->ID != CachedID)
-		{
-			UE_LOG(LogEditorNavManager, Warning, TEXT("Cached navmesh is not in-sync with this level's state. Regeneration required."));
-		}
-		else return;
-	}
 
-	// Generate the navmesh after the actors are initialized, which is next frame ( OnWorldInitializedActors does not work in editor-world ).
-	EditorWorld->GetTimerManager().SetTimerForNextTick([this]()
+	// Actors are initialized next frame.
+	EditorWorld->GetTimerManager().SetTimerForNextTick([&]()
 	{
+		TArray<AActor*> FoundActors;
+		UGameplayStatics::GetAllActorsOfClass(EditorWorld, AStaticMeshActor::StaticClass(), FoundActors);
+		for (AActor* Actor : FoundActors)
+		{
+			if(!Actor->IsA(AStaticMeshActor::StaticClass())) return;
+			PreviousActorTransforms.Add(Actor, Actor->GetTransform());
+		}
+		
+		// If the cached ID is not the same, then the navmesh and the level are not in sync, so we just regenerate a new one.
+		// Should only happen in cases where the level is shared outside of version-control, where the serialized .bin file is not in sync with the received level.
+		// todo: this should be checked, something is not right.
+		if(!NavMesh.empty() && NavMeshSettings->ID == CachedID) return;
 		GenerateNavmesh();
 		if(EditorWorld->GetOuter()->MarkPackageDirty())
 		{
 			UE_LOG(LogEditorNavManager, Log, TEXT("Marked level as dirty. Navmesh will be saved upon saving the level."))
 		}
-		NavMeshDebugger->Draw(NavMesh);
 	});
 }
 
@@ -466,7 +459,16 @@ void UEditorNavMeshManager::OnCameraMoved(const FVector& CameraLocation, const F
 
 void UEditorNavMeshManager::OnObjectMoved(AActor* Actor)
 {
-	// UE_LOG(LogEditorNavManager, Log, TEXT("On Object Moved"));
+	if(bIsMovingActors || !Actor->IsA(AStaticMeshActor::StaticClass())) return;
+	UE_LOG(LogEditorNavManager, Log, TEXT("On Actor Moved"))
+	
+	const FTransform* PreviousTransform = PreviousActorTransforms.Find(Actor);
+	if(!PreviousTransform) return;
+	const FTransform CurrentTransform = Actor->GetTransform();
+	if(PreviousTransform->Equals(CurrentTransform)) return;
+	
+	AddSnapshot(FUndoRedoSnapshot(ESnapshotType::Moved, TArray<const AActor*>{Actor}));
+	
 }
 
 void UEditorNavMeshManager::OnBeginObjectMovement(UObject& Object)
@@ -488,7 +490,7 @@ void UEditorNavMeshManager::OnEndObjectMovement(UObject& Object)
 	bIsMovingActors = false;
 	if(!MovingActorsState.Num()) return;
 	
-	TArray<AStaticMeshActor*> MovedActors;
+	TArray<const AActor*> MovedActors;
 	for (auto& Iterator : MovingActorsState)
 	{
 		const FTransformPair* TransformPair = &Iterator.Value;
@@ -508,65 +510,76 @@ void UEditorNavMeshManager::OnEndObjectMovement(UObject& Object)
 
 void UEditorNavMeshManager::OnNewActorsDropped(const TArray<UObject*>& Objects, const TArray<AActor*>& Actors)
 {
-	TArray<AStaticMeshActor*> SMActors;
-	for (AActor* Actor : Actors)
+	// Only get StaticMesh-Actors.
+	TArray<const AActor*> SMActors;
+	for (const AActor* Actor : Actors)
 	{
-		if(AStaticMeshActor* SMActor = Cast<AStaticMeshActor>(Actor))
+		if(Actor->IsA(AStaticMeshActor::StaticClass()))
 		{
-			SMActors.Add(SMActor);
+			SMActors.Add(Actor);
 		}
 	}
-	if(SMActors.Num())
-	{
-		AddSnapshot(FUndoRedoSnapshot(ESnapshotType::Placed, SMActors));
-		
-		GenerateNavmesh();
-		NavMeshDebugger->Draw(NavMesh);
-	}
+	
+	if(!SMActors.Num()) return;
+	AddSnapshot(FUndoRedoSnapshot(ESnapshotType::Added, SMActors));
+	GenerateNavmesh();
+	NavMeshDebugger->Draw(NavMesh);
 }
 
 void UEditorNavMeshManager::OnPasteActorsBegin()
 {
-	UE_LOG(LogEditorNavManager, Log, TEXT("Paste Actors Begin"));
-	AddSnapshot(FUndoRedoSnapshot(ESnapshotType::Pasted, SelectedActors));
+	// Check if any selected-actor was in moving state when the paste occurred.
+	if(!bIsMovingActors) return;
+	
+	// Check if any selected-actor had an actual change in its transform.
+	TArray<const AActor*> MovedActors;
+	for (auto Iterator : MovingActorsState)
+	{
+		const AActor* MovingActor = Iterator.Key.Get();
+		if(SelectedActors.Find(MovingActor) == INDEX_NONE) continue;
+		if(!Iterator.Value.BeginTransform.Equals(Iterator.Value.EndTransform))
+		{
+			MovedActors.Add(MovingActor);
+		}
+	}
+	if(MovedActors.Num())
+	{
+		AddSnapshot(FUndoRedoSnapshot(ESnapshotType::Moved, MovedActors));
+		// Don't need to update navmesh here since it already does every tick when an actor has moved.
+	}
 }
 
 void UEditorNavMeshManager::OnPasteActorsEnd()
 {
-	UE_LOG(LogEditorNavManager, Log, TEXT("Paste Actors End"));
-	GenerateNavmesh();
-	NavMeshDebugger->Draw(NavMesh);
+	bAddActorOccured = true;
 }
 
 void UEditorNavMeshManager::OnDuplicateActorsBegin()
 {
 	// Check if any selected-actor was in moving state when the duplication occurred.
-	if(bIsMovingActors)
+	if(!bIsMovingActors) return;
+	
+	// Check if any selected-actor had an actual change in its transform.
+	TArray<const AActor*> MovedActors;
+	for (auto Iterator : MovingActorsState)
 	{
-		// Check if any selected-actor had an actual change in its transform.
-		TArray<AStaticMeshActor*> MovedActors;
-		for (auto Iterator : MovingActorsState)
+		const AActor* MovingActor = Iterator.Key.Get();
+		if(SelectedActors.Find(MovingActor) == INDEX_NONE) continue;
+		if(!Iterator.Value.BeginTransform.Equals(Iterator.Value.EndTransform))
 		{
-			AStaticMeshActor* MovingActorPtr = Iterator.Key.Get();
-			if(SelectedActors.Find(MovingActorPtr) == INDEX_NONE) continue;
-			if(!Iterator.Value.BeginTransform.Equals(Iterator.Value.EndTransform))
-			{
-				MovedActors.Add(MovingActorPtr);
-			}
+			MovedActors.Add(MovingActor);
 		}
-		if(MovedActors.Num())
-		{
-			AddSnapshot(FUndoRedoSnapshot(ESnapshotType::Moved, MovedActors));
-			// Don't need to update navmesh here since it already does every tick when an actor has moved.
-		}
+	}
+	if(MovedActors.Num())
+	{
+		AddSnapshot(FUndoRedoSnapshot(ESnapshotType::Moved, MovedActors));
+		// Don't need to update navmesh here since it already does every tick when an actor has moved.
 	}
 }
 
 void UEditorNavMeshManager::OnDuplicateActorsEnd()
 {
-	bDuplicateOccured = true;
-	GenerateNavmesh();
-	NavMeshDebugger->Draw(NavMesh);
+	bAddActorOccured = true;
 }
 
 void UEditorNavMeshManager::OnDeleteActorsBegin()
@@ -582,37 +595,42 @@ void UEditorNavMeshManager::OnDeleteActorsEnd()
 
 void UEditorNavMeshManager::OnActorSelectionChanged(const TArray<UObject*>& Actors, bool)
 {
-	UE_LOG(LogEditorNavManager, Log, TEXT("Actor Selection Changed."));
-	SelectedActors.Empty();
+	bool bHasSelectionChanged = false;
+	TArray<const AActor*> CurrentSelectedActors;
 	for (UObject* Actor : Actors)
 	{
-		if(AStaticMeshActor* SMActor = Cast<AStaticMeshActor>(Actor))
-		{
-			SelectedActors.Add(SMActor);
-		}
+		if(!Actor->IsA(AStaticMeshActor::StaticClass())) continue;
+		const AActor* SMActor = Cast<AActor>(Actor);
+		CurrentSelectedActors.Add(SMActor);
+		if(SelectedActors.Find(SMActor) == INDEX_NONE) bHasSelectionChanged = true;
+	}
+	SelectedActors = CurrentSelectedActors;
+
+	// OnEndObjectMovement is not triggered when no movement has happened, so I need this check because of that... (thanks UE developers!).
+	if(bIsMovingActors && !bHasSelectionChanged)
+	{
+		UE_LOG(LogEditorNavManager, Log, TEXT("No movement occurred."));
+		bIsMovingActors = false;
 	}
 
 	// Check if a duplication has occured.
-	if(bDuplicateOccured)
+	if(bAddActorOccured)
 	{
+		bAddActorOccured = false;
+		
 		// New selected actors are the ones that had the operation applied to them.
-		AddSnapshot(FUndoRedoSnapshot(ESnapshotType::Duplicated, SelectedActors));
-		bDuplicateOccured = false;
+		AddSnapshot(FUndoRedoSnapshot(ESnapshotType::Added, SelectedActors));
+		
+		GenerateNavmesh();
+		NavMeshDebugger->Draw(NavMesh);
 	}
 
 	if(!bIsMovingActors) return;
 	MovingActorsState.Empty();
-	for (AStaticMeshActor* Actor : SelectedActors)
+	for (const AActor* Actor : SelectedActors)
 	{
-		MovingActorsState.Add(TWeakObjectPtr<AStaticMeshActor>(Actor),
-			FTransformPair(Actor->GetTransform(), Actor->GetTransform()));
+		MovingActorsState.Add(Actor, FTransformPair(Actor->GetTransform(), Actor->GetTransform()));
 	}
-}
-
-void UEditorNavMeshManager::OnPostUndoRedo()
-{
-	UE_LOG(LogEditorNavManager, Log, TEXT("OnPostUndoRedo."));
-	// HandleUndoRedo();
 }
 
 /* --- End delegate handles --- */
@@ -626,33 +644,23 @@ bool UEditorNavMeshManager::IsSnapshotActive(const FUndoRedoSnapshot& Snapshot)
 		for (const auto Iterator : Snapshot.ActorSnapshots)
 		{
 			const FActorSnapshot* TransformSnapshot = &Iterator.Value;
-			const bool bIsValid = TransformSnapshot->ActorPtr.IsValid();
-			if(!bIsValid) return false; // todo above line into if here
+			if(!TransformSnapshot->ActorPtr.IsValid()) return false;
 			if(!TransformSnapshot->ActorPtr.Get()->GetTransform().Equals(TransformSnapshot->Transform)) return false;
 		}
 		return true;
 	};
 	
 	switch (Snapshot.SnapshotType) {
-	case ESnapshotType::Moved:
-		return IsValidAndTransformEqual();
-		
-	case ESnapshotType::Placed:
-		return IsValidAndTransformEqual();
-		
-	case ESnapshotType::Pasted:
-		return IsValidAndTransformEqual();
-		
-	case ESnapshotType::Duplicated:
-		return IsValidAndTransformEqual();
-		
-	case ESnapshotType::Deleted:
-		// Return false if even one of the actors is still valid.
-		for (auto Iterator : Snapshot.ActorSnapshots)
-		{
-			if(Iterator.Value.ActorPtr.IsValid()) return false;
-		}
-		return true;
+		case ESnapshotType::Moved: case ESnapshotType::Added:
+			return IsValidAndTransformEqual();
+			
+		case ESnapshotType::Deleted:
+			// Return false if even one of the actors is still valid.
+			for (auto Iterator : Snapshot.ActorSnapshots)
+			{
+				if(Iterator.Value.ActorPtr.IsValid()) return false;
+			}
+			return true;
 	}
 
 	

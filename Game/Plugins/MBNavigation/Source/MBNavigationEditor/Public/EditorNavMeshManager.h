@@ -26,20 +26,18 @@ DECLARE_LOG_CATEGORY_EXTERN(LogEditorNavManager, Log, All);
 enum class ESnapshotType
 {
 	Moved,
-	Placed,
-	Pasted,
-	Duplicated,
+	Added,
 	Deleted
 };
 
 struct FActorSnapshot
 {
-	TWeakObjectPtr<AStaticMeshActor> ActorPtr;
+	TWeakObjectPtr<const AActor> ActorPtr;
 	FTransform Transform;
 	FVector MaxBounds;
 	FVector MinBounds;
 
-	explicit FActorSnapshot(AStaticMeshActor* Actor)
+	explicit FActorSnapshot(const AActor* Actor)
 	{
 		ActorPtr = Actor;
 		Transform = Actor->GetActorTransform();
@@ -57,11 +55,11 @@ struct FUndoRedoSnapshot
 	ESnapshotType SnapshotType;
 	TMap<FString, FActorSnapshot> ActorSnapshots;
 
-	FUndoRedoSnapshot(const ESnapshotType InE_SnapshotType, const TArray<AStaticMeshActor*>& Actors):
+	FUndoRedoSnapshot(const ESnapshotType InE_SnapshotType, const TArray<const AActor*>& Actors):
 		SnapshotType(InE_SnapshotType)
 	{
 		ActorSnapshots.Reserve(Actors.Num());
-		for (AStaticMeshActor* Actor : Actors)
+		for (const AActor* Actor : Actors)
 		{
 			ActorSnapshots.Emplace(Actor->GetName(), Actor);
 		}
@@ -185,13 +183,8 @@ private:
 	FDelegateHandle OnActorSelectionChangedDelegateHandle;
 	void OnActorSelectionChanged(const TArray<UObject*>& Actors, bool);
 
-	// Undo/redo delegate
-	FDelegateHandle OnPostUndoRedoDelegateHandle;
-	void OnPostUndoRedo();
-
 	/* End delegates */
 	
-	void HandleUndoRedo();
 	bool IsSnapshotActive(const FUndoRedoSnapshot& Snapshot);
 	
 	void HandleSMActorsMoved(const TArray<AStaticMeshActor*>& SMActors);
@@ -206,14 +199,16 @@ private:
 	UPROPERTY() UNavMeshSettings* NavMeshSettings;
 	FNavMesh NavMesh;
 	FMBNavigationModule MainModule;
-
-	bool bIsMovingActors;
-	TMap<TWeakObjectPtr<AStaticMeshActor>, FTransformPair> MovingActorsState;
 	
-	UPROPERTY() TArray<AStaticMeshActor*> SelectedActors;
+	bool bIsMovingActors;
+	bool bAddActorOccured;
+
+	// Todo change all to AActor? if(!Actor->IsA(AStaticMeshActor::StaticClass())) return;
+	TMap<TWeakObjectPtr<const AActor>, FTransformPair> MovingActorsState;
+	TMap<TWeakObjectPtr<const AActor>, FTransform> PreviousActorTransforms;
+	UPROPERTY() TArray<const AActor*> SelectedActors;
+	
 	TArray<FUndoRedoSnapshot> UndoRedoSnapshots;
 	int32 UndoRedoIndex = -1;
 	TArray<uint8> UndoBatchCounts;
-	
-	bool bDuplicateOccured;
 };
