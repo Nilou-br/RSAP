@@ -25,7 +25,7 @@
  *
  * Initialize should be called everytime a new level is opened with the settings for that level.
  */
-struct FNavMeshData
+struct FNavMeshData // todo, new level does not have correct settings in the widget.
 {
 	static inline constexpr uint16 MortonOffsets[10] = {1024, 512, 256, 128, 64, 32, 16, 8, 4, 2};
 	static inline uint8 VoxelSizeExponent = 2;

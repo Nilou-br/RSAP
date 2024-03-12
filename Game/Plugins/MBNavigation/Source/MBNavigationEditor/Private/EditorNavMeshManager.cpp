@@ -529,6 +529,8 @@ void UEditorNavMeshManager::OnMapOpened(const FString& Filename, bool bAsTemplat
 
 void UEditorNavMeshManager::PreWorldSaved(UWorld* World, FObjectPreSaveContext ObjectPreSaveContext)
 {
+	// return; // todo fix being able to save without being in a level
+	
 	// todo when in PostWorldSaved the save has failed, reset to old GUID?
 	// Store any changes on the NavMeshSettings on the level before the actual world/level save occurs.
 	NavMeshSettings->ID = FGuid::NewGuid();
@@ -537,6 +539,8 @@ void UEditorNavMeshManager::PreWorldSaved(UWorld* World, FObjectPreSaveContext O
 
 void UEditorNavMeshManager::PostWorldSaved(UWorld* World, FObjectPostSaveContext ObjectSaveContext)
 {
+	// return; // todo fix being able to save without being in a level
+	
 	if(ObjectSaveContext.SaveSucceeded())
 	{
 		SaveNavMesh();
