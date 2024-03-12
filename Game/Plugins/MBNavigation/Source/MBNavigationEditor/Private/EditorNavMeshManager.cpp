@@ -248,39 +248,40 @@ void UEditorNavMeshManager::PostUndo(bool bSuccess)
 			UE_LOG(LogEditorNavManager, Log, TEXT("Active state is back to what is was initially."));
 		}
 		
-		// Get each snapshot that has been undone and fill a new FActorBoundsPairMap with before-current bounds of each actor before/after this undo.
-		// FActorBoundsPairMap UndoBoundsPairMap;
-		// for (int Index = BeforeIndex; Index > UndoRedoIndex; --Index)
-		// {
-		// 	const FUndoRedoSnapshot& Snapshot = UndoRedoSnapshots[Index];
-		// 	for (const auto Iterator : Snapshot.ActorBoundsPairMap)
-		// 	{
-		// 		const FBoundsPair SSBoundsPair = Iterator.Value;
-		// 		
-		// 		switch (Snapshot.SnapshotType) {
-		// 		case ESnapshotType::Moved:
-		// 			if(!UndoBoundsPairMap.Contains(Iterator.Key))
-		// 			{
-		// 				UndoBoundsPairMap.Add(Iterator.Key, FBoundsPair(SSBoundsPair.Current, SSBoundsPair.Previous));
-		// 			}
-		// 			UndoBoundsPairMap[Iterator.Key].Current = SSBoundsPair.Previous;
-		// 			PreviousActorBoundsMap[Iterator.Key] = SSBoundsPair.Previous;
-		// 			break;
-		// 		case ESnapshotType::Added:
-		// 			if(!UndoBoundsPairMap.Contains(Iterator.Key))
-		// 			{
-		// 				UndoBoundsPairMap.Add(Iterator.Key, FBoundsPair(SSBoundsPair.Current, SSBoundsPair.Previous));
-		// 			}
-		// 			UndoBoundsPairMap[Iterator.Key].Current = SSBoundsPair.Previous;
-		// 			PreviousActorBoundsMap.Remove(Iterator.Key);
-		// 			break;
-		// 		case ESnapshotType::Deleted:
-		// 			UndoBoundsPairMap.Add(Iterator.Key, FBoundsPair(SSBoundsPair.Current, SSBoundsPair.Previous));
-		// 			PreviousActorBoundsMap.Add(Iterator.Key, SSBoundsPair.Previous);
-		// 			break;
-		// 		}
-		// 	}
-		// }
+		// Get each actors change after this undo into a new Bounds-Pair.
+		// A single actor won't appear twice in this map. There is one bound-pair of it's previous bounds (before the undo) and the current bounds (after the undo / right now ). 
+		FActorBoundsPairMap UndoBoundsPairMap;
+		for (int Index = BeforeIndex; Index > UndoRedoIndex; --Index)
+		{
+			const FUndoRedoSnapshot& Snapshot = UndoRedoSnapshots[Index];
+			for (const auto Iterator : Snapshot.ActorBoundsPairMap)
+			{
+				const FBoundsPair SSBoundsPair = Iterator.Value;
+				
+				switch (Snapshot.SnapshotType) {
+				case ESnapshotType::Moved:
+					if(!UndoBoundsPairMap.Contains(Iterator.Key))
+					{
+						UndoBoundsPairMap.Add(Iterator.Key, FBoundsPair(SSBoundsPair.Current, SSBoundsPair.Previous));
+					}
+					UndoBoundsPairMap[Iterator.Key].Current = SSBoundsPair.Previous;
+					CachedActorBoundsMap[Iterator.Key] = SSBoundsPair.Previous;
+					break;
+				case ESnapshotType::Added:
+					if(!UndoBoundsPairMap.Contains(Iterator.Key))
+					{
+						UndoBoundsPairMap.Add(Iterator.Key, FBoundsPair(SSBoundsPair.Current, SSBoundsPair.Previous));
+					}
+					UndoBoundsPairMap[Iterator.Key].Current = SSBoundsPair.Previous;
+					CachedActorBoundsMap.Remove(Iterator.Key);
+					break;
+				case ESnapshotType::Deleted:
+					UndoBoundsPairMap.Add(Iterator.Key, FBoundsPair(SSBoundsPair.Current, SSBoundsPair.Previous));
+					CachedActorBoundsMap.Add(Iterator.Key, SSBoundsPair.Previous);
+					break;
+				}
+			}
+		}
 		
 		GenerateNavmesh();
 	}
@@ -305,13 +306,39 @@ void UEditorNavMeshManager::PostRedo(bool bSuccess)
 	{
 		const FString LogString = Difference > 1 ? FString::Printf(TEXT("Redid '%i' operations."), Difference) : "Redid 1 operation.";
 		UE_LOG(LogEditorNavManager, Log, TEXT("%s"), *LogString);
-
-		// Get each snapshot that has been redone and fill a new FActorBoundsPairMap with before-current bounds of each actor before/after this redo.
-		// FActorBoundsPairMap UndoBoundsPairMap;
-		// for (int Index = BeforeIndex; Index < UndoRedoIndex; ++Index)
-		// {
-		// 	const FUndoRedoSnapshot& Snapshot = UndoRedoSnapshots[Index];
-		// }
+		
+		FActorBoundsPairMap UndoBoundsPairMap;
+		for (int Index = BeforeIndex+1; Index <= UndoRedoIndex; ++Index)
+		{
+			const FUndoRedoSnapshot& Snapshot = UndoRedoSnapshots[Index];
+			for (const auto Iterator : Snapshot.ActorBoundsPairMap)
+			{
+				const FBoundsPair SSBoundsPair = Iterator.Value;
+				
+				switch (Snapshot.SnapshotType) {
+				case ESnapshotType::Moved:
+					if(!UndoBoundsPairMap.Contains(Iterator.Key))
+					{
+						UndoBoundsPairMap.Add(Iterator.Key, FBoundsPair(SSBoundsPair.Previous, SSBoundsPair.Current));
+					}
+					UndoBoundsPairMap[Iterator.Key].Current = SSBoundsPair.Current;
+					CachedActorBoundsMap[Iterator.Key] = SSBoundsPair.Current;
+					break;
+				case ESnapshotType::Added:
+					UndoBoundsPairMap.Add(Iterator.Key, FBoundsPair(SSBoundsPair.Previous, SSBoundsPair.Current));
+					CachedActorBoundsMap.Add(Iterator.Key, SSBoundsPair.Current);
+					break;
+				case ESnapshotType::Deleted:
+					if(!UndoBoundsPairMap.Contains(Iterator.Key))
+					{
+						UndoBoundsPairMap.Add(Iterator.Key, FBoundsPair(SSBoundsPair.Previous, SSBoundsPair.Current));
+					}
+					UndoBoundsPairMap[Iterator.Key].Current = SSBoundsPair.Current;
+					CachedActorBoundsMap.Remove(Iterator.Key);
+					break;
+				}
+			}
+		}
 		
 		GenerateNavmesh();
 	}
@@ -348,14 +375,15 @@ void UEditorNavMeshManager::ClearRedoSnapshots()
 
 bool UEditorNavMeshManager::IsSnapshotActive(const FUndoRedoSnapshot& Snapshot)
 {
-	const auto IsValidAndTransformEqual = [Snapshot]()
+	const auto IsValidAndTransformEqual = [&]()
 	{
 		// Return false if even one of the actor's valid-state or bounds differs from what is stored in this snapshot.
 		for (const auto Iterator : Snapshot.ActorBoundsPairMap)
 		{
-			if(!Iterator.Key.IsValid()) return false;
+			const AActor* Actor;
+			if(!FindActorFromGuid(Iterator.Key, Actor)) return false;
 			const FBounds BoundsInSnapshot = Iterator.Value.Current;
-			const FBounds CurrentBounds(Iterator.Key.Get());
+			const FBounds CurrentBounds(Actor);
 			if(!BoundsInSnapshot.Equals(CurrentBounds)) return false;
 		}
 		return true;
@@ -369,7 +397,8 @@ bool UEditorNavMeshManager::IsSnapshotActive(const FUndoRedoSnapshot& Snapshot)
 			// Return false if even one of the actors is still valid.
 			for (auto Iterator : Snapshot.ActorBoundsPairMap)
 			{
-				if(Iterator.Key.IsValid()) return false;
+				const AActor* Actor;
+				if(FindActorFromGuid(Iterator.Key, Actor)) return false;
 			}
 			return true;
 	}
@@ -379,7 +408,7 @@ bool UEditorNavMeshManager::IsSnapshotActive(const FUndoRedoSnapshot& Snapshot)
 FBounds UEditorNavMeshManager::GetLevelBoundaries() const
 {
 	FBounds LevelBounds;
-	for (auto Iterator : PreviousActorBoundsMap)
+	for (auto Iterator : CachedActorBoundsMap)
 	{
 		FBounds& ActorBounds = Iterator.Value;
 		
@@ -405,31 +434,30 @@ void UEditorNavMeshManager::CheckMovingActors()
 		return;
 	}
 	
-	TArray<TWeakObjectPtr<const AActor>> InvalidActors;
+	TArray<FGuid> InvalidActors;
 	bool bUpdateNavmesh = false;
 	
 	for (auto& Iterator : MovingActorBoundsMap)
 	{
-		TWeakObjectPtr<const AActor> ActorPtr = Iterator.Key;
-		if (!ActorPtr.IsValid())
+		const AActor* Actor;
+		if(!FindActorFromGuid(Iterator.Key, Actor))
 		{
-			InvalidActors.Add(ActorPtr);
+			InvalidActors.Add(Iterator.Key);
 			continue;
 		}
-
-		const AActor* Actor = ActorPtr.Get();
+		
 		const FBounds* PreviousBounds = &Iterator.Value;
 		const FBounds CurrentBounds(Actor);
 		
 		if(PreviousBounds->Equals(CurrentBounds)) continue;
-		MovingActorBoundsMap[ActorPtr] = CurrentBounds;
+		MovingActorBoundsMap[Iterator.Key] = CurrentBounds;
 		bUpdateNavmesh = true;
 	}
 
 	// Remove invalid actors in MovingActorsState
-	for ( const auto& Actor : InvalidActors)
+	for ( const FGuid& Guid : InvalidActors)
 	{
-		MovingActorBoundsMap.Remove(Actor);
+		MovingActorBoundsMap.Remove(Guid);
 	}
 
 	if(bUpdateNavmesh)
@@ -438,6 +466,14 @@ void UEditorNavMeshManager::CheckMovingActors()
 	}
 }
 
+bool UEditorNavMeshManager::FindActorFromGuid(const FGuid& ActorGuid, const AActor*& OutActor)
+{
+	if(!StaticMeshActorsMap.Contains(ActorGuid)) return false;
+	const TWeakObjectPtr<const AActor> ActorPtr = StaticMeshActorsMap[ActorGuid];
+	if (!ActorPtr.IsValid()) return false;
+	OutActor = ActorPtr.Get();
+	return true;
+}
 
 
 /* --- Delegate handles --- */
@@ -475,7 +511,8 @@ void UEditorNavMeshManager::OnMapOpened(const FString& Filename, bool bAsTemplat
 		for (AActor* Actor : FoundActors)
 		{
 			if(!Actor->IsA(AStaticMeshActor::StaticClass())) return;
-			PreviousActorBoundsMap.Add(Actor, FBounds(Actor));
+			CachedActorBoundsMap.Add(Actor->GetActorGuid(), FBounds(Actor));
+			StaticMeshActorsMap.Add(Actor->GetActorGuid(), Actor);
 		}
 		
 		// If the cached ID is not the same, then the navmesh and the level are not in sync, so we just regenerate a new one.
@@ -524,7 +561,7 @@ void UEditorNavMeshManager::OnBeginObjectMovement(UObject& Object)
 
 	if(!Object.IsA(AStaticMeshActor::StaticClass())) return;
 	const AActor* Actor = Cast<AActor>(&Object);
-	MovingActorBoundsMap.Add(Actor, FBounds(Actor));
+	MovingActorBoundsMap.Add(Actor->GetActorGuid(), FBounds(Actor));
 }
 
 void UEditorNavMeshManager::OnEndObjectMovement(UObject& Object)
@@ -534,14 +571,14 @@ void UEditorNavMeshManager::OnEndObjectMovement(UObject& Object)
 	FActorBoundsPairMap MovedActorBoundsPairMap;
 	for (const AActor* Actor : SelectedActors)
 	{
-		const FBounds* PreviousBounds = PreviousActorBoundsMap.Find(Actor);
+		const FBounds* PreviousBounds = CachedActorBoundsMap.Find(Actor->GetActorGuid());
 		if(!PreviousBounds) continue;
 		
 		const FBounds CurrentBounds(Actor);
 		if(PreviousBounds->Equals(CurrentBounds)) continue;
 
-		MovedActorBoundsPairMap.Add(Actor, FBoundsPair(*PreviousBounds, CurrentBounds));
-		PreviousActorBoundsMap[Actor] = CurrentBounds;
+		MovedActorBoundsPairMap.Add(Actor->GetActorGuid(), FBoundsPair(*PreviousBounds, CurrentBounds));
+		CachedActorBoundsMap[Actor->GetActorGuid()] = CurrentBounds;
 	}
 	
 	if(MovedActorBoundsPairMap.Num())
@@ -557,8 +594,8 @@ void UEditorNavMeshManager::OnNewActorsDropped(const TArray<UObject*>& Objects, 
 	for (const AActor* Actor : Actors)
 	{
 		if(!Actor->IsA(AStaticMeshActor::StaticClass())) continue;
-		DroppedActorBoundsPairMap.Add(Actor, FBoundsPair(FBounds(), FBounds(Actor)));
-		PreviousActorBoundsMap.Add(Actor, FBounds(Actor));
+		DroppedActorBoundsPairMap.Add(Actor->GetActorGuid(), FBoundsPair(FBounds(), FBounds(Actor)));
+		CachedActorBoundsMap.Add(Actor->GetActorGuid(), FBounds(Actor));
 	}
 	
 	if(!DroppedActorBoundsPairMap.Num()) return;
@@ -573,16 +610,17 @@ void UEditorNavMeshManager::OnPasteActorsBegin()
 	
 	// Check if any selected-actor had an actual change in its transform.
 	FActorBoundsPairMap MovedActorBoundsPairMap;
-	for (auto& Iterator : PreviousActorBoundsMap)
+	for (auto& Iterator : CachedActorBoundsMap)
 	{
-		const AActor* Actor = Iterator.Key.Get();
+		const AActor* Actor;
+		if(!FindActorFromGuid(Iterator.Key, Actor)) continue;
 		if(SelectedActors.Find(Actor) == INDEX_NONE) continue;
 		
 		const FBounds CurrentBounds(Actor);
 		if(Iterator.Value.Equals(CurrentBounds)) continue;
 		
-		MovedActorBoundsPairMap.Add(Actor, FBoundsPair(Iterator.Value, CurrentBounds));
-		PreviousActorBoundsMap[Iterator.Key] = CurrentBounds;
+		MovedActorBoundsPairMap.Add(Iterator.Key, FBoundsPair(Iterator.Value, CurrentBounds));
+		CachedActorBoundsMap[Iterator.Key] = CurrentBounds;
 	}
 	if(MovedActorBoundsPairMap.Num())
 	{
@@ -603,16 +641,17 @@ void UEditorNavMeshManager::OnDuplicateActorsBegin()
 	
 	// Check if any selected-actor had an actual change in its transform.
 	FActorBoundsPairMap MovedActorBoundsPairMap;
-	for (auto& Iterator : PreviousActorBoundsMap)
+	for (auto& Iterator : CachedActorBoundsMap)
 	{
-		const AActor* Actor = Iterator.Key.Get();
+		const AActor* Actor;
+		if(!FindActorFromGuid(Iterator.Key, Actor)) continue;
 		if(SelectedActors.Find(Actor) == INDEX_NONE) continue;
 		
 		const FBounds CurrentBounds(Actor);
 		if(Iterator.Value.Equals(CurrentBounds)) continue;
 		
-		MovedActorBoundsPairMap.Add(Actor, FBoundsPair(Iterator.Value, CurrentBounds));
-		PreviousActorBoundsMap[Iterator.Key] = CurrentBounds;
+		MovedActorBoundsPairMap.Add(Iterator.Key, FBoundsPair(Iterator.Value, CurrentBounds));
+		CachedActorBoundsMap[Iterator.Key] = CurrentBounds;
 	}
 	if(MovedActorBoundsPairMap.Num())
 	{
@@ -631,10 +670,10 @@ void UEditorNavMeshManager::OnDeleteActorsBegin()
 	FActorBoundsPairMap RemovedActorBoundsPairMap;
 	for (const AActor* Actor : SelectedActors)
 	{
-		const FBounds* LastActorBounds = PreviousActorBoundsMap.Find(Actor);
-		if(!LastActorBounds) return;
-		RemovedActorBoundsPairMap.Add(Actor, FBoundsPair(*LastActorBounds, FBounds()));
-		PreviousActorBoundsMap.Remove(Actor);
+		const FBounds* LastActorBounds = CachedActorBoundsMap.Find(Actor->GetActorGuid());
+		if(!LastActorBounds) continue;
+		RemovedActorBoundsPairMap.Add(Actor->GetActorGuid(), FBoundsPair(*LastActorBounds, FBounds()));
+		CachedActorBoundsMap.Remove(Actor->GetActorGuid());
 	}
 	
 	AddSnapshot(ESnapshotType::Deleted, RemovedActorBoundsPairMap);
@@ -673,8 +712,9 @@ void UEditorNavMeshManager::OnActorSelectionChanged(const TArray<UObject*>& Acto
 		FActorBoundsPairMap AddedActorBoundsPairMap;
 		for (const AActor* Actor : SelectedActors)
 		{
-			AddedActorBoundsPairMap.Add(Actor, FBoundsPair(FBounds(), FBounds(Actor)));
-			PreviousActorBoundsMap.Add(Actor, FBounds(Actor));
+			AddedActorBoundsPairMap.Add(Actor->GetActorGuid(), FBoundsPair(FBounds(), FBounds(Actor)));
+			CachedActorBoundsMap.Add(Actor->GetActorGuid(), FBounds(Actor));
+			StaticMeshActorsMap.Add(Actor->GetActorGuid(), Actor);
 		}
 		
 		// New selected actors are the ones that had the operation applied to them.
@@ -686,7 +726,7 @@ void UEditorNavMeshManager::OnActorSelectionChanged(const TArray<UObject*>& Acto
 	MovingActorBoundsMap.Empty();
 	for (const AActor* Actor : SelectedActors)
 	{
-		MovingActorBoundsMap.Add(Actor, FBounds(Actor));
+		MovingActorBoundsMap.Add(Actor->GetActorGuid(), FBounds(Actor));
 	}
 }
 

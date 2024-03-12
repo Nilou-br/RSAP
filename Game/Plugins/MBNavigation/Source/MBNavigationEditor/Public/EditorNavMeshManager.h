@@ -27,8 +27,8 @@ enum class ESnapshotType
 	Deleted
 };
 
-typedef TMap<TWeakObjectPtr<const AActor>, FBounds> FActorBoundsMap;
-typedef TMap<TWeakObjectPtr<const AActor>, FBoundsPair> FActorBoundsPairMap;
+typedef TMap<FGuid, FBounds> FActorBoundsMap;
+typedef TMap<FGuid, FBoundsPair> FActorBoundsPairMap;
 
 struct FUndoRedoSnapshot
 {
@@ -91,9 +91,10 @@ protected:
 private:
 	void AddSnapshot(const ESnapshotType SnapshotType, const FActorBoundsPairMap& ActorBoundsPairMap);
 	void ClearRedoSnapshots();
-	static bool IsSnapshotActive(const FUndoRedoSnapshot& Snapshot);
+	bool IsSnapshotActive(const FUndoRedoSnapshot& Snapshot);
 	FBounds GetLevelBoundaries() const;
 	void CheckMovingActors();
+	bool FindActorFromGuid(const FGuid& ActorGuid, const AActor*& OutActor);
 
 	
 	/* Delegates */
@@ -158,11 +159,14 @@ private:
 	FNavMesh NavMesh;
 	FMBNavigationModule MainModule;
 
-	// Caches the previous actor bounds. // todo rename?
-	FActorBoundsMap PreviousActorBoundsMap;
+	// For quickly finding an actor using its GUID.
+	TMap<FGuid, TWeakObjectPtr<const AActor>> StaticMeshActorsMap;
+
+	// Caches the actor bounds.
+	FActorBoundsMap CachedActorBoundsMap;
 	
 	/** Holds the bounds of actors which are currently in moving state, these are updated every tick when an actor has moved.
-	 *  Snapshot is created when the movement stops */
+	 *  A snapshot is created when the movement stops. */
 	FActorBoundsMap MovingActorBoundsMap;
 	bool bIsMovingActors;
 	
