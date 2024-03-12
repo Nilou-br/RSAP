@@ -563,10 +563,11 @@ struct FBounds
 {
 	F3DVector32 Max;
 	F3DVector32 Min;
+	bool bIsValid;
 
-	FBounds() : Max(F3DVector32()), Min(F3DVector32()) {}
+	FBounds() : Max(F3DVector32()), Min(F3DVector32()), bIsValid(false) {}
 
-	explicit FBounds(const AActor* Actor)
+	explicit FBounds(const AActor* Actor) : bIsValid(true)
 	{
 		FVector Origin, Extent;
 		Actor->GetActorBounds(false, Origin, Extent, true);
@@ -587,6 +588,11 @@ struct FBounds
 				Min.X == Other.Min.X && Min.Y == Other.Min.Y && Min.Z == Other.Min.Z;
 	}
 
+	FORCEINLINE bool IsValid() const
+	{
+		return bIsValid;
+	}
+
 	FORCEINLINE bool operator!() const
 	{
 		return	Max.X == 0 && Max.Y == 0 && Max.Z == 0 &&
@@ -599,15 +605,19 @@ struct FBounds
  */
 struct FBoundsPair
 {
-	FBounds Before;
-	FBounds After;
+	FBounds Previous;
+	FBounds Current;
+
+	FBoundsPair() {}
 	
-	FBoundsPair(const FBounds& InBefore, const FBounds& InAfter)
-		: Before(InBefore), After(InAfter)
-	{}
+	FBoundsPair(const FBounds& InPrevious, const FBounds& InCurrent)
+		: Previous(InPrevious), Current(InCurrent) {}
+
+	FBoundsPair(const FBounds& InPrevious, const AActor* Actor)
+		: Previous(InPrevious), Current(Actor) {}
 
 	FORCEINLINE bool AreEqual() const
 	{
-		return Before.Equals(After);
+		return Previous.IsValid() && Previous.Equals(Current);
 	}
 };
