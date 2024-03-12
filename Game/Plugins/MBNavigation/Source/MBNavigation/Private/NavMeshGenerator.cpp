@@ -48,14 +48,8 @@ void UNavMeshGenerator::GenerateChunks(const FBounds& LevelBounds)
 
 	// Determine the min/max coordinates of the chunks.
 	const int32 Mask = ~((1<<FNavMeshData::KeyShift)-1);
-	F3DVector32 ChunksMinLoc;
-	F3DVector32 ChunksMaxLoc;
-	ChunksMinLoc.X = LevelMin.X & Mask;
-	ChunksMinLoc.Y = LevelMin.Y & Mask;
-	ChunksMinLoc.Z = LevelMin.Z & Mask;
-	ChunksMaxLoc.X = LevelMax.X & Mask;
-	ChunksMaxLoc.Y = LevelMax.Y & Mask;
-	ChunksMaxLoc.Z = LevelMax.Z & Mask;
+	const F3DVector32 ChunksMinLoc(LevelMin.X & Mask, LevelMin.Y & Mask, LevelMin.Z & Mask);
+	const F3DVector32 ChunksMaxLoc(LevelMax.X & Mask, LevelMax.Y & Mask, LevelMax.Z & Mask);
 
 	// Reserve room for all chunks in navmesh.
 	const uint32 TotalChunks =

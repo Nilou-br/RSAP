@@ -4,7 +4,6 @@
 
 #include "MBNavigation.h"
 #include "NavMeshTypes.h"
-#include "Engine/StaticMeshActor.h"
 #include "EditorNavMeshManager.generated.h"
 
 class UNavMeshGenerator;
@@ -18,63 +17,27 @@ DECLARE_LOG_CATEGORY_EXTERN(LogEditorNavManager, Log, All);
 /**
  * Enum for determining the operation that changed a static-mesh-actor.
  * - Moved: Existing Actor has changed location/rotation/scale.
- * - Placed: New Actor has been put in the level, from either dropping the asset in the viewport or pasting/duplicating an existing one.
- * - Deleted: Existing Actor has been removed from the level.
+ * - Added: New Actor has been added in the level by either dropping it in the level, or duplicating/pasting one.
+ * - Deleted: An existing Actor has been removed from the level.
  */
 enum class ESnapshotType
 {
 	Moved,
-	Added, // Dropped, pasted, duplicated
+	Added,
 	Deleted
 };
 
-/**
- * Snapshot of an actor that stores information about the state of an actor after an operation had been applied to that actor.
- * ActorPtr is used to validate the actor and compare its current state with its recorded state after the operation.
- */
-struct FActorSnapshot
-{
-	TWeakObjectPtr<AStaticMeshActor> ActorPtr;
-	FBoundsPair BoundsPair;
+typedef TMap<FGuid, FBounds> FActorBoundsMap;
+typedef TMap<FGuid, FBoundsPair> FActorBoundsPairMap;
 
-	explicit FActorSnapshot(const AStaticMeshActor* Actor)
-		: BoundsPair(Actor)
-	{}
-
-	explicit FActorSnapshot(AStaticMeshActor* Actor, const FBoundsPair& InActorBoundsPair)
-		: ActorPtr(Actor), BoundsPair(InActorBoundsPair)
-	{}
-
-	// Should be used for actors that have just been added in the world and thus don't have a before state yet.
-	static TArray<FActorSnapshot> FromActors(TArray<AStaticMeshActor*>& Actors)
-	{
-		TArray<FActorSnapshot> CreatedActors;
-		for (const AStaticMeshActor* Actor : Actors)
-		{
-			CreatedActors.Emplace(Actor);
-		}
-		return CreatedActors;
-	}
-};
-
-/**
- * Used for storing a snapshot of certain operations within the level-editor.
- * Each operation has a specific type, and a list of actors with their recorded state after this operation.
- */
 struct FUndoRedoSnapshot
 {
 	ESnapshotType SnapshotType;
-	TMap<const TWeakObjectPtr<AStaticMeshActor>, FActorSnapshot> ActorSnapshots;
+	FActorBoundsPairMap ActorBoundsPairMap;
 
-	FUndoRedoSnapshot(const ESnapshotType InE_SnapshotType, const TArray<FActorSnapshot>& InActorSnapshots):
-		SnapshotType(InE_SnapshotType)
-	{
-		ActorSnapshots.Reserve(InActorSnapshots.Num());
-		for (const FActorSnapshot& ActorSnapshot : InActorSnapshots)
-		{
-			ActorSnapshots.Add(ActorSnapshot.ActorPtr, ActorSnapshot);
-		}
-	}
+	FUndoRedoSnapshot(const ESnapshotType InE_SnapshotType, const FActorBoundsPairMap& InActorBoundsPairMap):
+		SnapshotType(InE_SnapshotType), ActorBoundsPairMap(InActorBoundsPairMap)
+	{}
 };
 
 /**
@@ -126,18 +89,17 @@ protected:
 	virtual void PostRedo(bool bSuccess) override;
 
 private:
-	void AddSnapshot(const ESnapshotType SnapshotType, const TArray<FActorSnapshot>& ActorSnapshots);
+	void AddSnapshot(const ESnapshotType SnapshotType, const FActorBoundsPairMap& ActorBoundsPairMap);
 	void ClearRedoSnapshots();
-	static bool IsSnapshotActive(const FUndoRedoSnapshot& Snapshot);
-	FBounds GetLevelBoundaries();
+	bool IsSnapshotActive(const FUndoRedoSnapshot& Snapshot);
+	FBounds GetLevelBoundaries() const;
 	void CheckMovingActors();
+	bool FindActorFromGuid(const FGuid& ActorGuid, const AActor*& OutActor);
 
 	
-
-
 	/* Delegates */
 	
-	// Level delegates
+	// Level
 	FDelegateHandle OnMapLoadDelegateHandle;
 	void OnMapLoad(const FString& Filename, FCanLoadMap& OutCanLoadMap);
 	FDelegateHandle OnMapOpenedDelegateHandle;
@@ -147,11 +109,11 @@ private:
 	FDelegateHandle PostSaveWorldDelegateHandle;
 	void PostWorldSaved(UWorld* World, FObjectPostSaveContext ObjectSaveContext);
 	
-	// Camera delegate
+	// Camera
 	FDelegateHandle OnCameraMovedDelegateHandle;
 	void OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation, ELevelViewportType LevelViewportType, int32) const;
 	
-	// Actor movement delegates
+	// Actor movement
 	FDelegateHandle OnObjectMovedDelegateHandle;
 	void OnObjectMoved(AActor* Actor);
 	FDelegateHandle OnBeginObjectMovementDelegateHandle;
@@ -159,29 +121,29 @@ private:
 	FDelegateHandle OnEndObjectMovementDelegateHandle;
 	void OnEndObjectMovement(UObject& Object);
 
-	// Actor dropped delegate
+	// Actor dropped
 	FDelegateHandle OnNewActorsDroppedDelegateHandle;
 	void OnNewActorsDropped(const TArray<UObject*>& Objects, const TArray<AActor*>& Actors);
 
-	// Actor paste delegates
+	// Actor paste
 	FDelegateHandle OnEditPasteActorsBeginDelegateHandle;
 	void OnPasteActorsBegin();
 	FDelegateHandle OnEditPasteActorsEndDelegateHandle;
 	void OnPasteActorsEnd();
 
-	// Actor duplicate delegates
+	// Actor duplicate
 	FDelegateHandle OnDuplicateActorsBeginDelegateHandle;
 	void OnDuplicateActorsBegin();
 	FDelegateHandle OnDuplicateActorsEndDelegateHandle;
 	void OnDuplicateActorsEnd();
 
-	// Actor delete delegates
+	// Actor delete
 	FDelegateHandle OnDeleteActorsBeginDelegateHandle;
 	void OnDeleteActorsBegin();
 	FDelegateHandle OnDeleteActorsEndDelegateHandle;
 	void OnDeleteActorsEnd();
 
-	// Actor selection delegate
+	// Actor selection
 	FDelegateHandle OnActorSelectionChangedDelegateHandle;
 	void OnActorSelectionChanged(const TArray<UObject*>& Actors, bool);
 
@@ -197,14 +159,21 @@ private:
 	FNavMesh NavMesh;
 	FMBNavigationModule MainModule;
 
-	bool bIsMovingActors;
-	TMap<TWeakObjectPtr<AStaticMeshActor>, FBoundsPair> MovingActorsBoundsPair;
-	bool bAddActorsOccurred;
+	// For quickly finding an actor using its GUID.
+	TMap<FGuid, TWeakObjectPtr<const AActor>> StaticMeshActorsMap;
+
+	// Caches the actor bounds.
+	FActorBoundsMap CachedActorBoundsMap;
 	
-	UPROPERTY() TArray<AStaticMeshActor*> SelectedActors;
+	/** Holds the bounds of actors which are currently in moving state, these are updated every tick when an actor has moved.
+	 *  A snapshot is created when the movement stops. */
+	FActorBoundsMap MovingActorBoundsMap;
+	bool bIsMovingActors;
+	
+	UPROPERTY() TArray<const AActor*> SelectedActors;
+	bool bAddActorOccured;
+	
 	TArray<FUndoRedoSnapshot> UndoRedoSnapshots;
 	int32 UndoRedoIndex = -1;
 	TArray<uint8> UndoBatchCounts;
-
-	TMap<TWeakObjectPtr<AStaticMeshActor>, FBounds> PreviousActorBounds;
 };

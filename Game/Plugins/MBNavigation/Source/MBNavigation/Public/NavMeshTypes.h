@@ -6,7 +6,6 @@
 #include "morton.h"
 #include "NavMeshSettings.h"
 #include "unordered_dense.h"
-#include "Engine/StaticMeshActor.h"
 
 #define DIRECTION_X_NEGATIVE 0b100000
 #define DIRECTION_Y_NEGATIVE 0b010000
@@ -136,6 +135,11 @@ struct F3DVector10
 		return X == OtherVector.X && Y == OtherVector.Y && Z == OtherVector.Z;
 	}
 
+	FORCEINLINE FVector ToVector() const
+	{
+		return FVector(X, Y, Z);
+	}
+
 	explicit F3DVector10(const uint16 InX, const uint16 InY, const uint16 InZ)
 		: X(InX), Y(InY), Z(InZ) {}
 
@@ -145,11 +149,6 @@ struct F3DVector10
 	F3DVector10()
 		:X(0), Y(0), Z(0)
 	{}
-
-	FORCEINLINE FVector ToVector() const
-	{
-		return FVector(X, Y, Z);
-	}
 };
 
 /**
@@ -189,7 +188,7 @@ struct F3DVector32
 		Vector32.Z = Decode(Key & 0x1FFFFF);
 		return Vector32;
 	}
-	
+
 	FORCEINLINE F3DVector32 ComponentMin(const F3DVector32& Other) const
 	{
 		return F3DVector32(FMath::Min(X, Other.X), FMath::Min(Y, Other.Y), FMath::Min(Z, Other.Z));
@@ -234,6 +233,11 @@ struct F3DVector32
 		return X == OtherVector.X && Y == OtherVector.Y && Z == OtherVector.Z;
 	}
 
+	FORCEINLINE FVector ToVector() const
+	{
+		return FVector(X, Y, Z);
+	}
+
 	explicit F3DVector32(const FVector &InVector)
 	{
 		X = static_cast<int_fast32_t>(std::round(InVector.X));
@@ -249,11 +253,6 @@ struct F3DVector32
 
 	explicit F3DVector32()
 		: X(0), Y(0), Z(0) {}
-
-	FORCEINLINE FVector ToVector() const
-	{
-		return FVector(X, Y, Z);
-	}
 };
 
 // todo
@@ -362,7 +361,7 @@ struct FNodeLookupData
  * - MortonCode: represents its location in a single value.
  *   Allows for memory coherency, and bitwise-operations to quickly calculate neighbours etc.
  * - Neighbours: Stores a 4 bit layer-index for locating each neighbour in the octree.
- * - DynamicIndex: Represents the octree the children of this node are stored on, 0 being the static octree. todo remove
+ * - DynamicIndex: Represents the octree the children of this node are stored on, 0 being the static octree. todo remove this, we only need to know d-index of neighbours/children.
  * - ChunkBorder: Bitmask for determining the border this voxel is next to.
  *   Used to efficiently calculate the next chunk.
  * - IsOccluded(): If the node is occluded.
@@ -551,8 +550,9 @@ struct FChunk
 	}
 };
 
-// The navigation-mesh is a hashmap of chunks, each being a SVO tree.
+// The navigation-mesh is a hashmap of chunks.
 typedef ankerl::unordered_dense::map<uint_fast64_t, FChunk> FNavMesh;
+
 
 
 /**
@@ -563,10 +563,11 @@ struct FBounds
 {
 	F3DVector32 Max;
 	F3DVector32 Min;
+	bool bIsValid;
 
-	FBounds() : Max(F3DVector32()), Min(F3DVector32()) {}
+	FBounds() : Max(F3DVector32()), Min(F3DVector32()), bIsValid(false) {}
 
-	explicit FBounds(const AActor* Actor)
+	explicit FBounds(const AActor* Actor) : bIsValid(true)
 	{
 		FVector Origin, Extent;
 		Actor->GetActorBounds(false, Origin, Extent, true);
@@ -580,11 +581,16 @@ struct FBounds
 							FMath::FloorToInt(Origin.Y - Extent.Y), 
 							FMath::FloorToInt(Origin.Z - Extent.Z));
 	}
-
-	FORCEINLINE bool Equals(const FBounds& InActorBounds) const
+	
+	FORCEINLINE bool Equals(const FBounds& Other) const
 	{
-		return	Max.X == InActorBounds.Max.X && Max.Y == InActorBounds.Max.Y && Max.Z == InActorBounds.Max.Z &&
-				Min.X == InActorBounds.Min.X && Min.Y == InActorBounds.Min.Y && Min.Z == InActorBounds.Min.Z;
+		return	Max.X == Other.Max.X && Max.Y == Other.Max.Y && Max.Z == Other.Max.Z &&
+				Min.X == Other.Min.X && Min.Y == Other.Min.Y && Min.Z == Other.Min.Z;
+	}
+
+	FORCEINLINE bool IsValid() const
+	{
+		return bIsValid;
 	}
 
 	FORCEINLINE bool operator!() const
@@ -599,19 +605,19 @@ struct FBounds
  */
 struct FBoundsPair
 {
-	FBounds Before;
-	FBounds After;
-	
-	explicit FBoundsPair(const AStaticMeshActor* Actor)
-		: Before(Actor), After(Actor)
-	{}
+	FBounds Previous;
+	FBounds Current;
 
-	explicit FBoundsPair(const FBounds& InBefore, const FBounds& InAfter)
-		: Before(InBefore), After(InAfter)
-	{}
+	FBoundsPair() {}
+	
+	FBoundsPair(const FBounds& InPrevious, const FBounds& InCurrent)
+		: Previous(InPrevious), Current(InCurrent) {}
+
+	FBoundsPair(const FBounds& InPrevious, const AActor* Actor)
+		: Previous(InPrevious), Current(Actor) {}
 
 	FORCEINLINE bool AreEqual() const
 	{
-		return Before.Equals(After);
+		return Previous.IsValid() && Previous.Equals(Current);
 	}
 };
