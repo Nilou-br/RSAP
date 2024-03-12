@@ -27,20 +27,16 @@ enum class ESnapshotType
 	Deleted
 };
 
+typedef TMap<TWeakObjectPtr<const AActor>, FBounds> FActorBoundsMap;
+
 struct FUndoRedoSnapshot
 {
 	ESnapshotType SnapshotType;
-	TMap<TWeakObjectPtr<const AActor>, FBounds> ActorBoundsMap;
+	FActorBoundsMap ActorBoundsMap;
 
-	FUndoRedoSnapshot(const ESnapshotType InE_SnapshotType, const TArray<const AActor*>& Actors):
-		SnapshotType(InE_SnapshotType)
-	{
-		ActorBoundsMap.Reserve(Actors.Num());
-		for (const AActor* Actor : Actors)
-		{
-			ActorBoundsMap.Emplace(Actor, Actor);
-		}
-	}
+	FUndoRedoSnapshot(const ESnapshotType InE_SnapshotType, const FActorBoundsMap& InActorBoundsMap):
+		SnapshotType(InE_SnapshotType), ActorBoundsMap(InActorBoundsMap)
+	{}
 };
 
 /**
@@ -92,7 +88,7 @@ protected:
 	virtual void PostRedo(bool bSuccess) override;
 
 private:
-	void AddSnapshot(const FUndoRedoSnapshot& Snapshot);
+	void AddSnapshot(const ESnapshotType SnapshotType, const FActorBoundsMap& ActorBoundsMap);
 	void ClearRedoSnapshots();
 	static bool IsSnapshotActive(const FUndoRedoSnapshot& Snapshot);
 	FBounds GetLevelBoundaries() const;
@@ -164,8 +160,8 @@ private:
 	bool bIsMovingActors;
 	bool bAddActorOccured;
 	
-	TMap<TWeakObjectPtr<const AActor>, FBounds> MovingActorBoundsMap;
-	TMap<TWeakObjectPtr<const AActor>, FBounds> PreviousActorBoundsMap;
+	FActorBoundsMap MovingActorBoundsMap; // Keeps track of currently moving actors bounds.
+	FActorBoundsMap PreviousActorBoundsMap; // Caches the actor bounds.
 	UPROPERTY() TArray<const AActor*> SelectedActors;
 	
 	TArray<FUndoRedoSnapshot> UndoRedoSnapshots;
