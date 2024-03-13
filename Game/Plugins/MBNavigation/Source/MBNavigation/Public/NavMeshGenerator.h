@@ -4,22 +4,22 @@
 
 #include "CoreMinimal.h"
 #include "NavMeshTypes.h"
-#include "NavMeshGenerator.generated.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogNavMeshGenerator, Log, All);
 
 
 
-UCLASS()
-class MBNAVIGATION_API UNavMeshGenerator : public UObject
+
+class MBNAVIGATION_API FNavMeshGenerator
 {
-	GENERATED_BODY()
 	
 public:
-	FORCEINLINE void Initialize(UWorld* InWorld) { World = InWorld; }
-	FORCEINLINE void Deinitialize() { World = nullptr; }
+	explicit FNavMeshGenerator(const FNavMeshPtr& InNavMesh)
+		: NavMeshPtr(InNavMesh), World(nullptr)
+	{}
+	void SetWorld(const UWorld* InWorld) { World = InWorld; }
 	
-	FNavMesh Generate(const FBounds& LevelBounds);
+	void Generate(const FBounds& LevelBounds);
 
 private:
 
@@ -33,8 +33,6 @@ private:
 	void RecursiveSetChildNodesRelation(const FOctreeNode* Node, const FChunk& Chunk, const uint8 LayerIndex, const uint8 LayerIndexToSet, const uint8 Direction);
 
 	// Variables
-	UPROPERTY()
-	UWorld* World;
-	
-	FNavMesh NavMesh;
+	FNavMeshPtr NavMeshPtr;
+	const UWorld* World;
 };

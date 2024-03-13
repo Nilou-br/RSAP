@@ -6,9 +6,9 @@
 #include "NavMeshTypes.h"
 #include "EditorNavMeshManager.generated.h"
 
-class UNavMeshGenerator;
-class UNavMeshUpdater;
-class UNavMeshDebugger;
+class FNavMeshGenerator;
+class FNavMeshUpdater;
+class FNavMeshDebugger;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogEditorNavManager, Log, All);
 
@@ -69,7 +69,7 @@ private:
 	void LoadLevelNavMeshSettings();
 	void InitStaticNavMeshData();
 	void GenerateNavmesh();
-	void SaveNavMesh();
+	void SaveNavMesh() const;
 	
 public:
 	UFUNCTION(BlueprintCallable, Category="Settings")
@@ -151,12 +151,12 @@ private:
 	
 	
 	// Variables
-	UPROPERTY() UWorld* EditorWorld;
-	UPROPERTY() UNavMeshGenerator* NavMeshGenerator;
-	UPROPERTY() UNavMeshUpdater* NavMeshUpdater;
-	UPROPERTY() UNavMeshDebugger* NavMeshDebugger;
+	UPROPERTY() const UWorld* EditorWorld;
 	UPROPERTY() UNavMeshSettings* NavMeshSettings;
-	FNavMesh NavMesh;
+	FNavMeshGenerator* NavMeshGenerator;
+	FNavMeshUpdater* NavMeshUpdater;
+	FNavMeshDebugger* NavMeshDebugger;
+	FNavMeshPtr NavMeshPtr;
 	FMBNavigationModule MainModule;
 
 	// For quickly finding an actor using its GUID.

@@ -15,8 +15,10 @@ void UWorldNavMeshManager::Initialize(FSubsystemCollectionBase& Collection)
 
 	OnWorldInitializedActorsDelegateHandle = FWorldDelegates::OnWorldInitializedActors.AddUObject(this, &ThisClass::OnWorldInitializedActors);
 
+	NavMeshPtr = std::make_shared<FNavMesh>();
+
 #if WITH_EDITOR
-	NavMeshDebugger = NewObject<UNavMeshDebugger>();
+	NavMeshDebugger = new FNavMeshDebugger(NavMeshPtr);
 #endif
 }
 
@@ -44,7 +46,7 @@ void UWorldNavMeshManager::Tick(float DeltaTime)
 	if(CameraLocation == LastCameraLocation && CameraRotation == LastCameraRotation) return;
 	
 #if WITH_EDITOR
-	NavMeshDebugger->Draw(NavMesh, CameraLocation, CameraRotation);
+	NavMeshDebugger->Draw(CameraLocation, CameraRotation);
 #endif
 
 	LastCameraLocation = CameraLocation;
@@ -55,11 +57,11 @@ void UWorldNavMeshManager::OnWorldInitializedActors(const FActorsInitializedPara
 {
 	World = GetWorld();
 	if(!World || World->WorldType == EWorldType::Editor) return;
-	if(FGuid ID; !DeserializeNavMesh(NavMesh, ID)) return;
+	if(FGuid ID; !DeserializeNavMesh(*NavMeshPtr, ID)) return;
 	// todo check navmesh?
 
 #if WITH_EDITOR
-	NavMeshDebugger->Initialize(World);
+	NavMeshDebugger->SetWorld(World);
 #endif
 	
 	bWorldReady = true;

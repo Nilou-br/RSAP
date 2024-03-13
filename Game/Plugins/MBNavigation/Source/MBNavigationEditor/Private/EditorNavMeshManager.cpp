@@ -27,15 +27,22 @@ void UEditorNavMeshManager::Initialize(FSubsystemCollectionBase& Collection)
 	GEditor->RegisterForUndo(this);
 
 	MainModule = FModuleManager::LoadModuleChecked<FMBNavigationModule>("MBNavigation");
-	NavMeshGenerator = NewObject<UNavMeshGenerator>();
-	NavMeshUpdater = NewObject<UNavMeshUpdater>();
-	NavMeshDebugger = NewObject<UNavMeshDebugger>();
+	
+	NavMeshPtr = std::make_shared<FNavMesh>();
+	NavMeshGenerator = new FNavMeshGenerator(NavMeshPtr);
+	NavMeshUpdater = new FNavMeshUpdater(NavMeshPtr);
+	NavMeshDebugger = new FNavMeshDebugger(NavMeshPtr);
 }
 
 void UEditorNavMeshManager::Deinitialize()
 {
 	ClearDelegates();
 	GEditor->UnregisterForUndo(this);
+
+	NavMeshPtr.reset();
+	delete NavMeshGenerator;
+	delete NavMeshUpdater;
+	delete NavMeshDebugger;
 	
 	Super::Deinitialize();
 }
@@ -164,13 +171,14 @@ void UEditorNavMeshManager::InitStaticNavMeshData()
 
 void UEditorNavMeshManager::GenerateNavmesh()
 {
-	NavMesh = NavMeshGenerator->Generate(GetLevelBoundaries());
-	NavMeshDebugger->Draw(NavMesh);
+	NavMeshGenerator->Generate(GetLevelBoundaries());
+	NavMeshDebugger->Draw();
 }
 
-void UEditorNavMeshManager::SaveNavMesh()
+void UEditorNavMeshManager::SaveNavMesh() const
 {
-	SerializeNavMesh(NavMesh, NavMeshSettings->ID);
+	if(!NavMeshPtr) return;
+	SerializeNavMesh(*NavMeshPtr, NavMeshSettings->ID);
 }
 
 void UEditorNavMeshManager::UpdateGenerationSettings(const float VoxelSizeExponentFloat, const float StaticDepthFloat)
@@ -201,7 +209,7 @@ void UEditorNavMeshManager::UpdateGenerationSettings(const float VoxelSizeExpone
 		}
 	}
 	
-	NavMeshDebugger->Draw(NavMesh);
+	NavMeshDebugger->Draw();
 }
 
 void UEditorNavMeshManager::UpdateDebugSettings (
@@ -214,7 +222,7 @@ void UEditorNavMeshManager::UpdateDebugSettings (
 	
 	FNavMeshDebugSettings::Initialize(bDebugEnabled, bDisplayNodes, bDisplayNodeBorder, bDisplayRelations, bDisplayPaths, bDisplayChunks);
 	MainModule.InitializeNavMeshDebugSettings(bDebugEnabled, bDisplayNodes, bDisplayNodeBorder, bDisplayRelations, bDisplayPaths, bDisplayChunks);
-	NavMeshDebugger->Draw(NavMesh);
+	NavMeshDebugger->Draw();
 }
 
 void UEditorNavMeshManager::PostUndo(bool bSuccess)
@@ -482,25 +490,22 @@ void UEditorNavMeshManager::OnMapLoad(const FString& Filename, FCanLoadMap& OutC
 {
 	NavMeshSettings = nullptr;
 	EditorWorld = nullptr;
-	NavMeshGenerator->Deinitialize();
-	NavMeshUpdater->Deinitialize();
-	NavMeshDebugger->Deinitialize();
-	NavMesh.clear();
+	NavMeshPtr->clear();
 }
 
 void UEditorNavMeshManager::OnMapOpened(const FString& Filename, bool bAsTemplate)
 {
 	EditorWorld = GEditor->GetEditorWorldContext().World();
-	NavMeshGenerator->Initialize(EditorWorld);
-	NavMeshUpdater->Initialize(EditorWorld);
-	NavMeshDebugger->Initialize(EditorWorld);
+	NavMeshGenerator->SetWorld(EditorWorld);
+	NavMeshUpdater->SetWorld(EditorWorld);
+	NavMeshDebugger->SetWorld(EditorWorld);
 
 	LoadLevelNavMeshSettings();
 	InitStaticNavMeshData();
 
 	// Get cached navmesh.
 	FGuid CachedID;
-	DeserializeNavMesh(NavMesh, CachedID);
+	DeserializeNavMesh(*NavMeshPtr, CachedID);
 
 	// Actors are initialized next frame.
 	EditorWorld->GetTimerManager().SetTimerForNextTick([&]()
@@ -518,7 +523,7 @@ void UEditorNavMeshManager::OnMapOpened(const FString& Filename, bool bAsTemplat
 		// If the cached ID is not the same, then the navmesh and the level are not in sync, so we just regenerate a new one.
 		// Should only happen in cases where the level is shared outside of version-control, where the serialized .bin file is not in sync with the received level.
 		// todo: this should be checked, something is not right.
-		if(!NavMesh.empty() && NavMeshSettings->ID == CachedID) return;
+		if(!NavMeshPtr->empty() && NavMeshSettings->ID == CachedID) return;
 		GenerateNavmesh();
 		if(EditorWorld->GetOuter()->MarkPackageDirty())
 		{
@@ -550,7 +555,7 @@ void UEditorNavMeshManager::PostWorldSaved(UWorld* World, FObjectPostSaveContext
 void UEditorNavMeshManager::OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation,
 	ELevelViewportType LevelViewportType, int32) const
 {
-	NavMeshDebugger->Draw(NavMesh, CameraLocation, CameraRotation);
+	NavMeshDebugger->Draw(CameraLocation, CameraRotation);
 }
 
 void UEditorNavMeshManager::OnObjectMoved(AActor* Actor)

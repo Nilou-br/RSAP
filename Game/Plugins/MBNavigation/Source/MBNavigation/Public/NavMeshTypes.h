@@ -550,8 +550,9 @@ struct FChunk
 	}
 };
 
-// The navigation-mesh is a hashmap of chunks.
+// The Navigation-Mesh is a hashmap of Chunks.
 typedef ankerl::unordered_dense::map<uint_fast64_t, FChunk> FNavMesh;
+typedef std::shared_ptr<FNavMesh> FNavMeshPtr;
 
 
 

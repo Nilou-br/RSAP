@@ -14,14 +14,9 @@ FString To6BitBinaryString(const uint8 Value) {
 	return FString(BinaryString.substr(2, 6).c_str());
 }
 
-void UNavMeshDebugger::Initialize(const UWorld* InWorld)
+void FNavMeshDebugger::Draw()
 {
-	World = InWorld;
-}
-
-void UNavMeshDebugger::Draw(const FNavMesh& NavMesh)
-{
-	if(!FNavMeshDebugSettings::bDebugEnabled) return;
+	if(!FNavMeshDebugSettings::bDebugEnabled || !NavMeshPtr) return;
 	
 	FVector CameraLocation;
 	FRotator CameraRotation;
@@ -51,18 +46,18 @@ void UNavMeshDebugger::Draw(const FNavMesh& NavMesh)
 	}
 	
 	const FVector CameraForwardVector = FRotationMatrix(CameraRotation).GetUnitAxis(EAxis::X);
-	PerformConditionalDraw(NavMesh, CameraLocation, CameraForwardVector);
+	PerformConditionalDraw(CameraLocation, CameraForwardVector);
 }
 
-void UNavMeshDebugger::Draw(const FNavMesh& NavMesh, const FVector& CameraLocation, const FRotator& CameraRotation)
+void FNavMeshDebugger::Draw(const FVector& CameraLocation, const FRotator& CameraRotation)
 {
-	if(!FNavMeshDebugSettings::bDebugEnabled) return;
+	if(!FNavMeshDebugSettings::bDebugEnabled || !NavMeshPtr) return;
 	
 	const FVector CameraForwardVector = FRotationMatrix(CameraRotation).GetUnitAxis(EAxis::X);
-	PerformConditionalDraw(NavMesh, CameraLocation, CameraForwardVector);
+	PerformConditionalDraw(CameraLocation, CameraForwardVector);
 }
 
-void UNavMeshDebugger::PerformConditionalDraw(const FNavMesh& NavMesh, const FVector& CameraLocation, const FVector& CameraForwardVector)
+void FNavMeshDebugger::PerformConditionalDraw(const FVector& CameraLocation, const FVector& CameraForwardVector)
 {
 	FlushPersistentDebugLines(World);
 	FlushDebugStrings(World);
@@ -70,21 +65,21 @@ void UNavMeshDebugger::PerformConditionalDraw(const FNavMesh& NavMesh, const FVe
 	if (FNavMeshDebugSettings::bDisplayNodes ||
 		FNavMeshDebugSettings::bDisplayNodeBorder ||
 		FNavMeshDebugSettings::bDisplayRelations) {
-		DrawNodes(NavMesh, CameraLocation, CameraForwardVector);
+		DrawNodes(CameraLocation, CameraForwardVector);
 	}
 	if (FNavMeshDebugSettings::bDisplayPaths) {
-		DrawPaths(NavMesh, CameraLocation, CameraForwardVector);
+		DrawPaths(CameraLocation, CameraForwardVector);
 	}
 	if (FNavMeshDebugSettings::bDisplayChunks) {
-		DrawChunks(NavMesh, CameraLocation, CameraForwardVector);
+		DrawChunks(CameraLocation, CameraForwardVector);
 	}
 }
 
-void UNavMeshDebugger::DrawNodes(const FNavMesh& NavMesh, const FVector& CameraLocation, const FVector& CameraForwardVector) const
+void FNavMeshDebugger::DrawNodes(const FVector& CameraLocation, const FVector& CameraForwardVector) const
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("DrawNodes");
 	
-	for (const auto &Chunk : std::views::values(NavMesh))
+	for (const FNavMesh& NavMesh = *NavMeshPtr; const auto &Chunk : std::views::values(NavMesh))
 	{
 		TArray<FNodesMap> Layers = Chunk.Octrees[0].Get()->Layers;
 		for (int LayerIndex = 0; LayerIndex < 10; ++LayerIndex)
@@ -174,15 +169,14 @@ void UNavMeshDebugger::DrawNodes(const FNavMesh& NavMesh, const FVector& CameraL
 	}
 }
 
-void UNavMeshDebugger::DrawPaths(const FNavMesh& NavMesh, const FVector& CameraLocation,
+void FNavMeshDebugger::DrawPaths(const FVector& CameraLocation,
 	const FVector& CameraForwardVector) const
-{
-}
+{}
 
-void UNavMeshDebugger::DrawChunks(const FNavMesh& NavMesh, const FVector& CameraLocation,
+void FNavMeshDebugger::DrawChunks(const FVector& CameraLocation,
 	const FVector& CameraForwardVector) const
 {
-	for (const auto &Chunk : std::views::values(NavMesh))
+	for (const auto &Chunk : std::views::values(*NavMeshPtr))
 	{
 		const FVector ChunkGlobalCenterLocation = (Chunk.Location + FNavMeshData::NodeHalveSizes[0]).ToVector();
 		const FVector DirectionToTarget = (ChunkGlobalCenterLocation - CameraLocation).GetSafeNormal();

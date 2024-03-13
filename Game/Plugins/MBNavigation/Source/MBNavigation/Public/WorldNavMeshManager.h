@@ -1,9 +1,10 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-#include "NavMeshDebugger.h"
 #include "NavMeshTypes.h"
 #include "WorldNavMeshManager.generated.h"
+
+class FNavMeshDebugger;
 
 
 
@@ -24,10 +25,8 @@ private:
 	FDelegateHandle OnWorldInitializedActorsDelegateHandle;
 	void OnWorldInitializedActors(const FActorsInitializedParams& ActorsInitializedParams);
 
-	UPROPERTY()
-	UWorld* World;
-	
-	FNavMesh NavMesh;
+	UPROPERTY() UWorld* World;
+	FNavMeshPtr NavMeshPtr;
 	
 	bool bWorldReady;
 	FVector LastCameraLocation;
@@ -35,8 +34,7 @@ private:
 	
 
 #if WITH_EDITORONLY_DATA
-	UPROPERTY()
-	UNavMeshDebugger* NavMeshDebugger;
+	FNavMeshDebugger* NavMeshDebugger;
 #endif
 	
 };

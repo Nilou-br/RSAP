@@ -5,24 +5,24 @@
 #include "CoreMinimal.h"
 #include "NavMeshSettings.h"
 #include "NavMeshTypes.h"
-#include "NavMeshUpdater.generated.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogNavMeshUpdater, Log, All);
 
 
 
-UCLASS()
-class MBNAVIGATION_API UNavMeshUpdater : public UObject
-{
-	GENERATED_BODY()
-	
-public:
-	FORCEINLINE void Initialize(UWorld* InWorld) { World = InWorld; }
-	FORCEINLINE void Deinitialize() { World = nullptr; }
 
+class MBNAVIGATION_API FNavMeshUpdater
+{
+public:
+	explicit FNavMeshUpdater(const FNavMeshPtr& InNavMesh)
+		: NavMesh(InNavMesh), World(nullptr)
+	{}
+	void SetWorld(const UWorld* InWorld) { World = InWorld; }
+	
 	void ProcessMovement(FBounds& ActorStatePair);
 	
 
 private:
-	UPROPERTY() UWorld* World;
+	FNavMeshPtr NavMesh;
+	const UWorld* World;
 };

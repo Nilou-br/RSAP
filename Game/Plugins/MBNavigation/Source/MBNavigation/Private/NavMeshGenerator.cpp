@@ -9,14 +9,13 @@
 DEFINE_LOG_CATEGORY(LogNavMeshGenerator)
 
 
-FNavMesh UNavMeshGenerator::Generate(const FBounds& LevelBounds)
+void FNavMeshGenerator::Generate(const FBounds& LevelBounds)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("NavMesh Generate");
 	if (!World)
 	{
-		UE_LOG(LogNavMeshGenerator, Error,
-		       TEXT("Invalid 'World'. Cannot generate the navmesh without an existing world."))
-		return FNavMesh();
+		UE_LOG(LogNavMeshGenerator, Error, TEXT("Invalid 'World'. Cannot generate the navmesh without an existing world."))
+		return;
 	}
 
 #if WITH_EDITOR
@@ -24,7 +23,7 @@ FNavMesh UNavMeshGenerator::Generate(const FBounds& LevelBounds)
 #endif
 
 	// Start generation
-	NavMesh = FNavMesh();
+	NavMeshPtr->clear(); // todo check if this clears everything
 	GenerateChunks(LevelBounds);
 
 #if WITH_EDITOR
@@ -32,15 +31,13 @@ FNavMesh UNavMeshGenerator::Generate(const FBounds& LevelBounds)
 		std::chrono::high_resolution_clock::now() - StartTime).count() / 1000.0f;
 	// UE_LOG(LogNavMeshGenerator, Log, TEXT("Generation took : '%f' seconds"), DurationSeconds);
 #endif
-
-	return NavMesh;
 }
 
 /*
  * Create a grid of chunks filling the entire area of the level-boundaries.
  * Chunks are be placed so that their origin align with the world coordinates x0,y0,z0.
  */
-void UNavMeshGenerator::GenerateChunks(const FBounds& LevelBounds)
+void FNavMeshGenerator::GenerateChunks(const FBounds& LevelBounds)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("GenerateChunks");
 	const F3DVector32 LevelMin = LevelBounds.Min;
@@ -56,7 +53,7 @@ void UNavMeshGenerator::GenerateChunks(const FBounds& LevelBounds)
 		((ChunksMaxLoc.X << FNavMeshData::KeyShift) - (ChunksMinLoc.X << FNavMeshData::KeyShift)) *
 		((ChunksMaxLoc.Y << FNavMeshData::KeyShift) - (ChunksMinLoc.Y << FNavMeshData::KeyShift)) *
 		((ChunksMaxLoc.Z << FNavMeshData::KeyShift) - (ChunksMinLoc.Z << FNavMeshData::KeyShift)) + 1;
-	NavMesh.reserve(TotalChunks);
+	NavMeshPtr->reserve(TotalChunks);
 
 	if (TotalChunks <= 0)
 	{
@@ -73,7 +70,7 @@ void UNavMeshGenerator::GenerateChunks(const FBounds& LevelBounds)
 			for (int32 Z = ChunksMinLoc.Z; Z <= ChunksMaxLoc.Z; Z+=FNavMeshData::ChunkSize)
 			{
 				F3DVector32 ChunkLocation = F3DVector32(X, Y, Z);
-				auto [ChunkIterator, IsInserted] = NavMesh.emplace(ChunkLocation.ToKey(), FChunk(ChunkLocation));
+				auto [ChunkIterator, IsInserted] = NavMeshPtr->emplace(ChunkLocation.ToKey(), FChunk(ChunkLocation));
 
 				FChunk* Chunk = &ChunkIterator->second;
 				RasterizeStaticOctree(Chunk);
@@ -86,7 +83,7 @@ void UNavMeshGenerator::GenerateChunks(const FBounds& LevelBounds)
 /**
  * Rasterize the static part of the octree on a given chunk.
  */
-void UNavMeshGenerator::RasterizeStaticOctree(FChunk* Chunk)
+void FNavMeshGenerator::RasterizeStaticOctree(FChunk* Chunk)
 {
 	FOctree* StaticOctree = Chunk->Octrees[0].Get();
 	FNodesMap& FirstLayer = StaticOctree->Layers[0];
@@ -113,7 +110,7 @@ void UNavMeshGenerator::RasterizeStaticOctree(FChunk* Chunk)
  * Rasterize a static node, only if it occludes anything.
  * This method is called recursively until it either reaches the static-depth or if it doesn't occlude anything.
  */
-void UNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, const uint8 LayerIndex)
+void FNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, const uint8 LayerIndex)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("RasterizeStaticNode");
 	const F3DVector10 NodeLocalLoc = Node.GetLocalLocation();
@@ -163,7 +160,7 @@ void UNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 	}
 }
 
-bool UNavMeshGenerator::HasOverlap(const F3DVector32& NodeGlobalLocation, const uint8 LayerIndex)
+bool FNavMeshGenerator::HasOverlap(const F3DVector32& NodeGlobalLocation, const uint8 LayerIndex)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("HasOverlap");
 	return World->OverlapBlockingTestByChannel(
@@ -189,7 +186,7 @@ bool UNavMeshGenerator::HasOverlap(const F3DVector32& NodeGlobalLocation, const 
  * 
  * @param Chunk Chunk holding the nodes you want to set the relations of.
  */
-void UNavMeshGenerator::SetNegativeNeighbourRelations(const FChunk* Chunk)
+void FNavMeshGenerator::SetNegativeNeighbourRelations(const FChunk* Chunk)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("SetNegativeNeighbourRelations");
 
@@ -212,7 +209,7 @@ void UNavMeshGenerator::SetNegativeNeighbourRelations(const FChunk* Chunk)
  * @param ChunkLocation: location of the chunk the given Node is in.
  * @param LayerIndex: layer-index of the given Node.
  */
-void UNavMeshGenerator::SetNodeRelations(FOctreeNode& Node, const F3DVector32& ChunkLocation, const uint8 LayerIndex)
+void FNavMeshGenerator::SetNodeRelations(FOctreeNode& Node, const F3DVector32& ChunkLocation, const uint8 LayerIndex)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("SetNeighbourRelations");
 
@@ -275,8 +272,8 @@ void UNavMeshGenerator::SetNodeRelations(FOctreeNode& Node, const F3DVector32& C
 
 		// Find chunk the neighbour is in.
 		const uint_fast64_t Key = (ChunkLocation + ChunkOffset).ToKey();
-		const auto ChunkIterator = NavMesh.find(Key);
-		if (ChunkIterator == NavMesh.end()) continue;
+		const auto ChunkIterator = NavMeshPtr->find(Key);
+		if (ChunkIterator == NavMeshPtr->end()) continue;
 		const FChunk& NeighbourChunk = ChunkIterator->second;
 
 		// Get morton-code we want to start checking from the calculated location.
@@ -338,7 +335,7 @@ void UNavMeshGenerator::SetNodeRelations(FOctreeNode& Node, const F3DVector32& C
  * @param Direction Direction of Neighbour.
  * 
  */
-void UNavMeshGenerator::RecursiveSetChildNodesRelation(const FOctreeNode* Node, const FChunk& Chunk, const uint8 LayerIndex, const uint8 LayerIndexToSet, const uint8 Direction)
+void FNavMeshGenerator::RecursiveSetChildNodesRelation(const FOctreeNode* Node, const FChunk& Chunk, const uint8 LayerIndex, const uint8 LayerIndexToSet, const uint8 Direction)
 {
 	if(!Node->IsFilled()) return;
 	
