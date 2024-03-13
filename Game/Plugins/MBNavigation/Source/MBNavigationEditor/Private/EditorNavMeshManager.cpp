@@ -169,9 +169,22 @@ void UEditorNavMeshManager::InitStaticNavMeshData()
 	MainModule.InitializeNavMeshSettings(NavMeshSettings);
 }
 
-void UEditorNavMeshManager::GenerateNavmesh()
+void UEditorNavMeshManager::GenerateAndDrawNavMesh()
 {
 	NavMeshGenerator->Generate(GetLevelBoundaries());
+	NavMeshDebugger->Draw();
+}
+
+void UEditorNavMeshManager::UpdateAndDrawNavMesh(const FActorBoundsPairMap& ActorBoundPairs)
+{
+	TArray<FBoundsPair> BoundPairs;
+	ActorBoundPairs.GenerateValueArray(BoundPairs);
+	UpdateAndDrawNavMesh(BoundPairs);
+}
+
+void UEditorNavMeshManager::UpdateAndDrawNavMesh(const TArray<FBoundsPair>& BoundPairs)
+{
+	NavMeshUpdater->Update(BoundPairs);
 	NavMeshDebugger->Draw();
 }
 
@@ -185,7 +198,7 @@ void UEditorNavMeshManager::UpdateGenerationSettings(const float VoxelSizeExpone
 {
 	if(!EditorWorld)
 	{
-		UE_LOG(LogEditorNavManager, Error, TEXT("Cannot update the navmesh-settings because there is no active world."));
+		UE_LOG(LogEditorNavManager, Warning, TEXT("Cannot update the navmesh-settings because there is no active world."));
 		return;
 	}
 	
@@ -199,7 +212,7 @@ void UEditorNavMeshManager::UpdateGenerationSettings(const float VoxelSizeExpone
 
 	if(bShouldRegenerate)
 	{
-		GenerateNavmesh();
+		GenerateAndDrawNavMesh();
 		
 		// Don't save the navmesh if the level has unsaved changes, it will be saved when the user saves the level manually.
 		if(const UPackage* Package = Cast<UPackage>(EditorWorld->GetOuter());
@@ -207,6 +220,7 @@ void UEditorNavMeshManager::UpdateGenerationSettings(const float VoxelSizeExpone
 		{
 			UE_LOG(LogEditorNavManager, Log, TEXT("Marked level as dirty. Navmesh will be saved upon saving the level."))
 		}
+		return;
 	}
 	
 	NavMeshDebugger->Draw();
@@ -291,7 +305,7 @@ void UEditorNavMeshManager::PostUndo(bool bSuccess)
 			}
 		}
 		
-		GenerateNavmesh();
+		UpdateAndDrawNavMesh(UndoBoundsPairMap);
 	}
 	
 	FEditorUndoClient::PostUndo(bSuccess);
@@ -315,7 +329,7 @@ void UEditorNavMeshManager::PostRedo(bool bSuccess)
 		const FString LogString = Difference > 1 ? FString::Printf(TEXT("Redid '%i' operations."), Difference) : "Redid 1 operation.";
 		UE_LOG(LogEditorNavManager, Log, TEXT("%s"), *LogString);
 		
-		FActorBoundsPairMap UndoBoundsPairMap;
+		FActorBoundsPairMap RedoBoundsPairMap;
 		for (int Index = BeforeIndex+1; Index <= UndoRedoIndex; ++Index)
 		{
 			const FUndoRedoSnapshot& Snapshot = UndoRedoSnapshots[Index];
@@ -325,30 +339,30 @@ void UEditorNavMeshManager::PostRedo(bool bSuccess)
 				
 				switch (Snapshot.SnapshotType) {
 				case ESnapshotType::Moved:
-					if(!UndoBoundsPairMap.Contains(Iterator.Key))
+					if(!RedoBoundsPairMap.Contains(Iterator.Key))
 					{
-						UndoBoundsPairMap.Add(Iterator.Key, FBoundsPair(SSBoundsPair.Previous, SSBoundsPair.Current));
+						RedoBoundsPairMap.Add(Iterator.Key, FBoundsPair(SSBoundsPair.Previous, SSBoundsPair.Current));
 					}
-					UndoBoundsPairMap[Iterator.Key].Current = SSBoundsPair.Current;
+					RedoBoundsPairMap[Iterator.Key].Current = SSBoundsPair.Current;
 					CachedActorBoundsMap[Iterator.Key] = SSBoundsPair.Current;
 					break;
 				case ESnapshotType::Added:
-					UndoBoundsPairMap.Add(Iterator.Key, FBoundsPair(SSBoundsPair.Previous, SSBoundsPair.Current));
+					RedoBoundsPairMap.Add(Iterator.Key, FBoundsPair(SSBoundsPair.Previous, SSBoundsPair.Current));
 					CachedActorBoundsMap.Add(Iterator.Key, SSBoundsPair.Current);
 					break;
 				case ESnapshotType::Deleted:
-					if(!UndoBoundsPairMap.Contains(Iterator.Key))
+					if(!RedoBoundsPairMap.Contains(Iterator.Key))
 					{
-						UndoBoundsPairMap.Add(Iterator.Key, FBoundsPair(SSBoundsPair.Previous, SSBoundsPair.Current));
+						RedoBoundsPairMap.Add(Iterator.Key, FBoundsPair(SSBoundsPair.Previous, SSBoundsPair.Current));
 					}
-					UndoBoundsPairMap[Iterator.Key].Current = SSBoundsPair.Current;
+					RedoBoundsPairMap[Iterator.Key].Current = SSBoundsPair.Current;
 					CachedActorBoundsMap.Remove(Iterator.Key);
 					break;
 				}
 			}
 		}
 		
-		GenerateNavmesh();
+		UpdateAndDrawNavMesh(RedoBoundsPairMap);
 	}
 	
 	FEditorUndoClient::PostRedo(bSuccess);
@@ -443,7 +457,7 @@ void UEditorNavMeshManager::CheckMovingActors()
 	}
 	
 	TArray<FGuid> InvalidActors;
-	bool bUpdateNavmesh = false;
+	TArray<FBoundsPair> MovedBoundsPairs;
 	
 	for (auto& Iterator : MovingActorBoundsMap)
 	{
@@ -459,7 +473,7 @@ void UEditorNavMeshManager::CheckMovingActors()
 		
 		if(PreviousBounds->Equals(CurrentBounds)) continue;
 		MovingActorBoundsMap[Iterator.Key] = CurrentBounds;
-		bUpdateNavmesh = true;
+		MovedBoundsPairs.Emplace(*PreviousBounds, CurrentBounds);
 	}
 
 	// Remove invalid actors in MovingActorsState
@@ -468,9 +482,9 @@ void UEditorNavMeshManager::CheckMovingActors()
 		MovingActorBoundsMap.Remove(Guid);
 	}
 
-	if(bUpdateNavmesh)
+	if(MovedBoundsPairs.Num())
 	{
-		GenerateNavmesh();
+		UpdateAndDrawNavMesh(MovedBoundsPairs);
 	}
 }
 
@@ -524,7 +538,7 @@ void UEditorNavMeshManager::OnMapOpened(const FString& Filename, bool bAsTemplat
 		// Should only happen in cases where the level is shared outside of version-control, where the serialized .bin file is not in sync with the received level.
 		// todo: this should be checked, something is not right.
 		if(!NavMeshPtr->empty() && NavMeshSettings->ID == CachedID) return;
-		GenerateNavmesh();
+		GenerateAndDrawNavMesh();
 		if(EditorWorld->GetOuter()->MarkPackageDirty())
 		{
 			UE_LOG(LogEditorNavManager, Log, TEXT("Marked level as dirty. Navmesh will be saved upon saving the level."))
@@ -593,7 +607,7 @@ void UEditorNavMeshManager::OnEndObjectMovement(UObject& Object)
 	if(MovedActorBoundsPairMap.Num())
 	{
 		AddSnapshot(ESnapshotType::Moved, MovedActorBoundsPairMap);
-		GenerateNavmesh();
+		UpdateAndDrawNavMesh(MovedActorBoundsPairMap);
 	}
 }
 
@@ -609,7 +623,7 @@ void UEditorNavMeshManager::OnNewActorsDropped(const TArray<UObject*>& Objects, 
 	
 	if(!DroppedActorBoundsPairMap.Num()) return;
 	AddSnapshot(ESnapshotType::Added, DroppedActorBoundsPairMap);
-	GenerateNavmesh();
+	UpdateAndDrawNavMesh(DroppedActorBoundsPairMap);
 }
 
 void UEditorNavMeshManager::OnPasteActorsBegin()
@@ -686,11 +700,12 @@ void UEditorNavMeshManager::OnDeleteActorsBegin()
 	}
 	
 	AddSnapshot(ESnapshotType::Deleted, RemovedActorBoundsPairMap);
+	UpdateAndDrawNavMesh(RemovedActorBoundsPairMap);
 }
 
 void UEditorNavMeshManager::OnDeleteActorsEnd()
 {
-	GenerateNavmesh();
+	
 }
 
 void UEditorNavMeshManager::OnActorSelectionChanged(const TArray<UObject*>& Actors, bool)
@@ -728,7 +743,7 @@ void UEditorNavMeshManager::OnActorSelectionChanged(const TArray<UObject*>& Acto
 		
 		// New selected actors are the ones that had the operation applied to them.
 		AddSnapshot(ESnapshotType::Added, AddedActorBoundsPairMap);
-		GenerateNavmesh();
+		UpdateAndDrawNavMesh(AddedActorBoundsPairMap);
 	}
 
 	if(!bIsMovingActors) return;

@@ -209,33 +209,58 @@ struct F3DVector32
 		return F3DVector32(X - Value, Y - Value, Z - Value);
 	}
 
-	FORCEINLINE F3DVector32 operator+(const F3DVector10& LocalCoordinate) const
+	FORCEINLINE F3DVector32 operator+(const F3DVector10& Vector10) const
 	{
-		return F3DVector32(X + LocalCoordinate.X, Y + LocalCoordinate.Y, Z + LocalCoordinate.Z);
+		return F3DVector32(X + Vector10.X, Y + Vector10.Y, Z + Vector10.Z);
 	}
 
-	FORCEINLINE F3DVector32 operator-(const F3DVector10& LocalCoordinate) const
+	FORCEINLINE F3DVector32 operator-(const F3DVector10& Vector10) const
 	{
-		return F3DVector32(X - LocalCoordinate.X, Y - LocalCoordinate.Y, Z - LocalCoordinate.Z);
+		return F3DVector32(X - Vector10.X, Y - Vector10.Y, Z - Vector10.Z);
 	}
 
-	FORCEINLINE F3DVector32 operator+(const F3DVector32& GlobalCoordinate) const
+	FORCEINLINE F3DVector32 operator+(const F3DVector32& Other) const
 	{
-		return F3DVector32(X + GlobalCoordinate.X, Y + GlobalCoordinate.Y, Z + GlobalCoordinate.Z);
+		return F3DVector32(X + Other.X, Y + Other.Y, Z + Other.Z);
 	}
 
-	FORCEINLINE F3DVector32 operator-(const F3DVector32& GlobalCoordinate) const
+	FORCEINLINE F3DVector32 operator-(const F3DVector32& Other) const
 	{
-		return F3DVector32(X - GlobalCoordinate.X, Y - GlobalCoordinate.Y, Z - GlobalCoordinate.Z);
+		return F3DVector32(X - Other.X, Y - Other.Y, Z - Other.Z);
 	}
 
-	FORCEINLINE bool operator==(const F3DVector32& OtherVector) const {
-		return X == OtherVector.X && Y == OtherVector.Y && Z == OtherVector.Z;
+	FORCEINLINE F3DVector32 operator*(const F3DVector32& Other) const
+	{
+		return F3DVector32(X * Other.X, Y * Other.Y, Z * Other.Z);
+	}
+
+	FORCEINLINE F3DVector32 operator<<(const uint8 Value) const
+	{
+		return F3DVector32(X << Value, Y << Value, Z << Value);
+	}
+
+	FORCEINLINE F3DVector32 operator>>(const uint8 Value) const
+	{
+		return F3DVector32(X >> Value, Y >> Value, Z >> Value);
+	}
+
+	FORCEINLINE F3DVector32 operator&(const uint32 Mask) const
+	{
+		return F3DVector32(X & Mask, Y & Mask, Z & Mask);
+	}
+
+	FORCEINLINE bool operator==(const F3DVector32& Other) const {
+		return X == Other.X && Y == Other.Y && Z == Other.Z;
 	}
 
 	FORCEINLINE FVector ToVector() const
 	{
 		return FVector(X, Y, Z);
+	}
+
+	FORCEINLINE FString ToString() const
+	{
+		return FString::Printf(TEXT("X:'%i', Y:'%i', Z:'%i"), X, Y, Z);
 	}
 
 	explicit F3DVector32(const FVector &InVector)

@@ -19,7 +19,7 @@ public:
 	{}
 	void SetWorld(const UWorld* InWorld) { World = InWorld; }
 	
-	void ProcessMovement(FBounds& ActorStatePair);
+	void Update(const TArray<FBoundsPair>& BeforeAfterBoundPairs);
 	
 
 private:

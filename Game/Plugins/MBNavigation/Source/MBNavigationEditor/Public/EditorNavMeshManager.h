@@ -68,7 +68,9 @@ private:
 	void ClearDelegates();
 	void LoadLevelNavMeshSettings();
 	void InitStaticNavMeshData();
-	void GenerateNavmesh();
+	FORCEINLINE void GenerateAndDrawNavMesh();
+	FORCEINLINE void UpdateAndDrawNavMesh(const FActorBoundsPairMap& ActorBoundPairs);
+	FORCEINLINE void UpdateAndDrawNavMesh(const TArray<FBoundsPair>& BoundPairs);
 	void SaveNavMesh() const;
 	
 public:
@@ -159,11 +161,9 @@ private:
 	FNavMeshPtr NavMeshPtr;
 	FMBNavigationModule MainModule;
 
-	// For quickly finding an actor using its GUID.
-	TMap<FGuid, TWeakObjectPtr<const AActor>> StaticMeshActorsMap;
-
-	// Caches the actor bounds.
-	FActorBoundsMap CachedActorBoundsMap;
+	
+	TMap<FGuid, TWeakObjectPtr<const AActor>> StaticMeshActorsMap; // For quickly finding an actor using its GUID.
+	FActorBoundsMap CachedActorBoundsMap; // Caches the actor bounds.
 	
 	/** Holds the bounds of actors which are currently in moving state, these are updated every tick when an actor has moved.
 	 *  A snapshot is created when the movement stops. */
