@@ -8,13 +8,12 @@ DEFINE_LOG_CATEGORY(LogNavMeshUpdater)
 
 void FNavMeshUpdater::UpdateStatic(const TArray<FBoundsPair>& BeforeAfterBoundPairs)
 {
-	const uint32 ChunkMask = ~((1<<FNavMeshData::KeyShift)-1);
 	for (auto BoundsPair : BeforeAfterBoundPairs)
 	{
-		F3DVector32 PreviousChunkCoordinateMin = BoundsPair.Previous.Min & ChunkMask;
-		F3DVector32 PreviousChunkCoordinateMax = BoundsPair.Previous.Max & ChunkMask;
-		F3DVector32 CurrentChunkCoordinateMin = BoundsPair.Current.Min & ChunkMask;
-		F3DVector32 CurrentChunkCoordinateMax = BoundsPair.Current.Max & ChunkMask;
+		F3DVector32 PreviousChunkCoordinateMin = BoundsPair.Previous.Min & FNavMeshData::ChunkMask;
+		F3DVector32 PreviousChunkCoordinateMax = BoundsPair.Previous.Max & FNavMeshData::ChunkMask;
+		F3DVector32 CurrentChunkCoordinateMin = BoundsPair.Current.Min & FNavMeshData::ChunkMask;
+		F3DVector32 CurrentChunkCoordinateMax = BoundsPair.Current.Max & FNavMeshData::ChunkMask;
 		
 		F3DVector32 PreviousChunkMin = BoundsPair.Previous.Min >> FNavMeshData::KeyShift;
 		F3DVector32 PreviousChunkMax = BoundsPair.Previous.Max >> FNavMeshData::KeyShift;

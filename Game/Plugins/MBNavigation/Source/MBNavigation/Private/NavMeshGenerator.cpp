@@ -29,7 +29,7 @@ void FNavMeshGenerator::Generate(const FBounds& LevelBounds)
 #if WITH_EDITOR
 	const float DurationSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(
 		std::chrono::high_resolution_clock::now() - StartTime).count() / 1000.0f;
-	// UE_LOG(LogNavMeshGenerator, Log, TEXT("Generation took : '%f' seconds"), DurationSeconds);
+	UE_LOG(LogNavMeshGenerator, Log, TEXT("Generation took : '%f' seconds"), DurationSeconds);
 #endif
 }
 
@@ -39,7 +39,6 @@ void FNavMeshGenerator::Generate(const FBounds& LevelBounds)
  */
 void FNavMeshGenerator::GenerateChunks(const FBounds& LevelBounds)
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("GenerateChunks");
 	const F3DVector32 LevelMin = LevelBounds.Min;
 	const F3DVector32 LevelMax = LevelBounds.Max;
 
@@ -53,7 +52,7 @@ void FNavMeshGenerator::GenerateChunks(const FBounds& LevelBounds)
 		((ChunksMaxLoc.X << FNavMeshData::KeyShift) - (ChunksMinLoc.X << FNavMeshData::KeyShift)) *
 		((ChunksMaxLoc.Y << FNavMeshData::KeyShift) - (ChunksMinLoc.Y << FNavMeshData::KeyShift)) *
 		((ChunksMaxLoc.Z << FNavMeshData::KeyShift) - (ChunksMinLoc.Z << FNavMeshData::KeyShift)) + 1;
-	//NavMeshPtr->reserve(TotalChunks);
+	NavMeshPtr->reserve(TotalChunks);
 
 	if (TotalChunks <= 0)
 	{
@@ -90,13 +89,6 @@ void FNavMeshGenerator::RasterizeStaticOctree(FChunk* Chunk)
 
 	// Create the root node, which is the same size as the chunk.
 	const auto [NodePairIterator, IsInserted] = FirstLayer.emplace(0, FOctreeNode(0, 0, 0));
-	if (!IsInserted)
-	{
-		UE_LOG(LogNavMeshGenerator, Error, TEXT("Error inserting node into the FNodesMap in ::RasterizeStaticOctree"));
-		return;
-	}
-
-	// Get reference to inserted node.
 	FOctreeNode& Node = NodePairIterator->second;
 
 	// Set the ChunkBorder to touch all borders.
@@ -112,7 +104,6 @@ void FNavMeshGenerator::RasterizeStaticOctree(FChunk* Chunk)
  */
 void FNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, const uint8 LayerIndex)
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("RasterizeStaticNode");
 	const F3DVector10 NodeLocalLoc = Node.GetLocalLocation();
 
 	// Set neighbour relations.
@@ -128,12 +119,13 @@ void FNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 
 	const uint8 ChildLayerIndex = LayerIndex + 1;
 	FNodesMap& ChildLayer = Chunk->Octrees[0].Get()->Layers[ChildLayerIndex];
-	const int_fast16_t ChildOffset = FNavMeshData::NodeHalveSizes[LayerIndex];
+	const int_fast16_t ChildOffset = FNavMeshData::NodeHalveSizes[LayerIndex]; // todo change to FNavMeshData::MortonOffsets!!
 
 	// Reserve memory for 8 child-nodes on the lower layer and initialize them.
-	//ChildLayer.reserve(8);
+	ChildLayer.reserve(8);
 	for (uint8 i = 0; i < 8; ++i)
 	{
+		// TODO this is not actually local. Change to use FNavMeshData::MortonOffsets!!
 		// Add the offset to certain children depending on their location in the parent.
 		const uint_fast16_t ChildNodeLocalX = NodeLocalLoc.X + ((i & 1) ? ChildOffset : 0);
 		const uint_fast16_t ChildNodeLocalY = NodeLocalLoc.Y + ((i & 2) ? ChildOffset : 0);
@@ -162,7 +154,7 @@ void FNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 
 bool FNavMeshGenerator::HasOverlap(const F3DVector32& NodeGlobalLocation, const uint8 LayerIndex)
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("HasOverlap");
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Has-Overlap");
 	return World->OverlapBlockingTestByChannel(
 		FVector(NodeGlobalLocation.X + FNavMeshData::NodeHalveSizes[LayerIndex],
 		        NodeGlobalLocation.Y + FNavMeshData::NodeHalveSizes[LayerIndex],
@@ -188,8 +180,6 @@ bool FNavMeshGenerator::HasOverlap(const F3DVector32& NodeGlobalLocation, const 
  */
 void FNavMeshGenerator::SetNegativeNeighbourRelations(const FChunk* Chunk)
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("SetNegativeNeighbourRelations");
-
 	// Loop through all static nodes sorted by morton-code.
 	uint8 LayerIndex = 0;
 	for (FNodesMap& NodesMap : Chunk->Octrees[0]->Layers)
@@ -211,8 +201,6 @@ void FNavMeshGenerator::SetNegativeNeighbourRelations(const FChunk* Chunk)
  */
 void FNavMeshGenerator::SetNodeRelations(FOctreeNode& Node, const F3DVector32& ChunkLocation, const uint8 LayerIndex)
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("SetNeighbourRelations");
-
 	const F3DVector10 NodeLocalLocation = Node.GetLocalLocation();
 	for (uint8 n = 0; n < 3; ++n)
 	{

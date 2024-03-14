@@ -4,6 +4,8 @@
 
 #include "NavMeshTypes.h"
 
+DECLARE_LOG_CATEGORY_EXTERN(LogNavMeshDebugger, Log, All);
+
 
 
 class MBNAVIGATION_API FNavMeshDebugger
@@ -22,8 +24,8 @@ public:
 private:
 	void PerformConditionalDraw(const FVector& CameraLocation, const FVector& CameraForwardVector);
 	void DrawNodes(const FVector& CameraLocation, const FVector& CameraForwardVector) const;
-	void DrawPaths(const FVector& CameraLocation, const FVector& CameraForwardVector) const;
-	void DrawChunks(const FVector& CameraLocation, const FVector& CameraForwardVector) const;
+	void RecursiveDrawNodes(const FChunk* Chunk, const uint8 LayerIndex, const uint_fast32_t& NodeMorton,
+		const FVector& CameraLocation, const FVector& CameraForwardVector) const;
 
 	FNavMeshPtr NavMeshPtr;
 	const UWorld* World;

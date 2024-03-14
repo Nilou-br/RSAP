@@ -34,6 +34,7 @@ struct FNavMeshData // todo, new level does not have correct settings in the wid
 	static inline constexpr uint8 DynamicDepth = 10;
 	static inline int32 ChunkSize = 1024 << VoxelSizeExponent;
 	static inline uint8 KeyShift = 12;
+	static inline uint32 ChunkMask = ~((1<<KeyShift)-1);
 	static inline int32 NodeSizes[10];
 	static inline int32 NodeHalveSizes[10];
 	static inline FCollisionShape CollisionBoxes[10];
@@ -44,6 +45,7 @@ struct FNavMeshData // todo, new level does not have correct settings in the wid
 		StaticDepth = NavMeshSettings->StaticDepth;
 		ChunkSize = 1024 << VoxelSizeExponent;
 		KeyShift = 10 + VoxelSizeExponent;
+		ChunkMask = ~((1<<KeyShift)-1);
 		
 		for (uint8 LayerIndex = 0; LayerIndex < DynamicDepth; ++LayerIndex)
 		{
@@ -83,6 +85,11 @@ struct FNavMeshDebugSettings
 		bDisplayPaths = InbDisplayPaths;
 		bDisplayChunks = InbDisplayChunks;
 	}
+
+	FORCEINLINE static bool ShouldDisplayDebug()
+	{
+		return bDebugEnabled && (bDisplayNodes || bDisplayNodeBorder || bDisplayRelations || bDisplayPaths || bDisplayChunks);
+	}
 };
 
 /**
@@ -98,7 +105,7 @@ struct F3DVector10
 	uint_fast16_t Z: 10;
 
 	// Keep in mind that the morton-code supports 10 bits per axis.
-	FORCEINLINE uint_fast32_t ToMortonCode() const
+	FORCEINLINE uint_fast32_t ToMortonCode() const // todo maybe make static alternative?
 	{
 		return libmorton::morton3D_32_encode(X, Y, Z);
 	}
@@ -161,28 +168,26 @@ struct F3DVector32
 	int_fast32_t Y;
 	int_fast32_t Z;
 	
-	// Creates key from the coordinates, usable for hashmaps.
+	// Creates key from the XYZ coordinates, usable for hashmaps.
 	// The F3DVector32 can have max 31 bits per axis to support this method.
 	FORCEINLINE uint64_t ToKey() const {
-		TRACE_CPUPROFILER_EVENT_SCOPE_STR("F3DVector32 ToKey");
 		auto Encode = [](const int_fast32_t Val) -> uint64_t {
-			uint64_t Result = (Val >> FNavMeshData::KeyShift) & 0xFFFFF; // Get the first 20 bits
-			Result |= ((Val < 0) ? 1ULL : 0ULL) << 20; // Add sign bit
+			uint64_t Result = (Val >> FNavMeshData::KeyShift) & 0xFFFFF;
+			Result |= ((Val < 0) ? 1ULL : 0ULL) << 20;
 			return Result;
 		};
 		
 		return (Encode(X) << 42) | (Encode(Y) << 21) | Encode(Z);
 	}
 
-	// Creates a F3DVector32 from a previously generated Key.
+	// Creates a F3DVector32 from a generated Key.
 	static FORCEINLINE F3DVector32 FromKey(const uint64_t Key) {
-		TRACE_CPUPROFILER_EVENT_SCOPE_STR("F3DVector32 FromKey");
 		auto Decode = [](const uint64_t Val) -> int_fast32_t {
-			int_fast32_t Result = Val & 0xFFFFF; // Get the 20 bits
-			if (Val & (1 << 20)) { // Check sign bit
-				Result |= 0xFFF00000; // Apply sign if necessary
+			int_fast32_t Result = Val & 0xFFFFF;
+			if (Val & (1 << 20)) {
+				Result |= 0xFFF00000;
 			}
-			return Result << FNavMeshData::KeyShift; // Shift back
+			return Result << FNavMeshData::KeyShift;
 		};
 
 		F3DVector32 Vector32;
@@ -256,14 +261,19 @@ struct F3DVector32
 		return X == Other.X && Y == Other.Y && Z == Other.Z;
 	}
 
+	FORCEINLINE FString ToString() const
+	{
+		return FString::Printf(TEXT("X:'%i', Y:'%i', Z:'%i"), X, Y, Z);
+	}
+
 	FORCEINLINE FVector ToVector() const
 	{
 		return FVector(X, Y, Z);
 	}
-
-	FORCEINLINE FString ToString() const
+	
+	static FORCEINLINE F3DVector32 FromVector(const FVector& InVector)
 	{
-		return FString::Printf(TEXT("X:'%i', Y:'%i', Z:'%i"), X, Y, Z);
+		return F3DVector32(InVector.X, InVector.Y, InVector.Z);
 	}
 
 	explicit F3DVector32(const FVector &InVector)
@@ -520,7 +530,8 @@ struct FOctreeNode
 	}
 };
 
-typedef std::map<uint_fast32_t, FOctreeNode> FNodesMap;
+// typedef std::map<uint_fast32_t, FOctreeNode> FNodesMap;
+typedef ankerl::unordered_dense::map<uint_fast32_t, FOctreeNode> FNodesMap;
 
 /**
  * The octree stores all the nodes in 10 different layers, each layer having higher resolution nodes.
@@ -579,7 +590,8 @@ struct FChunk
 };
 
 // The Navigation-Mesh is a hashmap of Chunks.
-typedef std::map<uint_fast64_t, FChunk> FNavMesh;
+// typedef std::map<uint_fast64_t, FChunk> FNavMesh;
+typedef ankerl::unordered_dense::map<uint_fast64_t, FChunk> FNavMesh;
 typedef std::shared_ptr<FNavMesh> FNavMeshPtr;
 
 
