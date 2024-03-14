@@ -19,7 +19,7 @@ public:
 	{}
 	void SetWorld(const UWorld* InWorld) { World = InWorld; }
 	
-	void Update(const TArray<FBoundsPair>& BeforeAfterBoundPairs);
+	void UpdateStatic(const TArray<FBoundsPair>& BeforeAfterBoundPairs);
 	
 
 private:

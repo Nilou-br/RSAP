@@ -163,17 +163,19 @@ struct F3DVector32
 	// Creates key from the coordinates, usable for hashmaps.
 	// The F3DVector32 can have max 31 bits per axis to support this method.
 	FORCEINLINE uint64_t ToKey() const {
+		TRACE_CPUPROFILER_EVENT_SCOPE_STR("F3DVector32 ToKey");
 		auto Encode = [](const int_fast32_t Val) -> uint64_t {
 			uint64_t Result = (Val >> FNavMeshData::KeyShift) & 0xFFFFF; // Get the first 20 bits
 			Result |= ((Val < 0) ? 1ULL : 0ULL) << 20; // Add sign bit
 			return Result;
 		};
-        
+		
 		return (Encode(X) << 42) | (Encode(Y) << 21) | Encode(Z);
 	}
 
 	// Creates a F3DVector32 from a previously generated Key.
-	static F3DVector32 FromKey(const uint64_t Key) {
+	static FORCEINLINE F3DVector32 FromKey(const uint64_t Key) {
+		TRACE_CPUPROFILER_EVENT_SCOPE_STR("F3DVector32 FromKey");
 		auto Decode = [](const uint64_t Val) -> int_fast32_t {
 			int_fast32_t Result = Val & 0xFFFFF; // Get the 20 bits
 			if (Val & (1 << 20)) { // Check sign bit

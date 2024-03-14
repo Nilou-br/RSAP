@@ -6,7 +6,7 @@
 DEFINE_LOG_CATEGORY(LogNavMeshUpdater)
 
 
-void FNavMeshUpdater::Update(const TArray<FBoundsPair>& BeforeAfterBoundPairs)
+void FNavMeshUpdater::UpdateStatic(const TArray<FBoundsPair>& BeforeAfterBoundPairs)
 {
 	const uint32 ChunkMask = ~((1<<FNavMeshData::KeyShift)-1);
 	for (auto BoundsPair : BeforeAfterBoundPairs)

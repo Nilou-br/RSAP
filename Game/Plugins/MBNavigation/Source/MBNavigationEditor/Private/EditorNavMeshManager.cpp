@@ -184,7 +184,7 @@ void UEditorNavMeshManager::UpdateAndDrawNavMesh(const FActorBoundsPairMap& Acto
 
 void UEditorNavMeshManager::UpdateAndDrawNavMesh(const TArray<FBoundsPair>& BoundPairs)
 {
-	NavMeshUpdater->Update(BoundPairs);
+	NavMeshUpdater->UpdateStatic(BoundPairs);
 	NavMeshDebugger->Draw();
 }
 
@@ -461,6 +461,7 @@ void UEditorNavMeshManager::CheckMovingActors()
 	
 	for (auto& Iterator : MovingActorBoundsMap)
 	{
+		// todo get prev bounds from 
 		const AActor* Actor;
 		if(!FindActorFromGuid(Iterator.Key, Actor))
 		{
@@ -472,8 +473,8 @@ void UEditorNavMeshManager::CheckMovingActors()
 		const FBounds CurrentBounds(Actor);
 		
 		if(PreviousBounds->Equals(CurrentBounds)) continue;
-		MovingActorBoundsMap[Iterator.Key] = CurrentBounds;
 		MovedBoundsPairs.Emplace(*PreviousBounds, CurrentBounds);
+		MovingActorBoundsMap[Iterator.Key] = CurrentBounds;
 	}
 
 	// Remove invalid actors in MovingActorsState
