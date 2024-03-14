@@ -119,20 +119,19 @@ void FNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 
 	const uint8 ChildLayerIndex = LayerIndex + 1;
 	FNodesMap& ChildLayer = Chunk->Octrees[0].Get()->Layers[ChildLayerIndex];
-	const int_fast16_t ChildOffset = FNavMeshData::NodeHalveSizes[LayerIndex]; // todo change to FNavMeshData::MortonOffsets!!
+	const int_fast16_t ChildOffset = FNavMeshData::MortonOffsets[ChildLayerIndex];
 
 	// Reserve memory for 8 child-nodes on the lower layer and initialize them.
 	ChildLayer.reserve(8);
 	for (uint8 i = 0; i < 8; ++i)
 	{
-		// TODO this is not actually local. Change to use FNavMeshData::MortonOffsets!!
 		// Add the offset to certain children depending on their location in the parent.
-		const uint_fast16_t ChildNodeLocalX = NodeLocalLoc.X + ((i & 1) ? ChildOffset : 0);
-		const uint_fast16_t ChildNodeLocalY = NodeLocalLoc.Y + ((i & 2) ? ChildOffset : 0);
-		const uint_fast16_t ChildNodeLocalZ = NodeLocalLoc.Z + ((i & 4) ? ChildOffset : 0);
+		const uint_fast16_t ChildLocalX = NodeLocalLoc.X + ((i & 1) ? ChildOffset : 0);
+		const uint_fast16_t ChildLocalY = NodeLocalLoc.Y + ((i & 2) ? ChildOffset : 0);
+		const uint_fast16_t ChildLocalZ = NodeLocalLoc.Z + ((i & 4) ? ChildOffset : 0);
 
 		// Add child-node to current-layer and get its reference.
-		FOctreeNode NewNode(ChildNodeLocalX, ChildNodeLocalY, ChildNodeLocalZ);
+		FOctreeNode NewNode(ChildLocalX, ChildLocalY, ChildLocalZ);
 		const auto [NodePairIterator, IsInserted] = ChildLayer.emplace(NewNode.GetMortonCode(), NewNode);
 
 		// Get reference to stored child-node.

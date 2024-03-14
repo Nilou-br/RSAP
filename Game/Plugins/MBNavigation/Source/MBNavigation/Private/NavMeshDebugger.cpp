@@ -117,24 +117,25 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const uint8 Layer
                                           const FVector& CameraLocation, const FVector& CameraForwardVector) const
 {
 	const FOctreeNode* Node = &Chunk->Octrees[0]->Layers[LayerIndex].find(NodeMorton)->second;
+	if(!Node->IsOccluded()) return;
 	const FVector NodeGlobalCenterLocation = (Node->GetGlobalLocation(Chunk->Location) + FNavMeshData::NodeHalveSizes[LayerIndex]).ToVector();
 
 	// Return if distance between camera and node is larger than the calculated distance for this specific node's layer.
 	if(FVector::Dist(CameraLocation, NodeGlobalCenterLocation) > (FNavMeshData::NodeSizes[LayerIndex] << 2) + 200 - 16 * LayerIndex) return;
-
-	// Return if not in field of view.
-	if(const FVector DirectionToTarget = (NodeGlobalCenterLocation - CameraLocation).GetSafeNormal();
-		FVector::DotProduct(CameraForwardVector, DirectionToTarget) < 0) return;
-
 	
 	if(FNavMeshDebugSettings::bDisplayNodes)
 	{
-		DrawDebugBox(World, NodeGlobalCenterLocation, FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), LayerColors[LayerIndex], true, -1, 0, 2);
+		// Return if not in field of view.
+		if(const FVector DirectionToTarget = (NodeGlobalCenterLocation - CameraLocation).GetSafeNormal();
+			FVector::DotProduct(CameraForwardVector, DirectionToTarget) > 0)
+		{
+			DrawDebugBox(World, NodeGlobalCenterLocation, FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), LayerColors[LayerIndex], true, -1, 0, 3 - (LayerIndex/2.5));
+		}
 	}
 
 	if(FNavMeshDebugSettings::bDisplayNodeBorder && World->IsPlayInEditor())
 	{
-		FString BitString = To6BitBinaryString(Node->ChunkBorder);
+		const FString BitString = To6BitBinaryString(Node->ChunkBorder);
 		DrawDebugString(World, NodeGlobalCenterLocation, BitString, nullptr, FColor::Red, -1, false, 1);
 		
 		const std::array<uint8, 6> NeighbourLayerIndexes = Node->GetNeighbourLayerIndexes();
@@ -193,7 +194,7 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const uint8 Layer
 		}
 	}
 	
-	if(LayerIndex == FNavMeshData::StaticDepth || !Node->IsOccluded()) return;
+	if(LayerIndex == FNavMeshData::StaticDepth) return;
 
 	const F3DVector10 NodeLocalLocation = Node->GetLocalLocation();
 	const int_fast16_t ChildOffset = FNavMeshData::MortonOffsets[LayerIndex+1];

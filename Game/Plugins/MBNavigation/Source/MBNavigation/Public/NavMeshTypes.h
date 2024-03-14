@@ -420,14 +420,14 @@ struct FOctreeNode
 	uint8 ChunkBorder: 6; // todo might not be needed because can be tracked in navigation algo?
 	// todo 8 bits for dynamic index for each neighbour + child + parent???? 128 dynamic-objects a chunk (first bit for static octree)
 
-	FOctreeNode(uint_fast16_t NodeLocalLocationX, uint_fast16_t NodeLocalLocationY, uint_fast16_t NodeLocalLocationZ):
+	FOctreeNode(const uint_fast16_t LocalX, const uint_fast16_t LocalY, const uint_fast16_t LocalZ):
 		ChunkBorder(0)
 	{
 		// Right bit-shift using the Voxel-Size-Exponent into morton-space.
-		NodeLocalLocationX >>= FNavMeshData::VoxelSizeExponent;
-		NodeLocalLocationY >>= FNavMeshData::VoxelSizeExponent;
-		NodeLocalLocationZ >>= FNavMeshData::VoxelSizeExponent;
-		MortonCode = libmorton::morton3D_32_encode(NodeLocalLocationX, NodeLocalLocationY, NodeLocalLocationZ);
+		// LocalX >>= FNavMeshData::VoxelSizeExponent;
+		// LocalY >>= FNavMeshData::VoxelSizeExponent;
+		// LocalZ >>= FNavMeshData::VoxelSizeExponent;
+		MortonCode = libmorton::morton3D_32_encode(LocalX, LocalY, LocalZ);
 	}
 
 	FOctreeNode():
