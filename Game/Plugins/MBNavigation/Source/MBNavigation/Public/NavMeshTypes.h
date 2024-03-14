@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <map>
 #include "Engine/AssetUserData.h"
 #include "morton.h"
 #include "NavMeshSettings.h"
@@ -519,7 +520,7 @@ struct FOctreeNode
 	}
 };
 
-typedef ankerl::unordered_dense::map<uint_fast32_t, FOctreeNode> FNodesMap;
+typedef std::map<uint_fast32_t, FOctreeNode> FNodesMap;
 
 /**
  * The octree stores all the nodes in 10 different layers, each layer having higher resolution nodes.
@@ -578,7 +579,7 @@ struct FChunk
 };
 
 // The Navigation-Mesh is a hashmap of Chunks.
-typedef ankerl::unordered_dense::map<uint_fast64_t, FChunk> FNavMesh;
+typedef std::map<uint_fast64_t, FChunk> FNavMesh;
 typedef std::shared_ptr<FNavMesh> FNavMeshPtr;
 
 

@@ -53,7 +53,7 @@ void FNavMeshGenerator::GenerateChunks(const FBounds& LevelBounds)
 		((ChunksMaxLoc.X << FNavMeshData::KeyShift) - (ChunksMinLoc.X << FNavMeshData::KeyShift)) *
 		((ChunksMaxLoc.Y << FNavMeshData::KeyShift) - (ChunksMinLoc.Y << FNavMeshData::KeyShift)) *
 		((ChunksMaxLoc.Z << FNavMeshData::KeyShift) - (ChunksMinLoc.Z << FNavMeshData::KeyShift)) + 1;
-	NavMeshPtr->reserve(TotalChunks);
+	//NavMeshPtr->reserve(TotalChunks);
 
 	if (TotalChunks <= 0)
 	{
@@ -131,7 +131,7 @@ void FNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 	const int_fast16_t ChildOffset = FNavMeshData::NodeHalveSizes[LayerIndex];
 
 	// Reserve memory for 8 child-nodes on the lower layer and initialize them.
-	ChildLayer.reserve(8);
+	//ChildLayer.reserve(8);
 	for (uint8 i = 0; i < 8; ++i)
 	{
 		// Add the offset to certain children depending on their location in the parent.
