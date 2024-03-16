@@ -6,27 +6,59 @@
 DEFINE_LOG_CATEGORY(LogNavMeshUpdater)
 
 
-void FNavMeshUpdater::UpdateStatic(const TArray<FBoundsPair>& BeforeAfterBoundPairs)
+
+void FNavMeshUpdater::UpdateStatic(const TArray<FBoundsPair>& BeforeAfterBoundsPairs)
 {
-	for (auto BoundsPair : BeforeAfterBoundPairs)
+	for (auto BeforeAfterBoundsPair : BeforeAfterBoundsPairs)
 	{
-		F3DVector32 PreviousChunkCoordinateMin = BoundsPair.Previous.Min & FNavMeshData::ChunkMask;
-		F3DVector32 PreviousChunkCoordinateMax = BoundsPair.Previous.Max & FNavMeshData::ChunkMask;
-		F3DVector32 CurrentChunkCoordinateMin = BoundsPair.Current.Min & FNavMeshData::ChunkMask;
-		F3DVector32 CurrentChunkCoordinateMax = BoundsPair.Current.Max & FNavMeshData::ChunkMask;
+		const FBounds PrevBounds = BeforeAfterBoundsPair.Previous;
+		const FBounds CurrBounds = BeforeAfterBoundsPair.Current;
+		const FBounds TotalBounds = BeforeAfterBoundsPair.GetTotalBounds();
 		
-		F3DVector32 PreviousChunkMin = BoundsPair.Previous.Min >> FNavMeshData::KeyShift;
-		F3DVector32 PreviousChunkMax = BoundsPair.Previous.Max >> FNavMeshData::KeyShift;
-		F3DVector32 CurrentChunkMin = BoundsPair.Current.Min >> FNavMeshData::KeyShift;
-		F3DVector32 CurrentChunkMax = BoundsPair.Current.Max >> FNavMeshData::KeyShift;
-
-		const F3DVector32 PrevDiff = PreviousChunkMax - PreviousChunkMin + 1;
-		const F3DVector32 CurrDiff = CurrentChunkMax - CurrentChunkMin + 1;
-
-		const uint32 PrevTotalChunks = PrevDiff.X * PrevDiff.Y * PrevDiff.Z;
-		const uint32 CurrTotalChunks = CurrDiff.X * CurrDiff.Y * CurrDiff.Z;
+		const F3DVector32 TotalChunkMin = TotalBounds.Min & FNavMeshData::ChunkMask;
+		const F3DVector32 TotalChunkMax = TotalBounds.Max & FNavMeshData::ChunkMask;
 		
-		UE_LOG(LogNavMeshUpdater, Log, TEXT("PrevTotalChunks: %i"), PrevTotalChunks)
-		UE_LOG(LogNavMeshUpdater, Log, TEXT("CurrTotalChunks: %i"), CurrTotalChunks)
+		// Get each affected chunk and store it in a hashmap with the part of the bounds inside that chunk.
+		TMap<FChunk*, FBoundsPair> ChunkBoundPairs;
+		uint32 TotalChunks = 0;
+		for (int32 X = TotalChunkMin.X; X <= TotalChunkMax.X; X+=FNavMeshData::ChunkSize)
+		{
+			for (int32 Y = TotalChunkMin.Y; Y <= TotalChunkMax.Y; Y+=FNavMeshData::ChunkSize)
+			{
+				for (int32 Z = TotalChunkMin.Z; Z <= TotalChunkMax.Z; Z+=FNavMeshData::ChunkSize)
+				{
+					TotalChunks++;
+					
+					// Get the chunk.
+					const F3DVector32 ChunkLocation = F3DVector32(X, Y, Z);
+					auto ChunkIterator = NavMeshPtr->find(F3DVector32(X, Y, Z).ToKey());
+					if(ChunkIterator == NavMeshPtr->end())
+					{
+						std::tie(ChunkIterator, std::ignore) = NavMeshPtr->emplace(ChunkLocation.ToKey(), FChunk(ChunkLocation));
+					}
+					FChunk& Chunk = ChunkIterator->second;
+					FBounds ChunkBounds(ChunkLocation, ChunkLocation+FNavMeshData::ChunkSize);
+
+					// Empty FBounds constructor will set it to invalid, meaning that the bounds are not inside this chunk.
+					// todo change GetBoundsInChunk to method taking in FBounds ChunkBounds
+					const FBounds PrevBoundsInChunk = PrevBounds.Overlaps(ChunkBounds) ? PrevBounds.GetBoundsInChunk(ChunkLocation) : FBounds();
+					const FBounds CurrBoundsInChunk = CurrBounds.Overlaps(ChunkBounds) ? CurrBounds.GetBoundsInChunk(ChunkLocation) : FBounds();
+					ChunkBoundPairs.Add(&Chunk, FBoundsPair(PrevBoundsInChunk, CurrBoundsInChunk));
+				}
+			}
+		}
+
+		UE_LOG(LogNavMeshUpdater, Log, TEXT("Chunk count: %i"), TotalChunks)
+		
+		for (auto ChunkBoundPairIterator : ChunkBoundPairs)
+		{
+			const FChunk* Chunk = ChunkBoundPairIterator.Key;
+			const FBoundsPair& BoundsPair = ChunkBoundPairIterator.Value;
+			// UE_LOG(LogNavMeshUpdater, Log, TEXT("Chunk current min-bounds: X: %i, Y: %i, Z: %i"), BoundsPair.Current.Min.X,  BoundsPair.Current.Min.Y,  BoundsPair.Current.Min.Z)
+
+			if(!BoundsPair.Current.IsValid())UE_LOG(LogNavMeshUpdater, Log, TEXT("Current bounds not in this chunk"));
+			if(BoundsPair.Current.IsValid()) UE_LOG(LogNavMeshUpdater, Log, TEXT("Current min-bounds in chunk: X: %i, Y: %i, Z: %i"), BoundsPair.Current.Max.X,  BoundsPair.Current.Max.Y,  BoundsPair.Current.Max.Z)
+			if(BoundsPair.Current.IsValid()) UE_LOG(LogNavMeshUpdater, Log, TEXT("Current max-bounds in chunk: X: %i, Y: %i, Z: %i"), BoundsPair.Current.Min.X,  BoundsPair.Current.Min.Y,  BoundsPair.Current.Min.Z)
+		}
 	}
 }

@@ -18,6 +18,9 @@
 #define LAYER_INDEX_INVALID 11
 
 
+// todo: convert all int_t/uint_t types to int/uint without the '_t' for platform compatibility ( globally across all files ).
+
+
 
 /**
  * Used to store static values that will be used often during generation where performance is critical.
@@ -28,16 +31,23 @@
  */
 struct FNavMeshData // todo, new level does not have correct settings in the widget.
 {
-	static inline constexpr uint16 MortonOffsets[10] = {1024, 512, 256, 128, 64, 32, 16, 8, 4, 2};
+	static inline constexpr uint16 MortonOffsets[10] = {1024, 512, 256, 128, 64, 32, 16, 8, 4, 2}; // todo: update for leaf nodes.
 	static inline uint8 VoxelSizeExponent = 2;
 	static inline uint8 StaticDepth = 6;
 	static inline constexpr uint8 DynamicDepth = 10;
 	static inline int32 ChunkSize = 1024 << VoxelSizeExponent;
 	static inline uint8 KeyShift = 12;
-	static inline uint32 ChunkMask = ~((1<<KeyShift)-1);
+	static inline uint32 ChunkMask = ~((1<<KeyShift)-1); // Rounds the number down to the nearest multiple of ChunkSize. // todo: check negative values
 	static inline int32 NodeSizes[10];
 	static inline int32 NodeHalveSizes[10];
 	static inline FCollisionShape CollisionBoxes[10];
+	static inline constexpr uint16 MortonMasks[10] = {
+		static_cast<uint16>(~((1<<10)-1)), static_cast<uint16>(~((1<<9)-1)),
+		static_cast<uint16>(~((1<<8)-1)), static_cast<uint16>(~((1<<7)-1)),
+		static_cast<uint16>(~((1<<6)-1)), static_cast<uint16>(~((1<<5)-1)),
+		static_cast<uint16>(~((1<<4)-1)), static_cast<uint16>(~((1<<3)-1)),
+		static_cast<uint16>(~((1<<2)-1)), static_cast<uint16>(~((1<<1)-1)), // todo: change last one to 0 for leaf nodes.
+	};
 	
 	static void Initialize(const UNavMeshSettings* NavMeshSettings)
 	{
@@ -71,12 +81,9 @@ struct FNavMeshDebugSettings
 	static inline bool bDisplayChunks = false;
 
 	static void Initialize(
-		const bool InbDebugEnabled = false,
-		const bool InbDisplayNodes = false,
-		const bool InbDisplayNodeBorder = false,
-		const bool InbDisplayRelations = false,
-		const bool InbDisplayPaths = false,
-		const bool InbDisplayChunks = false)
+		const bool InbDebugEnabled = false, const bool InbDisplayNodes = false,
+		const bool InbDisplayNodeBorder = false, const bool InbDisplayRelations = false,
+		const bool InbDisplayPaths = false, const bool InbDisplayChunks = false)
 	{
 		bDebugEnabled = InbDebugEnabled;
 		bDisplayNodes = InbDisplayNodes;
@@ -420,14 +427,10 @@ struct FOctreeNode
 	uint8 ChunkBorder: 6; // todo might not be needed because can be tracked in navigation algo?
 	// todo 8 bits for dynamic index for each neighbour + child + parent???? 128 dynamic-objects a chunk (first bit for static octree)
 
-	FOctreeNode(const uint_fast16_t LocalX, const uint_fast16_t LocalY, const uint_fast16_t LocalZ):
+	FOctreeNode(const uint_fast16_t MortonX, const uint_fast16_t MortonY, const uint_fast16_t MortonZ):
 		ChunkBorder(0)
 	{
-		// Right bit-shift using the Voxel-Size-Exponent into morton-space.
-		// LocalX >>= FNavMeshData::VoxelSizeExponent;
-		// LocalY >>= FNavMeshData::VoxelSizeExponent;
-		// LocalZ >>= FNavMeshData::VoxelSizeExponent;
-		MortonCode = libmorton::morton3D_32_encode(LocalX, LocalY, LocalZ);
+		MortonCode = libmorton::morton3D_32_encode(MortonX, MortonY, MortonZ);
 	}
 
 	FOctreeNode():
@@ -439,7 +442,7 @@ struct FOctreeNode
 		uint_fast16_t TempX, TempY, TempZ;
 		libmorton::morton3D_32_decode(GetMortonCode(), TempX, TempY, TempZ);
 
-		// Left bit-shift using the Voxel-Size-Exponent into local-space.
+		// Left-bit-shift using the Voxel-Size-Exponent into local-space.
 		TempX <<= FNavMeshData::VoxelSizeExponent;
 		TempY <<= FNavMeshData::VoxelSizeExponent;
 		TempZ <<= FNavMeshData::VoxelSizeExponent;
@@ -602,11 +605,15 @@ typedef std::shared_ptr<FNavMesh> FNavMeshPtr;
  */
 struct FBounds
 {
-	F3DVector32 Max;
 	F3DVector32 Min;
+	F3DVector32 Max;
 	bool bIsValid;
 
-	FBounds() : Max(F3DVector32()), Min(F3DVector32()), bIsValid(false) {}
+	FBounds() : Min(F3DVector32()), Max(F3DVector32()), bIsValid(false) {}
+
+	FBounds(const F3DVector32& VectorMin, const F3DVector32& VectorMax, const bool InValid = true)
+		: Min(VectorMin), Max(VectorMax), bIsValid(InValid)
+	{}
 
 	explicit FBounds(const AActor* Actor) : bIsValid(true)
 	{
@@ -614,13 +621,13 @@ struct FBounds
 		Actor->GetActorBounds(false, Origin, Extent, true);
         
 		// Convert to F3DVector32.
-		Max = F3DVector32(	FMath::FloorToInt(Origin.X + Extent.X), 
-							FMath::FloorToInt(Origin.Y + Extent.Y), 
-							FMath::FloorToInt(Origin.Z + Extent.Z));
-
 		Min = F3DVector32(	FMath::FloorToInt(Origin.X - Extent.X), 
 							FMath::FloorToInt(Origin.Y - Extent.Y), 
 							FMath::FloorToInt(Origin.Z - Extent.Z));
+		
+		Max = F3DVector32(	FMath::FloorToInt(Origin.X + Extent.X), 
+							FMath::FloorToInt(Origin.Y + Extent.Y), 
+							FMath::FloorToInt(Origin.Z + Extent.Z));
 	}
 	
 	FORCEINLINE bool Equals(const FBounds& Other) const
@@ -638,6 +645,27 @@ struct FBounds
 	{
 		return	Max.X == 0 && Max.Y == 0 && Max.Z == 0 &&
 				Min.X == 0 && Min.Y == 0 && Min.Z == 0;
+	}
+
+	// Returns copy of the FBounds where it is clamped inside of a chunk.
+	FORCEINLINE FBounds GetBoundsInChunk(const F3DVector32& ChunkLocation) const
+	{
+		const F3DVector32 ClampedMin(
+			FMath::Max(Min.X, ChunkLocation.X),
+			FMath::Max(Min.Y, ChunkLocation.Y),
+			FMath::Max(Min.Z, ChunkLocation.Z));
+		const F3DVector32 ClampedMax(
+			FMath::Min(Max.X, ChunkLocation.X + FNavMeshData::ChunkSize),
+			FMath::Min(Max.Y, ChunkLocation.Y + FNavMeshData::ChunkSize),
+			FMath::Min(Max.Z, ChunkLocation.Z + FNavMeshData::ChunkSize));
+		return FBounds(ClampedMin, ClampedMax);
+	}
+
+	FORCEINLINE bool Overlaps(const FBounds& Other) const
+	{
+		return	Max.X > Other.Min.X && Min.X < Other.Max.X &&
+				Max.Y > Other.Min.Y && Min.Y < Other.Max.Y &&
+				Max.Z > Other.Min.Z && Min.Z < Other.Max.Z;
 	}
 };
 
@@ -660,5 +688,10 @@ struct FBoundsPair
 	FORCEINLINE bool AreEqual() const
 	{
 		return Previous.IsValid() && Previous.Equals(Current);
+	}
+
+	FORCEINLINE FBounds GetTotalBounds() const
+	{
+		return FBounds(Previous.Min.ComponentMin(Current.Min), Previous.Max.ComponentMax(Current.Max));
 	}
 };

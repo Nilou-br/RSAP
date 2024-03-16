@@ -2,7 +2,6 @@
 
 #include "NavMeshDebugger.h"
 #include <bitset>
-#include <ranges>
 #include <string>
 #include "NavMeshTypes.h"
 #include "NavMeshUtils.h"
@@ -129,7 +128,7 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const uint8 Layer
 		if(const FVector DirectionToTarget = (NodeGlobalCenterLocation - CameraLocation).GetSafeNormal();
 			FVector::DotProduct(CameraForwardVector, DirectionToTarget) > 0)
 		{
-			DrawDebugBox(World, NodeGlobalCenterLocation, FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), LayerColors[LayerIndex], true, -1, 0, 3 - (LayerIndex/2.5));
+			DrawDebugBox(World, NodeGlobalCenterLocation, FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), LayerColors[LayerIndex], true, -1, 0, 3 - (LayerIndex/3.5));
 		}
 	}
 
