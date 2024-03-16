@@ -16,7 +16,6 @@ public:
 		: NavMeshPtr(InNavMesh), World(nullptr)
 	{}
 	void SetWorld(const UWorld* InWorld) { World = InWorld; }
-
 	void Draw();
 	void Draw(const FVector& CameraLocation, const FRotator& CameraRotation);
 	void UpdateSettings(const FNavMeshDebugSettings InNavMeshDebugSettings){ NavMeshDebugSettings = InNavMeshDebugSettings;	}

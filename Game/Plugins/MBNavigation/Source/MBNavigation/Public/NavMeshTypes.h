@@ -278,6 +278,11 @@ struct F3DVector32
 		return FVector(X, Y, Z);
 	}
 	
+	FORCEINLINE F3DVector10 ToVector10() const
+	{
+		return F3DVector10(static_cast<uint_fast16_t>(X), static_cast<uint_fast16_t>(Y), static_cast<uint_fast16_t>(Z));
+	}
+	
 	static FORCEINLINE F3DVector32 FromVector(const FVector& InVector)
 	{
 		return F3DVector32(InVector.X, InVector.Y, InVector.Z);
@@ -425,10 +430,10 @@ struct FOctreeNode
 	uint_fast32_t MortonCode;
 	FOctreeNeighbours Neighbours;
 	uint8 ChunkBorder: 6; // todo might not be needed because can be tracked in navigation algo?
-	// todo 8 bits for dynamic index for each neighbour + child + parent???? 128 dynamic-objects a chunk (first bit for static octree)
-
-	FOctreeNode(const uint_fast16_t MortonX, const uint_fast16_t MortonY, const uint_fast16_t MortonZ):
-		ChunkBorder(0)
+	// todo 8 bits for dynamic index for each neighbour + child + parent???? 128 dynamic-objects a chunk (0 index / first bit is for the static octree)
+	
+	FOctreeNode(const uint_fast16_t MortonX, const uint_fast16_t MortonY, const uint_fast16_t MortonZ, const uint8 InChunkBorder = 0b000000):
+		ChunkBorder(InChunkBorder)
 	{
 		MortonCode = libmorton::morton3D_32_encode(MortonX, MortonY, MortonZ);
 	}
@@ -600,37 +605,42 @@ typedef std::shared_ptr<FNavMesh> FNavMeshPtr;
 
 
 /**
- * Stores min/max boundaries where both are rounded down to the nearest integer.
- * This is more efficient for both cache and calculations.
+ * Stores min/max boundaries.
+ * These are rounded down to the nearest integer which is efficient for cache and calculations.
+ *
+ * @note Default type is F3DVector32.
  */
-struct FBounds
+template<typename VectorType = F3DVector32>
+struct TBounds
 {
-	F3DVector32 Min;
-	F3DVector32 Max;
+	static_assert(std::is_same_v<VectorType, F3DVector32> || std::is_same_v<VectorType, F3DVector10>, "TBounds can only be instantiated with F3DVector32 or F3DVector10");
+	
+	VectorType Min;
+	VectorType Max;
 	bool bIsValid;
 
-	FBounds() : Min(F3DVector32()), Max(F3DVector32()), bIsValid(false) {}
+	TBounds() : Min(VectorType()), Max(VectorType()), bIsValid(false) {}
 
-	FBounds(const F3DVector32& VectorMin, const F3DVector32& VectorMax, const bool InValid = true)
+	TBounds(const VectorType& VectorMin, const VectorType& VectorMax, const bool InValid = true)
 		: Min(VectorMin), Max(VectorMax), bIsValid(InValid)
 	{}
 
-	explicit FBounds(const AActor* Actor) : bIsValid(true)
+	explicit TBounds(const AActor* Actor) : bIsValid(true)
 	{
 		FVector Origin, Extent;
 		Actor->GetActorBounds(false, Origin, Extent, true);
         
-		// Convert to F3DVector32.
-		Min = F3DVector32(	FMath::FloorToInt(Origin.X - Extent.X), 
+		// Get the bounds from the Origin and Extent, and rounding the result down to an integer.
+		Min = VectorType(	FMath::FloorToInt(Origin.X - Extent.X), 
 							FMath::FloorToInt(Origin.Y - Extent.Y), 
 							FMath::FloorToInt(Origin.Z - Extent.Z));
 		
-		Max = F3DVector32(	FMath::FloorToInt(Origin.X + Extent.X), 
+		Max = VectorType(	FMath::FloorToInt(Origin.X + Extent.X), 
 							FMath::FloorToInt(Origin.Y + Extent.Y), 
 							FMath::FloorToInt(Origin.Z + Extent.Z));
 	}
 	
-	FORCEINLINE bool Equals(const FBounds& Other) const
+	FORCEINLINE bool Equals(const TBounds& Other) const
 	{
 		return	Max.X == Other.Max.X && Max.Y == Other.Max.Y && Max.Z == Other.Max.Z &&
 				Min.X == Other.Min.X && Min.Y == Other.Min.Y && Min.Z == Other.Min.Z;
@@ -641,48 +651,81 @@ struct FBounds
 		return bIsValid;
 	}
 
+	FORCEINLINE TBounds operator+(const VectorType& Vector) const
+	{
+		return TBounds(Min + Vector, Max + Vector);
+	}
+
+	FORCEINLINE TBounds operator-(const VectorType& Vector) const
+	{
+		return TBounds(Min - Vector, Max - Vector);
+	}
+
+	FORCEINLINE TBounds operator<<(const uint8 Value) const
+	{
+		return TBounds(Min << Value, Max << Value);
+	}
+
+	FORCEINLINE TBounds operator>>(const uint8 Value) const
+	{
+		return TBounds(Min >> Value, Max >> Value);
+	}
+
 	FORCEINLINE bool operator!() const
 	{
 		return	Max.X == 0 && Max.Y == 0 && Max.Z == 0 &&
 				Min.X == 0 && Min.Y == 0 && Min.Z == 0;
 	}
 
-	// Returns copy of the FBounds where it is clamped inside of a chunk.
-	FORCEINLINE FBounds GetBoundsInChunk(const F3DVector32& ChunkLocation) const
+	// Returns the part of the bounds that intersects with another.
+	FORCEINLINE TBounds GetIntersection(const TBounds& Other) const
 	{
-		const F3DVector32 ClampedMin(
-			FMath::Max(Min.X, ChunkLocation.X),
-			FMath::Max(Min.Y, ChunkLocation.Y),
-			FMath::Max(Min.Z, ChunkLocation.Z));
-		const F3DVector32 ClampedMax(
-			FMath::Min(Max.X, ChunkLocation.X + FNavMeshData::ChunkSize),
-			FMath::Min(Max.Y, ChunkLocation.Y + FNavMeshData::ChunkSize),
-			FMath::Min(Max.Z, ChunkLocation.Z + FNavMeshData::ChunkSize));
-		return FBounds(ClampedMin, ClampedMax);
+		const VectorType ClampedMin(
+			FMath::Max(Min.X, Other.Min.X),
+			FMath::Max(Min.Y, Other.Min.Y),
+			FMath::Max(Min.Z, Other.Min.Z));
+		const VectorType ClampedMax(
+			FMath::Min(Max.X, Other.Max.X),
+			FMath::Min(Max.Y, Other.Max.Y),
+			FMath::Min(Max.Z, Other.Max.Z));
+		return TBounds(ClampedMin, ClampedMax);
 	}
 
-	FORCEINLINE bool Overlaps(const FBounds& Other) const
+	// Check if these bounds are overlapping with another.
+	FORCEINLINE bool Overlaps(const TBounds& Other) const
 	{
 		return	Max.X > Other.Min.X && Min.X < Other.Max.X &&
 				Max.Y > Other.Min.Y && Min.Y < Other.Max.Y &&
 				Max.Z > Other.Min.Z && Min.Z < Other.Max.Z;
 	}
+
+	FORCEINLINE TBounds<F3DVector10> ToMortonSpace(const F3DVector32& ChunkLocation) const
+	{
+		const F3DVector10 LocalMin = ((Min - ChunkLocation) << FNavMeshData::VoxelSizeExponent).ToVector10();
+		const F3DVector10 LocalMax = ((Max - ChunkLocation) << FNavMeshData::VoxelSizeExponent).ToVector10();
+		return TBounds<F3DVector10>(LocalMin, LocalMax);
+	}
 };
 
 /**
- * Before and after pair of FBounds.
+ * Pair of bounds for storing the previous/current bounds.
+ *
+ * @note Default type is F3DVector32.
  */
-struct FBoundsPair
+template<typename VectorType = F3DVector32>
+struct TBoundsPair
 {
-	FBounds Previous;
-	FBounds Current;
-
-	FBoundsPair() {}
+	static_assert(std::is_same_v<VectorType, F3DVector32> || std::is_same_v<VectorType, F3DVector10>, "TBoundsPair can only be instantiated with F3DVector32 or F3DVector10");
 	
-	FBoundsPair(const FBounds& InPrevious, const FBounds& InCurrent)
+	TBounds<VectorType> Previous;
+	TBounds<VectorType> Current;
+
+	TBoundsPair() {}
+	
+	TBoundsPair(const TBounds<VectorType>& InPrevious, const TBounds<VectorType>& InCurrent)
 		: Previous(InPrevious), Current(InCurrent) {}
 
-	FBoundsPair(const FBounds& InPrevious, const AActor* Actor)
+	TBoundsPair(const TBounds<VectorType>& InPrevious, const AActor* Actor)
 		: Previous(InPrevious), Current(Actor) {}
 
 	FORCEINLINE bool AreEqual() const
@@ -690,8 +733,8 @@ struct FBoundsPair
 		return Previous.IsValid() && Previous.Equals(Current);
 	}
 
-	FORCEINLINE FBounds GetTotalBounds() const
+	FORCEINLINE TBounds<VectorType> GetTotalBounds() const
 	{
-		return FBounds(Previous.Min.ComponentMin(Current.Min), Previous.Max.ComponentMax(Current.Max));
+		return TBounds(Previous.Min.ComponentMin(Current.Min), Previous.Max.ComponentMax(Current.Max));
 	}
 };

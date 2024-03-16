@@ -9,7 +9,7 @@
 DEFINE_LOG_CATEGORY(LogNavMeshGenerator)
 
 
-void FNavMeshGenerator::Generate(const FBounds& LevelBounds)
+void FNavMeshGenerator::Generate(const TBounds<>& LevelBounds)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("NavMesh Generate");
 	if (!World)
@@ -37,7 +37,7 @@ void FNavMeshGenerator::Generate(const FBounds& LevelBounds)
  * Create a grid of chunks filling the entire area of the level-boundaries.
  * Chunks are be placed so that their origin align with the world coordinates x0,y0,z0.
  */
-void FNavMeshGenerator::GenerateChunks(const FBounds& LevelBounds)
+void FNavMeshGenerator::GenerateChunks(const TBounds<>& LevelBounds)
 {
 	const F3DVector32 LevelMin = LevelBounds.Min;
 	const F3DVector32 LevelMax = LevelBounds.Max;
@@ -87,14 +87,11 @@ void FNavMeshGenerator::RasterizeStaticOctree(FChunk* Chunk)
 	FOctree* StaticOctree = Chunk->Octrees[0].Get();
 	FNodesMap& FirstLayer = StaticOctree->Layers[0];
 
-	// Create the root node, which is the same size as the chunk.
-	const auto [NodePairIterator, IsInserted] = FirstLayer.emplace(0, FOctreeNode(0, 0, 0));
+	// Create the root node. Set its ChunkBorder to touch all borders.
+	const auto [NodePairIterator, IsInserted] = FirstLayer.emplace(0, FOctreeNode(0, 0, 0, 0b111111));
 	FOctreeNode& Node = NodePairIterator->second;
 
-	// Set the ChunkBorder to touch all borders.
-	Node.ChunkBorder = 0b111111;
-
-	// Recursively rasterize each node until max depth is reached.
+	// Recursively rasterize this node until static-depth is reached.
 	RasterizeStaticNode(Chunk, Node, 0);
 }
 

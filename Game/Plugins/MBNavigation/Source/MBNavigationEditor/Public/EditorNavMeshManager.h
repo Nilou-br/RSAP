@@ -27,8 +27,8 @@ enum class ESnapshotType
 	Deleted
 };
 
-typedef TMap<FGuid, FBounds> FActorBoundsMap;
-typedef TMap<FGuid, FBoundsPair> FActorBoundsPairMap;
+typedef TMap<FGuid, TBounds<>> FActorBoundsMap;
+typedef TMap<FGuid, TBoundsPair<>> FActorBoundsPairMap;
 
 struct FUndoRedoSnapshot
 {
@@ -70,7 +70,7 @@ private:
 	void InitStaticNavMeshData();
 	FORCEINLINE void GenerateAndDrawNavMesh();
 	FORCEINLINE void UpdateAndDrawNavMesh(const FActorBoundsPairMap& ActorBoundPairs);
-	FORCEINLINE void UpdateAndDrawNavMesh(const TArray<FBoundsPair>& BoundPairs);
+	FORCEINLINE void UpdateAndDrawNavMesh(const TArray<TBoundsPair<>>& BoundPairs);
 	void SaveNavMesh() const;
 	
 public:
@@ -94,7 +94,7 @@ private:
 	void AddSnapshot(const ESnapshotType SnapshotType, const FActorBoundsPairMap& ActorBoundsPairMap);
 	void ClearRedoSnapshots();
 	bool IsSnapshotActive(const FUndoRedoSnapshot& Snapshot);
-	FBounds GetLevelBoundaries() const;
+	TBounds<> GetLevelBoundaries() const;
 	void CheckMovingActors();
 	bool FindActorFromGuid(const FGuid& ActorGuid, const AActor*& OutActor);
 

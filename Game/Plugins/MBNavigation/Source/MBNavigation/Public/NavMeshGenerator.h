@@ -18,13 +18,12 @@ public:
 		: NavMeshPtr(InNavMesh), World(nullptr)
 	{}
 	void SetWorld(const UWorld* InWorld) { World = InWorld; }
-	
-	void Generate(const FBounds& LevelBounds);
+	void Generate(const TBounds<>& LevelBounds);
 
 private:
 
 	// Generation methods
-	void GenerateChunks(const FBounds& LevelBounds);
+	void GenerateChunks(const TBounds<>& LevelBounds);
 	void RasterizeStaticOctree(FChunk* Chunk);
 	void RasterizeStaticNode(FChunk* Chunk, FOctreeNode &Node, const uint8 LayerIndex);
 	FORCEINLINE bool HasOverlap(const F3DVector32 &NodeGlobalLocation, const uint8 LayerIndex);

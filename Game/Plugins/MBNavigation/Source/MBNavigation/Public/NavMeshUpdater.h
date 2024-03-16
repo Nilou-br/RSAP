@@ -17,8 +17,7 @@ public:
 		: NavMeshPtr(InNavMesh), World(nullptr)
 	{}
 	void SetWorld(const UWorld* InWorld) { World = InWorld; }
-	
-	void UpdateStatic(const TArray<FBoundsPair>& BeforeAfterBoundsPairs);
+	void UpdateStatic(const TArray<TBoundsPair<>>& BeforeAfterBoundsPairs);
 	
 
 private:
