@@ -70,29 +70,18 @@ void FNavMeshGenerator::GenerateChunks(const TBounds<>& LevelBounds)
 			{
 				F3DVector32 ChunkLocation = F3DVector32(X, Y, Z);
 				auto [ChunkIterator, IsInserted] = NavMeshPtr->emplace(ChunkLocation.ToKey(), FChunk(ChunkLocation));
-
 				FChunk* Chunk = &ChunkIterator->second;
-				RasterizeStaticOctree(Chunk);
+
+				// Rasterize the static-octree starting from the root-node until static-depth is reached.
+				FOctreeNode& RootNode = Chunk->Octrees[0]->Layers[0][0];
+				RasterizeStaticNode(Chunk, RootNode, 0);
+
+				// Set all the relations to the nodes that are in the negative direction from this chunk.
+				// Chunks are generated from negative to positive, so any chunks in the positive direction do not exist yet.
 				SetNegativeNeighbourRelations(Chunk);
 			}
 		}
 	}
-}
-
-/**
- * Rasterize the static part of the octree on a given chunk.
- */
-void FNavMeshGenerator::RasterizeStaticOctree(FChunk* Chunk)
-{
-	FOctree* StaticOctree = Chunk->Octrees[0].Get();
-	FNodesMap& FirstLayer = StaticOctree->Layers[0];
-
-	// Create the root node. Set its ChunkBorder to touch all borders.
-	const auto [NodePairIterator, IsInserted] = FirstLayer.emplace(0, FOctreeNode(0, 0, 0, 0b111111));
-	FOctreeNode& Node = NodePairIterator->second;
-
-	// Recursively rasterize this node until static-depth is reached.
-	RasterizeStaticNode(Chunk, Node, 0);
 }
 
 /**

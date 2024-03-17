@@ -24,7 +24,6 @@ private:
 
 	// Generation methods
 	void GenerateChunks(const TBounds<>& LevelBounds);
-	void RasterizeStaticOctree(FChunk* Chunk);
 	void RasterizeStaticNode(FChunk* Chunk, FOctreeNode &Node, const uint8 LayerIndex);
 	FORCEINLINE bool HasOverlap(const F3DVector32 &NodeGlobalLocation, const uint8 LayerIndex);
 	void SetNegativeNeighbourRelations(const FChunk* Chunk);

@@ -277,7 +277,8 @@ struct F3DVector32
 	{
 		return FVector(X, Y, Z);
 	}
-	
+
+	// Make sure every axis value fits in 10 bits.
 	FORCEINLINE F3DVector10 ToVector10() const
 	{
 		return F3DVector10(static_cast<uint_fast16_t>(X), static_cast<uint_fast16_t>(Y), static_cast<uint_fast16_t>(Z));
@@ -573,18 +574,14 @@ struct FChunk
 	F3DVector32 Location; // Located at the negative most location.
 	TArray<TSharedPtr<FOctree>> Octrees;
 	
-	FChunk(const F3DVector32 &InLocation)
+	explicit FChunk(const F3DVector32& InLocation = F3DVector32(0, 0, 0))
 		: Location(InLocation)
 	{
-		// Create the static octree, this octree should always exist.
+		// Create the static octree.
 		Octrees.Add(MakeShared<FOctree>());
-	}
 
-	FChunk()
-		: Location(0, 0, 0)
-	{
-		// Create the static octree, this octree should always exist.
-		Octrees.Add(MakeShared<FOctree>());
+		// Create the root node.
+		Octrees[0]->Layers[0].emplace(0, FOctreeNode(0, 0, 0, 0b111111));
 	}
 
 	FORCEINLINE FVector GetCenter(const uint32 ChunkHalveSize) const
@@ -631,13 +628,19 @@ struct TBounds
 		Actor->GetActorBounds(false, Origin, Extent, true);
         
 		// Get the bounds from the Origin and Extent, and rounding the result down to an integer.
-		Min = VectorType(	FMath::FloorToInt(Origin.X - Extent.X), 
-							FMath::FloorToInt(Origin.Y - Extent.Y), 
-							FMath::FloorToInt(Origin.Z - Extent.Z));
+		Min = VectorType(	FMath::RoundToInt(Origin.X - Extent.X), 
+							FMath::RoundToInt(Origin.Y - Extent.Y), 
+							FMath::RoundToInt(Origin.Z - Extent.Z));
 		
-		Max = VectorType(	FMath::FloorToInt(Origin.X + Extent.X), 
-							FMath::FloorToInt(Origin.Y + Extent.Y), 
-							FMath::FloorToInt(Origin.Z + Extent.Z));
+		Max = VectorType(	FMath::RoundToInt(Origin.X + Extent.X), 
+							FMath::RoundToInt(Origin.Y + Extent.Y), 
+							FMath::RoundToInt(Origin.Z + Extent.Z));
+
+		// Increment axis on Max if it equals the corresponding axis on Min.
+		// There needs to be at-least 1 unit of depth.
+		if(Max.X == Min.X) ++Max.X;
+		if(Max.Y == Min.Y) ++Max.Y;
+		if(Max.Z == Min.Z) ++Max.Z;
 	}
 	
 	FORCEINLINE bool Equals(const TBounds& Other) const
@@ -701,8 +704,12 @@ struct TBounds
 
 	FORCEINLINE TBounds<F3DVector10> ToMortonSpace(const F3DVector32& ChunkLocation) const
 	{
-		const F3DVector10 LocalMin = ((Min - ChunkLocation) << FNavMeshData::VoxelSizeExponent).ToVector10();
-		const F3DVector10 LocalMax = ((Max - ChunkLocation) << FNavMeshData::VoxelSizeExponent).ToVector10();
+		// Max-1 is required because the nodes have depth, and max-boundaries existing on 1024 are technically on the 1023th node.
+		// 10 bit holds 0-1023, and 1024 would cause overflow to 0 even though a Max axis value of 1024 it is still inside the chunk in world-space.
+		// A node with morton 1023 covers the space from 1023 to 1024, so if a Max axis value is 1024, it is actually on the 1023th node in morton-space.
+		// Look at is as if the Min on 1023 is the start of that node, and the Max on 1023 is the end of that node.
+		const F3DVector10 LocalMin = ( Min-ChunkLocation << FNavMeshData::VoxelSizeExponent).ToVector10();
+		const F3DVector10 LocalMax = ((Max-ChunkLocation << FNavMeshData::VoxelSizeExponent)-1).ToVector10();
 		return TBounds<F3DVector10>(LocalMin, LocalMax);
 	}
 };
