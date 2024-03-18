@@ -146,6 +146,21 @@ struct F3DVector10
 		return F3DVector10(X - OtherVector.X, Y - OtherVector.Y, Z - OtherVector.Z);
 	}
 
+	FORCEINLINE F3DVector10 operator<<(const uint8 Value) const
+	{
+		return F3DVector10(X << Value, Y << Value, Z << Value);
+	}
+
+	FORCEINLINE F3DVector10 operator>>(const uint8 Value) const
+	{
+		return F3DVector10(X >> Value, Y >> Value, Z >> Value);
+	}
+
+	FORCEINLINE F3DVector10 operator&(const uint16 Mask) const
+	{
+		return F3DVector10(X & Mask, Y & Mask, Z & Mask);
+	}
+
 	FORCEINLINE bool operator==(const F3DVector10& OtherVector) const {
 		return X == OtherVector.X && Y == OtherVector.Y && Z == OtherVector.Z;
 	}
@@ -261,6 +276,7 @@ struct F3DVector32
 
 	FORCEINLINE F3DVector32 operator&(const uint32 Mask) const
 	{
+		// todo check negative values?
 		return F3DVector32(X & Mask, Y & Mask, Z & Mask);
 	}
 
