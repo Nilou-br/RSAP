@@ -116,7 +116,7 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const uint8 Layer
                                           const FVector& CameraLocation, const FVector& CameraForwardVector) const
 {
 	const FOctreeNode* Node = &Chunk->Octrees[0]->Layers[LayerIndex].find(NodeMorton)->second;
-	// if(!Node->IsOccluded()) return; // todo check the one random node why it is there in a spot without a mesh.
+	if(!Node->IsOccluded()) return; // todo check the one random node why it is there in a spot without a mesh.
 	const FVector NodeGlobalCenterLocation = (Node->GetGlobalLocation(Chunk->Location) + FNavMeshData::NodeHalveSizes[LayerIndex]).ToVector();
 
 	// Return if distance between camera and node is larger than the calculated distance for this specific node's layer.
