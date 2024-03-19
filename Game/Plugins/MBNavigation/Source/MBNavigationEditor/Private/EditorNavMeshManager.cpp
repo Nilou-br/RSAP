@@ -586,6 +586,8 @@ void UEditorNavMeshManager::OnBeginObjectMovement(UObject& Object)
 	if(!Object.IsA(AStaticMeshActor::StaticClass())) return;
 	const AActor* Actor = Cast<AActor>(&Object);
 	MovingActorBoundsMap.Add(Actor->GetActorGuid(), TBounds(Actor));
+
+	
 }
 
 void UEditorNavMeshManager::OnEndObjectMovement(UObject& Object)

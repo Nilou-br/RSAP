@@ -1,12 +1,20 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #include "NavMeshGenerator.h"
-#include "NavMeshTypes.h"
-#include "unordered_dense.h"
 #include <chrono>
 #include <ranges>
+#include "NavMeshTypes.h"
+#include "unordered_dense.h"
+#include "Collision/CollisionConversions.h"
+#include "Engine/World.h"
+#include "Physics/PhysicsInterfaceUtils.h"
+#include "PhysicsEngine/CollisionQueryFilterCallback.h"
+
+#include "Collision/CollisionDebugDrawing.h"
+// #include "PhysicsEngine/CollisionQueryFilterCallback.h"
 
 DEFINE_LOG_CATEGORY(LogNavMeshGenerator)
+
 
 
 void FNavMeshGenerator::Generate(const TBounds<>& LevelBounds)
@@ -31,6 +39,7 @@ void FNavMeshGenerator::Generate(const TBounds<>& LevelBounds)
 		std::chrono::high_resolution_clock::now() - StartTime).count() / 1000.0f;
 	UE_LOG(LogNavMeshGenerator, Log, TEXT("Generation took : '%f' seconds"), DurationSeconds);
 #endif
+	
 }
 
 /*
@@ -137,40 +146,46 @@ void FNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 	}
 }
 
+/**
+ * Simplified overlap method from the UE source-code.
+ * Will only use Box as collision-shape.
+ */
+bool CustomGeomOverlapMulti(const UWorld* World, const FPhysicsGeometry& Geom, const FTransform& GeomPose, TArray<FOverlapResult>& OutOverlaps, ECollisionChannel TraceChannel, const struct FCollisionQueryParams& Params, const struct FCollisionResponseParams& ResponseParams, const struct FCollisionObjectQueryParams& ObjectParams)
+{
+	FScopeCycleCounter Counter(Params.StatId);
+	if (World->GetPhysicsScene() == nullptr) return false;
+	const FPhysScene& PhysScene = *World->GetPhysicsScene();
+	using namespace ChaosInterface;
+	
+	// Params
+	const FCollisionFilterData Filter = CreateQueryFilterData(TraceChannel, Params.bTraceComplex, ResponseParams.CollisionResponse, Params, ObjectParams, true);
+	const EQueryFlags QueryFlags = EQueryFlags::PreFilter | EQueryFlags::AnyHit;
+	FDynamicHitBuffer<FOverlapHit> OverlapBuffer;
+	
+	// Execute a single low-level overlap query
+	LowLevelOverlap(PhysScene, Geom, GeomPose,  OverlapBuffer, QueryFlags, Filter, MakeQueryFilterData(Filter, QueryFlags, Params), nullptr);
+	return OverlapBuffer.GetNumHits() > 0;
+}
+
 bool FNavMeshGenerator::HasOverlap(const F3DVector32& NodeGlobalLocation, const uint8 LayerIndex)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Has-Overlap");
-	return World->OverlapBlockingTestByChannel(
-		FVector(NodeGlobalLocation.X + FNavMeshData::NodeHalveSizes[LayerIndex],
-		        NodeGlobalLocation.Y + FNavMeshData::NodeHalveSizes[LayerIndex],
-		        NodeGlobalLocation.Z + FNavMeshData::NodeHalveSizes[LayerIndex]),
-		FQuat::Identity,
-		ECollisionChannel::ECC_WorldStatic,
-		FNavMeshData::CollisionBoxes[LayerIndex]
-	);
-}
 
-bool FNavMeshGenerator::HasSweep(const F3DVector32& NodeGlobalLocation, const uint8 LayerIndex)
-{
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Has-Sweep");
-	
-	const FVector StartLocation = FVector(NodeGlobalLocation.X + FNavMeshData::NodeHalveSizes[LayerIndex],
-									NodeGlobalLocation.Y + FNavMeshData::NodeHalveSizes[LayerIndex],
-									NodeGlobalLocation.Z + FNavMeshData::NodeHalveSizes[LayerIndex]);
-	// const FVector EndLocation = StartLocation + FVector(0.f, 0.f, 1.f);
+	// return FPhysicsInterface::GeomOverlapBlockingTest(
+	// 	World,
+	// 	FNavMeshData::CollisionBoxes[LayerIndex],
+	// 	FVector(NodeGlobalLocation.X + FNavMeshData::NodeHalveSizes[LayerIndex],
+	// 			NodeGlobalLocation.Y + FNavMeshData::NodeHalveSizes[LayerIndex],
+	// 			NodeGlobalLocation.Z + FNavMeshData::NodeHalveSizes[LayerIndex]),
+	// 	FQuat::Identity,
+	// 	ECollisionChannel::ECC_WorldStatic,
+	// 	FCollisionQueryParams::DefaultQueryParam,
+	// 	FCollisionResponseParams::DefaultResponseParam
+	// );
 
-	FHitResult HitResult;
-	const bool bHasHit = World->SweepSingleByChannel(
-		HitResult,
-		StartLocation,
-		StartLocation,
-		FQuat::Identity,
-		ECollisionChannel::ECC_WorldStatic,
-		FNavMeshData::CollisionBoxes[LayerIndex],
-		FCollisionQueryParams(SCENE_QUERY_STAT(HasSweep), false)
-	);
+	return false;
+	// return CustomGeomOverlapMulti(World, Geom, CollisionAnalyzerType, GeomPose, OutOverlaps, TraceChannel, Params, ResponseParams, ObjectParams, AccelContainer);
 	
-	return bHasHit;
 }
 
 /**

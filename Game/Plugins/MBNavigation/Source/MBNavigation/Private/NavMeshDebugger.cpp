@@ -109,34 +109,6 @@ void FNavMeshDebugger::DrawNodes(const FVector& CameraLocation, const FVector& C
 			FNavMeshDebugSettings::bDisplayRelations || FNavMeshDebugSettings::bDisplayNodeBorder)
 		{
 			RecursiveDrawNodes(Chunk, 0, 0, CameraLocation, CameraForwardVector);
-			continue;
-
-			// Start testing
-			/*TArray<FNodesMap> Layers = Chunk->Octrees[0].Get()->Layers;
-			for (uint8 LayerIndex = 0; LayerIndex < 10; ++LayerIndex)
-			{
-				FNodesMap Layer = Layers[LayerIndex];
-				for (const FOctreeNode Node : std::views::values(Layers[LayerIndex]))
-				{
-
-					//if(!Node.IsOccluded()) return; // todo check the one random node why it is there in a spot without a mesh.
-					const FVector NodeGlobalCenterLocation = (Node.GetGlobalLocation(Chunk->Location) + FNavMeshData::NodeHalveSizes[LayerIndex]).ToVector();
-
-					// Return if distance between camera and node is larger than the calculated distance for this specific node's layer.
-					if(FVector::Dist(CameraLocation, NodeGlobalCenterLocation) > (FNavMeshData::NodeSizes[LayerIndex] << 2)+200 - 16*LayerIndex) continue;
-	
-					if(FNavMeshDebugSettings::bDisplayNodes)
-					{
-						if(const FVector DirectionToTarget = (NodeGlobalCenterLocation - CameraLocation).GetSafeNormal();
-							FVector::DotProduct(CameraForwardVector, DirectionToTarget))
-						{
-							DrawDebugBox(World, NodeGlobalCenterLocation, FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), LayerColors[LayerIndex], true, -1, 0, 3 - (LayerIndex/3.5));
-						}
-					}
-					
-				}
-			}*/
-			// End testing
 		}
 	}
 }
@@ -148,7 +120,7 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const uint8 Layer
 	if(NodeIterator == Chunk->Octrees[0]->Layers[LayerIndex].end()) return;
 	const FOctreeNode* Node = &NodeIterator->second;
 	
-	// if(!Node->IsOccluded()) return; // todo check the one random node why it is there in a spot without a mesh.
+	if(!Node->IsOccluded()) return;
 	const FVector NodeGlobalCenterLocation = (Node->GetGlobalLocation(Chunk->Location) + FNavMeshData::NodeHalveSizes[LayerIndex]).ToVector();
 
 	// Return if distance between camera and node is larger than the calculated distance for this specific node's layer.
@@ -224,7 +196,7 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const uint8 Layer
 		}
 	}
 	
-	if(LayerIndex == FNavMeshData::StaticDepth) return;
+	if(LayerIndex == FNavMeshData::StaticDepth || !Node->IsFilled()) return;
 
 	const F3DVector10 NodeLocalLocation = Node->GetLocalLocation();
 	const uint8 ChildLayerIndex = LayerIndex+1;

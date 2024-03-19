@@ -21,11 +21,15 @@ public class MBNavigation : ModuleRules
 		PrivateDependencyModuleNames.AddRange(
 			new string[]
 			{
+				"Core",
 				"CoreUObject",
 				"Engine",
 				"Slate",
 				"SlateCore",
-				"UnrealEd"
+				"UnrealEd",
+				"PhysicsCore",
+				"Chaos",
+				"InputCore"
 				// ... add private dependencies that you statically link with here ...	
 			}
 		);
