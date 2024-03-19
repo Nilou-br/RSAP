@@ -3,6 +3,7 @@
 #include "NavMeshDebugger.h"
 #include <bitset>
 #include <string>
+#include <ranges>
 #include "NavMeshTypes.h"
 #include "NavMeshUtils.h"
 
@@ -104,10 +105,38 @@ void FNavMeshDebugger::DrawNodes(const FVector& CameraLocation, const FVector& C
 			}
 		}
 		
-		if(FNavMeshDebugSettings::bDisplayNodes)
+		if(	FNavMeshDebugSettings::bDisplayNodes || FNavMeshDebugSettings::bDisplayPaths ||
+			FNavMeshDebugSettings::bDisplayRelations || FNavMeshDebugSettings::bDisplayNodeBorder)
 		{
-			// First node on chunk always exists.
 			RecursiveDrawNodes(Chunk, 0, 0, CameraLocation, CameraForwardVector);
+			continue;
+
+			// Start testing
+			/*TArray<FNodesMap> Layers = Chunk->Octrees[0].Get()->Layers;
+			for (uint8 LayerIndex = 0; LayerIndex < 10; ++LayerIndex)
+			{
+				FNodesMap Layer = Layers[LayerIndex];
+				for (const FOctreeNode Node : std::views::values(Layers[LayerIndex]))
+				{
+
+					//if(!Node.IsOccluded()) return; // todo check the one random node why it is there in a spot without a mesh.
+					const FVector NodeGlobalCenterLocation = (Node.GetGlobalLocation(Chunk->Location) + FNavMeshData::NodeHalveSizes[LayerIndex]).ToVector();
+
+					// Return if distance between camera and node is larger than the calculated distance for this specific node's layer.
+					if(FVector::Dist(CameraLocation, NodeGlobalCenterLocation) > (FNavMeshData::NodeSizes[LayerIndex] << 2)+200 - 16*LayerIndex) continue;
+	
+					if(FNavMeshDebugSettings::bDisplayNodes)
+					{
+						if(const FVector DirectionToTarget = (NodeGlobalCenterLocation - CameraLocation).GetSafeNormal();
+							FVector::DotProduct(CameraForwardVector, DirectionToTarget))
+						{
+							DrawDebugBox(World, NodeGlobalCenterLocation, FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), LayerColors[LayerIndex], true, -1, 0, 3 - (LayerIndex/3.5));
+						}
+					}
+					
+				}
+			}*/
+			// End testing
 		}
 	}
 }
@@ -115,8 +144,11 @@ void FNavMeshDebugger::DrawNodes(const FVector& CameraLocation, const FVector& C
 void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const uint8 LayerIndex, const uint_fast32_t& NodeMorton,
                                           const FVector& CameraLocation, const FVector& CameraForwardVector) const
 {
-	const FOctreeNode* Node = &Chunk->Octrees[0]->Layers[LayerIndex].find(NodeMorton)->second;
-	if(!Node->IsOccluded()) return; // todo check the one random node why it is there in a spot without a mesh.
+	const auto NodeIterator = Chunk->Octrees[0]->Layers[LayerIndex].find(NodeMorton);
+	if(NodeIterator == Chunk->Octrees[0]->Layers[LayerIndex].end()) return;
+	const FOctreeNode* Node = &NodeIterator->second;
+	
+	// if(!Node->IsOccluded()) return; // todo check the one random node why it is there in a spot without a mesh.
 	const FVector NodeGlobalCenterLocation = (Node->GetGlobalLocation(Chunk->Location) + FNavMeshData::NodeHalveSizes[LayerIndex]).ToVector();
 
 	// Return if distance between camera and node is larger than the calculated distance for this specific node's layer.
@@ -124,9 +156,8 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const uint8 Layer
 	
 	if(FNavMeshDebugSettings::bDisplayNodes)
 	{
-		// Return if not in field of view.
 		if(const FVector DirectionToTarget = (NodeGlobalCenterLocation - CameraLocation).GetSafeNormal();
-			FVector::DotProduct(CameraForwardVector, DirectionToTarget) > 0)
+			FVector::DotProduct(CameraForwardVector, DirectionToTarget))
 		{
 			DrawDebugBox(World, NodeGlobalCenterLocation, FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), LayerColors[LayerIndex], true, -1, 0, 3 - (LayerIndex/3.5));
 		}
@@ -196,14 +227,14 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const uint8 Layer
 	if(LayerIndex == FNavMeshData::StaticDepth) return;
 
 	const F3DVector10 NodeLocalLocation = Node->GetLocalLocation();
-	const int_fast16_t ChildOffset = FNavMeshData::MortonOffsets[LayerIndex+1];
+	const uint8 ChildLayerIndex = LayerIndex+1;
+	const int_fast16_t ChildMortonOffset = FNavMeshData::MortonOffsets[ChildLayerIndex];
 	for (uint8 i = 0; i < 8; ++i)
 	{
-		// TODO this is not actually local. Change to use FNavMeshData::MortonOffsets!!
 		// Add the offset to certain children depending on their location in the parent.
-		const uint_fast16_t ChildX = NodeLocalLocation.X + ((i & 1) ? ChildOffset : 0);
-		const uint_fast16_t ChildY = NodeLocalLocation.Y + ((i & 2) ? ChildOffset : 0);
-		const uint_fast16_t ChildZ = NodeLocalLocation.Z + ((i & 4) ? ChildOffset : 0);
-		RecursiveDrawNodes(Chunk, LayerIndex+1, F3DVector10(ChildX, ChildY, ChildZ).ToMortonCode(), CameraLocation, CameraForwardVector);
+		const uint_fast16_t ChildX = NodeLocalLocation.X + ((i & 1) ? ChildMortonOffset : 0);
+		const uint_fast16_t ChildY = NodeLocalLocation.Y + ((i & 2) ? ChildMortonOffset : 0);
+		const uint_fast16_t ChildZ = NodeLocalLocation.Z + ((i & 4) ? ChildMortonOffset : 0);
+		RecursiveDrawNodes(Chunk, ChildLayerIndex, F3DVector10::ToMortonCode(ChildX, ChildY, ChildZ), CameraLocation, CameraForwardVector);
 	}
 }

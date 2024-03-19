@@ -150,6 +150,29 @@ bool FNavMeshGenerator::HasOverlap(const F3DVector32& NodeGlobalLocation, const 
 	);
 }
 
+bool FNavMeshGenerator::HasSweep(const F3DVector32& NodeGlobalLocation, const uint8 LayerIndex)
+{
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Has-Sweep");
+	
+	const FVector StartLocation = FVector(NodeGlobalLocation.X + FNavMeshData::NodeHalveSizes[LayerIndex],
+									NodeGlobalLocation.Y + FNavMeshData::NodeHalveSizes[LayerIndex],
+									NodeGlobalLocation.Z + FNavMeshData::NodeHalveSizes[LayerIndex]);
+	// const FVector EndLocation = StartLocation + FVector(0.f, 0.f, 1.f);
+
+	FHitResult HitResult;
+	const bool bHasHit = World->SweepSingleByChannel(
+		HitResult,
+		StartLocation,
+		StartLocation,
+		FQuat::Identity,
+		ECollisionChannel::ECC_WorldStatic,
+		FNavMeshData::CollisionBoxes[LayerIndex],
+		FCollisionQueryParams(SCENE_QUERY_STAT(HasSweep), false)
+	);
+	
+	return bHasHit;
+}
+
 /**
  * Sets all the neighbour relations on the nodes within the static octree of the given chunk.
  * 

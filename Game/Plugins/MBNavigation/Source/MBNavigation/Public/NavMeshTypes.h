@@ -112,7 +112,12 @@ struct F3DVector10
 	uint_fast16_t Z: 10;
 
 	// Keep in mind that the morton-code supports 10 bits per axis.
-	FORCEINLINE uint_fast32_t ToMortonCode() const // todo maybe make static alternative?
+	FORCEINLINE uint_fast32_t ToMortonCode() const
+	{
+		return libmorton::morton3D_32_encode(X, Y, Z);
+	}
+
+	static FORCEINLINE uint_fast32_t ToMortonCode(const uint_fast16_t X, const uint_fast16_t Y, const uint_fast16_t Z)
 	{
 		return libmorton::morton3D_32_encode(X, Y, Z);
 	}
