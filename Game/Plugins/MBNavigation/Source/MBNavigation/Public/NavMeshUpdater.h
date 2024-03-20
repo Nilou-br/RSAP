@@ -18,6 +18,7 @@ public:
 	{}
 	void SetWorld(const UWorld* InWorld) { World = InWorld; }
 	void UpdateStatic(const TArray<TBoundsPair<>>& BeforeAfterBoundsPairs);
+	FORCEINLINE bool HasOverlapWithActor(const F3DVector32& NodeGlobalLocation, const uint8 LayerIndex, const UPrimitiveComponent* PrimitiveComponent);
 	
 
 private:

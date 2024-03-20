@@ -12,8 +12,7 @@ public class MBNavigation : ModuleRules
 		PublicDependencyModuleNames.AddRange(
 			new string[]
 			{
-				"Core",
-				// ... add other public dependencies that you statically link with here ...
+				"Core"
 			}
 		);
 			
@@ -26,11 +25,7 @@ public class MBNavigation : ModuleRules
 				"Engine",
 				"Slate",
 				"SlateCore",
-				"UnrealEd",
-				"PhysicsCore",
-				"Chaos",
-				"InputCore"
-				// ... add private dependencies that you statically link with here ...	
+				"UnrealEd"
 			}
 		);
 		

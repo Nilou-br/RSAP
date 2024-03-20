@@ -5,13 +5,6 @@
 #include <ranges>
 #include "NavMeshTypes.h"
 #include "unordered_dense.h"
-#include "Collision/CollisionConversions.h"
-#include "Engine/World.h"
-#include "Physics/PhysicsInterfaceUtils.h"
-#include "PhysicsEngine/CollisionQueryFilterCallback.h"
-
-#include "Collision/CollisionDebugDrawing.h"
-// #include "PhysicsEngine/CollisionQueryFilterCallback.h"
 
 DEFINE_LOG_CATEGORY(LogNavMeshGenerator)
 
@@ -146,45 +139,21 @@ void FNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 	}
 }
 
-/**
- * Simplified overlap method from the UE source-code.
- * Will only use Box as collision-shape.
- */
-bool CustomGeomOverlapMulti(const UWorld* World, const FPhysicsGeometry& Geom, const FTransform& GeomPose, TArray<FOverlapResult>& OutOverlaps, ECollisionChannel TraceChannel, const struct FCollisionQueryParams& Params, const struct FCollisionResponseParams& ResponseParams, const struct FCollisionObjectQueryParams& ObjectParams)
-{
-	FScopeCycleCounter Counter(Params.StatId);
-	if (World->GetPhysicsScene() == nullptr) return false;
-	const FPhysScene& PhysScene = *World->GetPhysicsScene();
-	using namespace ChaosInterface;
-	
-	// Params
-	const FCollisionFilterData Filter = CreateQueryFilterData(TraceChannel, Params.bTraceComplex, ResponseParams.CollisionResponse, Params, ObjectParams, true);
-	const EQueryFlags QueryFlags = EQueryFlags::PreFilter | EQueryFlags::AnyHit;
-	FDynamicHitBuffer<FOverlapHit> OverlapBuffer;
-	
-	// Execute a single low-level overlap query
-	LowLevelOverlap(PhysScene, Geom, GeomPose,  OverlapBuffer, QueryFlags, Filter, MakeQueryFilterData(Filter, QueryFlags, Params), nullptr);
-	return OverlapBuffer.GetNumHits() > 0;
-}
-
 bool FNavMeshGenerator::HasOverlap(const F3DVector32& NodeGlobalLocation, const uint8 LayerIndex)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Has-Overlap");
 
-	// return FPhysicsInterface::GeomOverlapBlockingTest(
-	// 	World,
-	// 	FNavMeshData::CollisionBoxes[LayerIndex],
-	// 	FVector(NodeGlobalLocation.X + FNavMeshData::NodeHalveSizes[LayerIndex],
-	// 			NodeGlobalLocation.Y + FNavMeshData::NodeHalveSizes[LayerIndex],
-	// 			NodeGlobalLocation.Z + FNavMeshData::NodeHalveSizes[LayerIndex]),
-	// 	FQuat::Identity,
-	// 	ECollisionChannel::ECC_WorldStatic,
-	// 	FCollisionQueryParams::DefaultQueryParam,
-	// 	FCollisionResponseParams::DefaultResponseParam
-	// );
-
-	return false;
-	// return CustomGeomOverlapMulti(World, Geom, CollisionAnalyzerType, GeomPose, OutOverlaps, TraceChannel, Params, ResponseParams, ObjectParams, AccelContainer);
+	return FPhysicsInterface::GeomOverlapBlockingTest(
+		World,
+		FNavMeshData::CollisionBoxes[LayerIndex],
+		FVector(NodeGlobalLocation.X + FNavMeshData::NodeHalveSizes[LayerIndex],
+				NodeGlobalLocation.Y + FNavMeshData::NodeHalveSizes[LayerIndex],
+				NodeGlobalLocation.Z + FNavMeshData::NodeHalveSizes[LayerIndex]),
+		FQuat::Identity,
+		ECollisionChannel::ECC_WorldStatic,
+		FCollisionQueryParams::DefaultQueryParam,
+		FCollisionResponseParams::DefaultResponseParam
+	);
 	
 }
 
