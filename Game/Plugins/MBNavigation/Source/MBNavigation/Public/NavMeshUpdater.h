@@ -11,8 +11,12 @@ DECLARE_LOG_CATEGORY_EXTERN(LogNavMeshUpdater, Log, All);
 
 struct FAxisState
 {
-	uint16 StartSkip: 10;
-	uint16 EndSkip: 10;
+	EAxis::Type Axis = EAxis::None;
+	
+	uint16 StartSkip: 10 = 0;
+	uint16 EndSkip: 10 = 0;
+	uint16 RoundedMin: 10 = 0;
+	uint16 RoundedMax: 10 = 0;
 	
 	// For if the axis on first/last node is exactly on a the current rounded-axis for that loop, and we have not yet checked it.
 	bool bHasCheckedFirst = false;
@@ -24,8 +28,7 @@ struct FAxisState
 	// For determining if there are nodes in-between the Min/Max of a coordinate.
 	uint16 DiffCriteria = 1;
 
-	uint16 RoundedMin: 10;
-	uint16 RoundedMax: 10;
+	explicit FAxisState(const EAxis::Type Axis): Axis(Axis) {}
 };
 
 class MBNAVIGATION_API FNavMeshUpdater

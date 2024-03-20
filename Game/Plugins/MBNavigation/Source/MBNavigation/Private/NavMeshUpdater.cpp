@@ -101,7 +101,21 @@ void FNavMeshUpdater::AxisCheck(FAxisState& AxisState, const uint16 Diff, const 
 			if(AxisToIterateB.bCanSkip && StartB == AxisToIterateB.StartSkip) StartB = AxisToIterateB.EndSkip;
 			for (uint16 AxisB = StartB; AxisB<=AxisToIterateB.RoundedMax; AxisB+=MortonOffset)
 			{
-				DrawDebugBox(World, (F3DVector10(AxisValue, AxisA, AxisB) + (FNavMeshData::MortonOffsets[LayerIndex]>>1)).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Red, true, -1, 0, 1);
+				// todo
+				// DrawDebugBox(World, (F3DVector10(AxisValue, AxisA, AxisB) + (FNavMeshData::MortonOffsets[LayerIndex]>>1)).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Red, true, -1, 0, 1);
+				switch (AxisState.Axis) {
+				case EAxis::X:
+					DrawDebugBox(World, (F3DVector10(AxisValue, AxisA, AxisB) + (FNavMeshData::MortonOffsets[LayerIndex]>>1)).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Red, true, -1, 0, 1);
+					break;
+				case EAxis::Y:
+					DrawDebugBox(World, (F3DVector10(AxisA, AxisValue, AxisB) + (FNavMeshData::MortonOffsets[LayerIndex]>>1)).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Green, true, -1, 0, 1);
+					break;
+				case EAxis::Z:
+					DrawDebugBox(World, (F3DVector10(AxisA, AxisB, AxisValue) + (FNavMeshData::MortonOffsets[LayerIndex]>>1)).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Blue, true, -1, 0, 1);
+					break;
+				case EAxis::None:
+					break;
+				}
 			}
 			
 		}
@@ -130,9 +144,9 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<>>& BeforeAfterBound
 			
 			/* --- Currently only using the CurrentBounds for testing --- */
 
-			FAxisState AxisStateX;
-			FAxisState AxisStateY;
-			FAxisState AxisStateZ;
+			FAxisState AxisStateX(EAxis::X);
+			FAxisState AxisStateY(EAxis::Y);
+			FAxisState AxisStateZ(EAxis::Z);
 			
 			for (uint8 LayerIndex = 0; LayerIndex<=FNavMeshData::StaticDepth; ++LayerIndex)
 			{
@@ -154,8 +168,8 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<>>& BeforeAfterBound
 				
 				// Start checking each axis one by one. // todo switch case on largest axis.
 				AxisCheck(AxisStateX, ShiftedMax.X != ShiftedMin.X ? ShiftedMax.X - ShiftedMin.X - 1 : 0, LayerIndex, AxisStateY, AxisStateZ);
-				// AxisCheck(AxisStateY, ShiftedMax.Y - ShiftedMin.Y, LayerIndex, AxisStateZ, AxisStateX);
-				// AxisCheck(AxisStateZ, ShiftedMax.Z - ShiftedMin.Z, LayerIndex, AxisStateX, AxisStateY);
+				AxisCheck(AxisStateY, ShiftedMax.Y != ShiftedMin.Y ? ShiftedMax.Y - ShiftedMin.Y - 1 : 0, LayerIndex, AxisStateX, AxisStateZ);
+				AxisCheck(AxisStateZ, ShiftedMax.Z != ShiftedMin.Z ? ShiftedMax.Z - ShiftedMin.Z - 1 : 0, LayerIndex, AxisStateX, AxisStateY);
 			}
 		}
 	}
@@ -170,6 +184,7 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<>>& BeforeAfterBound
 bool FNavMeshUpdater::HasOverlapWithActor(const F3DVector32& NodeGlobalLocation, const uint8 LayerIndex, const UPrimitiveComponent* PrimitiveComponent)
 {
 	// todo: check WorldCollision.cpp in source-code to simplify it?
+	// todo, use normal overlap on total-bounds to get actors in that area :)
 	TArray<FOverlapResult> OutOverlaps;
 	return World->ComponentOverlapMultiByChannel(
 		OutOverlaps,
