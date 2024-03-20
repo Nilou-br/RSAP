@@ -53,37 +53,71 @@ TMap<FChunk*, TBoundsPair<F3DVector10>> GetMortonBoundsPairs(const FNavMeshPtr& 
 	return MortonBoundsPairs;
 }
 
-struct FAxisState
+void FNavMeshUpdater::AxisCheck(FAxisState& AxisState, const uint16 Diff, const uint8 LayerIndex, const FAxisState& AxisToIterateA, const FAxisState& AxisToIterateB)
 {
-	uint16 StartSkip: 10;
-	uint16 EndSkip: 10;
+	if(Diff <= AxisState.DiffCriteria)
+	{
+		if(AxisState.DiffCriteria != 1) AxisState.DiffCriteria <<= 1;
+		return;
+	}
+	AxisState.DiffCriteria = Diff << 1;
 	
-	// For if the axis on first/last node is exactly on a the current rounded-axis for that loop, and we have not yet checked it.
-	bool bHasCheckedFirst = false;
-	bool bHasCheckedLast = false;
+	const uint16 MortonOffset = FNavMeshData::MortonOffsets[LayerIndex];
+	
+	uint16 StartValue = AxisState.RoundedMin+MortonOffset; // Add offset because we only want to check the between-nodes for this axis.
+	if(AxisState.bCanSkip && StartValue == AxisState.StartSkip) StartValue = AxisState.EndSkip; // Skip to end if starting point has already been checked.
+	for (uint16 AxisValue = StartValue; AxisValue<AxisState.RoundedMax; AxisValue+=MortonOffset)
+	{
+		// Skip the parts that have already been checked in previous layers.
+		bool bSkipToEnd = false;
+		if(AxisState.bCanSkip)
+		{
+			if(AxisValue < AxisState.StartSkip)
+			{
+				AxisState.StartSkip = AxisValue;
+				bSkipToEnd = true;
+			}
+			else
+			{
+				AxisState.EndSkip = AxisValue+MortonOffset;
+			}
+		}
+		else
+		{
+			AxisState.bCanSkip = true;
+			AxisState.StartSkip = AxisValue;
+		}
+		
+		// We are now on a node that needs to be checked.
 
-	// To know if we are able to skip over already iterated parts.
-	bool bCanSkip = false;
+		// todo, if start or end falls perfectly on the boundaries of an axis, then set that axis start/end from here.
+		// Loop through the two given AxisStates.
+		uint16 StartA = AxisToIterateA.RoundedMin;
+		if(AxisToIterateA.bCanSkip && StartA == AxisToIterateA.StartSkip) StartA = AxisToIterateA.EndSkip;
+		for (uint16 AxisA = StartA; AxisA<=AxisToIterateA.RoundedMax; AxisA+=MortonOffset)
+		{
 
-	// For determining if there are nodes in-between the Min/Max of a coordinate.
-	uint16 DiffCriteria = 1;
-
-	//
-	std::array<uint16, 10> LayerDiffs;
-
-	// explicit FAxisState(const EAxis::Type Axis, const uint16 Length)
-	// 	: Axis(Axis), Length(Length)
-	// {}
-};
+			uint16 StartB = AxisToIterateB.RoundedMin;
+			if(AxisToIterateB.bCanSkip && StartB == AxisToIterateB.StartSkip) StartB = AxisToIterateB.EndSkip;
+			for (uint16 AxisB = StartB; AxisB<=AxisToIterateB.RoundedMax; AxisB+=MortonOffset)
+			{
+				DrawDebugBox(World, (F3DVector10(AxisValue, AxisA, AxisB) + (FNavMeshData::MortonOffsets[LayerIndex]>>1)).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Red, true, -1, 0, 1);
+			}
+			
+		}
+		
+		if(bSkipToEnd) AxisValue = AxisState.EndSkip-MortonOffset; // The next node is guaranteed to be the StartSkip, so we can skip to the last node.
+	}
+}
 
 void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<>>& BeforeAfterBoundsPairs)
 {
 	
 #if WITH_EDITOR
+	FlushPersistentDebugLines(World);
 	const auto StartTime = std::chrono::high_resolution_clock::now();
 #endif
-
-	uint64 Count = 0;
+	
 	for (const auto BeforeAfterBoundsPair : BeforeAfterBoundsPairs)
 	{
 		// For-each Min/Max bounds in a chunk.
@@ -94,144 +128,34 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<>>& BeforeAfterBound
 			const TBounds<F3DVector10> PrevMortonBounds = MortonBoundsPair.Previous;
 			const TBounds<F3DVector10> CurrMortonBounds = MortonBoundsPair.Current;
 			
-			/* --- Currently only using the PrevBounds for testing --- */
-
-			
-			
-			// std::array<FAxisState, 3> AxisStates = {
-			// 	FAxisState(EAxis::X, PrevMortonBounds.Max.X - PrevMortonBounds.Min.X),
-			// 	FAxisState(EAxis::Y, PrevMortonBounds.Max.Y - PrevMortonBounds.Min.Y),
-			// 	FAxisState(EAxis::Z, PrevMortonBounds.Max.Z - PrevMortonBounds.Min.Z)
-			// };
-
-			// Sort the array based on the length.
-			// std::ranges::sort(AxisStates, [](const FAxisState& A, const FAxisState& B) -> bool {
-			// 	return A.Length > B.Length;
-			// });
+			/* --- Currently only using the CurrentBounds for testing --- */
 
 			FAxisState AxisStateX;
 			FAxisState AxisStateY;
 			FAxisState AxisStateZ;
 			
-			for (uint8 LayerIndex = 0; LayerIndex<=9; ++LayerIndex)
+			for (uint8 LayerIndex = 0; LayerIndex<=FNavMeshData::StaticDepth; ++LayerIndex)
 			{
-				const uint8 Shift = 9-LayerIndex;
-				const uint16 MortonOffset = FNavMeshData::MortonOffsets[LayerIndex];
+				// todo: if static-depth, then check remaining nodes for overlap directly.
 
-				// todo: if static-depth, then check overlap directly.
-
-				// Floor value to nearest multiple of the current node-size.
-				const F3DVector10 ShiftedMin = PrevMortonBounds.Min >> Shift;
-				const F3DVector10 ShiftedMax = PrevMortonBounds.Max >> Shift;
-
-				// Get node-count difference between min-max for each XYZ coordinate.
-				const uint16 DiffX = ShiftedMax.X - ShiftedMin.X;
-				const uint16 DiffY = ShiftedMax.Y - ShiftedMin.Y;
-				const uint16 DiffZ = ShiftedMax.Z - ShiftedMin.Z;
-
+				// Shift the bounds to be able to calculate how many nodes on this layer can fit between the Min/Max.
+				const uint8 Shift = 10-LayerIndex;
+				const F3DVector10 ShiftedMin = CurrMortonBounds.Min >> Shift;
+				const F3DVector10 ShiftedMax = CurrMortonBounds.Max >> Shift;
+				
 				// Round MortonBounds to the nearest multiple of this layer's Morton-offset.
-				const F3DVector10 RoundedMin = PrevMortonBounds.Min & FNavMeshData::MortonMasks[LayerIndex];
-				const F3DVector10 RoundedMax = PrevMortonBounds.Max & FNavMeshData::MortonMasks[LayerIndex];
+				const F3DVector10 RoundedMin = CurrMortonBounds.Min & FNavMeshData::MortonMasks[LayerIndex];
+				const F3DVector10 RoundedMax = CurrMortonBounds.Max & FNavMeshData::MortonMasks[LayerIndex];
 
-				// Start checking X
-				if(DiffX > AxisStateX.DiffCriteria)
-				{
-					uint16 StartX = RoundedMin.X+MortonOffset;
-					if(AxisStateX.bCanSkip && StartX == AxisStateX.StartSkip) StartX = AxisStateX.EndSkip; // Skip to end if starting X has already been checked.
-					for (uint16 X = StartX; X<RoundedMax.X; X+=MortonOffset)
-					{
-						// Skip the parts on X that have already been checked in previous layers.
-						if(AxisStateX.bCanSkip)
-						{
-							if(X == AxisStateX.StartSkip)
-							{
-								X=AxisStateX.EndSkip;
-								continue;
-							}
-							if(X < AxisStateX.StartSkip)
-							{
-								AxisStateX.StartSkip = X;
-							}
-							else
-							{
-								AxisStateX.EndSkip = X+MortonOffset;
-							}
-						}
-						else
-						{
-							AxisStateX.bCanSkip = true;
-							AxisStateX.StartSkip = X;
-						}
-						AxisStateX.DiffCriteria = (DiffX << 1)+1;
-
-						uint16 TempY = RoundedMin.Z+MortonOffset;
-						uint16 TempZ = RoundedMin.Z+MortonOffset;
-						// DrawDebugBox(World, (F3DVector10(X, TempY, TempZ) + (FNavMeshData::MortonOffsets[LayerIndex]>>1)).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Red, true, -1, 0, 5);
-
-						uint16 StartY = RoundedMin.Y+MortonOffset;
-						if(AxisStateY.bCanSkip && StartY == AxisStateY.StartSkip) StartY = AxisStateY.EndSkip; // Skip to end if starting Y has already been checked.
-						for (uint16 Y = StartY; Y<=RoundedMax.Y; Y+=MortonOffset)
-						{
-							if(AxisStateY.bCanSkip)
-							{
-								if(Y == AxisStateY.StartSkip)
-								{
-									Y=AxisStateY.EndSkip;
-									continue;
-								}
-								if(Y < AxisStateY.StartSkip)
-								{
-									AxisStateY.StartSkip = Y;
-								}
-								else
-								{
-									AxisStateY.EndSkip = Y+MortonOffset;
-								}
-							}
-							else
-							{
-								AxisStateY.bCanSkip = true;
-								AxisStateY.StartSkip = Y;
-							}
-
-							// DrawDebugBox(World, (F3DVector10(X, Y, TempZ) + (FNavMeshData::MortonOffsets[LayerIndex]>>1)).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Red, true, -1, 0, 5);
-
-							uint16 StartZ = RoundedMin.Z+MortonOffset;
-							if(AxisStateZ.bCanSkip && StartZ == AxisStateZ.StartSkip) StartZ = AxisStateZ.EndSkip; // Skip to end if starting Y has already been checked.
-							for (uint16 Z = StartZ; Z<=RoundedMax.Z; Z+=MortonOffset)
-							{
-								Count++;
-								if(AxisStateZ.bCanSkip)
-								{
-									if(Z == AxisStateZ.StartSkip)
-									{
-										Z=AxisStateZ.EndSkip;
-										continue;
-									}
-									if(Z < AxisStateZ.StartSkip)
-									{
-										AxisStateZ.StartSkip = Z;
-									}
-									else
-									{
-										AxisStateZ.EndSkip = Z+MortonOffset;
-									}
-								}
-								else
-								{
-									AxisStateZ.bCanSkip = true;
-									AxisStateZ.StartSkip = Z;
-								}
-
-								// DrawDebugBox(World, (F3DVector10(X, Y, Z) + (FNavMeshData::MortonOffsets[LayerIndex]>>1)).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Red, true, -1, 0, 5);
-							}
-						}
-					}
-				}
-
-				// Start checking Y ...
-
-				// Start checking Z ...
+				// Set these on the states.
+				AxisStateX.RoundedMin = RoundedMin.X; AxisStateX.RoundedMax = RoundedMax.X;
+				AxisStateY.RoundedMin = RoundedMin.Y; AxisStateY.RoundedMax = RoundedMax.Y;
+				AxisStateZ.RoundedMin = RoundedMin.Z; AxisStateZ.RoundedMax = RoundedMax.Z;
+				
+				// Start checking each axis one by one. // todo switch case on largest axis.
+				AxisCheck(AxisStateX, ShiftedMax.X != ShiftedMin.X ? ShiftedMax.X - ShiftedMin.X - 1 : 0, LayerIndex, AxisStateY, AxisStateZ);
+				// AxisCheck(AxisStateY, ShiftedMax.Y - ShiftedMin.Y, LayerIndex, AxisStateZ, AxisStateX);
+				// AxisCheck(AxisStateZ, ShiftedMax.Z - ShiftedMin.Z, LayerIndex, AxisStateX, AxisStateY);
 			}
 		}
 	}
@@ -240,7 +164,6 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<>>& BeforeAfterBound
 	const float DurationSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(
 		std::chrono::high_resolution_clock::now() - StartTime).count() / 1000.0f;
 	UE_LOG(LogNavMeshUpdater, Log, TEXT("Update took : '%f' seconds"), DurationSeconds);
-	UE_LOG(LogNavMeshUpdater, Log, TEXT("Count: '%llu'"), Count);
 #endif
 }
 
