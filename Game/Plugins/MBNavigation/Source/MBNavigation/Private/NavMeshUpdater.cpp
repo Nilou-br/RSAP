@@ -96,19 +96,28 @@ void FNavMeshUpdater::AxisCheck(FAxisState& AxisState, const uint16 Diff, const 
 		if(AxisToIterateA.bCanSkip && StartA == AxisToIterateA.StartSkip) StartA = AxisToIterateA.EndSkip;
 		for (uint16 AxisA = StartA; AxisA<=AxisToIterateA.RoundedMax; AxisA+=MortonOffset)
 		{
-
+			if(AxisToIterateA.bCanSkip && AxisA == AxisToIterateA.StartSkip)
+			{
+				AxisA = AxisToIterateA.EndSkip-MortonOffset;
+				continue;
+			}
+			
 			uint16 StartB = AxisToIterateB.RoundedMin;
 			if(AxisToIterateB.bCanSkip && StartB == AxisToIterateB.StartSkip) StartB = AxisToIterateB.EndSkip;
 			for (uint16 AxisB = StartB; AxisB<=AxisToIterateB.RoundedMax; AxisB+=MortonOffset)
 			{
-				// todo
-				// DrawDebugBox(World, (F3DVector10(AxisValue, AxisA, AxisB) + (FNavMeshData::MortonOffsets[LayerIndex]>>1)).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Red, true, -1, 0, 1);
+				if(AxisToIterateB.bCanSkip && AxisB == AxisToIterateB.StartSkip)
+				{
+					AxisB = AxisToIterateB.EndSkip-MortonOffset;
+					continue;
+				}
+				
 				switch (AxisState.Axis) {
 				case EAxis::X:
-					DrawDebugBox(World, (F3DVector10(AxisValue, AxisA, AxisB) + (FNavMeshData::MortonOffsets[LayerIndex]>>1)).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Red, true, -1, 0, 1);
+					DrawDebugBox(World, (F3DVector10(AxisValue, AxisA, AxisB) + (FNavMeshData::MortonOffsets[LayerIndex]>>1)).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Red, true, -1, 0, 3);
 					break;
 				case EAxis::Y:
-					DrawDebugBox(World, (F3DVector10(AxisA, AxisValue, AxisB) + (FNavMeshData::MortonOffsets[LayerIndex]>>1)).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Green, true, -1, 0, 1);
+					DrawDebugBox(World, (F3DVector10(AxisA, AxisValue, AxisB) + (FNavMeshData::MortonOffsets[LayerIndex]>>1)).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Green, true, -1, 0, 2);
 					break;
 				case EAxis::Z:
 					DrawDebugBox(World, (F3DVector10(AxisA, AxisB, AxisValue) + (FNavMeshData::MortonOffsets[LayerIndex]>>1)).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Blue, true, -1, 0, 1);
@@ -117,7 +126,6 @@ void FNavMeshUpdater::AxisCheck(FAxisState& AxisState, const uint16 Diff, const 
 					break;
 				}
 			}
-			
 		}
 		
 		if(bSkipToEnd) AxisValue = AxisState.EndSkip-MortonOffset; // The next node is guaranteed to be the StartSkip, so we can skip to the last node.
@@ -150,7 +158,7 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<>>& BeforeAfterBound
 			
 			for (uint8 LayerIndex = 0; LayerIndex<=FNavMeshData::StaticDepth; ++LayerIndex)
 			{
-				// todo: if static-depth, then check remaining nodes for overlap directly.
+				// todo: static-depth check should be for-each axis so that they can do the last loop with overlap check.
 
 				// Shift the bounds to be able to calculate how many nodes on this layer can fit between the Min/Max.
 				const uint8 Shift = 10-LayerIndex;
