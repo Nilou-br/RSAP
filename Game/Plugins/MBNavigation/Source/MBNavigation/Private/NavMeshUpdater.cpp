@@ -150,14 +150,13 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<>>& BeforeAfterBound
 			
 			/* --- Currently only using the CurrentBounds for testing --- */
 
+			if(!CurrMortonBounds.IsValid()) continue;
 			FAxisState AxisStateX(EAxis::X);
 			FAxisState AxisStateY(EAxis::Y);
 			FAxisState AxisStateZ(EAxis::Z);
 			
-			for (uint8 LayerIndex = 2; LayerIndex<=FNavMeshData::StaticDepth; ++LayerIndex)// todo start from layer 2, because 0/1 will never satisfy the diffCriteria?
+			for (uint8 LayerIndex = 0; LayerIndex<=FNavMeshData::StaticDepth; ++LayerIndex)// todo start from layer 2, because 0/1 will never satisfy the diffCriteria?
 			{
-				// todo: static-depth check should be for-each axis so that they can do the last loop with overlap check.
-
 				// Shift the bounds to be able to calculate how many nodes on this layer can fit between the Min/Max.
 				const uint8 Shift = 10-LayerIndex;
 				const F3DVector10 ShiftedMin = CurrMortonBounds.Min >> Shift;
