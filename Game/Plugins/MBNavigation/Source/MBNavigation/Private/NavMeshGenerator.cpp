@@ -113,7 +113,7 @@ void FNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 	ChildLayer.reserve(8);
 	for (uint8 i = 0; i < 8; ++i)
 	{
-		// Add the offset to certain children depending on their location in the parent.
+		// Add the offset to certain children depending on their location in the parent. todo: check performance compared to switch??
 		const uint_fast16_t ChildMortonX = NodeLocalLoc.X + ((i & 1) ? ChildMortonOffset : 0);
 		const uint_fast16_t ChildMortonY = NodeLocalLoc.Y + ((i & 2) ? ChildMortonOffset : 0);
 		const uint_fast16_t ChildMortonZ = NodeLocalLoc.Z + ((i & 4) ? ChildMortonOffset : 0);

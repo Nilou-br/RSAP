@@ -53,7 +53,7 @@ TMap<FChunk*, TBoundsPair<F3DVector10>> GetMortonBoundsPairs(const FNavMeshPtr& 
 	return MortonBoundsPairs;
 }
 
-void FNavMeshUpdater::AxisCheck(FAxisState& AxisState, const uint16 Diff, const uint8 LayerIndex, const FAxisState& AxisToIterateA, const FAxisState& AxisToIterateB)
+void FNavMeshUpdater::AxisCheck(FAxisState& AxisState, const uint16 Diff, const uint8 LayerIndex, const FAxisState& AxisToIterateA, const FAxisState& AxisToIterateB, const F3DVector32& ChunkLocation)
 {
 	if(Diff <= AxisState.DiffCriteria)
 	{
@@ -61,7 +61,6 @@ void FNavMeshUpdater::AxisCheck(FAxisState& AxisState, const uint16 Diff, const 
 		return;
 	}
 	AxisState.DiffCriteria = Diff << 1;
-	
 	const uint16 MortonOffset = FNavMeshData::MortonOffsets[LayerIndex];
 	
 	uint16 StartValue = AxisState.RoundedMin+MortonOffset; // Add offset because we only want to check the between-nodes for this axis.
@@ -87,10 +86,8 @@ void FNavMeshUpdater::AxisCheck(FAxisState& AxisState, const uint16 Diff, const 
 			AxisState.bCanSkip = true;
 			AxisState.StartSkip = AxisValue;
 		}
-		
-		// We are now on a node that needs to be checked.
 
-		// todo, if start or end falls perfectly on the boundaries of an axis, then set that axis start/end from here.
+		// todo, if start or end falls perfectly on the boundaries of an axis, then set that axis start/end from here?
 		// Loop through the two given AxisStates.
 		uint16 StartA = AxisToIterateA.RoundedMin;
 		if(AxisToIterateA.bCanSkip && StartA == AxisToIterateA.StartSkip) StartA = AxisToIterateA.EndSkip;
@@ -111,16 +108,17 @@ void FNavMeshUpdater::AxisCheck(FAxisState& AxisState, const uint16 Diff, const 
 					AxisB = AxisToIterateB.EndSkip-MortonOffset;
 					continue;
 				}
-				
+
+				// We are now on a node that needs to be checked.
 				switch (AxisState.Axis) {
 				case EAxis::X:
-					DrawDebugBox(World, (F3DVector10(AxisValue, AxisA, AxisB) + (FNavMeshData::MortonOffsets[LayerIndex]>>1)).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Red, true, -1, 0, 3);
+					DrawDebugBox(World, (F3DVector32::FromMortonLocation(F3DVector10(AxisValue, AxisA, AxisB), ChunkLocation) + (FNavMeshData::NodeHalveSizes[LayerIndex])).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Red, true, -1, 0, 1);
 					break;
 				case EAxis::Y:
-					DrawDebugBox(World, (F3DVector10(AxisA, AxisValue, AxisB) + (FNavMeshData::MortonOffsets[LayerIndex]>>1)).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Green, true, -1, 0, 2);
+					DrawDebugBox(World, (F3DVector32::FromMortonLocation(F3DVector10(AxisA, AxisValue, AxisB), ChunkLocation) + (FNavMeshData::NodeHalveSizes[LayerIndex])).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Green, true, -1, 0, 1);
 					break;
 				case EAxis::Z:
-					DrawDebugBox(World, (F3DVector10(AxisA, AxisB, AxisValue) + (FNavMeshData::MortonOffsets[LayerIndex]>>1)).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Blue, true, -1, 0, 1);
+					DrawDebugBox(World, (F3DVector32::FromMortonLocation(F3DVector10(AxisA, AxisB, AxisValue), ChunkLocation) + (FNavMeshData::NodeHalveSizes[LayerIndex])).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Blue, true, -1, 0, 1);
 					break;
 				case EAxis::None:
 					break;
@@ -156,7 +154,7 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<>>& BeforeAfterBound
 			FAxisState AxisStateY(EAxis::Y);
 			FAxisState AxisStateZ(EAxis::Z);
 			
-			for (uint8 LayerIndex = 0; LayerIndex<=FNavMeshData::StaticDepth; ++LayerIndex)
+			for (uint8 LayerIndex = 2; LayerIndex<=FNavMeshData::StaticDepth; ++LayerIndex)// todo start from layer 2, because 0/1 will never satisfy the diffCriteria?
 			{
 				// todo: static-depth check should be for-each axis so that they can do the last loop with overlap check.
 
@@ -174,11 +172,24 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<>>& BeforeAfterBound
 				AxisStateY.RoundedMin = RoundedMin.Y; AxisStateY.RoundedMax = RoundedMax.Y;
 				AxisStateZ.RoundedMin = RoundedMin.Z; AxisStateZ.RoundedMax = RoundedMax.Z;
 				
-				// Start checking each axis one by one. // todo switch case on largest axis.
-				AxisCheck(AxisStateX, ShiftedMax.X != ShiftedMin.X ? ShiftedMax.X - ShiftedMin.X - 1 : 0, LayerIndex, AxisStateY, AxisStateZ);
-				AxisCheck(AxisStateY, ShiftedMax.Y != ShiftedMin.Y ? ShiftedMax.Y - ShiftedMin.Y - 1 : 0, LayerIndex, AxisStateX, AxisStateZ);
-				AxisCheck(AxisStateZ, ShiftedMax.Z != ShiftedMin.Z ? ShiftedMax.Z - ShiftedMin.Z - 1 : 0, LayerIndex, AxisStateX, AxisStateY);
+				// Start checking each axis one by one.
+				AxisCheck(AxisStateX, ShiftedMax.X != ShiftedMin.X ? ShiftedMax.X - ShiftedMin.X - 1 : 0, LayerIndex, AxisStateY, AxisStateZ, Chunk->Location);
+				AxisCheck(AxisStateY, ShiftedMax.Y != ShiftedMin.Y ? ShiftedMax.Y - ShiftedMin.Y - 1 : 0, LayerIndex, AxisStateX, AxisStateZ, Chunk->Location);
+				AxisCheck(AxisStateZ, ShiftedMax.Z != ShiftedMin.Z ? ShiftedMax.Z - ShiftedMin.Z - 1 : 0, LayerIndex, AxisStateX, AxisStateY, Chunk->Location);
+				
+
+				// If on static-depth, then lastly check each corner for overlap.
+				if(LayerIndex != FNavMeshData::StaticDepth) continue;
+				for (int i = 0; i < 8; ++i)
+				{
+					F3DVector10 MortonLocation = RoundedMin;
+					if(i & 1) MortonLocation.X = RoundedMax.X;
+					if(i & 2) MortonLocation.Y = RoundedMax.Y;
+					if(i & 4) MortonLocation.Z = RoundedMax.Z;
+					DrawDebugBox(World, (F3DVector32::FromMortonLocation(MortonLocation, Chunk->Location) + FNavMeshData::NodeHalveSizes[LayerIndex]).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Black, true, -1, 0, 1);
+				}
 			}
+			
 		}
 	}
 
@@ -189,10 +200,18 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<>>& BeforeAfterBound
 #endif
 }
 
+void FNavMeshUpdater::RasterizeWithCheck(FChunk* Chunk, uint_fast32_t& MortonCode, const uint8 LayerIndex)
+{
+}
+
+void FNavMeshUpdater::Rasterize(FChunk* Chunk, uint_fast32_t& MortonCode, const uint8 LayerIndex)
+{
+}
+
 bool FNavMeshUpdater::HasOverlapWithActor(const F3DVector32& NodeGlobalLocation, const uint8 LayerIndex, const UPrimitiveComponent* PrimitiveComponent)
 {
 	// todo: check WorldCollision.cpp in source-code to simplify it?
-	// todo, use normal overlap on total-bounds to get actors in that area :)
+	// todo, use normal overlap on total-bounds to get primitive-components in that area, and then use those components here :)
 	TArray<FOverlapResult> OutOverlaps;
 	return World->ComponentOverlapMultiByChannel(
 		OutOverlaps,

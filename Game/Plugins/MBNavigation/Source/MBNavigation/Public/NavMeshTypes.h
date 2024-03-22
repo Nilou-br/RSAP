@@ -111,7 +111,7 @@ struct F3DVector10
 	uint_fast16_t Y: 10;
 	uint_fast16_t Z: 10;
 
-	// Keep in mind that the morton-code supports 10 bits per axis.
+	// Converts the coordinates on this vector to a 1-dimensional 32-bit Morton-Code.
 	FORCEINLINE uint_fast32_t ToMortonCode() const
 	{
 		return libmorton::morton3D_32_encode(X, Y, Z);
@@ -297,6 +297,11 @@ struct F3DVector32
 	FORCEINLINE FVector ToVector() const
 	{
 		return FVector(X, Y, Z);
+	}
+
+	static F3DVector32 FromMortonLocation(const F3DVector10 MortonLocation, const F3DVector32& ChunkLocation)
+	{
+		return ChunkLocation + MortonLocation;
 	}
 
 	// Make sure every axis value fits in 10 bits.
@@ -572,7 +577,7 @@ typedef ankerl::unordered_dense::map<uint_fast32_t, FOctreeNode> FNodesMap;
  */
 struct FOctree
 {
-	TArray<FNodesMap> Layers;
+	TArray<FNodesMap> Layers; // todo static array?
 	TArray<FOctreeLeaf> Leafs;
 
 	FOctree()
