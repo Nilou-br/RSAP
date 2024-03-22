@@ -2,9 +2,9 @@
 
 #include "NavMeshUpdater.h"
 #include "NavMeshTypes.h"
+#include "Engine/StaticMeshActor.h"
 
 DEFINE_LOG_CATEGORY(LogNavMeshUpdater)
-
 
 
 /**
@@ -53,83 +53,6 @@ TMap<FChunk*, TBoundsPair<F3DVector10>> GetMortonBoundsPairs(const FNavMeshPtr& 
 	return MortonBoundsPairs;
 }
 
-void FNavMeshUpdater::AxisCheck(FAxisState& AxisState, const uint16 Diff, const uint8 LayerIndex, const FAxisState& AxisToIterateA, const FAxisState& AxisToIterateB, const F3DVector32& ChunkLocation)
-{
-	if(Diff <= AxisState.DiffCriteria)
-	{
-		if(AxisState.DiffCriteria != 1) AxisState.DiffCriteria <<= 1;
-		return;
-	}
-	AxisState.DiffCriteria = Diff << 1;
-	const uint16 MortonOffset = FNavMeshData::MortonOffsets[LayerIndex];
-	
-	uint16 StartValue = AxisState.RoundedMin+MortonOffset; // Add offset because we only want to check the between-nodes for this axis.
-	if(AxisState.bCanSkip && StartValue == AxisState.StartSkip) StartValue = AxisState.EndSkip; // Skip to end if starting point has already been checked.
-	for (uint16 AxisValue = StartValue; AxisValue<AxisState.RoundedMax; AxisValue+=MortonOffset)
-	{
-		// Skip the parts that have already been checked in previous layers.
-		bool bSkipToEnd = false;
-		if(AxisState.bCanSkip)
-		{
-			if(AxisValue < AxisState.StartSkip)
-			{
-				AxisState.StartSkip = AxisValue;
-				bSkipToEnd = true;
-			}
-			else
-			{
-				AxisState.EndSkip = AxisValue+MortonOffset;
-			}
-		}
-		else
-		{
-			AxisState.bCanSkip = true;
-			AxisState.StartSkip = AxisValue;
-		}
-
-		// todo, if start or end falls perfectly on the boundaries of an axis, then set that axis start/end from here?
-		// Loop through the two given AxisStates.
-		uint16 StartA = AxisToIterateA.RoundedMin;
-		if(AxisToIterateA.bCanSkip && StartA == AxisToIterateA.StartSkip) StartA = AxisToIterateA.EndSkip;
-		for (uint16 AxisA = StartA; AxisA<=AxisToIterateA.RoundedMax; AxisA+=MortonOffset)
-		{
-			if(AxisToIterateA.bCanSkip && AxisA == AxisToIterateA.StartSkip)
-			{
-				AxisA = AxisToIterateA.EndSkip-MortonOffset;
-				continue;
-			}
-			
-			uint16 StartB = AxisToIterateB.RoundedMin;
-			if(AxisToIterateB.bCanSkip && StartB == AxisToIterateB.StartSkip) StartB = AxisToIterateB.EndSkip;
-			for (uint16 AxisB = StartB; AxisB<=AxisToIterateB.RoundedMax; AxisB+=MortonOffset)
-			{
-				if(AxisToIterateB.bCanSkip && AxisB == AxisToIterateB.StartSkip)
-				{
-					AxisB = AxisToIterateB.EndSkip-MortonOffset;
-					continue;
-				}
-
-				// We are now on a node that needs to be checked.
-				switch (AxisState.Axis) {
-				case EAxis::X:
-					DrawDebugBox(World, (F3DVector32::FromMortonLocation(F3DVector10(AxisValue, AxisA, AxisB), ChunkLocation) + (FNavMeshData::NodeHalveSizes[LayerIndex])).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Red, true, -1, 0, 1);
-					break;
-				case EAxis::Y:
-					DrawDebugBox(World, (F3DVector32::FromMortonLocation(F3DVector10(AxisA, AxisValue, AxisB), ChunkLocation) + (FNavMeshData::NodeHalveSizes[LayerIndex])).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Green, true, -1, 0, 1);
-					break;
-				case EAxis::Z:
-					DrawDebugBox(World, (F3DVector32::FromMortonLocation(F3DVector10(AxisA, AxisB, AxisValue), ChunkLocation) + (FNavMeshData::NodeHalveSizes[LayerIndex])).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Blue, true, -1, 0, 1);
-					break;
-				case EAxis::None:
-					break;
-				}
-			}
-		}
-		
-		if(bSkipToEnd) AxisValue = AxisState.EndSkip-MortonOffset; // The next node is guaranteed to be the StartSkip, so we can skip to the last node.
-	}
-}
-
 void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<>>& BeforeAfterBoundsPairs)
 {
 	
@@ -148,55 +71,88 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<>>& BeforeAfterBound
 			const TBounds<F3DVector10> PrevMortonBounds = MortonBoundsPair.Previous;
 			const TBounds<F3DVector10> CurrMortonBounds = MortonBoundsPair.Current;
 			
-			/* --- Currently only using the CurrentBounds for testing --- */
-
-			if(!CurrMortonBounds.IsValid()) continue;
-			FAxisState AxisStateX(EAxis::X);
-			FAxisState AxisStateY(EAxis::Y);
-			FAxisState AxisStateZ(EAxis::Z);
-			
-			for (uint8 LayerIndex = 0; LayerIndex<=FNavMeshData::StaticDepth; ++LayerIndex)// todo start from layer 2, because 0/1 will never satisfy the diffCriteria?
-			{
-				// Shift the bounds to be able to calculate how many nodes on this layer can fit between the Min/Max.
-				const uint8 Shift = 10-LayerIndex;
-				const F3DVector10 ShiftedMin = CurrMortonBounds.Min >> Shift;
-				const F3DVector10 ShiftedMax = CurrMortonBounds.Max >> Shift;
-				
-				// Round MortonBounds to the nearest multiple of this layer's Morton-offset.
-				const F3DVector10 RoundedMin = CurrMortonBounds.Min & FNavMeshData::MortonMasks[LayerIndex];
-				const F3DVector10 RoundedMax = CurrMortonBounds.Max & FNavMeshData::MortonMasks[LayerIndex];
-
-				// Set these on the states.
-				AxisStateX.RoundedMin = RoundedMin.X; AxisStateX.RoundedMax = RoundedMax.X;
-				AxisStateY.RoundedMin = RoundedMin.Y; AxisStateY.RoundedMax = RoundedMax.Y;
-				AxisStateZ.RoundedMin = RoundedMin.Z; AxisStateZ.RoundedMax = RoundedMax.Z;
-				
-				// Start checking each axis one by one.
-				AxisCheck(AxisStateX, ShiftedMax.X != ShiftedMin.X ? ShiftedMax.X - ShiftedMin.X - 1 : 0, LayerIndex, AxisStateY, AxisStateZ, Chunk->Location);
-				AxisCheck(AxisStateY, ShiftedMax.Y != ShiftedMin.Y ? ShiftedMax.Y - ShiftedMin.Y - 1 : 0, LayerIndex, AxisStateX, AxisStateZ, Chunk->Location);
-				AxisCheck(AxisStateZ, ShiftedMax.Z != ShiftedMin.Z ? ShiftedMax.Z - ShiftedMin.Z - 1 : 0, LayerIndex, AxisStateX, AxisStateY, Chunk->Location);
-				
-
-				// If on static-depth, then lastly check each corner for overlap.
-				if(LayerIndex != FNavMeshData::StaticDepth) continue;
-				for (int i = 0; i < 8; ++i)
-				{
-					F3DVector10 MortonLocation = RoundedMin;
-					if(i & 1) MortonLocation.X = RoundedMax.X;
-					if(i & 2) MortonLocation.Y = RoundedMax.Y;
-					if(i & 4) MortonLocation.Z = RoundedMax.Z;
-					DrawDebugBox(World, (F3DVector32::FromMortonLocation(MortonLocation, Chunk->Location) + FNavMeshData::NodeHalveSizes[LayerIndex]).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), FColor::Black, true, -1, 0, 1);
-				}
-			}
-			
+			HandleCheckCurrBounds(Chunk, CurrMortonBounds);
 		}
 	}
 
 #if WITH_EDITOR
 	const float DurationSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(
 		std::chrono::high_resolution_clock::now() - StartTime).count() / 1000.0f;
-	UE_LOG(LogNavMeshUpdater, Log, TEXT("Update took : '%f' seconds"), DurationSeconds);
+	// UE_LOG(LogNavMeshUpdater, Log, TEXT("Update took : '%f' seconds"), DurationSeconds);
 #endif
+}
+
+uint8 FNavMeshUpdater::FindLayerToIterate(const TBounds<F3DVector10>& MortonBounds)
+{
+	uint8 LayerToIterate = FNavMeshData::StaticDepth;
+	for (uint8 LayerIndex = 0; LayerIndex<FNavMeshData::StaticDepth; ++LayerIndex)
+	{
+		const uint8 Shift = 10-LayerIndex;
+		const F3DVector10 ShiftedMin = MortonBounds.Min >> Shift;
+		const F3DVector10 ShiftedMax = MortonBounds.Max >> Shift;
+		const uint8 DiffX = ShiftedMax.X != ShiftedMin.X ? ShiftedMax.X - ShiftedMin.X - 1 : 0;
+		const uint8 DiffY = ShiftedMax.Y != ShiftedMin.Y ? ShiftedMax.Y - ShiftedMin.Y - 1 : 0;
+		const uint8 DiffZ = ShiftedMax.Z != ShiftedMin.Z ? ShiftedMax.Z - ShiftedMin.Z - 1 : 0;
+
+		if(DiffX > 1 || DiffY > 1 || DiffZ > 1)
+		{
+			LayerToIterate = LayerIndex;
+			break;
+		}
+	}
+	return LayerToIterate;
+}
+
+void FNavMeshUpdater::HandleCheckCurrBounds(const FChunk* Chunk, const TBounds<F3DVector10>& PrevMortonBounds)
+{
+	const uint8 LayerToIterate = FindLayerToIterate(PrevMortonBounds);
+	const F3DVector32 RoundedMin = F3DVector32::GetGlobalFromMorton(PrevMortonBounds.Min & FNavMeshData::MortonMasks[LayerToIterate], Chunk->Location);
+	const F3DVector32 RoundedMax = F3DVector32::GetGlobalFromMorton(PrevMortonBounds.Max & FNavMeshData::MortonMasks[LayerToIterate], Chunk->Location) + FNavMeshData::MortonOffsets[LayerToIterate];
+	const F3DVector32 Center = (RoundedMin + RoundedMax) >> 1;
+ 	const F3DVector32 Extents = (RoundedMax - RoundedMin) >> 1;
+	
+	FCollisionQueryParams CollisionQueryParams;
+	CollisionQueryParams.bTraceComplex = false;
+	
+	TArray<FOverlapResult> OverlapResults;
+	const bool bHasOverlap = World->OverlapMultiByObjectType(
+		OverlapResults,
+		Center.ToVector(),
+		FQuat::Identity,
+		FCollisionObjectQueryParams(),
+		FCollisionShape::MakeBox(Extents.ToVector()),
+		CollisionQueryParams
+	);
+
+	DrawDebugBox(World, Center.ToVector(), Extents.ToVector(), FColor::Red, true, -1, 0, 1);
+
+	if (bHasOverlap)
+	{
+		TArray<const AActor*> FoundActors;
+		for (auto& OverlapResult : OverlapResults)
+		{
+			const AActor* Actor = OverlapResult.GetActor();
+			if(!Actor->IsA(AStaticMeshActor::StaticClass())) return;
+			FoundActors.Add(Actor);
+		}
+
+		for (const auto FoundActor : FoundActors)
+		{
+			UE_LOG(LogNavMeshUpdater, Log, TEXT("Actor: '%s' to be used for overlap-check."), *FoundActor->GetName());
+		}
+	}
+	
+	const uint16 MortonOffset = FNavMeshData::MortonOffsets[LayerToIterate];
+	for (uint16 X = RoundedMin.X; X<RoundedMax.X; X+=MortonOffset)
+	{
+		for (uint16 Y = RoundedMin.Y; Y<RoundedMax.Y; Y+=MortonOffset)
+		{
+			for (uint16 Z = RoundedMin.Z; Z<RoundedMax.Z; Z+=MortonOffset)
+			{
+				DrawDebugBox(World, (F3DVector32(X, Y, Z) + FNavMeshData::NodeHalveSizes[LayerToIterate]).ToVector(), FVector(FNavMeshData::NodeHalveSizes[LayerToIterate]), FColor::Black, true, -1, 0, 1);
+			}
+		}
+	}
 }
 
 void FNavMeshUpdater::RasterizeWithCheck(FChunk* Chunk, uint_fast32_t& MortonCode, const uint8 LayerIndex)

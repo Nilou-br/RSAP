@@ -156,6 +156,11 @@ struct F3DVector10
 		return F3DVector10(X << Value, Y << Value, Z << Value);
 	}
 
+	FORCEINLINE F3DVector10 operator*(const uint8 Value) const
+	{
+		return F3DVector10(X * Value, Y * Value, Z * Value);
+	}
+
 	FORCEINLINE F3DVector10 operator>>(const uint8 Value) const
 	{
 		return F3DVector10(X >> Value, Y >> Value, Z >> Value);
@@ -299,15 +304,20 @@ struct F3DVector32
 		return FVector(X, Y, Z);
 	}
 
-	static F3DVector32 FromMortonLocation(const F3DVector10 MortonLocation, const F3DVector32& ChunkLocation)
+	static F3DVector32 GetGlobalFromMorton(const F3DVector10 MortonLocation, const F3DVector32& ChunkLocation)
 	{
-		return ChunkLocation + MortonLocation;
+		return ChunkLocation + (F3DVector32(MortonLocation) << FNavMeshData::VoxelSizeExponent);
 	}
 
 	// Make sure every axis value fits in 10 bits.
 	FORCEINLINE F3DVector10 ToVector10() const
 	{
 		return F3DVector10(static_cast<uint_fast16_t>(X), static_cast<uint_fast16_t>(Y), static_cast<uint_fast16_t>(Z));
+	}
+
+	FORCEINLINE F3DVector32 ToVector32() const
+	{
+		return F3DVector32(static_cast<uint_fast32_t>(X), static_cast<uint_fast32_t>(Y), static_cast<uint_fast32_t>(Z));
 	}
 	
 	static FORCEINLINE F3DVector32 FromVector(const FVector& InVector)
@@ -316,6 +326,13 @@ struct F3DVector32
 	}
 
 	explicit F3DVector32(const FVector &InVector)
+	{
+		X = static_cast<int_fast32_t>(std::round(InVector.X));
+		Y = static_cast<int_fast32_t>(std::round(InVector.Y));
+		Z = static_cast<int_fast32_t>(std::round(InVector.Z));
+	}
+
+	explicit F3DVector32(const F3DVector10 &InVector)
 	{
 		X = static_cast<int_fast32_t>(std::round(InVector.X));
 		Y = static_cast<int_fast32_t>(std::round(InVector.Y));
@@ -468,6 +485,13 @@ struct FOctreeNode
 	FOctreeNode():
 		MortonCode(0), ChunkBorder(0)
 	{}
+
+	FORCEINLINE F3DVector10 GetMortonLocation() const
+	{
+		uint_fast16_t TempX, TempY, TempZ;
+		libmorton::morton3D_32_decode(GetMortonCode(), TempX, TempY, TempZ);
+		return F3DVector10(TempX, TempY, TempZ);
+	}
 
 	FORCEINLINE F3DVector10 GetLocalLocation() const
 	{

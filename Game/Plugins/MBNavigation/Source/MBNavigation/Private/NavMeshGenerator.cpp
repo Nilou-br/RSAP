@@ -225,7 +225,7 @@ void FNavMeshGenerator::SetNodeRelations(FOctreeNode& Node, const F3DVector32& C
 			}
 		}
 
-		// Get the location we want to check by applying an offset based on its layer ( the size of the node in global space ).
+		// Get the location we want to check by applying an offset based on its layer.
 		F3DVector10 LocalLocationToCheck;
 		switch (Direction) {
 		case DIRECTION_X_NEGATIVE:
