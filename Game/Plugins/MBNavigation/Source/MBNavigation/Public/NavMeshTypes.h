@@ -31,7 +31,7 @@
  */
 struct FNavMeshData // todo, new level does not have correct settings in the widget.
 {
-	static inline constexpr uint16 MortonOffsets[10] = {1024, 512, 256, 128, 64, 32, 16, 8, 4, 2}; // todo: update for leaf nodes.
+	static inline constexpr uint_fast16_t MortonOffsets[10] = {1024, 512, 256, 128, 64, 32, 16, 8, 4, 2}; // todo: update for leaf nodes.
 	static inline uint8 VoxelSizeExponent = 2;
 	static inline uint8 StaticDepth = 6;
 	static inline constexpr uint8 DynamicDepth = 10;
@@ -185,6 +185,13 @@ struct F3DVector10
 
 	explicit F3DVector10(const uint_fast16_t InX, const uint_fast16_t InY, const uint_fast16_t InZ)
 		: X(InX), Y(InY), Z(InZ) {}
+
+	explicit F3DVector10(const uint_fast32_t MortonCode)
+	{
+		uint_fast16_t TempX, TempY ,TempZ;
+		libmorton::morton3D_32_decode(MortonCode, TempX, TempY, TempZ);
+		X=TempZ; Y=TempY; Z=TempZ;
+	}
 
 	F3DVector10()
 		:X(0), Y(0), Z(0)
@@ -724,6 +731,11 @@ struct TBounds
 		return TBounds(Min >> Value, Max >> Value);
 	}
 
+	TBounds operator&(const uint16 MortonMask) const
+	{
+		return TBounds(Min & MortonMask, Max & MortonMask);
+	}
+
 	FORCEINLINE bool operator!() const
 	{
 		return	Max.X == 0 && Max.Y == 0 && Max.Z == 0 &&
@@ -744,6 +756,48 @@ struct TBounds
 		return TBounds(ClampedMin, ClampedMax);
 	}
 
+	// Gets the remaining parts of the bounds that are not overlapping with the given bounds. 
+	FORCEINLINE TArray<TBounds> GetRemainder(const TBounds& Other) const
+	{
+		if(!Overlaps(Other)) return { *this };
+		
+		TArray<TBounds> BoundsList;
+		TBounds RemainingBounds = *this;
+
+		if(Max.X > Other.Max.X)
+		{
+			BoundsList.Emplace(VectorType(Other.Max.X, RemainingBounds.Min.Y, RemainingBounds.Min.Z), RemainingBounds.Max);
+			RemainingBounds.Max.X = Other.Max.X;
+		}
+		if(Min.X < Other.Min.X)
+		{
+			BoundsList.Emplace(RemainingBounds.Min, VectorType(Other.Min.X, RemainingBounds.Max.Y, RemainingBounds.Max.Z));
+			RemainingBounds.Min.X = Other.Min.X;
+		}
+		
+		if(Max.Y > Other.Max.Y)
+		{
+			BoundsList.Emplace(VectorType(RemainingBounds.Min.X, Other.Max.Y, RemainingBounds.Min.Z), RemainingBounds.Max);
+			RemainingBounds.Max.Y = Other.Max.Y;
+		}
+		if(Min.Y < Other.Min.Y)
+		{
+			BoundsList.Emplace(RemainingBounds.Min, VectorType(RemainingBounds.Max.X, Other.Min.Y, RemainingBounds.Max.Z));
+			RemainingBounds.Min.Y = Other.Min.Y;
+		}
+		
+		if(Max.Z > Other.Max.Z)
+		{
+			BoundsList.Emplace(VectorType(RemainingBounds.Min.X, RemainingBounds.Min.Y, Other.Max.Z), RemainingBounds.Max);
+		}
+		if(Min.Z < Other.Min.Z)
+		{
+			BoundsList.Emplace(RemainingBounds.Min, VectorType(RemainingBounds.Max.X, RemainingBounds.Max.Y, Other.Min.Z));
+		}
+
+		return BoundsList;
+	}
+
 	// Check if these bounds are overlapping with another.
 	FORCEINLINE bool Overlaps(const TBounds& Other) const
 	{
@@ -761,6 +815,15 @@ struct TBounds
 		const F3DVector10 LocalMin = ( Min-ChunkLocation << FNavMeshData::VoxelSizeExponent).ToVector10();
 		const F3DVector10 LocalMax = ((Max-ChunkLocation << FNavMeshData::VoxelSizeExponent)-1).ToVector10();
 		return TBounds<F3DVector10>(LocalMin, LocalMax);
+	}
+
+	FORCEINLINE void Draw(const UWorld* World, const F3DVector32& ChunkLocation, FColor Color = FColor::Black) const
+	{
+		const F3DVector32 GlobalMin = F3DVector32::GetGlobalFromMorton(Min, ChunkLocation);
+		const F3DVector32 GlobalMax = F3DVector32::GetGlobalFromMorton(Max, ChunkLocation);
+		const F3DVector32 Center = (GlobalMin + GlobalMax) >> 1;
+		const F3DVector32 Extents = (GlobalMax - GlobalMin) >> 1;
+		DrawDebugBox(World, Center.ToVector(), Extents.ToVector(), Color, true, -1, 0, 1);
 	}
 };
 

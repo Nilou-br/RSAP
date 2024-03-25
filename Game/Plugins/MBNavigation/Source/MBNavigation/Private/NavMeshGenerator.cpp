@@ -92,11 +92,6 @@ void FNavMeshGenerator::GenerateChunks(const TBounds<>& LevelBounds)
  */
 void FNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, const uint8 LayerIndex)
 {
-	const F3DVector10 NodeLocalLoc = Node.GetLocalLocation();
-
-	// Set neighbour relations.
-	// SetNeighbourRelations(Node, Chunk->Location, LayerIndex);
-
 	// If overlapping any static object.
 	if (!HasOverlap(Node.GetGlobalLocation(Chunk->Location), LayerIndex)) return;
 	Node.SetOccluded(true);
@@ -111,12 +106,13 @@ void FNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 
 	// Reserve memory for 8 child-nodes on the lower layer and initialize them.
 	ChildLayer.reserve(8);
+	const F3DVector10 NodeMortonLocation = Node.GetMortonLocation();
 	for (uint8 i = 0; i < 8; ++i)
 	{
 		// Add the offset to certain children depending on their location in the parent. todo: check performance compared to switch??
-		const uint_fast16_t ChildMortonX = NodeLocalLoc.X + ((i & 1) ? ChildMortonOffset : 0);
-		const uint_fast16_t ChildMortonY = NodeLocalLoc.Y + ((i & 2) ? ChildMortonOffset : 0);
-		const uint_fast16_t ChildMortonZ = NodeLocalLoc.Z + ((i & 4) ? ChildMortonOffset : 0);
+		const uint_fast16_t ChildMortonX = NodeMortonLocation.X + ((i & 1) ? ChildMortonOffset : 0);
+		const uint_fast16_t ChildMortonY = NodeMortonLocation.Y + ((i & 2) ? ChildMortonOffset : 0);
+		const uint_fast16_t ChildMortonZ = NodeMortonLocation.Z + ((i & 4) ? ChildMortonOffset : 0);
 
 		// Add child-node to current-layer and get its reference.
 		FOctreeNode NewNode(ChildMortonX, ChildMortonY, ChildMortonZ);
@@ -142,7 +138,6 @@ void FNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 bool FNavMeshGenerator::HasOverlap(const F3DVector32& NodeGlobalLocation, const uint8 LayerIndex)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Has-Overlap");
-
 	return FPhysicsInterface::GeomOverlapBlockingTest(
 		World,
 		FNavMeshData::CollisionBoxes[LayerIndex],
@@ -154,7 +149,6 @@ bool FNavMeshGenerator::HasOverlap(const F3DVector32& NodeGlobalLocation, const 
 		FCollisionQueryParams::DefaultQueryParam,
 		FCollisionResponseParams::DefaultResponseParam
 	);
-	
 }
 
 /**
