@@ -1,22 +1,22 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #include "EditorNavMeshManager.h"
+
 #include "Editor.h"
 #include "LevelEditor.h"
-#include "MBNavigation.h"
-#include "NavMeshDebugger.h"
-#include "NavMeshGenerator.h"
-#include "NavMeshSettings.h"
-#include "NavMeshUpdater.h"
-#include "Serialize.h"
 #include "Engine/Level.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
+#include "MBNavigation/MBNavigation.h"
+#include "MBNavigation/NavMesh/Debugger.h"
+#include "MBNavigation/NavMesh/Generator.h"
+#include "MBNavigation/NavMesh/Settings.h"
+#include "MBNavigation/NavMesh/Updater.h"
+#include "MBNavigation/Types/Serialize.h"
 #include "UObject/ObjectSaveContext.h"
 
 DEFINE_LOG_CATEGORY(LogEditorNavManager)
-
 
 
 void UEditorNavMeshManager::Initialize(FSubsystemCollectionBase& Collection)
@@ -159,13 +159,13 @@ void UEditorNavMeshManager::LoadLevelNavMeshSettings()
 }
 
 /**
- * Initializes the static variables in FNavMeshData in both modules.
+ * Initializes the static variables in FNavMeshStatic in both modules.
  * Updating static variables in module-1 won't be reflected to module-2 so we have to explicitly initialize it from within the other module.
  */
 void UEditorNavMeshManager::InitStaticNavMeshData()
 {
 	if(!NavMeshSettings) return;
-	FNavMeshData::Initialize(NavMeshSettings);
+	FNavMeshStatic::Initialize(NavMeshSettings);
 	MainModule.InitializeNavMeshSettings(NavMeshSettings);
 }
 
@@ -177,12 +177,12 @@ void UEditorNavMeshManager::GenerateAndDrawNavMesh()
 
 void UEditorNavMeshManager::UpdateAndDrawNavMesh(const FActorBoundsPairMap& ActorBoundPairs)
 {
-	TArray<TBoundsPair<>> BoundPairs;
+	TArray<TBoundsPair<F3DVector32>> BoundPairs;
 	ActorBoundPairs.GenerateValueArray(BoundPairs);
 	UpdateAndDrawNavMesh(BoundPairs);
 }
 
-void UEditorNavMeshManager::UpdateAndDrawNavMesh(const TArray<TBoundsPair<>>& BoundPairs)
+void UEditorNavMeshManager::UpdateAndDrawNavMesh(const TArray<TBoundsPair<F3DVector32>>& BoundPairs)
 {
 	NavMeshUpdater->UpdateStatic(BoundPairs);
 	NavMeshDebugger->Draw();
@@ -278,7 +278,7 @@ void UEditorNavMeshManager::PostUndo(bool bSuccess)
 			const FUndoRedoSnapshot& Snapshot = UndoRedoSnapshots[Index];
 			for (const auto Iterator : Snapshot.ActorBoundsPairMap)
 			{
-				const TBoundsPair SSBoundsPair = Iterator.Value;
+				const TBoundsPair<F3DVector32> SSBoundsPair = Iterator.Value;
 				
 				switch (Snapshot.SnapshotType) {
 				case ESnapshotType::Moved:
@@ -335,7 +335,7 @@ void UEditorNavMeshManager::PostRedo(bool bSuccess)
 			const FUndoRedoSnapshot& Snapshot = UndoRedoSnapshots[Index];
 			for (const auto Iterator : Snapshot.ActorBoundsPairMap)
 			{
-				const TBoundsPair SSBoundsPair = Iterator.Value;
+				const TBoundsPair<F3DVector32> SSBoundsPair = Iterator.Value;
 				
 				switch (Snapshot.SnapshotType) {
 				case ESnapshotType::Moved:
@@ -404,8 +404,8 @@ bool UEditorNavMeshManager::IsSnapshotActive(const FUndoRedoSnapshot& Snapshot)
 		{
 			const AActor* Actor;
 			if(!FindActorFromGuid(Iterator.Key, Actor)) return false;
-			const TBounds BoundsInSnapshot = Iterator.Value.Current;
-			const TBounds CurrentBounds(Actor);
+			const TBounds<F3DVector32> BoundsInSnapshot = Iterator.Value.Current;
+			const TBounds<F3DVector32> CurrentBounds(Actor);
 			if(!BoundsInSnapshot.Equals(CurrentBounds)) return false;
 		}
 		return true;
@@ -429,10 +429,10 @@ bool UEditorNavMeshManager::IsSnapshotActive(const FUndoRedoSnapshot& Snapshot)
 
 TBounds<F3DVector32> UEditorNavMeshManager::GetLevelBoundaries() const
 {
-	TBounds LevelBounds;
+	TBounds<F3DVector32> LevelBounds;
 	for (auto Iterator : CachedActorBoundsMap)
 	{
-		TBounds<>& ActorBounds = Iterator.Value;
+		TBounds<F3DVector32>& ActorBounds = Iterator.Value;
 		
 		// First iteration should be set to the ActorBounds.
 		if(!LevelBounds)
@@ -457,7 +457,7 @@ void UEditorNavMeshManager::CheckMovingActors()
 	}
 	
 	TArray<FGuid> InvalidActors;
-	TArray<TBoundsPair<>> MovedBoundsPairs;
+	TArray<TBoundsPair<F3DVector32>> MovedBoundsPairs;
 	
 	for (auto& Iterator : MovingActorBoundsMap)
 	{
@@ -469,8 +469,8 @@ void UEditorNavMeshManager::CheckMovingActors()
 			continue;
 		}
 		
-		const TBounds<>* PreviousBounds = &Iterator.Value;
-		const TBounds CurrentBounds(Actor);
+		const TBounds<F3DVector32>* PreviousBounds = &Iterator.Value;
+		const TBounds<F3DVector32> CurrentBounds(Actor);
 		
 		if(PreviousBounds->Equals(CurrentBounds)) continue;
 		MovedBoundsPairs.Emplace(*PreviousBounds, CurrentBounds);
@@ -531,7 +531,7 @@ void UEditorNavMeshManager::OnMapOpened(const FString& Filename, bool bAsTemplat
 		for (AActor* Actor : FoundActors)
 		{
 			if(!Actor->IsA(AStaticMeshActor::StaticClass())) return;
-			CachedActorBoundsMap.Add(Actor->GetActorGuid(), TBounds(Actor));
+			CachedActorBoundsMap.Add(Actor->GetActorGuid(), TBounds<F3DVector32>(Actor));
 			StaticMeshActorsMap.Add(Actor->GetActorGuid(), Actor);
 		}
 		
@@ -585,7 +585,7 @@ void UEditorNavMeshManager::OnBeginObjectMovement(UObject& Object)
 
 	if(!Object.IsA(AStaticMeshActor::StaticClass())) return;
 	const AActor* Actor = Cast<AActor>(&Object);
-	MovingActorBoundsMap.Add(Actor->GetActorGuid(), TBounds(Actor));
+	MovingActorBoundsMap.Add(Actor->GetActorGuid(), TBounds<F3DVector32>(Actor));
 }
 
 void UEditorNavMeshManager::OnEndObjectMovement(UObject& Object)
@@ -595,10 +595,10 @@ void UEditorNavMeshManager::OnEndObjectMovement(UObject& Object)
 	FActorBoundsPairMap MovedActorBoundsPairMap;
 	for (const AActor* Actor : SelectedActors)
 	{
-		const TBounds<>* PreviousBounds = CachedActorBoundsMap.Find(Actor->GetActorGuid());
+		const TBounds<F3DVector32>* PreviousBounds = CachedActorBoundsMap.Find(Actor->GetActorGuid());
 		if(!PreviousBounds) continue;
 		
-		const TBounds CurrentBounds(Actor);
+		const TBounds<F3DVector32> CurrentBounds(Actor);
 		if(PreviousBounds->Equals(CurrentBounds)) continue;
 
 		MovedActorBoundsPairMap.Add(Actor->GetActorGuid(), TBoundsPair(*PreviousBounds, CurrentBounds));
@@ -618,8 +618,8 @@ void UEditorNavMeshManager::OnNewActorsDropped(const TArray<UObject*>& Objects, 
 	for (const AActor* Actor : Actors)
 	{
 		if(!Actor->IsA(AStaticMeshActor::StaticClass())) continue;
-		DroppedActorBoundsPairMap.Add(Actor->GetActorGuid(), TBoundsPair(TBounds(), TBounds(Actor)));
-		CachedActorBoundsMap.Add(Actor->GetActorGuid(), TBounds(Actor));
+		DroppedActorBoundsPairMap.Add(Actor->GetActorGuid(), TBoundsPair<F3DVector32>(TBounds<F3DVector32>(), TBounds<F3DVector32>(Actor)));
+		CachedActorBoundsMap.Add(Actor->GetActorGuid(), TBounds<F3DVector32>(Actor));
 	}
 	
 	if(!DroppedActorBoundsPairMap.Num()) return;
@@ -640,7 +640,7 @@ void UEditorNavMeshManager::OnPasteActorsBegin()
 		if(!FindActorFromGuid(Iterator.Key, Actor)) continue;
 		if(SelectedActors.Find(Actor) == INDEX_NONE) continue;
 		
-		const TBounds CurrentBounds(Actor);
+		const TBounds<F3DVector32> CurrentBounds(Actor);
 		if(Iterator.Value.Equals(CurrentBounds)) continue;
 		
 		MovedActorBoundsPairMap.Add(Iterator.Key, TBoundsPair(Iterator.Value, CurrentBounds));
@@ -671,7 +671,7 @@ void UEditorNavMeshManager::OnDuplicateActorsBegin()
 		if(!FindActorFromGuid(Iterator.Key, Actor)) continue;
 		if(SelectedActors.Find(Actor) == INDEX_NONE) continue;
 		
-		const TBounds CurrentBounds(Actor);
+		const TBounds<F3DVector32> CurrentBounds(Actor);
 		if(Iterator.Value.Equals(CurrentBounds)) continue;
 		
 		MovedActorBoundsPairMap.Add(Iterator.Key, TBoundsPair(Iterator.Value, CurrentBounds));
@@ -694,9 +694,9 @@ void UEditorNavMeshManager::OnDeleteActorsBegin()
 	FActorBoundsPairMap RemovedActorBoundsPairMap;
 	for (const AActor* Actor : SelectedActors)
 	{
-		const TBounds<>* LastActorBounds = CachedActorBoundsMap.Find(Actor->GetActorGuid());
+		const TBounds<F3DVector32>* LastActorBounds = CachedActorBoundsMap.Find(Actor->GetActorGuid());
 		if(!LastActorBounds) continue;
-		RemovedActorBoundsPairMap.Add(Actor->GetActorGuid(), TBoundsPair(*LastActorBounds, TBounds()));
+		RemovedActorBoundsPairMap.Add(Actor->GetActorGuid(), TBoundsPair<F3DVector32>(*LastActorBounds, TBounds<F3DVector32>()));
 		CachedActorBoundsMap.Remove(Actor->GetActorGuid());
 	}
 	
@@ -737,8 +737,8 @@ void UEditorNavMeshManager::OnActorSelectionChanged(const TArray<UObject*>& Acto
 		FActorBoundsPairMap AddedActorBoundsPairMap;
 		for (const AActor* Actor : SelectedActors)
 		{
-			AddedActorBoundsPairMap.Add(Actor->GetActorGuid(), TBoundsPair(TBounds(), TBounds(Actor)));
-			CachedActorBoundsMap.Add(Actor->GetActorGuid(), TBounds(Actor));
+			AddedActorBoundsPairMap.Add(Actor->GetActorGuid(), TBoundsPair<F3DVector32>(TBounds<F3DVector32>(), TBounds<F3DVector32>(Actor)));
+			CachedActorBoundsMap.Add(Actor->GetActorGuid(), TBounds<F3DVector32>(Actor));
 			StaticMeshActorsMap.Add(Actor->GetActorGuid(), Actor);
 		}
 		
@@ -751,7 +751,7 @@ void UEditorNavMeshManager::OnActorSelectionChanged(const TArray<UObject*>& Acto
 	MovingActorBoundsMap.Empty();
 	for (const AActor* Actor : SelectedActors)
 	{
-		MovingActorBoundsMap.Add(Actor->GetActorGuid(), TBounds(Actor));
+		MovingActorBoundsMap.Add(Actor->GetActorGuid(), TBounds<F3DVector32>(Actor));
 	}
 }
 

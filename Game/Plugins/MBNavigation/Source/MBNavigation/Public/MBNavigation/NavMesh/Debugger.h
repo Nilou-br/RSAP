@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "NavMeshTypes.h"
+#include "MBNavigation/Types/NavMesh.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogNavMeshDebugger, Log, All);
 

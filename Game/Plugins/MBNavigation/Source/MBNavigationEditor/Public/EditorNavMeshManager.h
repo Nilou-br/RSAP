@@ -2,8 +2,9 @@
 
 #pragma once
 
-#include "MBNavigation.h"
-#include "NavMeshTypes.h"
+#include "MBNavigation/MBNavigation.h"
+#include "MBNavigation/Types/Math.h"
+#include "MBNavigation/Types/NavMesh.h"
 #include "EditorNavMeshManager.generated.h"
 
 class FNavMeshGenerator;
@@ -27,8 +28,8 @@ enum class ESnapshotType
 	Deleted
 };
 
-typedef TMap<FGuid, TBounds<>> FActorBoundsMap;
-typedef TMap<FGuid, TBoundsPair<>> FActorBoundsPairMap;
+typedef TMap<FGuid, TBounds<F3DVector32>> FActorBoundsMap;
+typedef TMap<FGuid, TBoundsPair<F3DVector32>> FActorBoundsPairMap;
 
 struct FUndoRedoSnapshot
 {
@@ -70,7 +71,7 @@ private:
 	void InitStaticNavMeshData();
 	FORCEINLINE void GenerateAndDrawNavMesh();
 	FORCEINLINE void UpdateAndDrawNavMesh(const FActorBoundsPairMap& ActorBoundPairs);
-	FORCEINLINE void UpdateAndDrawNavMesh(const TArray<TBoundsPair<>>& BoundPairs);
+	FORCEINLINE void UpdateAndDrawNavMesh(const TArray<TBoundsPair<F3DVector32>>& BoundPairs);
 	void SaveNavMesh() const;
 	
 public:
@@ -94,7 +95,7 @@ private:
 	void AddSnapshot(const ESnapshotType SnapshotType, const FActorBoundsPairMap& ActorBoundsPairMap);
 	void ClearRedoSnapshots();
 	bool IsSnapshotActive(const FUndoRedoSnapshot& Snapshot);
-	TBounds<> GetLevelBoundaries() const;
+	TBounds<F3DVector32> GetLevelBoundaries() const;
 	void CheckMovingActors();
 	bool FindActorFromGuid(const FGuid& ActorGuid, const AActor*& OutActor);
 

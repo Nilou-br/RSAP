@@ -1,7 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
-#include "MBNavigation.h"
-#include "NavMeshTypes.h"
+#include "MBNavigation/MBNavigation.h"
+#include "MBNavigation/Types/NavMesh.h"
 
 #define LOCTEXT_NAMESPACE "FMBNavigationModule"
 
@@ -19,7 +19,7 @@ void FMBNavigationModule::ShutdownModule()
 
 void FMBNavigationModule::InitializeNavMeshSettings(const UNavMeshSettings* NavMeshData)
 {
-	FNavMeshData::Initialize(NavMeshData);
+	FNavMeshStatic::Initialize(NavMeshData);
 }
 
 void FMBNavigationModule::InitializeNavMeshDebugSettings(

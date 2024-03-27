@@ -1,8 +1,8 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-#include "Serialize.h"
+#include "MBNavigation/Types/Serialize.h"
+#include "MBNavigation/Types/NavMesh.h"
 #include <ranges>
-
 
 
 void SerializeNavMesh(FNavMesh& NavMesh, FGuid& ID)

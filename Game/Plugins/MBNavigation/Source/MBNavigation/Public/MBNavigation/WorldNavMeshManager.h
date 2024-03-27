@@ -1,7 +1,7 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-#include "NavMeshTypes.h"
+#include "MBNavigation/Types/NavMesh.h"
 #include "WorldNavMeshManager.generated.h"
 
 class FNavMeshDebugger;

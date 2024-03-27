@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "NavMeshTypes.h"
+#include "MBNavigation/Types/NavMesh.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogNavMeshGenerator, Log, All);
 
@@ -18,12 +18,12 @@ public:
 		: NavMeshPtr(InNavMesh), World(nullptr)
 	{}
 	void SetWorld(const UWorld* InWorld) { World = InWorld; }
-	void Generate(const TBounds<>& LevelBounds);
+	void Generate(const TBounds<F3DVector32>& LevelBounds);
 
 private:
 
 	// Generation methods
-	void GenerateChunks(const TBounds<>& LevelBounds);
+	void GenerateChunks(const TBounds<F3DVector32>& LevelBounds);
 	void RasterizeStaticNode(FChunk* Chunk, FOctreeNode &Node, const uint8 LayerIndex);
 	FORCEINLINE bool HasOverlap(const F3DVector32& NodeGlobalLocation, const uint8 LayerIndex);
 	void SetNegativeNeighbourRelations(const FChunk* Chunk);

@@ -2,7 +2,8 @@
 
 #pragma once
 
-#include "NavMeshTypes.h"
+#include "MBNavigation/Types/NavMesh.h"
+#include "MBNavigation/Types/Math.h"
 
 
 

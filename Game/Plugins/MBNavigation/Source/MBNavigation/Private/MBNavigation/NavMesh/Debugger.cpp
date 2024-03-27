@@ -1,14 +1,13 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-#include "NavMeshDebugger.h"
+#include "MBNavigation/NavMesh/Debugger.h"
+
 #include <bitset>
-#include <string>
 #include <ranges>
-#include "NavMeshTypes.h"
-#include "NavMeshUtils.h"
+#include <string>
+#include "MBNavigation/Types/NavMesh.h"
 
 DEFINE_LOG_CATEGORY(LogNavMeshDebugger)
-
 
 
 FString To6BitBinaryString(const uint8 Value) {
@@ -71,21 +70,21 @@ void FNavMeshDebugger::PerformConditionalDraw(const FVector& CameraLocation, con
 	
 	const float DurationSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(
 		std::chrono::high_resolution_clock::now() - StartTime).count() / 1000.0f;
-	UE_LOG(LogNavMeshDebugger, Log, TEXT("Drawing took : '%f' seconds"), DurationSeconds);
+	//UE_LOG(LogNavMeshDebugger, Log, TEXT("Drawing took : '%f' seconds"), DurationSeconds);
 }
 
 void FNavMeshDebugger::DrawNodes(const FVector& CameraLocation, const FVector& CameraForwardVector) const
 {
 	// Get x amount of chunks around camera.
-	const F3DVector32 CameraChunkLocation = F3DVector32::FromVector(CameraLocation) & FNavMeshData::ChunkMask;
-	const F3DVector32 ChunksMinLoc = CameraChunkLocation - FNavMeshData::ChunkSize*4;
-	const F3DVector32 ChunksMaxLoc = CameraChunkLocation + FNavMeshData::ChunkSize*4;
+	const F3DVector32 CameraChunkLocation = F3DVector32::FromVector(CameraLocation) & FNavMeshStatic::ChunkMask;
+	const F3DVector32 ChunksMinLoc = CameraChunkLocation - FNavMeshStatic::ChunkSize*4;
+	const F3DVector32 ChunksMaxLoc = CameraChunkLocation + FNavMeshStatic::ChunkSize*4;
 	TArray<FChunk*> ChunksToDraw;
-	for (int32 X = ChunksMinLoc.X; X <= ChunksMaxLoc.X; X+=FNavMeshData::ChunkSize)
+	for (int32 X = ChunksMinLoc.X; X <= ChunksMaxLoc.X; X+=FNavMeshStatic::ChunkSize)
 	{
-		for (int32 Y = ChunksMinLoc.Y; Y <= ChunksMaxLoc.Y; Y+=FNavMeshData::ChunkSize)
+		for (int32 Y = ChunksMinLoc.Y; Y <= ChunksMaxLoc.Y; Y+=FNavMeshStatic::ChunkSize)
 		{
-			for (int32 Z = ChunksMinLoc.Z; Z <= ChunksMaxLoc.Z; Z+=FNavMeshData::ChunkSize)
+			for (int32 Z = ChunksMinLoc.Z; Z <= ChunksMaxLoc.Z; Z+=FNavMeshStatic::ChunkSize)
 			{
 				const auto ChunkIterator = NavMeshPtr->find(F3DVector32(X, Y, Z).ToKey());
 				if(ChunkIterator != NavMeshPtr->end()) ChunksToDraw.Add(&ChunkIterator->second);
@@ -97,11 +96,11 @@ void FNavMeshDebugger::DrawNodes(const FVector& CameraLocation, const FVector& C
 	{
 		if(FNavMeshDebugSettings::bDisplayChunks)
 		{
-			const FVector ChunkGlobalCenterLocation = (Chunk->Location + FNavMeshData::NodeHalveSizes[0]).ToVector();
+			const FVector ChunkGlobalCenterLocation = (Chunk->Location + FNavMeshStatic::NodeHalveSizes[0]).ToVector();
 			const FVector DirectionToTarget = (ChunkGlobalCenterLocation - CameraLocation).GetSafeNormal();
 			if(FVector::DotProduct(CameraForwardVector, DirectionToTarget) > 0)
 			{
-				DrawDebugBox(World, ChunkGlobalCenterLocation, FVector(FNavMeshData::NodeHalveSizes[0]), FColor::Black, true, -1, 11, 5);
+				DrawDebugBox(World, ChunkGlobalCenterLocation, FVector(FNavMeshStatic::NodeHalveSizes[0]), FColor::Black, true, -1, 11, 5);
 			}
 		}
 		
@@ -121,17 +120,17 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const uint8 Layer
 	const FOctreeNode* Node = &NodeIterator->second;
 	
 	if(!Node->IsOccluded()) return;
-	const FVector NodeGlobalCenterLocation = (Node->GetGlobalLocation(Chunk->Location) + FNavMeshData::NodeHalveSizes[LayerIndex]).ToVector();
+	const FVector NodeGlobalCenterLocation = (Node->GetGlobalLocation(Chunk->Location) + FNavMeshStatic::NodeHalveSizes[LayerIndex]).ToVector();
 
 	// Return if distance between camera and node is larger than the calculated distance for this specific node's layer.
-	if(FVector::Dist(CameraLocation, NodeGlobalCenterLocation) > (FNavMeshData::NodeSizes[LayerIndex] << 2)+200 - 16*LayerIndex) return;
+	if(FVector::Dist(CameraLocation, NodeGlobalCenterLocation) > (FNavMeshStatic::NodeSizes[LayerIndex] << 2)+200 - 16*LayerIndex) return;
 	
 	if(FNavMeshDebugSettings::bDisplayNodes)
 	{
 		if(const FVector DirectionToTarget = (NodeGlobalCenterLocation - CameraLocation).GetSafeNormal();
 			FVector::DotProduct(CameraForwardVector, DirectionToTarget))
 		{
-			DrawDebugBox(World, NodeGlobalCenterLocation, FVector(FNavMeshData::NodeHalveSizes[LayerIndex]), LayerColors[LayerIndex], true, -1, 0, 3 - (LayerIndex/3.5));
+			DrawDebugBox(World, NodeGlobalCenterLocation, FVector(FNavMeshStatic::NodeHalveSizes[LayerIndex]), LayerColors[LayerIndex], true, -1, 0, 3 - (LayerIndex/3.5));
 		}
 	}
 
@@ -148,22 +147,22 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const uint8 Layer
 						
 			switch (Direction) {
 			case DIRECTION_X_NEGATIVE:
-				CenterOffset = F3DVector32(-FNavMeshData::NodeHalveSizes[LayerIndex] + 5, 0, 0);
+				CenterOffset = F3DVector32(-FNavMeshStatic::NodeHalveSizes[LayerIndex] + 5, 0, 0);
 				break;
 			case DIRECTION_Y_NEGATIVE:
-				CenterOffset = F3DVector32(0, -FNavMeshData::NodeHalveSizes[LayerIndex] + 5, 0);
+				CenterOffset = F3DVector32(0, -FNavMeshStatic::NodeHalveSizes[LayerIndex] + 5, 0);
 				break;
 			case DIRECTION_Z_NEGATIVE:
-				CenterOffset = F3DVector32(0, 0, -FNavMeshData::NodeHalveSizes[LayerIndex] + 5);
+				CenterOffset = F3DVector32(0, 0, -FNavMeshStatic::NodeHalveSizes[LayerIndex] + 5);
 				break;
 			case DIRECTION_X_POSITIVE:
-				CenterOffset = F3DVector32(FNavMeshData::NodeHalveSizes[LayerIndex] - 5, 0, 0);
+				CenterOffset = F3DVector32(FNavMeshStatic::NodeHalveSizes[LayerIndex] - 5, 0, 0);
 				break;
 			case DIRECTION_Y_POSITIVE:
-				CenterOffset = F3DVector32(0, FNavMeshData::NodeHalveSizes[LayerIndex] - 5, 0);
+				CenterOffset = F3DVector32(0, FNavMeshStatic::NodeHalveSizes[LayerIndex] - 5, 0);
 				break;
 			case DIRECTION_Z_POSITIVE:
-				CenterOffset = F3DVector32(0, 0, FNavMeshData::NodeHalveSizes[LayerIndex] - 5);
+				CenterOffset = F3DVector32(0, 0, FNavMeshStatic::NodeHalveSizes[LayerIndex] - 5);
 				break;
 			default:
 				break;
@@ -177,7 +176,7 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const uint8 Layer
 
 	if(FNavMeshDebugSettings::bDisplayRelations)
 	{
-		const std::array<FNodeLookupData, 6> NeighboursLookupData = GetNeighboursLookupData(Node, Chunk->Location);
+		const std::array<FNodeLookupData, 6> NeighboursLookupData = Node->GetNeighboursLookupData(Chunk->Location);
 		for (const auto NeighbourLookupData : NeighboursLookupData)
 		{
 			if(NeighbourLookupData.LayerIndex == LAYER_INDEX_INVALID) continue;
@@ -191,16 +190,16 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const uint8 Layer
 			if(NeighbourIterator == Chunk->Octrees[0]->Layers[NeighbourLookupData.LayerIndex].end()) continue;
 			const FOctreeNode& NeighbourNode = NeighbourIterator->second;
 						
-			const F3DVector32 NeighbourGlobalCenterLocation = NeighbourNode.GetGlobalLocation(NeighbourChunk.Location) + FNavMeshData::NodeHalveSizes[NeighbourLookupData.LayerIndex];
+			const F3DVector32 NeighbourGlobalCenterLocation = NeighbourNode.GetGlobalLocation(NeighbourChunk.Location) + FNavMeshStatic::NodeHalveSizes[NeighbourLookupData.LayerIndex];
 			DrawDebugLine(World, NodeGlobalCenterLocation, NeighbourGlobalCenterLocation.ToVector(), FColor::White, true, -1, 11, 1);
 		}
 	}
 	
-	if(LayerIndex == FNavMeshData::StaticDepth || !Node->IsFilled()) return;
+	if(LayerIndex == FNavMeshStatic::StaticDepth || !Node->IsFilled()) return;
 
 	const F3DVector10 NodeLocalLocation = Node->GetLocalLocation();
 	const uint8 ChildLayerIndex = LayerIndex+1;
-	const int_fast16_t ChildMortonOffset = FNavMeshData::MortonOffsets[ChildLayerIndex];
+	const int_fast16_t ChildMortonOffset = FNavMeshStatic::MortonOffsets[ChildLayerIndex];
 	for (uint8 i = 0; i < 8; ++i)
 	{
 		// Add the offset to certain children depending on their location in the parent.

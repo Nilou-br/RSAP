@@ -3,7 +3,7 @@
 #pragma once
 
 #include "Engine/AssetUserData.h"
-#include "NavMeshSettings.generated.h"
+#include "Settings.generated.h"
 
 
 

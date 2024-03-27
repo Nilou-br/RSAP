@@ -1,16 +1,17 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-#include "NavMeshGenerator.h"
+#include "MBNavigation/NavMesh/Generator.h"
+
 #include <chrono>
 #include <ranges>
-#include "NavMeshTypes.h"
 #include "unordered_dense.h"
+#include "MBNavigation/Types/NavMesh.h"
+#include "MBNavigation/Types/Math.h"
 
 DEFINE_LOG_CATEGORY(LogNavMeshGenerator)
 
 
-
-void FNavMeshGenerator::Generate(const TBounds<>& LevelBounds)
+void FNavMeshGenerator::Generate(const TBounds<F3DVector32>& LevelBounds)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("NavMesh Generate");
 	if (!World)
@@ -39,21 +40,21 @@ void FNavMeshGenerator::Generate(const TBounds<>& LevelBounds)
  * Create a grid of chunks filling the entire area of the level-boundaries.
  * Chunks are be placed so that their origin align with the world coordinates x0,y0,z0.
  */
-void FNavMeshGenerator::GenerateChunks(const TBounds<>& LevelBounds)
+void FNavMeshGenerator::GenerateChunks(const TBounds<F3DVector32>& LevelBounds)
 {
 	const F3DVector32 LevelMin = LevelBounds.Min;
 	const F3DVector32 LevelMax = LevelBounds.Max;
 
 	// Determine the min/max coordinates of the chunks.
-	const int32 Mask = ~((1<<FNavMeshData::KeyShift)-1);
+	const int32 Mask = ~((1<<FNavMeshStatic::KeyShift)-1);
 	const F3DVector32 ChunksMinLoc(LevelMin.X & Mask, LevelMin.Y & Mask, LevelMin.Z & Mask);
 	const F3DVector32 ChunksMaxLoc(LevelMax.X & Mask, LevelMax.Y & Mask, LevelMax.Z & Mask);
 
 	// Reserve room for all chunks in navmesh.
 	const uint32 TotalChunks =
-		((ChunksMaxLoc.X << FNavMeshData::KeyShift) - (ChunksMinLoc.X << FNavMeshData::KeyShift)) *
-		((ChunksMaxLoc.Y << FNavMeshData::KeyShift) - (ChunksMinLoc.Y << FNavMeshData::KeyShift)) *
-		((ChunksMaxLoc.Z << FNavMeshData::KeyShift) - (ChunksMinLoc.Z << FNavMeshData::KeyShift)) + 1;
+		((ChunksMaxLoc.X << FNavMeshStatic::KeyShift) - (ChunksMinLoc.X << FNavMeshStatic::KeyShift)) *
+		((ChunksMaxLoc.Y << FNavMeshStatic::KeyShift) - (ChunksMinLoc.Y << FNavMeshStatic::KeyShift)) *
+		((ChunksMaxLoc.Z << FNavMeshStatic::KeyShift) - (ChunksMinLoc.Z << FNavMeshStatic::KeyShift)) + 1;
 	NavMeshPtr->reserve(TotalChunks);
 
 	if (TotalChunks <= 0)
@@ -64,11 +65,11 @@ void FNavMeshGenerator::GenerateChunks(const TBounds<>& LevelBounds)
 	}
 
 	// Fill navmesh with chunks.
-	for (int32 X = ChunksMinLoc.X; X <= ChunksMaxLoc.X; X+=FNavMeshData::ChunkSize)
+	for (int32 X = ChunksMinLoc.X; X <= ChunksMaxLoc.X; X+=FNavMeshStatic::ChunkSize)
 	{
-		for (int32 Y = ChunksMinLoc.Y; Y <= ChunksMaxLoc.Y; Y+=FNavMeshData::ChunkSize)
+		for (int32 Y = ChunksMinLoc.Y; Y <= ChunksMaxLoc.Y; Y+=FNavMeshStatic::ChunkSize)
 		{
-			for (int32 Z = ChunksMinLoc.Z; Z <= ChunksMaxLoc.Z; Z+=FNavMeshData::ChunkSize)
+			for (int32 Z = ChunksMinLoc.Z; Z <= ChunksMaxLoc.Z; Z+=FNavMeshStatic::ChunkSize)
 			{
 				F3DVector32 ChunkLocation = F3DVector32(X, Y, Z);
 				auto [ChunkIterator, IsInserted] = NavMeshPtr->emplace(ChunkLocation.ToKey(), FChunk(ChunkLocation));
@@ -97,12 +98,12 @@ void FNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 	Node.SetOccluded(true);
 
 	// Stop recursion if end reached.
-	if (LayerIndex >= FNavMeshData::StaticDepth) return;
+	if (LayerIndex >= FNavMeshStatic::StaticDepth) return;
 	Node.SetFilled(true);
 
 	const uint8 ChildLayerIndex = LayerIndex + 1;
 	FNodesMap& ChildLayer = Chunk->Octrees[0].Get()->Layers[ChildLayerIndex];
-	const int_fast16_t ChildMortonOffset = FNavMeshData::MortonOffsets[ChildLayerIndex];
+	const int_fast16_t ChildMortonOffset = FNavMeshStatic::MortonOffsets[ChildLayerIndex];
 
 	// Reserve memory for 8 child-nodes on the lower layer and initialize them.
 	ChildLayer.reserve(8);
@@ -140,10 +141,10 @@ bool FNavMeshGenerator::HasOverlap(const F3DVector32& NodeGlobalLocation, const 
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Has-Overlap");
 	return FPhysicsInterface::GeomOverlapBlockingTest(
 		World,
-		FNavMeshData::CollisionBoxes[LayerIndex],
-		FVector(NodeGlobalLocation.X + FNavMeshData::NodeHalveSizes[LayerIndex],
-				NodeGlobalLocation.Y + FNavMeshData::NodeHalveSizes[LayerIndex],
-				NodeGlobalLocation.Z + FNavMeshData::NodeHalveSizes[LayerIndex]),
+		FNavMeshStatic::CollisionBoxes[LayerIndex],
+		FVector(NodeGlobalLocation.X + FNavMeshStatic::NodeHalveSizes[LayerIndex],
+				NodeGlobalLocation.Y + FNavMeshStatic::NodeHalveSizes[LayerIndex],
+				NodeGlobalLocation.Z + FNavMeshStatic::NodeHalveSizes[LayerIndex]),
 		FQuat::Identity,
 		ECollisionChannel::ECC_WorldStatic,
 		FCollisionQueryParams::DefaultQueryParam,
@@ -197,22 +198,22 @@ void FNavMeshGenerator::SetNodeRelations(FOctreeNode& Node, const F3DVector32& C
 		if (Node.ChunkBorder & Direction) {
 			switch (Direction) {
 			case DIRECTION_X_NEGATIVE:
-				ChunkOffset.X = -FNavMeshData::ChunkSize;
+				ChunkOffset.X = -FNavMeshStatic::ChunkSize;
 				break;
 			case DIRECTION_Y_NEGATIVE:
-				ChunkOffset.Y = -FNavMeshData::ChunkSize;
+				ChunkOffset.Y = -FNavMeshStatic::ChunkSize;
 				break;
 			case DIRECTION_Z_NEGATIVE:
-				ChunkOffset.Z = -FNavMeshData::ChunkSize;
+				ChunkOffset.Z = -FNavMeshStatic::ChunkSize;
 				break;
 			case DIRECTION_X_POSITIVE:
-				ChunkOffset.X = FNavMeshData::ChunkSize;
+				ChunkOffset.X = FNavMeshStatic::ChunkSize;
 				break;
 			case DIRECTION_Y_POSITIVE:
-				ChunkOffset.Y = FNavMeshData::ChunkSize;
+				ChunkOffset.Y = FNavMeshStatic::ChunkSize;
 				break;
 			case DIRECTION_Z_POSITIVE:
-				ChunkOffset.Z = FNavMeshData::ChunkSize;
+				ChunkOffset.Z = FNavMeshStatic::ChunkSize;
 				break;
 			default:
 				break;
@@ -223,22 +224,22 @@ void FNavMeshGenerator::SetNodeRelations(FOctreeNode& Node, const F3DVector32& C
 		F3DVector10 LocalLocationToCheck;
 		switch (Direction) {
 		case DIRECTION_X_NEGATIVE:
-			LocalLocationToCheck = NodeLocalLocation - F3DVector10(FNavMeshData::MortonOffsets[LayerIndex], 0, 0);
+			LocalLocationToCheck = NodeLocalLocation - F3DVector10(FNavMeshStatic::MortonOffsets[LayerIndex], 0, 0);
 			break;
 		case DIRECTION_Y_NEGATIVE:
-			LocalLocationToCheck = NodeLocalLocation - F3DVector10(0, FNavMeshData::MortonOffsets[LayerIndex], 0);
+			LocalLocationToCheck = NodeLocalLocation - F3DVector10(0, FNavMeshStatic::MortonOffsets[LayerIndex], 0);
 			break;
 		case DIRECTION_Z_NEGATIVE:
-			LocalLocationToCheck = NodeLocalLocation - F3DVector10(0, 0, FNavMeshData::MortonOffsets[LayerIndex]);
+			LocalLocationToCheck = NodeLocalLocation - F3DVector10(0, 0, FNavMeshStatic::MortonOffsets[LayerIndex]);
 			break;
 		case DIRECTION_X_POSITIVE:
-			LocalLocationToCheck = NodeLocalLocation + F3DVector10(FNavMeshData::MortonOffsets[LayerIndex], 0, 0);
+			LocalLocationToCheck = NodeLocalLocation + F3DVector10(FNavMeshStatic::MortonOffsets[LayerIndex], 0, 0);
 			break;
 		case DIRECTION_Y_POSITIVE:
-			LocalLocationToCheck = NodeLocalLocation + F3DVector10(0, FNavMeshData::MortonOffsets[LayerIndex], 0);
+			LocalLocationToCheck = NodeLocalLocation + F3DVector10(0, FNavMeshStatic::MortonOffsets[LayerIndex], 0);
 			break;
 		case DIRECTION_Z_POSITIVE:
-			LocalLocationToCheck = NodeLocalLocation + F3DVector10(0, 0, FNavMeshData::MortonOffsets[LayerIndex]);
+			LocalLocationToCheck = NodeLocalLocation + F3DVector10(0, 0, FNavMeshStatic::MortonOffsets[LayerIndex]);
 			break;
 		default:
 			break;
@@ -315,7 +316,7 @@ void FNavMeshGenerator::RecursiveSetChildNodesRelation(const FOctreeNode* Node, 
 	
 	const F3DVector10 ParentLocalLocation = Node->GetLocalLocation();
 	const uint8 ChildLayerIndex = LayerIndex+1;
-	const uint16 MortonOffset = FNavMeshData::MortonOffsets[ChildLayerIndex];
+	const uint16 MortonOffset = FNavMeshStatic::MortonOffsets[ChildLayerIndex];
 	std::array<uint_fast32_t, 4> ChildMortonCodes;
 	switch (Direction)
 	{
