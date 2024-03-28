@@ -310,8 +310,8 @@ struct FChunk
 		const uint8 ChildLayerIndex = LayerIndex+1;
 		if(ChildLayerIndex >= FNavMeshStatic::StaticDepth || !Node.IsFilled()) return;
 		const int_fast16_t ChildMortonOffset = FNavMeshStatic::MortonOffsets[ChildLayerIndex];
+		
 		const F3DVector10 ParentMortonLocation = Node.GetMortonLocation();
-
 		for (uint8 i = 0; i < 8; ++i)
 		{
 			const uint_fast16_t ChildMortonX = ParentMortonLocation.X + ((i & 1) ? ChildMortonOffset : 0);

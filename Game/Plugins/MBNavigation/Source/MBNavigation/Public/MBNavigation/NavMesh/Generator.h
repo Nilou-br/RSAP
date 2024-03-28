@@ -9,6 +9,8 @@ DECLARE_LOG_CATEGORY_EXTERN(LogNavMeshGenerator, Log, All);
 
 
 
+// todo: Add custom overlap check and only do world-overlap if on/within the actual bounds of an actor.
+// todo: Get each bound in chunk, and for each actual overlap, add a parent. So build from bottom-up.
 
 class MBNAVIGATION_API FNavMeshGenerator
 {
