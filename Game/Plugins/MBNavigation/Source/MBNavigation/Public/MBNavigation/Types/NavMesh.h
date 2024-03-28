@@ -3,11 +3,10 @@
 #pragma once
 
 #include "map"
-#include "Math.h"
 #include "morton.h"
-#include "Static.h"
 #include "unordered_dense.h"
-#include "Engine/AssetUserData.h"
+#include "MBNavigation/Types/Math.h"
+#include "MBNavigation/Types/Static.h"
 
 #define DIRECTION_X_NEGATIVE 0b100000
 #define DIRECTION_Y_NEGATIVE 0b010000
@@ -154,7 +153,7 @@ struct FOctreeNode
 	FOctreeNeighbours Neighbours;
 	uint8 ChunkBorder: 6; // todo might not be needed because can be tracked in navigation algo?
 	// todo 8 bits for dynamic index for each neighbour + child + parent???? 128 dynamic-objects a chunk (0 index / first bit is for the static octree)
-	
+
 	FOctreeNode(const uint_fast16_t MortonX, const uint_fast16_t MortonY, const uint_fast16_t MortonZ, const uint8 InChunkBorder = 0b000000):
 		ChunkBorder(InChunkBorder)
 	{
@@ -233,9 +232,22 @@ struct FOctreeNode
 		return MortonCode & BoolOccludedMask;
 	}
 
-	FORCEINLINE bool HasOverlap(const UWorld* World, const struct FChunk* Chunk, const uint8 LayerIndex) const;
 	std::array<uint8, 6> GetNeighbourLayerIndexes() const;
 	std::array<FNodeLookupData, 6> GetNeighboursLookupData(const F3DVector32& ChunkLocation) const;
+	
+	FORCEINLINE bool HasOverlap(const UWorld* World, const F3DVector32& ChunkLocation, const uint8 LayerIndex) const
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE_STR("Node Has-Overlap");
+		return FPhysicsInterface::GeomOverlapBlockingTest(
+			World,
+			FNavMeshStatic::CollisionBoxes[LayerIndex],
+			GetGlobalLocation(ChunkLocation).ToVector() + FNavMeshStatic::NodeHalveSizes[LayerIndex],
+			FQuat::Identity,
+			ECollisionChannel::ECC_WorldStatic,
+			FCollisionQueryParams::DefaultQueryParam,
+			FCollisionResponseParams::DefaultResponseParam
+		);
+	}
 };
 
 // typedef std::map<uint_fast32_t, FOctreeNode> FNodesMap;
@@ -290,6 +302,16 @@ struct FChunk
 			Location.Y + ChunkHalveSize,
 			Location.Z + ChunkHalveSize
 		);
+	}
+
+	FORCEINLINE bool FindNode(FOctreeNode& OutNode, const uint8 DynamicIndex, const uint8 LayerIndex, const uint_fast32_t MortonCode) const
+	{
+		const auto& Layer = Octrees[DynamicIndex]->Layers[LayerIndex];
+		if (const auto NodeIterator = Layer.find(MortonCode); NodeIterator != Layer.end()) {
+			OutNode = NodeIterator->second;
+			return true;
+		}
+		return false;
 	}
 };
 

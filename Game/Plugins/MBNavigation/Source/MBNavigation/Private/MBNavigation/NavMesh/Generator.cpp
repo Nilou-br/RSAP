@@ -94,7 +94,7 @@ void FNavMeshGenerator::GenerateChunks(const TBounds<F3DVector32>& LevelBounds)
 void FNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, const uint8 LayerIndex)
 {
 	// If overlapping any static object.
-	if (!HasOverlap(Node.GetGlobalLocation(Chunk->Location), LayerIndex)) return;
+	if (!Node.HasOverlap(World, Chunk->Location, LayerIndex)) return;
 	Node.SetOccluded(true);
 
 	// Stop recursion if end reached.
@@ -134,22 +134,6 @@ void FNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 		// Recursively rasterize this child-node.
 		RasterizeStaticNode(Chunk, ChildNode, ChildLayerIndex);
 	}
-}
-
-bool FNavMeshGenerator::HasOverlap(const F3DVector32& NodeGlobalLocation, const uint8 LayerIndex)
-{
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Has-Overlap");
-	return FPhysicsInterface::GeomOverlapBlockingTest(
-		World,
-		FNavMeshStatic::CollisionBoxes[LayerIndex],
-		FVector(NodeGlobalLocation.X + FNavMeshStatic::NodeHalveSizes[LayerIndex],
-				NodeGlobalLocation.Y + FNavMeshStatic::NodeHalveSizes[LayerIndex],
-				NodeGlobalLocation.Z + FNavMeshStatic::NodeHalveSizes[LayerIndex]),
-		FQuat::Identity,
-		ECollisionChannel::ECC_WorldStatic,
-		FCollisionQueryParams::DefaultQueryParam,
-		FCollisionResponseParams::DefaultResponseParam
-	);
 }
 
 /**

@@ -107,13 +107,14 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<F3DVector32>>& Befor
 
 			// Keep track of all parents of affected nodes.
 			std::set<uint_fast32_t> ParentMortonCodes;
-
+			
 			// If there are any remaining previous bounds, then we should clear any non-overlapping nodes within.
 			for (auto RemainingBounds : PrevRoundedBounds.GetRemainder(CurrRoundedBounds))
 			{
 				RemainingBounds.Draw(World, Chunk->Location, FColor::Red);
 
-				// First check if there is any overlap within these remaining bounds.
+				// TODO: These remaining-bounds directly on the edge of the actor will return true even if technically not overlapping. ( Use custom overlap check? ).
+				// First check if these remaining-bounds overlap with the actor's current NOT-rounded bounds.
 				if(const TBounds<F3DVector32> GlobalBounds = RemainingBounds.ToGlobalSpace(Chunk->Location); !GlobalBounds.HasOverlap(World))
 				{
 					// There is no overlap, so we can clear all nodes in this part at once.
@@ -121,20 +122,17 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<F3DVector32>>& Befor
 					{
 						DrawDebugBox(World, MortonLocation.GetCenterVector(StartingLayer), F3DVector10::GetExtentsVector(StartingLayer), FColor::Black, true, -1, 0, 1);
 						
-						const uint_fast32_t MortonCode = MortonLocation.ToMortonCode();
-						const auto NodeIterator = Chunk->Octrees[0]->Layers[StartingLayer].find(MortonCode);
-						if(NodeIterator != Chunk->Octrees[0]->Layers[StartingLayer].end())
+						FOctreeNode Node;
+						if(Chunk->FindNode(Node, 0, StartingLayer, MortonLocation.ToMortonCode())) return;
+						
+						Node.SetOccluded(false);
+						ParentMortonCodes.insert(Node.GetParentMortonCode(StartingLayer));
+						
+						// Clear the children on this node if it has any.
+						if(StartingLayer < FNavMeshStatic::StaticDepth && Node.IsFilled())
 						{
-							FOctreeNode& Node = NodeIterator->second;
-							Node.SetOccluded(false);
-							ParentMortonCodes.insert(Node.GetParentMortonCode(StartingLayer));
-							
-							// Clear the children on this node if it has any.
-							if(StartingLayer < FNavMeshStatic::StaticDepth && Node.IsFilled())
-							{
-								RecursiveClearAllNodes(Chunk, MortonLocation, StartingLayer+1);
-								Node.SetFilled(false);
-							}
+							RecursiveClearAllNodes(Chunk, MortonLocation, StartingLayer+1);
+							Node.SetFilled(false);
 						}
 					});
 				}
@@ -143,12 +141,12 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<F3DVector32>>& Befor
 					// There is an overlap, so check each node manually.
 					RemainingBounds.ForEachPoint(FNavMeshStatic::MortonOffsets[StartingLayer], [&](const F3DVector10 MortonLocation) -> void
 					{
-						const uint_fast32_t MortonCode = MortonLocation.ToMortonCode();
-						const auto NodeIterator = Chunk->Octrees[0]->Layers[StartingLayer].find(MortonCode);
-						if(NodeIterator == Chunk->Octrees[0]->Layers[StartingLayer].end()) return;
+						DrawDebugBox(World, MortonLocation.GetCenterVector(StartingLayer), F3DVector10::GetExtentsVector(StartingLayer), FColor::Black, true, -1, 0, 1);
+						
+						FOctreeNode Node;
+						if(Chunk->FindNode(Node, 0, StartingLayer, MortonLocation.ToMortonCode())) return;
 
-						FOctreeNode& Node = NodeIterator->second;
-						if(!Node.HasOverlap(World, Chunk, StartingLayer))
+						if(!Node.HasOverlap(World, Chunk->Location, StartingLayer))
 						{
 							Node.SetOccluded(false);
 							ParentMortonCodes.insert(Node.GetParentMortonCode(StartingLayer));
@@ -197,7 +195,7 @@ void FNavMeshUpdater::RecursiveClearUnoccludedNodes(const FChunk* Chunk, const F
 		FOctreeNode& ChildNode = NodeIterator->second;
 		const F3DVector32 NodeCenter = ChildNode.GetGlobalLocation(Chunk->Location) + FNavMeshStatic::MortonOffsets[ChildLayerIndex];
 
-		if(ChildNode.HasOverlap(World, Chunk, ChildLayerIndex))
+		if(ChildNode.HasOverlap(World, Chunk->Location, ChildLayerIndex))
 		{
 			// Keep searching for unoccluded nodes.
 			RecursiveClearUnoccludedNodes(Chunk, ChildMortonLocation, ChildLayerIndex+1);

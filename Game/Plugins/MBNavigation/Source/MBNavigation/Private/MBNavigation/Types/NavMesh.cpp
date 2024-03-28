@@ -4,20 +4,6 @@
 
 
 
-bool FOctreeNode::HasOverlap(const UWorld* World, const FChunk* Chunk, const uint8 LayerIndex) const
-{
-    TRACE_CPUPROFILER_EVENT_SCOPE_STR("Node Has-Overlap");
-    return FPhysicsInterface::GeomOverlapBlockingTest(
-        World,
-        FNavMeshStatic::CollisionBoxes[LayerIndex],
-        GetGlobalLocation(Chunk->Location).ToVector() + FNavMeshStatic::NodeHalveSizes[LayerIndex],
-        FQuat::Identity,
-        ECollisionChannel::ECC_WorldStatic,
-        FCollisionQueryParams::DefaultQueryParam,
-        FCollisionResponseParams::DefaultResponseParam
-    );
-}
-
 std::array<uint8, 6> FOctreeNode::GetNeighbourLayerIndexes() const
 {
     std::array<uint8, 6> NeighbourLayerIndexes;
