@@ -304,14 +304,26 @@ struct FChunk
 		);
 	}
 
-	FORCEINLINE bool FindNode(FOctreeNode& OutNode, const uint8 DynamicIndex, const uint8 LayerIndex, const uint_fast32_t MortonCode) const
+	template<typename Func>
+	void ForEachChildOfNode(const FOctreeNode& Node, const uint8 LayerIndex, Func Callback) const
 	{
-		const auto& Layer = Octrees[DynamicIndex]->Layers[LayerIndex];
-		if (const auto NodeIterator = Layer.find(MortonCode); NodeIterator != Layer.end()) {
-			OutNode = NodeIterator->second;
-			return true;
+		const uint8 ChildLayerIndex = LayerIndex+1;
+		if(ChildLayerIndex >= FNavMeshStatic::StaticDepth || !Node.IsFilled()) return;
+		const int_fast16_t ChildMortonOffset = FNavMeshStatic::MortonOffsets[ChildLayerIndex];
+		const F3DVector10 ParentMortonLocation = Node.GetMortonLocation();
+
+		for (uint8 i = 0; i < 8; ++i)
+		{
+			const uint_fast16_t ChildMortonX = ParentMortonLocation.X + ((i & 1) ? ChildMortonOffset : 0);
+			const uint_fast16_t ChildMortonY = ParentMortonLocation.Y + ((i & 2) ? ChildMortonOffset : 0);
+			const uint_fast16_t ChildMortonZ = ParentMortonLocation.Z + ((i & 4) ? ChildMortonOffset : 0);
+
+			const F3DVector10 ChildMortonLocation = F3DVector10(ChildMortonX, ChildMortonY, ChildMortonZ);
+			const uint_fast32_t ChildMortonCode = ChildMortonLocation.ToMortonCode();
+			
+			const auto NodeIterator = Octrees[0]->Layers[ChildLayerIndex].find(ChildMortonCode);
+			Callback(&NodeIterator->second);
 		}
-		return false;
 	}
 };
 

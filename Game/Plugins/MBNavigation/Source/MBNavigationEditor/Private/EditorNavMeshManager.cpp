@@ -608,7 +608,7 @@ void UEditorNavMeshManager::OnEndObjectMovement(UObject& Object)
 	if(MovedActorBoundsPairMap.Num())
 	{
 		AddSnapshot(ESnapshotType::Moved, MovedActorBoundsPairMap);
-		// UpdateAndDrawNavMesh(MovedActorBoundsPairMap);
+		// No need to update because the Tick already did before this method was called.
 	}
 }
 

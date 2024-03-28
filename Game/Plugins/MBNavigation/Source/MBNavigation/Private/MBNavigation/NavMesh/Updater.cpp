@@ -113,7 +113,6 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<F3DVector32>>& Befor
 			{
 				RemainingBounds.Draw(World, Chunk->Location, FColor::Red);
 
-				// TODO: These remaining-bounds directly on the edge of the actor will return true even if technically not overlapping. ( Use custom overlap check? ).
 				// First check if these remaining-bounds overlap with the actor's current NOT-rounded bounds.
 				if(const TBounds<F3DVector32> GlobalBounds = RemainingBounds.ToGlobalSpace(Chunk->Location); !GlobalBounds.HasOverlap(World))
 				{
@@ -122,8 +121,9 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<F3DVector32>>& Befor
 					{
 						DrawDebugBox(World, MortonLocation.GetCenterVector(StartingLayer), F3DVector10::GetExtentsVector(StartingLayer), FColor::Black, true, -1, 0, 1);
 						
-						FOctreeNode Node;
-						if(Chunk->FindNode(Node, 0, StartingLayer, MortonLocation.ToMortonCode())) return;
+						const auto NodeIterator = Chunk->Octrees[0]->Layers[StartingLayer].find(MortonLocation.ToMortonCode());
+						if(NodeIterator == Chunk->Octrees[0]->Layers[StartingLayer].end()) return;
+						FOctreeNode& Node = NodeIterator->second;
 						
 						Node.SetOccluded(false);
 						ParentMortonCodes.insert(Node.GetParentMortonCode(StartingLayer));
@@ -131,7 +131,7 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<F3DVector32>>& Befor
 						// Clear the children on this node if it has any.
 						if(StartingLayer < FNavMeshStatic::StaticDepth && Node.IsFilled())
 						{
-							RecursiveClearAllNodes(Chunk, MortonLocation, StartingLayer+1);
+							RecursiveClearAllChildren(Chunk, Node, StartingLayer);
 							Node.SetFilled(false);
 						}
 					});
@@ -141,10 +141,11 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<F3DVector32>>& Befor
 					// There is an overlap, so check each node manually.
 					RemainingBounds.ForEachPoint(FNavMeshStatic::MortonOffsets[StartingLayer], [&](const F3DVector10 MortonLocation) -> void
 					{
-						DrawDebugBox(World, MortonLocation.GetCenterVector(StartingLayer), F3DVector10::GetExtentsVector(StartingLayer), FColor::Black, true, -1, 0, 1);
+						// DrawDebugBox(World, MortonLocation.GetCenterVector(StartingLayer), F3DVector10::GetExtentsVector(StartingLayer), FColor::Black, true, -1, 0, 1);
 						
-						FOctreeNode Node;
-						if(Chunk->FindNode(Node, 0, StartingLayer, MortonLocation.ToMortonCode())) return;
+						const auto NodeIterator = Chunk->Octrees[0]->Layers[StartingLayer].find(MortonLocation.ToMortonCode());
+						if(NodeIterator == Chunk->Octrees[0]->Layers[StartingLayer].end()) return;
+						FOctreeNode& Node = NodeIterator->second;
 
 						if(!Node.HasOverlap(World, Chunk->Location, StartingLayer))
 						{
@@ -154,13 +155,13 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<F3DVector32>>& Befor
 							// Clear the children on this node if it has any.
 							if(StartingLayer < FNavMeshStatic::StaticDepth && Node.IsFilled())
 							{
-								RecursiveClearAllNodes(Chunk, MortonLocation, StartingLayer+1);
+								RecursiveClearAllChildren(Chunk, Node, StartingLayer);
 								Node.SetFilled(false);
 							}
 							return;
 						}
 
-						RecursiveClearUnoccludedNodes(Chunk, MortonLocation, StartingLayer);
+						RecursiveClearUnoccludedChildren(Chunk, Node, StartingLayer);
 					});
 				}
 			}
@@ -177,58 +178,36 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<F3DVector32>>& Befor
 #endif
 }
 
-void FNavMeshUpdater::RecursiveClearUnoccludedNodes(const FChunk* Chunk, const F3DVector10& ParentMortonLocation, const uint8 ChildLayerIndex)
+void FNavMeshUpdater::RecursiveClearUnoccludedChildren(const FChunk* Chunk, const FOctreeNode& Node, const uint8 LayerIndex)
 {
-	if(ChildLayerIndex == FNavMeshStatic::StaticDepth) return;
-	const int_fast16_t ChildMortonOffset = FNavMeshStatic::MortonOffsets[ChildLayerIndex];
-
-	// For-each child
-	for (uint8 i = 0; i < 8; ++i)
+	Chunk->ForEachChildOfNode(Node, LayerIndex, [&](FOctreeNode* ChildNode)
 	{
-		const uint_fast16_t ChildMortonX = ParentMortonLocation.X + ((i & 1) ? ChildMortonOffset : 0);
-		const uint_fast16_t ChildMortonY = ParentMortonLocation.Y + ((i & 2) ? ChildMortonOffset : 0);
-		const uint_fast16_t ChildMortonZ = ParentMortonLocation.Z + ((i & 4) ? ChildMortonOffset : 0);
-
-		const F3DVector10 ChildMortonLocation = F3DVector10(ChildMortonX, ChildMortonY, ChildMortonZ);
-		const uint_fast32_t ChildMortonCode = ChildMortonLocation.ToMortonCode();
-		const auto NodeIterator = Chunk->Octrees[0]->Layers[ChildLayerIndex].find(ChildMortonCode);
-		FOctreeNode& ChildNode = NodeIterator->second;
-		const F3DVector32 NodeCenter = ChildNode.GetGlobalLocation(Chunk->Location) + FNavMeshStatic::MortonOffsets[ChildLayerIndex];
-
-		if(ChildNode.HasOverlap(World, Chunk->Location, ChildLayerIndex))
+		const uint8 ChildLayerIndex = LayerIndex+1;
+		if(ChildNode->HasOverlap(World, Chunk->Location, ChildLayerIndex))
 		{
 			// Keep searching for unoccluded nodes.
-			RecursiveClearUnoccludedNodes(Chunk, ChildMortonLocation, ChildLayerIndex+1);
+			RecursiveClearUnoccludedChildren(Chunk, *ChildNode, ChildLayerIndex+1);
 			return;
 		}
 
 		// No overlap, so update node and clear all its children.
-		ChildNode.SetFilled(false);
-		ChildNode.SetOccluded(false);
-		RecursiveClearAllNodes(Chunk, ChildMortonLocation, ChildLayerIndex+1);
-	}
+		ChildNode->SetFilled(false);
+		ChildNode->SetOccluded(false);
+		RecursiveClearAllChildren(Chunk, *ChildNode, ChildLayerIndex+1);
+	});
 }
 
-void FNavMeshUpdater::RecursiveClearAllNodes(const FChunk* Chunk, const F3DVector10& ParentMortonLocation, const uint8 ChildLayerIndex)
+void FNavMeshUpdater::RecursiveClearAllChildren(const FChunk* Chunk, const FOctreeNode& Node, const uint8 LayerIndex)
 {
-	const int_fast16_t ChildMortonOffset = FNavMeshStatic::MortonOffsets[ChildLayerIndex];
-	for (uint8 i = 0; i < 8; ++i)
+	Chunk->ForEachChildOfNode(Node, LayerIndex, [&](FOctreeNode* ChildNode)
 	{
-		const uint_fast16_t ChildMortonX = ParentMortonLocation.X + ((i & 1) ? ChildMortonOffset : 0);
-		const uint_fast16_t ChildMortonY = ParentMortonLocation.Y + ((i & 2) ? ChildMortonOffset : 0);
-		const uint_fast16_t ChildMortonZ = ParentMortonLocation.Z + ((i & 4) ? ChildMortonOffset : 0);
-
-		const F3DVector10 ChildMortonLocation = F3DVector10(ChildMortonX, ChildMortonY, ChildMortonZ);
-		const uint_fast32_t ChildMortonCode = ChildMortonLocation.ToMortonCode();
-		const auto NodeIterator = Chunk->Octrees[0]->Layers[ChildLayerIndex].find(ChildMortonCode);
-		FOctreeNode& ChildNode = NodeIterator->second;
-		
-		if(ChildLayerIndex < FNavMeshStatic::StaticDepth && ChildNode.IsFilled())
+		const uint8 ChildLayerIndex = LayerIndex+1;
+		if(ChildLayerIndex < FNavMeshStatic::StaticDepth && ChildNode->IsFilled())
 		{
-			RecursiveClearAllNodes(Chunk, ChildMortonLocation, ChildLayerIndex+1);
+			RecursiveClearAllChildren(Chunk, *ChildNode, ChildLayerIndex+1);
 		}
-		Chunk->Octrees[0]->Layers[ChildLayerIndex].erase(ChildMortonCode);
-	}
+		Chunk->Octrees[0]->Layers[ChildLayerIndex].erase(ChildNode->GetMortonCode());
+	});
 }
 
 void FNavMeshUpdater::RecursiveClearParentNodes(const FChunk* Chunk, const F3DVector10& MortonLocation, const uint8 LayerIndex)

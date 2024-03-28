@@ -44,7 +44,7 @@ struct FNavMeshStatic // todo, new level does not have correct settings in the w
 		{
 			NodeSizes[LayerIndex] = ChunkSize >> LayerIndex;
 			NodeHalveSizes[LayerIndex] = static_cast<float>(NodeSizes[LayerIndex]) / 2;
-			CollisionBoxes[LayerIndex] = FCollisionShape::MakeBox(FVector(NodeHalveSizes[LayerIndex]));
+			CollisionBoxes[LayerIndex] = FCollisionShape::MakeBox(FVector(NodeHalveSizes[LayerIndex] - 0.1f)); // Decrease by small amount to avoid floating-point inaccuracy.
 		}
 	}
 };

@@ -19,8 +19,8 @@ public:
 	void UpdateStatic(const TArray<TBoundsPair<F3DVector32>>& BeforeAfterBoundsPairs);
 
 private:
-	void RecursiveClearUnoccludedNodes(const FChunk* Chunk, const F3DVector10& ParentMortonLocation, const uint8 ChildLayerIndex);
-	static void RecursiveClearAllNodes(const FChunk* Chunk, const F3DVector10& ParentMortonLocation, const uint8 ChildLayerIndex);
+	void RecursiveClearUnoccludedChildren(const FChunk* Chunk, const FOctreeNode& Node, const uint8 LayerIndex);
+	static void RecursiveClearAllChildren(const FChunk* Chunk, const FOctreeNode& Node, const uint8 LayerIndex);
 	void RecursiveClearParentNodes(const FChunk* Chunk, const F3DVector10& MortonLocation, const uint8 LayerIndex);
 	
 	FNavMeshPtr NavMeshPtr;

@@ -244,19 +244,20 @@ void FNavMeshGenerator::SetNodeRelations(FOctreeNode& Node, const F3DVector32& C
 		{
 			// Try to find neighbour
 			const auto NodeIterator = NeighbourChunk.Octrees[0]->Layers[LayerIndexToCheck].find(MortonCodeToCheck);
-			if (NodeIterator == NeighbourChunk.Octrees[0]->Layers[LayerIndexToCheck].end()) // If not found.
+			if(NodeIterator == NeighbourChunk.Octrees[0]->Layers[LayerIndexToCheck].end())
 			{
 				// Continue the loop by setting the MortonCodeToCheck to the parent's morton-code.
 				// This way you will eventually find the node located in this direction.
 				MortonCodeToCheck = FOctreeNode::GetParentMortonCode(MortonCodeToCheck, LayerIndexToCheck);
 				continue;
 			}
+			
+			FOctreeNode* NeighbourNode = &NodeIterator->second;
 			const uint8 NeighbourLayerIndex = LayerIndexToCheck;
 
-			// Get the found neighbour from iterator and set the FoundNeighbourLayerIndex on the Node.Neighbours for this direction,
-			// and the Node's layer-index to the Neighbouring-Node.Neighbours for opposite direction ( where we are looking from ).
+			// Set the FoundNeighbourLayerIndex on the Node.Neighbours for this direction,
+			// and the Node's layer-index to the NeighbourNode.Neighbours for opposite direction ( where we are looking from ).
 			// If the neighbour has any children, then call RecursiveSetChildNodesRelation.
-			FOctreeNode* NeighbourNode = &NodeIterator->second;
 			switch (Direction)
 			{
 			case DIRECTION_X_NEGATIVE:

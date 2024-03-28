@@ -480,7 +480,7 @@ struct TBounds
 		TRACE_CPUPROFILER_EVENT_SCOPE_STR("TBounds Has-Overlap");
 		return FPhysicsInterface::GeomOverlapBlockingTest(
 			World,
-			FCollisionShape::MakeBox(GetExtents().ToVector()),
+			FCollisionShape::MakeBox(GetExtents().ToVector() - 0.1f), // Decrease by small amount to avoid floating-point inaccuracy.
 			GetCenter().ToVector(),
 			FQuat::Identity,
 			ECollisionChannel::ECC_WorldStatic,
@@ -488,8 +488,7 @@ struct TBounds
 			FCollisionResponseParams::DefaultResponseParam
 		);
 	}
-
-
+	
 	template<typename OffsetType, typename Func>
 	void ForEachPoint(const OffsetType Offset, Func Callback) const {
 		for (OffsetType X = Min.X; X < Max.X; X+=Offset) {

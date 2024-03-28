@@ -112,8 +112,7 @@ void FNavMeshDebugger::DrawNodes(const FVector& CameraLocation, const FVector& C
 	}
 }
 
-void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const uint8 LayerIndex, const uint_fast32_t& NodeMorton,
-                                          const FVector& CameraLocation, const FVector& CameraForwardVector) const
+void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const uint8 LayerIndex, const uint_fast32_t& NodeMorton, const FVector& CameraLocation, const FVector& CameraForwardVector) const
 {
 	const auto NodeIterator = Chunk->Octrees[0]->Layers[LayerIndex].find(NodeMorton);
 	if(NodeIterator == Chunk->Octrees[0]->Layers[LayerIndex].end()) return;
