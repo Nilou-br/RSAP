@@ -330,27 +330,27 @@ struct TBounds
 
 	FORCEINLINE TBounds operator+(const VectorType& Vector) const
 	{
-		return TBounds(Min + Vector, Max + Vector);
+		return TBounds(Min + Vector, Max + Vector, bIsValid);
 	}
 
 	FORCEINLINE TBounds operator-(const VectorType& Vector) const
 	{
-		return TBounds(Min - Vector, Max - Vector);
+		return TBounds(Min - Vector, Max - Vector, bIsValid);
 	}
 
 	FORCEINLINE TBounds operator<<(const uint8 Value) const
 	{
-		return TBounds(Min << Value, Max << Value);
+		return TBounds(Min << Value, Max << Value, bIsValid);
 	}
 
 	FORCEINLINE TBounds operator>>(const uint8 Value) const
 	{
-		return TBounds(Min >> Value, Max >> Value);
+		return TBounds(Min >> Value, Max >> Value, bIsValid);
 	}
 
 	TBounds operator&(const uint16 MortonMask) const
 	{
-		return TBounds(Min & MortonMask, Max & MortonMask);
+		return TBounds(Min & MortonMask, Max & MortonMask, bIsValid);
 	}
 
 	FORCEINLINE bool operator!() const
@@ -363,7 +363,7 @@ struct TBounds
 	{
 		static_assert(std::is_same_v<VectorType, F3DVector10>, "TBounds::Round() is only supported for F3DVector10");
 		TBounds<F3DVector10> Rounded = *this & FNavMeshStatic::MortonMasks[LayerIndex];
-		Rounded.Max = Rounded.Max + FNavMeshStatic::MortonOffsets[LayerIndex];
+		Rounded.Max = Rounded.Max + FNavMeshStatic::MortonOffsets[LayerIndex] - 1;
 		return Rounded;
 	}
 
@@ -378,7 +378,7 @@ struct TBounds
 			FMath::Min(Max.X, Other.Max.X),
 			FMath::Min(Max.Y, Other.Max.Y),
 			FMath::Min(Max.Z, Other.Max.Z));
-		return TBounds(ClampedMin, ClampedMax);
+		return TBounds(ClampedMin, ClampedMax, bIsValid);
 	}
 
 	// Gets the remaining parts of the bounds that are not overlapping with the given bounds. 
@@ -440,7 +440,7 @@ struct TBounds
 		// A node with morton 1023 covers the space from 1023 to 1024, so if a Max axis value is 1024, it is actually on the 1023th node in morton-space.
 		const F3DVector10 LocalMin = ( Min-ChunkLocation << FNavMeshStatic::VoxelSizeExponent).ToVector10();
 		const F3DVector10 LocalMax = ((Max-ChunkLocation << FNavMeshStatic::VoxelSizeExponent)-1).ToVector10();
-		return TBounds<F3DVector10>(LocalMin, LocalMax);
+		return TBounds<F3DVector10>(LocalMin, LocalMax, IsValid());
 	}
 
 	FORCEINLINE TBounds<F3DVector32> ToGlobalSpace(const F3DVector32& ChunkLocation) const
@@ -450,7 +450,7 @@ struct TBounds
 		// Max+1 explanation is same as above.
 		const F3DVector32 LocalMin = (F3DVector32(Min) >> FNavMeshStatic::VoxelSizeExponent) + ChunkLocation;
 		const F3DVector32 LocalMax = (F3DVector32(Max)+1 >> FNavMeshStatic::VoxelSizeExponent) + ChunkLocation;
-		return TBounds<F3DVector32>(LocalMin, LocalMax);
+		return TBounds<F3DVector32>(LocalMin, LocalMax, IsValid());
 	}
 
 	// F3DVector32 Version.
@@ -465,7 +465,7 @@ struct TBounds
 	FORCEINLINE void Draw(const UWorld* World, const F3DVector32& ChunkLocation, const FColor Color = FColor::Black) const
 	{
 		const F3DVector32 GlobalMin = F3DVector32::GetGlobalFromMorton(Min, ChunkLocation);
-		const F3DVector32 GlobalMax = F3DVector32::GetGlobalFromMorton(Max+1, ChunkLocation);
+		const F3DVector32 GlobalMax = F3DVector32::GetGlobalFromMorton(Max, ChunkLocation) + (1 << FNavMeshStatic::VoxelSizeExponent);
 		const F3DVector32 Center = (GlobalMin + GlobalMax) >> 1;
 		const F3DVector32 Extents = (GlobalMax - GlobalMin) >> 1;
 		DrawDebugBox(World, Center.ToVector(), Extents.ToVector(), Color, true, -1, 0, 1);
