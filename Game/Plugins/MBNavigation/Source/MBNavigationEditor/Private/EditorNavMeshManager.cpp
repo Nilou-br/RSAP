@@ -461,7 +461,6 @@ void UEditorNavMeshManager::CheckMovingActors()
 	
 	for (auto& Iterator : MovingActorBoundsMap)
 	{
-		// todo get prev bounds from 
 		const AActor* Actor;
 		if(!FindActorFromGuid(Iterator.Key, Actor))
 		{
@@ -478,7 +477,7 @@ void UEditorNavMeshManager::CheckMovingActors()
 	}
 
 	// Remove invalid actors in MovingActorsState
-	for ( const FGuid& Guid : InvalidActors)
+	for (const FGuid& Guid : InvalidActors)
 	{
 		MovingActorBoundsMap.Remove(Guid);
 	}
@@ -575,7 +574,7 @@ void UEditorNavMeshManager::OnCameraMoved(const FVector& CameraLocation, const F
 
 void UEditorNavMeshManager::OnObjectMoved(AActor* Actor)
 {
-	
+	// todo delete
 }
 
 void UEditorNavMeshManager::OnBeginObjectMovement(UObject& Object)
@@ -590,25 +589,37 @@ void UEditorNavMeshManager::OnBeginObjectMovement(UObject& Object)
 
 void UEditorNavMeshManager::OnEndObjectMovement(UObject& Object)
 {
+	if(!bIsMovingActors) return;
 	bIsMovingActors = false;
-
-	FActorBoundsPairMap MovedActorBoundsPairMap;
+	
+	FActorBoundsPairMap ActorBoundsPairMapToSnapshot;
+	FActorBoundsPairMap ActorBoundsPairMapToReflect;
 	for (const AActor* Actor : SelectedActors)
 	{
+		// Add snapshot for this actor if its cached bounds ( before the drag ) differs from the current bounds.
 		const TBounds<F3DVector32>* PreviousBounds = CachedActorBoundsMap.Find(Actor->GetActorGuid());
 		if(!PreviousBounds) continue;
-		
 		const TBounds<F3DVector32> CurrentBounds(Actor);
 		if(PreviousBounds->Equals(CurrentBounds)) continue;
+		ActorBoundsPairMapToSnapshot.Add(Actor->GetActorGuid(), TBoundsPair(*PreviousBounds, CurrentBounds));
 
-		MovedActorBoundsPairMap.Add(Actor->GetActorGuid(), TBoundsPair(*PreviousBounds, CurrentBounds));
+		// Update the cached bounds.
 		CachedActorBoundsMap[Actor->GetActorGuid()] = CurrentBounds;
+
+		// Every tick, the navmesh is updated when an object has been dragged. So only update if the last recorded bounds in the MovingActorBoundsMap differs from the current bounds.
+		const TBounds<F3DVector32>* LastRecordedActorBounds = MovingActorBoundsMap.Find(Actor->GetActorGuid());
+		if(LastRecordedActorBounds->Equals(CurrentBounds)) continue;
+		ActorBoundsPairMapToReflect.Add(Actor->GetActorGuid(), TBoundsPair(*LastRecordedActorBounds, CurrentBounds));
 	}
-	
-	if(MovedActorBoundsPairMap.Num())
+
+	if(ActorBoundsPairMapToSnapshot.Num())
 	{
-		AddSnapshot(ESnapshotType::Moved, MovedActorBoundsPairMap);
-		// No need to update because the Tick already did before this method was called.
+		AddSnapshot(ESnapshotType::Moved, ActorBoundsPairMapToSnapshot);
+	}
+
+	if(ActorBoundsPairMapToReflect.Num())
+	{
+		UpdateAndDrawNavMesh(ActorBoundsPairMapToReflect);
 	}
 }
 

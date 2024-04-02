@@ -492,7 +492,8 @@ struct TBounds
 			FCollisionResponseParams::DefaultResponseParam
 		);
 	}
-	
+
+	// Iterates over all nodes within these bounds.
 	template<typename OffsetType, typename Func>
 	void ForEachPoint(const OffsetType Offset, Func Callback) const {
 		for (OffsetType X = Min.X; X < Max.X; X+=Offset) {
