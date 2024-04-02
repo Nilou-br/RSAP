@@ -1,59 +1,12 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #include "MBNavigation/NavMesh/Updater.h"
-
 #include <set>
 #include "MBNavigation/Types/NavMesh.h"
 
 DEFINE_LOG_CATEGORY(LogNavMeshUpdater)
 
 
-
-/**
- * Returns a map holding the previous/current bounds-pairs within a specific chunk, where the bounds are in morton-space.
- */
-TMap<FChunk*, TBoundsPair<F3DVector32>> GetBoundsPerChunk(const FNavMeshPtr& NavMeshPtr, const TBoundsPair<F3DVector32>& BeforeAfterBoundsPair)
-{
-	const TBounds PrevBounds = BeforeAfterBoundsPair.Previous;
-	const TBounds CurrBounds = BeforeAfterBoundsPair.Current;
-	const TBounds TotalBounds = BeforeAfterBoundsPair.GetTotalBounds();
-	const F3DVector32 TotalChunkMin = TotalBounds.Min & FNavMeshStatic::ChunkMask;
-	const F3DVector32 TotalChunkMax = TotalBounds.Max & FNavMeshStatic::ChunkMask;
-		
-	// Get each affected chunk and store it in a hashmap with the part of the bounds inside that chunk.
-	TMap<FChunk*, TBoundsPair<F3DVector32>> MortonBoundsPairs;
-	uint32 TotalChunks = 0;
-	for (int32 X = TotalChunkMin.X; X <= TotalChunkMax.X; X+=FNavMeshStatic::ChunkSize)
-	{
-		for (int32 Y = TotalChunkMin.Y; Y <= TotalChunkMax.Y; Y+=FNavMeshStatic::ChunkSize)
-		{
-			for (int32 Z = TotalChunkMin.Z; Z <= TotalChunkMax.Z; Z+=FNavMeshStatic::ChunkSize)
-			{
-				TotalChunks++;
-
-				const F3DVector32 ChunkLocation = F3DVector32(X, Y, Z);
-				TBounds ChunkBounds(ChunkLocation, ChunkLocation+FNavMeshStatic::ChunkSize);
-					
-				// Get the chunk. Add new one with root node if it does not exists.
-				auto ChunkIterator = NavMeshPtr->find(F3DVector32(X, Y, Z).ToKey());
-				if(ChunkIterator == NavMeshPtr->end())
-				{
-					std::tie(ChunkIterator, std::ignore) = NavMeshPtr->emplace(ChunkLocation.ToKey(), FChunk(ChunkLocation));
-				}
-				FChunk& Chunk = ChunkIterator->second;
-
-				// Get the intersection of the bounds inside of this chunk. Bounds that are not inside this chunk will be invalid.
-				const TBounds<F3DVector32> PrevBoundsInChunk = PrevBounds.Overlaps(ChunkBounds)
-					? PrevBounds.GetIntersection(ChunkBounds) : TBounds<F3DVector32>();
-				const TBounds<F3DVector32> CurrBoundsInChunk = CurrBounds.Overlaps(ChunkBounds)
-					? CurrBounds.GetIntersection(ChunkBounds) : TBounds<F3DVector32>();
-
-				MortonBoundsPairs.Add(&Chunk, TBoundsPair(PrevBoundsInChunk, CurrBoundsInChunk));
-			}
-		}
-	}
-	return MortonBoundsPairs;
-}
 
 uint8 GetStartingLayer(const TBoundsPair<F3DVector32>& BoundsPair)
 {
@@ -84,29 +37,27 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<F3DVector32>>& Befor
 	const auto StartTime = std::chrono::high_resolution_clock::now();
 #endif
 	
-	for (const auto BeforeAfterBoundsPair : BeforeAfterBoundsPairs)
+	for (const auto BoundsPair : BeforeAfterBoundsPairs)
 	{
-		// todo: call FindStartingLayer here to use for all chunks these bounds are in. Return a node size of at-least one difference in the total bounds?
-
 		// Get the layer-index used as the starting point for the overlap checks.
-		const uint8 StartingLayer = GetStartingLayer(BeforeAfterBoundsPair);
-		
-		// For-each intersection of the pair inside a chunk.
-		for (const auto BoundsIterator : GetBoundsPerChunk(NavMeshPtr, BeforeAfterBoundsPair))
+		const uint8 StartingLayer = GetStartingLayer(BoundsPair);
+
+		// Get the chunks these bounds are inside of.
+		for (const FChunk* Chunk : GetChunksFromBoundsPair(BoundsPair))
 		{
-			const FChunk* Chunk = BoundsIterator.Key;
-			const TBoundsPair<F3DVector32>& BoundsPair = BoundsIterator.Value;
-			const TBounds<F3DVector32> PrevBounds = BoundsPair.Previous;
-			const TBounds<F3DVector32> CurrBounds = BoundsPair.Current;
+			TBounds<F3DVector32> ChunkBounds = Chunk->GetBounds();
+			
+			// These bounds are the remainder of an intersection between the bounds and the chunk.
+			const TBounds<F3DVector32> PrevBounds = BoundsPair.Previous.Overlaps(ChunkBounds)
+				? BoundsPair.Previous.GetIntersection(ChunkBounds) : TBounds<F3DVector32>();
+			const TBounds<F3DVector32> CurrBounds = BoundsPair.Current.Overlaps(ChunkBounds)
+				? BoundsPair.Current.GetIntersection(ChunkBounds) : TBounds<F3DVector32>();
 
-			// Convert global to morton-space in this chunk.
-			const TBounds<F3DVector10> PrevMortonBounds = PrevBounds.ToMortonSpace(Chunk->Location);
-			const TBounds<F3DVector10> CurrMortonBounds = CurrBounds.ToMortonSpace(Chunk->Location);
+			// Convert them from global to morton-space, and round them to the nearest multiple of the node-size of this layer.
+			const TBounds<F3DVector10> PrevRoundedBounds = PrevBounds.ToMortonSpace(Chunk->Location).Round(StartingLayer);
+			const TBounds<F3DVector10> CurrRoundedBounds = CurrBounds.ToMortonSpace(Chunk->Location).Round(StartingLayer);
 
-			// Round the bounds to the nearest multiple of the node-size of this layer.
-			const TBounds<F3DVector10> PrevRoundedBounds = PrevMortonBounds.Round(StartingLayer);
-			const TBounds<F3DVector10> CurrRoundedBounds = CurrMortonBounds.Round(StartingLayer);
-
+			// Debug draw
 			if(CurrBounds.IsValid()) CurrRoundedBounds.Draw(World, Chunk->Location, FColor::Green);
 
 			// Keep track of all the parents of affected nodes.
@@ -129,10 +80,40 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<F3DVector32>>& Befor
 #endif
 }
 
+TArray<FChunk*> FNavMeshUpdater::GetChunksFromBoundsPair(const TBoundsPair<F3DVector32>& BoundsPair) const
+{
+	const TBounds<F3DVector32> TotalBounds = BoundsPair.GetTotalBounds();
+	const F3DVector32 ChunkMin = TotalBounds.Min & FNavMeshStatic::ChunkMask;
+	const F3DVector32 ChunkMax = TotalBounds.Max & FNavMeshStatic::ChunkMask;
+	
+	TArray<FChunk*> Chunks;
+	for (int32 X = ChunkMin.X; X <= ChunkMax.X; X+=FNavMeshStatic::ChunkSize)
+	{
+		for (int32 Y = ChunkMin.Y; Y <= ChunkMax.Y; Y+=FNavMeshStatic::ChunkSize)
+		{
+			for (int32 Z = ChunkMin.Z; Z <= ChunkMax.Z; Z+=FNavMeshStatic::ChunkSize)
+			{
+				const F3DVector32 ChunkLocation = F3DVector32(X, Y, Z);
+				
+				auto ChunkIterator = NavMeshPtr->find(ChunkLocation.ToKey());
+				if(ChunkIterator == NavMeshPtr->end())
+				{
+					// Init new one if it does not exists yet.
+					std::tie(ChunkIterator, std::ignore) = NavMeshPtr->emplace(ChunkLocation.ToKey(), FChunk(ChunkLocation));
+				}
+				
+				FChunk* Chunk = &ChunkIterator->second;
+				Chunks.Add(Chunk);
+			}
+		}
+	}
+	return Chunks;
+}
+
 std::unordered_set<uint_fast32_t> FNavMeshUpdater::HandlePrevBounds(const FChunk* Chunk, const TBounds<F3DVector10> PrevBounds, const TBounds<F3DVector10> CurrBounds, const uint8 LayerIndex)
 {
 	if(!PrevBounds.IsValid()) return{};
-
+	
 	// Lambda for checking and updating these bounds.
 	const auto CheckBounds = [&](const TBounds<F3DVector10> Bounds)
 	{

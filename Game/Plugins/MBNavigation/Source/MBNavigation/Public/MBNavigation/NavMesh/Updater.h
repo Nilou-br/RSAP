@@ -19,6 +19,8 @@ public:
 	void UpdateStatic(const TArray<TBoundsPair<F3DVector32>>& BeforeAfterBoundsPairs);
 
 private:
+	TArray<FChunk*> GetChunksFromBoundsPair(const TBoundsPair<F3DVector32>& BoundsPair) const;
+	
 	std::unordered_set<uint_fast32_t> HandlePrevBounds(const FChunk* Chunk, const TBounds<F3DVector10> PrevBounds, const TBounds<F3DVector10> CurrBounds, const uint8 LayerIndex);
 	std::unordered_set<uint_fast32_t> HandleCurrentBounds(const FChunk* Chunk, const TBounds<F3DVector10> CurrBounds, const uint8 LayerIndex);
 	

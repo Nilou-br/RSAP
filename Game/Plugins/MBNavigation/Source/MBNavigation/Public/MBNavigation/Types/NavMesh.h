@@ -303,6 +303,11 @@ struct FChunk
 		);
 	}
 
+	FORCEINLINE TBounds<F3DVector32> GetBounds() const
+	{
+		return TBounds(Location, Location+FNavMeshStatic::ChunkSize);
+	}
+
 	template<typename Func>
 	void ForEachChildOfNode(const FOctreeNode& Node, const uint8 LayerIndex, Func Callback) const
 	{
