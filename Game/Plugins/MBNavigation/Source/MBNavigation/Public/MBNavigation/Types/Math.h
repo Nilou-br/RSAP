@@ -232,10 +232,8 @@ struct F3DVector32
 	{
 		return ChunkLocation + (F3DVector32(MortonLocation) << FNavMeshStatic::VoxelSizeExponent);
 	}
-
 	
-
-	// Make sure every axis value fits in 10 bits.
+	// Make sure every axis value fits in 10 bits, unsigned.
 	FORCEINLINE F3DVector10 ToVector10() const
 	{
 		return F3DVector10(static_cast<uint_fast16_t>(X), static_cast<uint_fast16_t>(Y), static_cast<uint_fast16_t>(Z));
@@ -249,6 +247,11 @@ struct F3DVector32
 	static FORCEINLINE F3DVector32 FromVector(const FVector& InVector)
 	{
 		return F3DVector32(InVector.X, InVector.Y, InVector.Z);
+	}
+
+	FORCEINLINE int32 GetMax() const
+	{
+		return FMath::Max(FMath::Max(X,Y), Z);
 	}
 
 	explicit F3DVector32(const FVector &InVector)
@@ -473,6 +476,7 @@ struct TBounds
 
 	FORCEINLINE F3DVector32 GetCenter() const { return Min+Max >> 1; }
 	FORCEINLINE F3DVector32 GetExtents() const { return Max-Min >> 1; }
+	FORCEINLINE F3DVector32 GetLengths() const { return F3DVector32(Max.X - Min.X, Max.Y - Min.Y, Max.Z - Min.Z); }
 
 	FORCEINLINE bool HasOverlap(const UWorld* World) const
 	{

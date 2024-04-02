@@ -262,15 +262,14 @@ typedef ankerl::unordered_dense::map<uint_fast32_t, FOctreeNode> FNodesMap;
  */
 struct FOctree
 {
-	TArray<FNodesMap> Layers; // todo static array?
+	std::array<FNodesMap, 10> Layers; // todo static array?
 	TArray<FOctreeLeaf> Leafs;
 
 	FOctree()
 	{
-		Layers.Reserve(10);
 		for (uint8 i = 0; i < 10; i++)
 		{
-			Layers.Add(FNodesMap());
+			Layers[i] = FNodesMap();
 		}
 	}
 };

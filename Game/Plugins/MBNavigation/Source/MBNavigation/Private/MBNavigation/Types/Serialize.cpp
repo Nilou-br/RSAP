@@ -144,7 +144,7 @@ FArchive& operator<<(FArchive& Ar, TSharedPtr<FOctree>& Octree)
 		Octree = MakeShared<FOctree>();
 	}
 	
-	for (uint8 i = 0; i < Octree->Layers.Num(); ++i)
+	for (uint8 i = 0; i < Octree->Layers.size(); ++i)
 	{
 		Ar << Octree->Layers[i];
 	}
