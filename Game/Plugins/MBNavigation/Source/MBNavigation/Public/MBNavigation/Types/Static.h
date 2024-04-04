@@ -15,14 +15,15 @@
 struct FNavMeshStatic // todo, new level does not have correct settings in the widget.
 {
 	static inline constexpr uint_fast16_t MortonOffsets[10] = {1024, 512, 256, 128, 64, 32, 16, 8, 4, 2}; // todo: update for leaf nodes.
-	static inline uint8 VoxelSizeExponent = 2;
-	static inline uint8 StaticDepth = 6;
 	static inline constexpr uint8 DynamicDepth = 10;
+	static inline uint8 StaticDepth = 6;
+	static inline uint8 VoxelSizeExponent = 0;
+	static inline uint8 SmallestNodeSize = 1;
 	static inline int32 ChunkSize = 1024 << VoxelSizeExponent;
 	static inline uint8 KeyShift = 12;
-	static inline uint32 ChunkMask = ~((1<<KeyShift)-1); // todo check negatives?
-	static inline int32 NodeSizes[10];
-	static inline float NodeHalveSizes[10];
+	static inline uint32 ChunkMask = ~((1<<KeyShift)-1);
+	static inline int32 NodeSizes[10] = {1024, 512, 256, 128, 64, 32, 16, 8, 4, 2}; // todo: update for leaf nodes.
+	static inline float NodeHalveSizes[10] = {512.f, 256.f, 128.f, 64.f, 32.f, 16.f, 8.f, 4.f, 2.f, 1.f}; // todo: update for leaf nodes.
 	static inline FCollisionShape CollisionBoxes[10];
 	static inline constexpr uint16 MortonMasks[10] = {
 		static_cast<uint16>(~((1<<10)-1)), static_cast<uint16>(~((1<<9)-1)),
@@ -39,6 +40,7 @@ struct FNavMeshStatic // todo, new level does not have correct settings in the w
 		ChunkSize = 1024 << VoxelSizeExponent;
 		KeyShift = 10 + VoxelSizeExponent;
 		ChunkMask = ~((1<<KeyShift)-1);
+		SmallestNodeSize = 1 << VoxelSizeExponent;
 		
 		for (uint8 LayerIndex = 0; LayerIndex < DynamicDepth; ++LayerIndex)
 		{

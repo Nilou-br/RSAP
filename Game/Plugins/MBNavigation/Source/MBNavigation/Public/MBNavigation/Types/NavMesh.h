@@ -154,14 +154,24 @@ struct FOctreeNode
 	uint8 ChunkBorder: 6; // todo might not be needed because can be tracked in navigation algo?
 	// todo 8 bits for dynamic index for each neighbour + child + parent???? 128 dynamic-objects a chunk (0 index / first bit is for the static octree)
 
+	FOctreeNode():
+		MortonCode(0), ChunkBorder(0)
+	{}
+
 	FOctreeNode(const uint_fast16_t MortonX, const uint_fast16_t MortonY, const uint_fast16_t MortonZ, const uint8 InChunkBorder = 0b000000):
 		ChunkBorder(InChunkBorder)
 	{
 		MortonCode = libmorton::morton3D_32_encode(MortonX, MortonY, MortonZ);
 	}
 
-	FOctreeNode():
-		MortonCode(0), ChunkBorder(0)
+	explicit FOctreeNode(const F3DVector10 MortonLocation, const uint8 InChunkBorder = 0b000000):
+		ChunkBorder(InChunkBorder)
+	{
+		MortonCode = libmorton::morton3D_32_encode(MortonLocation.X, MortonLocation.Y, MortonLocation.Z);
+	}
+
+	explicit FOctreeNode(const uint_fast32_t InMortonCode, const uint8 InChunkBorder = 0b000000):
+		MortonCode(InMortonCode), ChunkBorder(InChunkBorder)
 	{}
 
 	FORCEINLINE F3DVector10 GetMortonLocation() const
@@ -204,9 +214,9 @@ struct FOctreeNode
 		return GetMortonCode() & ParentMask;
 	}
 	
-	FORCEINLINE static uint_fast32_t GetParentMortonCode(const uint_fast32_t MortonCode, const uint8 ParentLayerIndex)
+	FORCEINLINE static uint_fast32_t GetParentMortonCode(const uint_fast32_t MortonCode, const uint8 LayerIndex)
 	{
-		const uint_fast32_t ParentMask = ~((1 << ParentShiftAmount[ParentLayerIndex-1]) - 1);
+		const uint_fast32_t ParentMask = ~((1 << ParentShiftAmount[LayerIndex-1]) - 1);
 		return MortonCode & ParentMask;
 	}
 
@@ -247,6 +257,12 @@ struct FOctreeNode
 			FCollisionQueryParams::DefaultQueryParam,
 			FCollisionResponseParams::DefaultResponseParam
 		);
+	}
+
+	FORCEINLINE void Draw(const UWorld* World, const F3DVector32& ChunkLocation, const uint8 LayerIndex, const FColor Color = FColor::Black) const
+	{
+		const float NodeHalveSize = FNavMeshStatic::NodeHalveSizes[LayerIndex];
+		DrawDebugBox(World, F3DVector32(GetGlobalLocation(ChunkLocation)).ToVector()+NodeHalveSize, F3DVector32(NodeHalveSize).ToVector(), Color, true, -1, 0, 1);
 	}
 };
 
@@ -311,8 +327,8 @@ struct FChunk
 	template<typename Func>
 	void ForEachChildOfNode(const FOctreeNode& Node, const uint8 LayerIndex, Func Callback) const
 	{
+		if(LayerIndex >= FNavMeshStatic::StaticDepth || !Node.IsFilled()) return;
 		const uint8 ChildLayerIndex = LayerIndex+1;
-		if(ChildLayerIndex >= FNavMeshStatic::StaticDepth || !Node.IsFilled()) return;
 		const int_fast16_t ChildMortonOffset = FNavMeshStatic::MortonOffsets[ChildLayerIndex];
 		
 		const F3DVector10 ParentMortonLocation = Node.GetMortonLocation();

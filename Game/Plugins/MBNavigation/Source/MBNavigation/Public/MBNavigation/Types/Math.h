@@ -115,6 +115,11 @@ struct F3DVector10
 	{}
 };
 
+
+// todo: add this template type to F3DVector32 and change name 'F3DVector32' to something else.
+template<typename T>
+concept global_vector_type = std::is_same_v<T, int_fast32_t> || std::is_same_v<T, int_fast64_t>;
+
 /**
  * Coordinates used for chunks or nodes that exist in global-space.
  */
@@ -238,11 +243,6 @@ struct F3DVector32
 	{
 		return F3DVector10(static_cast<uint_fast16_t>(X), static_cast<uint_fast16_t>(Y), static_cast<uint_fast16_t>(Z));
 	}
-
-	FORCEINLINE F3DVector32 ToVector32() const
-	{
-		return F3DVector32(static_cast<uint_fast32_t>(X), static_cast<uint_fast32_t>(Y), static_cast<uint_fast32_t>(Z));
-	}
 	
 	static FORCEINLINE F3DVector32 FromVector(const FVector& InVector)
 	{
@@ -276,6 +276,20 @@ struct F3DVector32
 
 	explicit F3DVector32()
 		: X(0), Y(0), Z(0) {}
+
+	FORCEINLINE bool HasOverlapWithinExtent(const UWorld* World, const F3DVector32& Extent) const
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE_STR("HasOverlapWithinExtent");
+		return FPhysicsInterface::GeomOverlapBlockingTest(
+			World,
+			FCollisionShape::MakeBox(Extent.ToVector()),
+			ToVector(),
+			FQuat::Identity,
+			ECollisionChannel::ECC_WorldStatic,
+			FCollisionQueryParams::DefaultQueryParam,
+			FCollisionResponseParams::DefaultResponseParam
+		);
+	}
 };
 
 /**
@@ -385,8 +399,9 @@ struct TBounds
 	}
 
 	// Gets the remaining parts of the bounds that are not overlapping with the given bounds. 
-	FORCEINLINE TArray<TBounds> GetRemainder(const TBounds& Other) const
+	TArray<TBounds<F3DVector32>> GetNonOverlapping(const TBounds<F3DVector32>& Other) const
 	{
+		static_assert(std::is_same_v<VectorType, F3DVector32>, "GetNonOverlapping only supports F3DVector32 due to the nature of morton-codes.");
 		if(!Overlaps(Other)) return { *this };
 		
 		TArray<TBounds> BoundsList;
@@ -438,11 +453,8 @@ struct TBounds
 	{
 		static_assert(std::is_same_v<VectorType, F3DVector32>, "TBounds::ToMortonSpace is only supported for F3DVector32");
 		
-		// Max-1 is required because the nodes have depth, and max-boundaries of 1024 are technically on the 1023th node.
-		// 10 bit holds 0-1023, and 1024 would cause overflow to 0 even though a Max axis value of 1024 it is still on the edge of the chunk in world-space.
-		// A node with morton 1023 covers the space from 1023 to 1024, so if a Max axis value is 1024, it is actually on the 1023th node in morton-space.
 		const F3DVector10 LocalMin = ( Min-ChunkLocation << FNavMeshStatic::VoxelSizeExponent).ToVector10();
-		const F3DVector10 LocalMax = ((Max-ChunkLocation << FNavMeshStatic::VoxelSizeExponent)-1).ToVector10();
+		const F3DVector10 LocalMax = ((Max-ChunkLocation << FNavMeshStatic::VoxelSizeExponent) - FNavMeshStatic::SmallestNodeSize).ToVector10();
 		return TBounds<F3DVector10>(LocalMin, LocalMax, IsValid());
 	}
 
@@ -450,15 +462,15 @@ struct TBounds
 	{
 		static_assert(std::is_same_v<VectorType, F3DVector10>, "TBounds::ToGlobalSpace is only supported for F3DVector10");
 		
-		// Max+1 explanation is same as above.
 		const F3DVector32 LocalMin = (F3DVector32(Min) >> FNavMeshStatic::VoxelSizeExponent) + ChunkLocation;
-		const F3DVector32 LocalMax = (F3DVector32(Max)+1 >> FNavMeshStatic::VoxelSizeExponent) + ChunkLocation;
+		const F3DVector32 LocalMax = ((F3DVector32(Max) + FNavMeshStatic::SmallestNodeSize) >> FNavMeshStatic::VoxelSizeExponent) + ChunkLocation;
 		return TBounds<F3DVector32>(LocalMin, LocalMax, IsValid());
 	}
 
 	// F3DVector32 Version.
 	FORCEINLINE void Draw(const UWorld* World, const FColor Color = FColor::Black) const
 	{
+		static_assert(std::is_same_v<VectorType, F3DVector32>, "Wrong overload used for TBounds::Draw. Call the F3DVector10 version instead.");
 		const F3DVector32 Center = (Min + Max) >> 1;
 		const F3DVector32 Extents = (Max - Min) >> 1;
 		DrawDebugBox(World, Center.ToVector(), Extents.ToVector(), Color, true, -1, 0, 1);
@@ -467,11 +479,8 @@ struct TBounds
 	// F3DVector10 Version.
 	FORCEINLINE void Draw(const UWorld* World, const F3DVector32& ChunkLocation, const FColor Color = FColor::Black) const
 	{
-		const F3DVector32 GlobalMin = F3DVector32::GetGlobalFromMorton(Min, ChunkLocation);
-		const F3DVector32 GlobalMax = F3DVector32::GetGlobalFromMorton(Max, ChunkLocation) + (1 << FNavMeshStatic::VoxelSizeExponent);
-		const F3DVector32 Center = (GlobalMin + GlobalMax) >> 1;
-		const F3DVector32 Extents = (GlobalMax - GlobalMin) >> 1;
-		DrawDebugBox(World, Center.ToVector(), Extents.ToVector(), Color, true, -1, 0, 1);
+		static_assert(std::is_same_v<VectorType, F3DVector10>, "Wrong overload used for TBounds::Draw. Call the F3DVector32 version instead.");
+		ToGlobalSpace(ChunkLocation).Draw(World, Color);
 	}
 
 	FORCEINLINE F3DVector32 GetCenter() const { return Min+Max >> 1; }

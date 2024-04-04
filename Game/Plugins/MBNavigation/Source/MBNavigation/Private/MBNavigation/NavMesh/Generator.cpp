@@ -117,10 +117,10 @@ void FNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FOctreeNode& Node, co
 
 		// Add child-node to current-layer and get its reference.
 		FOctreeNode NewNode(ChildMortonX, ChildMortonY, ChildMortonZ);
-		const auto [NodePairIterator, IsInserted] = ChildLayer.emplace(NewNode.GetMortonCode(), NewNode);
+		const auto [NodeIterator, IsInserted] = ChildLayer.emplace(NewNode.GetMortonCode(), NewNode);
 
 		// Get reference to stored child-node.
-		FOctreeNode& ChildNode = NodePairIterator->second;
+		FOctreeNode& ChildNode = NodeIterator->second;
 
 		// Determine the chunk-border of this child-node.
 		if (Node.ChunkBorder) // if parent touches a border, then at-least 4 of its children also do.
