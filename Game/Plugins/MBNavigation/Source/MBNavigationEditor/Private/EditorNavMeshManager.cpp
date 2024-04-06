@@ -702,22 +702,20 @@ void UEditorNavMeshManager::OnDuplicateActorsEnd()
 
 void UEditorNavMeshManager::OnDeleteActorsBegin()
 {
-	FActorBoundsPairMap RemovedActorBoundsPairMap;
 	for (const AActor* Actor : SelectedActors)
 	{
 		const TBounds<F3DVector32>* LastActorBounds = CachedActorBoundsMap.Find(Actor->GetActorGuid());
 		if(!LastActorBounds) continue;
-		RemovedActorBoundsPairMap.Add(Actor->GetActorGuid(), TBoundsPair<F3DVector32>(*LastActorBounds, TBounds<F3DVector32>()));
+		DeletedActorBoundsPairMap.Add(Actor->GetActorGuid(), TBoundsPair<F3DVector32>(*LastActorBounds, TBounds<F3DVector32>()));
 		CachedActorBoundsMap.Remove(Actor->GetActorGuid());
 	}
-	
-	AddSnapshot(ESnapshotType::Deleted, RemovedActorBoundsPairMap);
-	UpdateAndDrawNavMesh(RemovedActorBoundsPairMap);
+	AddSnapshot(ESnapshotType::Deleted, DeletedActorBoundsPairMap);
 }
 
 void UEditorNavMeshManager::OnDeleteActorsEnd()
 {
-	
+	UpdateAndDrawNavMesh(DeletedActorBoundsPairMap);
+	DeletedActorBoundsPairMap.Empty();
 }
 
 void UEditorNavMeshManager::OnActorSelectionChanged(const TArray<UObject*>& Actors, bool)

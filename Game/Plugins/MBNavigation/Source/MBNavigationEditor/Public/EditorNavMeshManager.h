@@ -165,13 +165,10 @@ private:
 	
 	TMap<FGuid, TWeakObjectPtr<const AActor>> StaticMeshActorsMap; // For quickly finding an actor using its GUID.
 	FActorBoundsMap CachedActorBoundsMap; // Caches the actor bounds.
-	
-	/** Holds the bounds of actors which are currently in moving state, these are updated every tick when an actor has moved.
-	 *  A snapshot is created when the movement stops. */
-	FActorBoundsMap MovingActorBoundsMap;
-	bool bIsMovingActors;
-	
+	FActorBoundsPairMap DeletedActorBoundsPairMap; // Actors to delete in OnDeleteActorsEnd.
+	FActorBoundsMap MovingActorBoundsMap; // Keeps track of the bounds of actors that are currently in a moving state ( holding the gizmo ).
 	UPROPERTY() TArray<const AActor*> SelectedActors;
+	bool bIsMovingActors;
 	bool bAddActorOccured;
 	
 	TArray<FUndoRedoSnapshot> UndoRedoSnapshots;

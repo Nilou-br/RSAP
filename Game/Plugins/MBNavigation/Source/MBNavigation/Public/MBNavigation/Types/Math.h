@@ -168,12 +168,12 @@ struct F3DVector32
 		return F3DVector32(FMath::Max(X, Other.X), FMath::Max(Y, Other.Y), FMath::Max(Z, Other.Z));
 	}
 
-	FORCEINLINE F3DVector32 operator+(const uint_fast32_t Value) const
+	FORCEINLINE F3DVector32 operator+(const int_fast32_t Value) const
 	{
 		return F3DVector32(X + Value, Y + Value, Z + Value);
 	}
 
-	FORCEINLINE F3DVector32 operator-(const uint_fast32_t Value) const
+	FORCEINLINE F3DVector32 operator-(const int_fast32_t Value) const
 	{
 		return F3DVector32(X - Value, Y - Value, Z - Value);
 	}
@@ -249,7 +249,7 @@ struct F3DVector32
 		return F3DVector32(InVector.X, InVector.Y, InVector.Z);
 	}
 
-	FORCEINLINE int32 GetMax() const
+	FORCEINLINE int32 GetLargestAxis() const
 	{
 		return FMath::Max(FMath::Max(X,Y), Z);
 	}
@@ -277,13 +277,14 @@ struct F3DVector32
 	explicit F3DVector32()
 		: X(0), Y(0), Z(0) {}
 
-	FORCEINLINE bool HasOverlapWithinExtent(const UWorld* World, const F3DVector32& Extent) const
+	FORCEINLINE bool HasOverlapWithinNodeExtent(const UWorld* World, const uint8 NodeLayerIndex) const
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE_STR("HasOverlapWithinExtent");
+		const FVector Extent = FVector(FNavMeshStatic::MortonOffsets[NodeLayerIndex]);
 		return FPhysicsInterface::GeomOverlapBlockingTest(
 			World,
-			FCollisionShape::MakeBox(Extent.ToVector()),
-			ToVector(),
+			FCollisionShape::MakeBox(Extent),
+			ToVector() + Extent,
 			FQuat::Identity,
 			ECollisionChannel::ECC_WorldStatic,
 			FCollisionQueryParams::DefaultQueryParam,

@@ -143,15 +143,15 @@ struct FNodeLookupData
  */
 struct FOctreeNode
 {
-	static constexpr uint_fast32_t BoolFilledMask = 1u << 30; // Filled boolean mask on the MortonCode
-	static constexpr uint_fast32_t BoolOccludedMask = 1u << 31; // Occluded boolean mask on the MortonCode
+	static constexpr uint_fast32_t BoolFilledMask = 1u << 30;
+	static constexpr uint_fast32_t BoolOccludedMask = 1u << 31;
 	static constexpr uint_fast32_t MortonMask = (1u << 30) - 1;
 	static constexpr int LayerShiftAmount[10] = {30, 30, 27, 24, 21, 18, 15, 12, 9, 6}; // todo change to make 30, 27, 24 etc...
 	static constexpr int ParentShiftAmount[10] = {30, 27, 24, 21, 18, 15, 12, 9, 6, 3};
 
 	uint_fast32_t MortonCode;
 	FOctreeNeighbours Neighbours;
-	uint8 ChunkBorder: 6; // todo might not be needed because can be tracked in navigation algo?
+	uint8 ChunkBorder: 6;
 	// todo 8 bits for dynamic index for each neighbour + child + parent???? 128 dynamic-objects a chunk (0 index / first bit is for the static octree)
 
 	FOctreeNode():
@@ -259,10 +259,10 @@ struct FOctreeNode
 		);
 	}
 
-	FORCEINLINE void Draw(const UWorld* World, const F3DVector32& ChunkLocation, const uint8 LayerIndex, const FColor Color = FColor::Black) const
+	FORCEINLINE void Draw(const UWorld* World, const F3DVector32& ChunkLocation, const uint8 LayerIndex, const FColor Color = FColor::Black, const uint32 Thickness = 0) const
 	{
 		const float NodeHalveSize = FNavMeshStatic::NodeHalveSizes[LayerIndex];
-		DrawDebugBox(World, F3DVector32(GetGlobalLocation(ChunkLocation)).ToVector()+NodeHalveSize, F3DVector32(NodeHalveSize).ToVector(), Color, true, -1, 0, 1);
+		DrawDebugBox(World, F3DVector32(GetGlobalLocation(ChunkLocation)).ToVector()+NodeHalveSize, F3DVector32(NodeHalveSize).ToVector(), Color, true, -1, 0, Thickness);
 	}
 };
 
@@ -327,22 +327,23 @@ struct FChunk
 	template<typename Func>
 	void ForEachChildOfNode(const FOctreeNode& Node, const uint8 LayerIndex, Func Callback) const
 	{
-		if(LayerIndex >= FNavMeshStatic::StaticDepth || !Node.IsFilled()) return;
+		if(!Node.IsFilled()) return;
+		
 		const uint8 ChildLayerIndex = LayerIndex+1;
 		const int_fast16_t ChildMortonOffset = FNavMeshStatic::MortonOffsets[ChildLayerIndex];
+		const F3DVector10 MortonLocation = Node.GetMortonLocation();
 		
-		const F3DVector10 ParentMortonLocation = Node.GetMortonLocation();
 		for (uint8 i = 0; i < 8; ++i)
 		{
-			const uint_fast16_t ChildMortonX = ParentMortonLocation.X + ((i & 1) ? ChildMortonOffset : 0);
-			const uint_fast16_t ChildMortonY = ParentMortonLocation.Y + ((i & 2) ? ChildMortonOffset : 0);
-			const uint_fast16_t ChildMortonZ = ParentMortonLocation.Z + ((i & 4) ? ChildMortonOffset : 0);
+			const uint_fast16_t ChildMortonX = MortonLocation.X + ((i & 1) ? ChildMortonOffset : 0);
+			const uint_fast16_t ChildMortonY = MortonLocation.Y + ((i & 2) ? ChildMortonOffset : 0);
+			const uint_fast16_t ChildMortonZ = MortonLocation.Z + ((i & 4) ? ChildMortonOffset : 0);
 
 			const F3DVector10 ChildMortonLocation = F3DVector10(ChildMortonX, ChildMortonY, ChildMortonZ);
 			const uint_fast32_t ChildMortonCode = ChildMortonLocation.ToMortonCode();
 			
 			const auto NodeIterator = Octrees[0]->Layers[ChildLayerIndex].find(ChildMortonCode);
-			Callback(&NodeIterator->second);
+			Callback(NodeIterator->second);
 		}
 	}
 };

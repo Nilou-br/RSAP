@@ -129,7 +129,7 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const uint8 Layer
 		if(const FVector DirectionToTarget = (NodeGlobalCenterLocation - CameraLocation).GetSafeNormal();
 			FVector::DotProduct(CameraForwardVector, DirectionToTarget))
 		{
-			DrawDebugBox(World, NodeGlobalCenterLocation, FVector(FNavMeshStatic::NodeHalveSizes[LayerIndex]), LayerColors[LayerIndex], true, -1, 0, 3 - (LayerIndex/3.5));
+			DrawDebugBox(World, NodeGlobalCenterLocation, FVector(FNavMeshStatic::NodeHalveSizes[LayerIndex]), LayerColors[LayerIndex], true, -1, 0, 2.5 - (LayerIndex/3.5));
 		}
 	}
 
