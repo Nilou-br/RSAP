@@ -193,15 +193,22 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const uint8 Layer
 			DrawDebugLine(World, NodeGlobalCenterLocation, NeighbourGlobalCenterLocation.ToVector(), FColor::White, true, -1, 11, 1);
 		}
 	}
-	
-	if(LayerIndex == FNavMeshStatic::StaticDepth || !Node->IsFilled()) return;
 
+	if(FNavMeshDebugSettings::bDisplayPaths && World->IsPlayInEditor())
+	{
+		if(FVector::Dist(CameraLocation, NodeGlobalCenterLocation) < 50)
+		{
+			DrawDebugString(World, NodeGlobalCenterLocation, FString::Printf(TEXT("%i"), Node->GetMortonCode()), nullptr, LayerColors[LayerIndex], -1, false, 1);
+		}
+	}
+
+	// Continue drawing the children if the node has any.
+	if(LayerIndex == FNavMeshStatic::StaticDepth || !Node->IsFilled()) return;
 	const F3DVector10 NodeLocalLocation = Node->GetLocalLocation();
 	const uint8 ChildLayerIndex = LayerIndex+1;
 	const int_fast16_t ChildMortonOffset = FNavMeshStatic::MortonOffsets[ChildLayerIndex];
 	for (uint8 i = 0; i < 8; ++i)
 	{
-		// Add the offset to certain children depending on their location in the parent.
 		const uint_fast16_t ChildX = NodeLocalLocation.X + ((i & 1) ? ChildMortonOffset : 0);
 		const uint_fast16_t ChildY = NodeLocalLocation.Y + ((i & 2) ? ChildMortonOffset : 0);
 		const uint_fast16_t ChildZ = NodeLocalLocation.Z + ((i & 4) ? ChildMortonOffset : 0);
