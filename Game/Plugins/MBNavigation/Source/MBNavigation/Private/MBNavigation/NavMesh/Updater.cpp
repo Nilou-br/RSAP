@@ -7,7 +7,11 @@
 DEFINE_LOG_CATEGORY(LogNavMeshUpdater)
 
 
-uint8 GetStartingLayer(const TBoundsPair<F3DVector32>& BoundsPair)
+/**
+ * Calculates the optimal starting layer used for rounding the bounds.
+ * This gives us a layer-index where the node-size for that layer fits at-least once inside the largest side of both bounds.
+ */
+uint8 CalculateOptimalStartingLayer(const TBoundsPair<F3DVector32>& BoundsPair)
 {
 	uint8 StartingLayer = FNavMeshStatic::StaticDepth;
 
@@ -24,6 +28,31 @@ uint8 GetStartingLayer(const TBoundsPair<F3DVector32>& BoundsPair)
 	}
 	
 	return StartingLayer;
+}
+
+enum EDirectionSteps // todo change name
+{
+	Skip,
+	AlwaysSkip, // todo change name
+	DontSkip
+};
+
+/**
+ * Calculate the steps the first and last node should take on each axis, for each layer, starting from the given LayerIndex.
+ * Use in conjunction with 'CalculateOptimalStartingLayer'.
+ *
+ * This method is a bit vague in its explanation.
+ * It basically gives a way of knowing what nodes we can skip, because they are not overlapping with the bounds.
+ */
+std::array<std::vector<EDirectionSteps>, 6> CalculateNodeStepsForBounds(const TBounds<F3DVector32>& Bounds, const uint8 StartingIndex)
+{
+	const TBounds<F3DVector32> RoundedBounds = Bounds.Round(StartingIndex);
+
+	for (int Index = StartingIndex; Index < FNavMeshStatic::StaticDepth; ++Index)
+	{
+		// -X
+		const uint_fast32_t MinX = RoundedBounds.Min.X;
+	}
 }
 
 void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<F3DVector32>>& BeforeAfterBoundsPairs)
@@ -74,7 +103,11 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<F3DVector32>>& Befor
 	for (const auto BoundsPair : BeforeAfterBoundsPairs)
 	{
 		// Get the layer-index used as the starting point for the overlap checks.
-		const uint8 StartingLayer = GetStartingLayer(BoundsPair);
+		const uint8 StartingLayer = CalculateOptimalStartingLayer(BoundsPair);
+		
+		// todo: currently only current-bounds, but check if also previous-bounds?
+		CalculateNodeStepsForBounds(BoundsPair.Current, StartingLayer);
+		
 		
 		ForEachChunk(BoundsPair, [&](FChunk* Chunk)
 		{
@@ -132,7 +165,6 @@ std::unordered_set<uint_fast32_t> FNavMeshUpdater::HandlePrevBounds(const FChunk
 	const TBounds<F3DVector32> GlobalPrevBounds = PrevBounds.ToGlobalSpace(Chunk->Location);
 	
 	std::unordered_set<uint_fast32_t> ParentsToCheck;
-	// todo: remaining bounds not fully correct when scaling actor.
 	for (const auto RemainingGlobalBounds : GlobalPrevBounds.GetNonOverlapping(GlobalCurrBounds))
 	{
 		UE_LOG(LogNavMeshUpdater, Log, TEXT("Clearing prev-bounds in parts..."));
@@ -216,6 +248,8 @@ std::unordered_set<uint_fast32_t> FNavMeshUpdater::HandleCurrentBounds(const FCh
 		const uint_fast32_t MortonCode = MortonLocation.ToMortonCode();
 		const F3DVector32 GlobalLocation = F3DVector32::GetGlobalFromMorton(MortonLocation, Chunk->Location);
 		const bool bHasOverlap = GlobalLocation.HasOverlapWithinNodeExtent(World, LayerIndex);
+
+		DrawDebugBox(World, GlobalLocation.ToVector() + FNavMeshStatic::NodeHalveSizes[LayerIndex], FVector(FNavMeshStatic::NodeHalveSizes[LayerIndex]), FColor::Black, true);
 
 		// Get node.
 		auto NodeIterator = Chunk->Octrees[0]->Layers[LayerIndex].find(MortonCode);
