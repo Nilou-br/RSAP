@@ -2,16 +2,14 @@
 
 #include "MBNavigation/NavMesh/Updater.h"
 
-DEFINE_LOG_CATEGORY(LogNavMeshUpdater)
+#include <set>
 
+DEFINE_LOG_CATEGORY(LogNavMeshUpdater)
 
 
 uint8 GetStartingLayer(const TBoundsPair<F3DVector32>& BoundsPair)
 {
 	uint8 StartingLayer = FNavMeshStatic::StaticDepth;
-
-	// We only actually need one of the bounds in this pair, so just use current.
-	const TBounds<F3DVector32> Bounds = BoundsPair.Current;
 
 	// Get the largest side of the bounds-pair. One of the bounds could be invalid when undo/redoing to a state where the actor does not exist.
 	const int32 MaxSide = BoundsPair.Current.IsValid()
@@ -35,27 +33,41 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<F3DVector32>>& Befor
 	const auto StartTime = std::chrono::high_resolution_clock::now();
 #endif
 
-	// For-each chunk that these bounds are inside of.
-	const auto ForEachChunk = [&](const TBounds<F3DVector32>& Bounds, auto Callback)
+	// Callback for-each chunk that the given bounds-pair is inside of.
+	const auto ForEachChunk = [&NavMeshPtr=NavMeshPtr, &World=World](const TBoundsPair<F3DVector32>& BoundsPair, auto Callback)
 	{
-		const F3DVector32 ChunkMin = Bounds.Min & FNavMeshStatic::ChunkMask;
-		const F3DVector32 ChunkMax = Bounds.Max & FNavMeshStatic::ChunkMask;
-		for (int32 X = ChunkMin.X; X <= ChunkMax.X; X+=FNavMeshStatic::ChunkSize)
+		std::set<uint64_t> ChunkKeys;
+		
+		// Get the affected chunks from both the previous and current bounds.
+		const auto GetChunkKeys = [&ChunkKeys, &World=World](const TBounds<F3DVector32>& Bounds)
 		{
-			for (int32 Y = ChunkMin.Y; Y <= ChunkMax.Y; Y+=FNavMeshStatic::ChunkSize)
+			const F3DVector32 ChunkMin = Bounds.Min & FNavMeshStatic::ChunkMask;
+			const F3DVector32 ChunkMax = Bounds.Max & FNavMeshStatic::ChunkMask;
+			for (int32 X = ChunkMin.X; X <= ChunkMax.X; X+=FNavMeshStatic::ChunkSize)
 			{
-				for (int32 Z = ChunkMin.Z; Z <= ChunkMax.Z; Z+=FNavMeshStatic::ChunkSize)
+				for (int32 Y = ChunkMin.Y; Y <= ChunkMax.Y; Y+=FNavMeshStatic::ChunkSize)
 				{
-					const F3DVector32 ChunkLocation = F3DVector32(X, Y, Z);
-					auto ChunkIterator = NavMeshPtr->find(ChunkLocation.ToKey());
-					if(ChunkIterator == NavMeshPtr->end())
+					for (int32 Z = ChunkMin.Z; Z <= ChunkMax.Z; Z+=FNavMeshStatic::ChunkSize)
 					{
-						// Init new one if it does not exists yet.
-						std::tie(ChunkIterator, std::ignore) = NavMeshPtr->emplace(ChunkLocation.ToKey(), FChunk(ChunkLocation));
+						const F3DVector32 ChunkLocation = F3DVector32(X, Y, Z);
+						if(!Bounds.HasSimpleOverlap(TBounds(ChunkLocation, ChunkLocation+FNavMeshStatic::ChunkSize))) continue;
+						ChunkKeys.insert(ChunkLocation.ToKey());
 					}
-					Callback(&ChunkIterator->second);
 				}
 			}
+		};
+		GetChunkKeys(BoundsPair.Previous);
+		GetChunkKeys(BoundsPair.Current);
+
+		for (const auto ChunkKey : ChunkKeys)
+		{
+			auto ChunkIterator = NavMeshPtr->find(ChunkKey);
+			if(ChunkIterator == NavMeshPtr->end())
+			{
+				// Initialize new chunk if it does not exists yet.
+				std::tie(ChunkIterator, std::ignore) = NavMeshPtr->emplace(ChunkKey, FChunk(F3DVector32::FromKey(ChunkKey)));
+			}
+			Callback(&ChunkIterator->second);
 		}
 	};
 	
@@ -64,14 +76,14 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<F3DVector32>>& Befor
 		// Get the layer-index used as the starting point for the overlap checks.
 		const uint8 StartingLayer = GetStartingLayer(BoundsPair);
 		
-		ForEachChunk(BoundsPair.GetTotalBounds(), [&](FChunk* Chunk)
+		ForEachChunk(BoundsPair, [&](FChunk* Chunk)
 		{
 			TBounds<F3DVector32> ChunkBounds = Chunk->GetBounds();
 			
 			// These bounds are the remainder of an intersection between the bounds and the chunk.
-			const TBounds<F3DVector32> PrevBounds = BoundsPair.Previous.Overlaps(ChunkBounds)
+			const TBounds<F3DVector32> PrevBounds = BoundsPair.Previous.HasSimpleOverlap(ChunkBounds)
 				? BoundsPair.Previous.GetIntersection(ChunkBounds) : TBounds<F3DVector32>();
-			const TBounds<F3DVector32> CurrBounds = BoundsPair.Current.Overlaps(ChunkBounds)
+			const TBounds<F3DVector32> CurrBounds = BoundsPair.Current.HasSimpleOverlap(ChunkBounds)
 				? BoundsPair.Current.GetIntersection(ChunkBounds) : TBounds<F3DVector32>();
 
 			// Convert them from global to morton-space, and round them to the nearest multiple of the node-size of this layer.
@@ -92,7 +104,7 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<F3DVector32>>& Befor
 			ParentsToCheck.erase(OutParentsCreated.begin(), OutParentsCreated.end());
 			
 			// Check every parent that have had their children affected.
-			ClearParents(Chunk, ParentsToCheck, StartingLayer);
+			if(StartingLayer > 0) ClearParents(Chunk, ParentsToCheck, StartingLayer-1);
 		});
 	}
 
@@ -110,7 +122,7 @@ std::unordered_set<uint_fast32_t> FNavMeshUpdater::HandlePrevBounds(const FChunk
 	// If current-bounds are not valid, then we don't need to get any remainder.
 	if(!CurrBounds.IsValid())
 	{
-		PrevBounds.Draw(World, Chunk->Location, FColor::Red);
+		UE_LOG(LogNavMeshUpdater, Log, TEXT("Clearing prev-bounds whole..."));
 		return ClearUnoccludedBounds(Chunk, PrevBounds, LayerIndex);
 	}
 
@@ -123,7 +135,7 @@ std::unordered_set<uint_fast32_t> FNavMeshUpdater::HandlePrevBounds(const FChunk
 	// todo: remaining bounds not fully correct when scaling actor.
 	for (const auto RemainingGlobalBounds : GlobalPrevBounds.GetNonOverlapping(GlobalCurrBounds))
 	{
-		RemainingGlobalBounds.Draw(World, FColor::Red);
+		UE_LOG(LogNavMeshUpdater, Log, TEXT("Clearing prev-bounds in parts..."));
 		const TBounds<F3DVector10> RemainingMortonBounds = RemainingGlobalBounds.ToMortonSpace(Chunk->Location);
 		const std::unordered_set<uint_fast32_t> Result = ClearUnoccludedBounds(Chunk, RemainingMortonBounds, LayerIndex);
 		ParentsToCheck.insert(Result.begin(), Result.end());
@@ -196,6 +208,7 @@ std::unordered_set<uint_fast32_t> FNavMeshUpdater::ClearUnoccludedBounds(const F
 std::unordered_set<uint_fast32_t> FNavMeshUpdater::HandleCurrentBounds(const FChunk* Chunk, const TBounds<F3DVector10> CurrBounds, const uint8 LayerIndex, std::unordered_set<uint_fast32_t>& OutCreatedParents)
 {
 	if(!CurrBounds.IsValid()) return{};
+	CurrBounds.Draw(World, Chunk->Location, FColor::Green);
 	
 	std::unordered_set<uint_fast32_t> ParentsToCheck;
 	CurrBounds.ForEachPoint(FNavMeshStatic::MortonOffsets[LayerIndex], [&](const F3DVector10 MortonLocation) -> void
@@ -388,11 +401,8 @@ void FNavMeshUpdater::ClearAllChildrenOfNode(const FChunk* Chunk, const FOctreeN
 }
 
 // OPTIMIZE
-void FNavMeshUpdater::ClearParents(const FChunk* Chunk, const std::unordered_set<uint_fast32_t>& ParentMortonCodes, const uint8 ChildLayerIndex)
+void FNavMeshUpdater::ClearParents(const FChunk* Chunk, const std::unordered_set<uint_fast32_t>& ParentMortonCodes, const uint8 ParentLayerIndex)
 {
-	if(ChildLayerIndex == 0) return;
-	const uint8 ParentLayerIndex = ChildLayerIndex-1;
-
 	std::unordered_set<uint_fast32_t> GrandParentMortonCodes;
 	for (auto ParentMortonCode : ParentMortonCodes)
 	{
@@ -412,11 +422,19 @@ void FNavMeshUpdater::ClearParents(const FChunk* Chunk, const std::unordered_set
 		ParentNode.SetOccluded(false);
 		for (auto ChildMortonCode : ChildMortonCodes)
 		{
-			Chunk->Octrees[0]->Layers[ChildLayerIndex].erase(ChildMortonCode);
+			Chunk->Octrees[0]->Layers[ParentLayerIndex+1].erase(ChildMortonCode);
 		}
 
 		GrandParentMortonCodes.insert(ParentNode.GetParentMortonCode(ParentLayerIndex));
 	}
+	if(GrandParentMortonCodes.empty()) return;
+	
+	if(ParentLayerIndex > 0)
+	{
+		ClearParents(Chunk, GrandParentMortonCodes, ParentLayerIndex-1);
+		return;
+	}
 
-	if(!GrandParentMortonCodes.empty()) ClearParents(Chunk, GrandParentMortonCodes, ParentLayerIndex);
+	// Remove chunk if we are on the root node.
+	NavMeshPtr->erase(Chunk->Location.ToKey());
 }

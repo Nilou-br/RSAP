@@ -280,7 +280,8 @@ struct F3DVector32
 	FORCEINLINE bool HasOverlapWithinNodeExtent(const UWorld* World, const uint8 NodeLayerIndex) const
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE_STR("HasOverlapWithinExtent");
-		const FVector Extent = FVector(FNavMeshStatic::MortonOffsets[NodeLayerIndex]);
+		const FVector Extent = FVector(FNavMeshStatic::NodeHalveSizes[NodeLayerIndex]);
+		//DrawDebugBox(World, ToVector()+Extent, Extent, FColor::Yellow, true, -1, 0, 5);
 		return FPhysicsInterface::GeomOverlapBlockingTest(
 			World,
 			FCollisionShape::MakeBox(Extent),
@@ -403,7 +404,7 @@ struct TBounds
 	TArray<TBounds<F3DVector32>> GetNonOverlapping(const TBounds<F3DVector32>& Other) const
 	{
 		static_assert(std::is_same_v<VectorType, F3DVector32>, "GetNonOverlapping only supports F3DVector32 due to the nature of morton-codes.");
-		if(!Overlaps(Other)) return { *this };
+		if(!HasSimpleOverlap(Other)) return { *this };
 		
 		TArray<TBounds> BoundsList;
 		TBounds RemainingBounds = *this;
@@ -442,8 +443,8 @@ struct TBounds
 		return BoundsList;
 	}
 
-	// Check if these bounds are overlapping with another.
-	FORCEINLINE bool Overlaps(const TBounds& Other) const
+	// Used to check if these bounds are overlapping with another.
+	FORCEINLINE bool HasSimpleOverlap(const TBounds& Other) const
 	{
 		return	Max.X > Other.Min.X && Min.X < Other.Max.X &&
 				Max.Y > Other.Min.Y && Min.Y < Other.Max.Y &&
