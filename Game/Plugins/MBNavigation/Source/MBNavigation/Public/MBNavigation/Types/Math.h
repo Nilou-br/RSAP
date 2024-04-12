@@ -378,11 +378,13 @@ struct TBounds
 				Min.X == 0 && Min.Y == 0 && Min.Z == 0;
 	}
 	
-	template<typename T = VectorType>
-	FORCEINLINE auto Round(const uint8 LayerIndex) const -> std::enable_if_t<std::is_same_v<T, F3DVector32>, TBounds<F3DVector32>>
-	{
-		return *this & FNavMeshStatic::MortonMasks[LayerIndex];
-	}
+	// template<typename T = VectorType>
+	// FORCEINLINE auto Round(const uint8 LayerIndex) const -> std::enable_if_t<std::is_same_v<T, F3DVector32>, TBounds<F3DVector32>>
+	// {
+	// 	TBounds<F3DVector32> Rounded = *this & FNavMeshStatic::NodeSizes[LayerIndex];
+	// 	Rounded.Max = Rounded.Max + FNavMeshStatic::NodeSizes[LayerIndex];
+	// 	return *this & FNavMeshStatic::MortonMasks[LayerIndex];
+	// }
 
 	// F3DVector10 version needs to decrement the Max bounds.
 	template<typename T = VectorType>

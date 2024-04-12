@@ -128,7 +128,7 @@ struct FNodeLookupData
 };
 
 /**
- * 128 bit node used in the 3D navigation-mesh for pathfinding.
+ * *x* bit node used in the 3D navigation-mesh for pathfinding.
  *
  * - MortonCode: represents its location in a single value.
  *   Allows for memory coherency, and bitwise-operations to quickly calculate neighbours etc.

@@ -30,29 +30,56 @@ uint8 CalculateOptimalStartingLayer(const TBoundsPair<F3DVector32>& BoundsPair)
 	return StartingLayer;
 }
 
-enum EDirectionSteps // todo change name
+enum ENodeStep // todo change name?
 {
+	DontSkip,
 	Skip,
-	AlwaysSkip, // todo change name
-	DontSkip
+	AlwaysSkip,
 };
+
+typedef std::array<std::vector<ENodeStep>, 6> FDirectionalNodeSteps;
 
 /**
  * Calculate the steps the first and last node should take on each axis, for each layer, starting from the given LayerIndex.
  * Use in conjunction with 'CalculateOptimalStartingLayer'.
  *
- * This method is a bit vague in its explanation.
- * It basically gives a way of knowing what nodes we can skip, because they are not overlapping with the bounds.
+ * This method is a bit vague in its explanation,
+ * but it basically gives a way of knowing what nodes we can skip, because they are not overlapping with the bounds, and do not require world-overlap checks, which is slow.
  */
-std::array<std::vector<EDirectionSteps>, 6> CalculateNodeStepsForBounds(const TBounds<F3DVector32>& Bounds, const uint8 StartingIndex)
+FDirectionalNodeSteps CalculateNodeStepsForBounds(const TBounds<F3DVector10>& Bounds, const TBounds<F3DVector10>& RoundedBounds, const uint8 StartingIndex)
 {
-	const TBounds<F3DVector32> RoundedBounds = Bounds.Round(StartingIndex);
-
-	for (int Index = StartingIndex; Index < FNavMeshStatic::StaticDepth; ++Index)
+	FDirectionalNodeSteps NodeSteps;
+	const auto NewNodeStep = [&NodeSteps](const uint8 DirectionIndex, const uint8 BitIndex, uint_fast32_t& Diff, const uint8 ShiftValue)
 	{
-		// -X
-		const uint_fast32_t MinX = RoundedBounds.Min.X;
+		if(!Diff || Diff == FNavMeshStatic::MortonOffsets[BitIndex]) { // If there is no difference for any axis value, or the current node-size fits the remaining diff, then we can stop checking this node, and all its children, entirely.
+			NodeSteps[DirectionIndex].push_back(AlwaysSkip);
+			if(Diff) Diff = 0;
+		} else { // Else we need to check if a node can be skipped, which can be calculated quickly by checking the bits in the difference.
+			const uint16 BitIndexValue = Diff & FNavMeshStatic::MortonOffsets[BitIndex]; // The value of the bit we want to check.
+			NodeSteps[DirectionIndex].push_back(static_cast<ENodeStep>(BitIndexValue >> ShiftValue)); // Shift this value to check if it is either 0 or 1, which can be cast to the corresponding enum value.
+			Diff -= BitIndexValue; // Decrements the difference if the bit was set, which only sets the checked bit to 0.
+		}
+	};
+	
+	uint_fast32_t DiffMinX = Bounds.Min.X - RoundedBounds.Min.X;
+	uint_fast32_t DiffMinY = Bounds.Min.Y - RoundedBounds.Min.Y;
+	uint_fast32_t DiffMinZ = Bounds.Min.Z - RoundedBounds.Min.Z;
+	uint_fast32_t DiffMaxX = RoundedBounds.Max.X - Bounds.Max.X;
+	uint_fast32_t DiffMaxY = RoundedBounds.Max.Y - Bounds.Max.Y;
+	uint_fast32_t DiffMaxZ = RoundedBounds.Max.Z - Bounds.Max.Z;
+	
+	for (int Index = StartingIndex; Index <= FNavMeshStatic::StaticDepth; ++Index)
+	{
+		const uint8 ShiftValue = 9 - Index; // To get the bit we want to check for each axis.
+		NewNodeStep(0, Index, DiffMinX, ShiftValue); // -X
+		NewNodeStep(1, Index, DiffMinY, ShiftValue); // -Y
+		NewNodeStep(2, Index, DiffMinZ, ShiftValue); // -Z
+		NewNodeStep(3, Index, DiffMaxX, ShiftValue); // +X
+		NewNodeStep(4, Index, DiffMaxY, ShiftValue); // +Y
+		NewNodeStep(5, Index, DiffMaxZ, ShiftValue); // +Z
 	}
+
+	return NodeSteps;
 }
 
 void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<F3DVector32>>& BeforeAfterBoundsPairs)
@@ -105,23 +132,22 @@ void FNavMeshUpdater::UpdateStatic(const TArray<TBoundsPair<F3DVector32>>& Befor
 		// Get the layer-index used as the starting point for the overlap checks.
 		const uint8 StartingLayer = CalculateOptimalStartingLayer(BoundsPair);
 		
-		// todo: currently only current-bounds, but check if also previous-bounds?
-		CalculateNodeStepsForBounds(BoundsPair.Current, StartingLayer);
-		
-		
 		ForEachChunk(BoundsPair, [&](FChunk* Chunk)
 		{
 			TBounds<F3DVector32> ChunkBounds = Chunk->GetBounds();
 			
 			// These bounds are the remainder of an intersection between the bounds and the chunk.
-			const TBounds<F3DVector32> PrevBounds = BoundsPair.Previous.HasSimpleOverlap(ChunkBounds)
-				? BoundsPair.Previous.GetIntersection(ChunkBounds) : TBounds<F3DVector32>();
-			const TBounds<F3DVector32> CurrBounds = BoundsPair.Current.HasSimpleOverlap(ChunkBounds)
-				? BoundsPair.Current.GetIntersection(ChunkBounds) : TBounds<F3DVector32>();
+			const TBounds<F3DVector10> PrevBounds = BoundsPair.Previous.HasSimpleOverlap(ChunkBounds)
+				? BoundsPair.Previous.GetIntersection(ChunkBounds).ToMortonSpace(Chunk->Location) : TBounds<F3DVector10>();
+			const TBounds<F3DVector10> CurrBounds = BoundsPair.Current.HasSimpleOverlap(ChunkBounds)
+				? BoundsPair.Current.GetIntersection(ChunkBounds).ToMortonSpace(Chunk->Location) : TBounds<F3DVector10>();
 
 			// Convert them from global to morton-space, and round them to the nearest multiple of the node-size of this layer.
-			const TBounds<F3DVector10> PrevRoundedBounds = PrevBounds.ToMortonSpace(Chunk->Location).Round(StartingLayer);
-			const TBounds<F3DVector10> CurrRoundedBounds = CurrBounds.ToMortonSpace(Chunk->Location).Round(StartingLayer);
+			const TBounds<F3DVector10> PrevRoundedBounds = PrevBounds.Round(StartingLayer);
+			const TBounds<F3DVector10> CurrRoundedBounds = CurrBounds.Round(StartingLayer);
+
+			// todo: currently only current-bounds, but check if also previous-bounds?
+			FDirectionalNodeSteps NodeSteps = CalculateNodeStepsForBounds(CurrBounds, CurrRoundedBounds, StartingLayer);
 
 			// Clear any unoccluded nodes on the previous bounds.
 			std::unordered_set<uint_fast32_t> ParentsToCheck = HandlePrevBounds(Chunk, PrevRoundedBounds, CurrRoundedBounds, StartingLayer);
