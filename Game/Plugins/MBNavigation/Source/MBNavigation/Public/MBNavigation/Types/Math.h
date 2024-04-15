@@ -378,21 +378,26 @@ struct TBounds
 				Min.X == 0 && Min.Y == 0 && Min.Z == 0;
 	}
 	
-	// template<typename T = VectorType>
-	// FORCEINLINE auto Round(const uint8 LayerIndex) const -> std::enable_if_t<std::is_same_v<T, F3DVector32>, TBounds<F3DVector32>>
-	// {
-	// 	TBounds<F3DVector32> Rounded = *this & FNavMeshStatic::NodeSizes[LayerIndex];
-	// 	Rounded.Max = Rounded.Max + FNavMeshStatic::NodeSizes[LayerIndex];
-	// 	return *this & FNavMeshStatic::MortonMasks[LayerIndex];
-	// }
-
-	// F3DVector10 version needs to decrement the Max bounds.
 	template<typename T = VectorType>
 	FORCEINLINE auto Round(const uint8 LayerIndex) const -> std::enable_if_t<std::is_same_v<T, F3DVector10>, TBounds<F3DVector10>>
 	{
 		TBounds<F3DVector10> Rounded = *this & FNavMeshStatic::MortonMasks[LayerIndex];
 		Rounded.Max = Rounded.Max + FNavMeshStatic::MortonOffsets[LayerIndex] - 1;
 		return Rounded;
+	}
+
+	template<typename T = VectorType>
+	auto GetMortonCodesWithin(const uint8 LayerIndex) const -> std::enable_if_t<std::is_same_v<T, F3DVector10>, TArray<uint_fast32_t>>
+	{
+		TArray<uint_fast32_t> MortonCodes;
+		for (uint_fast16_t X = Min.X; X < Max.X; X+=FNavMeshStatic::MortonOffsets[LayerIndex]) {
+			for (uint_fast16_t Y = Min.Y; Y < Max.Y; Y+=FNavMeshStatic::MortonOffsets[LayerIndex]) {
+				for (uint_fast16_t Z = Min.Z; Z < Max.Z; Z+=FNavMeshStatic::MortonOffsets[LayerIndex]) {
+					MortonCodes.Add(F3DVector10::ToMortonCode(X, Y, Z));
+				}
+			}
+		}
+		return MortonCodes;
 	}
 
 	// Returns the part of the bounds that intersects with another.
@@ -409,88 +414,72 @@ struct TBounds
 		return TBounds(ClampedMin, ClampedMax, bIsValid);
 	}
 
-	// Gets the remaining parts of the bounds that are not overlapping with the given bounds. 
-	TArray<TBounds<F3DVector32>> GetNonOverlapping(const TBounds<F3DVector32>& Other) const
+	// Gets the remaining parts of the bounds that are not overlapping with the given bounds.
+	// only supports F3DVector32 due to the nature of morton-codes.
+	template<typename T = VectorType>
+	auto GetNonOverlapping(const TBounds<F3DVector32>& Other) const -> std::enable_if_t<std::is_same_v<T, F3DVector32>, TArray<TBounds<F3DVector32>>>
 	{
-		static_assert(std::is_same_v<VectorType, F3DVector32>, "GetNonOverlapping only supports F3DVector32 due to the nature of morton-codes.");
 		if(!HasSimpleOverlap(Other)) return { *this };
-		
 		TArray<TBounds> BoundsList;
 		TBounds RemainingBounds = *this;
-
-		if(Max.X > Other.Max.X)
-		{
+		
+		if(Max.X > Other.Max.X){ // X
 			BoundsList.Emplace(VectorType(Other.Max.X, RemainingBounds.Min.Y, RemainingBounds.Min.Z), RemainingBounds.Max);
 			RemainingBounds.Max.X = Other.Max.X;
-		}
-		if(Min.X < Other.Min.X)
-		{
+		}if(Min.X < Other.Min.X){
 			BoundsList.Emplace(RemainingBounds.Min, VectorType(Other.Min.X, RemainingBounds.Max.Y, RemainingBounds.Max.Z));
 			RemainingBounds.Min.X = Other.Min.X;
-		}
-		
-		if(Max.Y > Other.Max.Y)
-		{
+		}if(Max.Y > Other.Max.Y){ // Y
 			BoundsList.Emplace(VectorType(RemainingBounds.Min.X, Other.Max.Y, RemainingBounds.Min.Z), RemainingBounds.Max);
 			RemainingBounds.Max.Y = Other.Max.Y;
-		}
-		if(Min.Y < Other.Min.Y)
-		{
+		}if(Min.Y < Other.Min.Y){
 			BoundsList.Emplace(RemainingBounds.Min, VectorType(RemainingBounds.Max.X, Other.Min.Y, RemainingBounds.Max.Z));
 			RemainingBounds.Min.Y = Other.Min.Y;
-		}
-		
-		if(Max.Z > Other.Max.Z)
-		{
+		}if(Max.Z > Other.Max.Z){ // Z
 			BoundsList.Emplace(VectorType(RemainingBounds.Min.X, RemainingBounds.Min.Y, Other.Max.Z), RemainingBounds.Max);
-		}
-		if(Min.Z < Other.Min.Z)
-		{
+		}if(Min.Z < Other.Min.Z) {
 			BoundsList.Emplace(RemainingBounds.Min, VectorType(RemainingBounds.Max.X, RemainingBounds.Max.Y, Other.Min.Z));
 		}
-
+		
 		return BoundsList;
 	}
 
 	// Used to check if these bounds are overlapping with another.
-	FORCEINLINE bool HasSimpleOverlap(const TBounds& Other) const
+	template<typename T = VectorType>
+	FORCEINLINE auto HasSimpleOverlap(const TBounds<F3DVector32>& Other) const -> std::enable_if_t<std::is_same_v<T, F3DVector32>, bool>
 	{
 		return	Max.X > Other.Min.X && Min.X < Other.Max.X &&
 				Max.Y > Other.Min.Y && Min.Y < Other.Max.Y &&
 				Max.Z > Other.Min.Z && Min.Z < Other.Max.Z;
 	}
 
-	FORCEINLINE TBounds<F3DVector10> ToMortonSpace(const F3DVector32& ChunkLocation) const
+	template<typename T = VectorType>
+	FORCEINLINE auto ToMortonSpace(const F3DVector32& ChunkLocation) const -> std::enable_if_t<std::is_same_v<T, F3DVector32>, TBounds<F3DVector10>>
 	{
-		static_assert(std::is_same_v<VectorType, F3DVector32>, "TBounds::ToMortonSpace is only supported for F3DVector32");
-		
 		const F3DVector10 LocalMin = ( Min-ChunkLocation << FNavMeshStatic::VoxelSizeExponent).ToVector10();
 		const F3DVector10 LocalMax = ((Max-ChunkLocation << FNavMeshStatic::VoxelSizeExponent) - FNavMeshStatic::SmallestNodeSize).ToVector10();
 		return TBounds<F3DVector10>(LocalMin, LocalMax, IsValid());
 	}
 
-	FORCEINLINE TBounds<F3DVector32> ToGlobalSpace(const F3DVector32& ChunkLocation) const
+	template<typename T = VectorType>
+	FORCEINLINE auto ToGlobalSpace(const F3DVector32& ChunkLocation) const -> std::enable_if_t<std::is_same_v<T, F3DVector10>, TBounds<F3DVector32>>
 	{
-		static_assert(std::is_same_v<VectorType, F3DVector10>, "TBounds::ToGlobalSpace is only supported for F3DVector10");
-		
 		const F3DVector32 LocalMin = (F3DVector32(Min) >> FNavMeshStatic::VoxelSizeExponent) + ChunkLocation;
 		const F3DVector32 LocalMax = ((F3DVector32(Max) + FNavMeshStatic::SmallestNodeSize) >> FNavMeshStatic::VoxelSizeExponent) + ChunkLocation;
 		return TBounds<F3DVector32>(LocalMin, LocalMax, IsValid());
 	}
 
-	// F3DVector32 Version.
-	FORCEINLINE void Draw(const UWorld* World, const FColor Color = FColor::Black) const
+	template<typename T = VectorType>
+	FORCEINLINE auto Draw(const UWorld* World, const FColor Color = FColor::Black) const -> std::enable_if_t<std::is_same_v<T, F3DVector32>, void>
 	{
-		static_assert(std::is_same_v<VectorType, F3DVector32>, "Wrong overload used for TBounds::Draw. Call the F3DVector10 version instead.");
 		const F3DVector32 Center = (Min + Max) >> 1;
 		const F3DVector32 Extents = (Max - Min) >> 1;
 		DrawDebugBox(World, Center.ToVector(), Extents.ToVector(), Color, true, -1, 0, 1);
 	}
 
-	// F3DVector10 Version.
-	FORCEINLINE void Draw(const UWorld* World, const F3DVector32& ChunkLocation, const FColor Color = FColor::Black) const
+	template<typename T = VectorType>
+	FORCEINLINE auto Draw(const UWorld* World, const F3DVector32& ChunkLocation, const FColor Color = FColor::Black) const -> std::enable_if_t<std::is_same_v<T, F3DVector10>, void>
 	{
-		static_assert(std::is_same_v<VectorType, F3DVector10>, "Wrong overload used for TBounds::Draw. Call the F3DVector32 version instead.");
 		ToGlobalSpace(ChunkLocation).Draw(World, Color);
 	}
 
@@ -498,9 +487,9 @@ struct TBounds
 	FORCEINLINE F3DVector32 GetExtents() const { return Max-Min >> 1; }
 	FORCEINLINE F3DVector32 GetLengths() const { return F3DVector32(Max.X - Min.X, Max.Y - Min.Y, Max.Z - Min.Z); }
 
-	FORCEINLINE bool HasOverlap(const UWorld* World) const
+	template<typename T = VectorType>
+	FORCEINLINE auto HasOverlap(const UWorld* World) const -> std::enable_if_t<std::is_same_v<T, F3DVector32>, bool>
 	{
-		static_assert(std::is_same_v<VectorType, F3DVector32>, "TBounds::HasOverlap is only supported for F3DVector32");
 		TRACE_CPUPROFILER_EVENT_SCOPE_STR("TBounds Has-Overlap");
 		return FPhysicsInterface::GeomOverlapBlockingTest(
 			World,
