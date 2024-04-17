@@ -141,7 +141,7 @@ struct F3DVector32
 		return (Encode(X) << 42) | (Encode(Y) << 21) | Encode(Z);
 	}
 
-	// Creates a F3DVector32 from a generated Key.
+	// Creates an F3DVector32 from a generated Key.
 	static FORCEINLINE F3DVector32 FromKey(const uint64_t Key) {
 		auto Decode = [](const uint64_t Val) -> int_fast32_t {
 			int_fast32_t Result = Val & 0xFFFFF;
@@ -233,7 +233,7 @@ struct F3DVector32
 		return FVector(X, Y, Z);
 	}
 
-	static F3DVector32 GetGlobalFromMorton(const F3DVector10 MortonLocation, const F3DVector32& ChunkLocation)
+	static F3DVector32 FromMortonVector(const F3DVector10 MortonLocation, const F3DVector32& ChunkLocation)
 	{
 		return ChunkLocation + (F3DVector32(MortonLocation) << FNavMeshStatic::VoxelSizeExponent);
 	}
@@ -281,7 +281,7 @@ struct F3DVector32
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE_STR("HasOverlapWithinExtent");
 		const FVector Extent = FVector(FNavMeshStatic::NodeHalveSizes[NodeLayerIndex]);
-		//DrawDebugBox(World, ToVector()+Extent, Extent, FColor::Yellow, true, -1, 0, 5);
+		// DrawDebugBox(World, ToVector()+Extent, Extent, FColor::Black, true, -1, 0, 2);
 		return FPhysicsInterface::GeomOverlapBlockingTest(
 			World,
 			FCollisionShape::MakeBox(Extent),

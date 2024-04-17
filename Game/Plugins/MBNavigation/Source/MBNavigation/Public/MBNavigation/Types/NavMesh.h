@@ -248,6 +248,7 @@ struct FOctreeNode
 	FORCEINLINE bool HasOverlap(const UWorld* World, const F3DVector32& ChunkLocation, const uint8 LayerIndex) const
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE_STR("Node Has-Overlap");
+		// if(LayerIndex == 5) DrawDebugBox(World, GetGlobalLocation(ChunkLocation).ToVector() + FNavMeshStatic::NodeHalveSizes[LayerIndex], FVector(FNavMeshStatic::NodeHalveSizes[LayerIndex]), FColor::Black, true, -1, 0, 2); // Test for starting-layer being 5
 		return FPhysicsInterface::GeomOverlapBlockingTest(
 			World,
 			FNavMeshStatic::CollisionBoxes[LayerIndex],
@@ -324,6 +325,7 @@ struct FChunk
 		return TBounds(Location, Location+FNavMeshStatic::ChunkSize);
 	}
 
+	// Todo move somewhere else, maybe FOctree?
 	template<typename Func>
 	void ForEachChildOfNode(const FOctreeNode& Node, const uint8 LayerIndex, Func Callback) const
 	{
@@ -348,7 +350,9 @@ struct FChunk
 	}
 };
 
-// The Navigation-Mesh is a hashmap of Chunks.
-// typedef std::map<uint_fast64_t, FChunk> FNavMesh;
+// The Navigation-Mesh is a hashmap of Chunks, where each chunk can be found using a uint64 key.
+// The key is the location of the chunk divided by the chunk-size ( F3DVector32::ToKey ).
 typedef ankerl::unordered_dense::map<uint_fast64_t, FChunk> FNavMesh;
 typedef std::shared_ptr<FNavMesh> FNavMeshPtr;
+
+// typedef std::map<uint_fast64_t, FChunk> FNavMesh;
