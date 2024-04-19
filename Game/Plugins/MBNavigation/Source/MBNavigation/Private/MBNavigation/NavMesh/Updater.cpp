@@ -55,37 +55,34 @@ namespace ENodeUpdate
 TArray<TPair<uint_fast32_t, ENodeUpdate::Type>> GetMortonCodesToUpdate(const UWorld* World, const FChunk* Chunk, const TBoundsPair<F3DVector32>& BoundsPair, const uint8 StartingLayerIdx)
 {
 	TArray<TPair<uint_fast32_t, ENodeUpdate::Type>> MortonUpdatePairs;
-	const TBounds<F3DVector32> PreviousBounds = BoundsPair.Previous;
-	const TBounds<F3DVector32> CurrentBounds = BoundsPair.Current;
 
-	if(PreviousBounds.IsValid())
+	// Convert the bounds to morton-space, and round them to the nearest multiple of the node-size of the starting-layer.
+	const TBounds<F3DVector10> PreviousRoundedBounds = BoundsPair.Previous.ToMortonSpace(Chunk->Location).Round(StartingLayerIdx);
+	const TBounds<F3DVector10> CurrentRoundedBounds = BoundsPair.Current.ToMortonSpace(Chunk->Location).Round(StartingLayerIdx);
+
+	if(PreviousRoundedBounds.IsValid())
 	{
-		// Get the remaining bounds of an intersection between previous and current bounds, which will be used for the bounds for clearing unoccluded nodes. This is basically a boolean-cut.
-		TArray<TBounds<F3DVector32>> PreviousRemainders = CurrentBounds.IsValid() ? PreviousBounds.GetNonOverlapping(CurrentBounds) : TArray{PreviousBounds};
-
-		if(!PreviousBounds.HasSimpleOverlap(CurrentBounds))
-		{
-			UE_LOG(LogNavMeshUpdater, Warning, TEXT("Has no simple overlap!"));
-		}
-
-		// Convert the previous-remainders / current bounds to morton-space, and round them to the nearest multiple of the node-size of the starting-layer.
-		// We can then use these rounded-bounds to get the morton-codes of all possible Nodes within ( of the 'starting-layer' ), and fill the MortonUpdatePairs with them.
+		// Get the remaining bounds of an intersection between the rounded previous and current bounds, which will be used for clearing unoccluded nodes. This is basically a boolean-cut.
+		// Its easier to first convert these rounded-bounds to global space and get the remainders from there.
+		const TArray<TBounds<F3DVector32>> GlobalRemainders = CurrentRoundedBounds.IsValid() ? PreviousRoundedBounds.ToGlobalSpace(Chunk->Location).GetNonOverlapping(CurrentRoundedBounds.ToGlobalSpace(Chunk->Location)) : TArray{PreviousRoundedBounds.ToGlobalSpace(Chunk->Location)};
 	
-		// Get the update-type for-each remaining previous-bounds, which is either ClearUnoccluded or ClearAll based on overlap state.
-		for (auto Remainder : PreviousRemainders)
+		// Get the update-type for-each remainder, which is either ClearUnoccluded or ClearAll based on overlap state.
+		// If there is no overlap, then we can quickly clear all children at once.
+		for (auto GlobalRemainder : GlobalRemainders)
 		{
-			const ENodeUpdate::Type UpdateType = Remainder.HasOverlap(World) ? ENodeUpdate::ClearUnoccludedChildren : ENodeUpdate::ClearAllChildren;
-			for (auto MortonCode : Remainder.ToMortonSpace(Chunk->Location).Round(StartingLayerIdx).GetMortonCodesWithin(StartingLayerIdx))
+			const ENodeUpdate::Type UpdateType = GlobalRemainder.HasOverlap(World) ? ENodeUpdate::ClearUnoccludedChildren : ENodeUpdate::ClearAllChildren;
+
+			// Convert back to morton-space to get the morton-codes.
+			for (auto MortonCode : GlobalRemainder.ToMortonSpace(Chunk->Location).GetMortonCodesWithin(StartingLayerIdx))
 			{
 				MortonUpdatePairs.Add(TPair<uint_fast32_t, ENodeUpdate::Type>(MortonCode, UpdateType));
 			}
 		}
 	}
 
-	if(CurrentBounds.IsValid())
+	if(CurrentRoundedBounds.IsValid())
 	{
-		// Current bounds should always be re-rasterized, so simply get all morton-codes within and add each to MortonUpdatePairs with the ReRasterize type.
-		const TBounds<F3DVector10> CurrentRoundedBounds = CurrentBounds.ToMortonSpace(Chunk->Location).Round(StartingLayerIdx);
+		// Current bounds should always be re-rasterized, so get all morton-codes within and simply pair it with the ReRasterize update-type.
 		for (auto MortonCode : CurrentRoundedBounds.GetMortonCodesWithin(StartingLayerIdx)) MortonUpdatePairs.Add(TPair<uint_fast32_t, ENodeUpdate::Type>(MortonCode, ENodeUpdate::ReRasterize));
 	}
 	
@@ -272,12 +269,14 @@ static void RecursiveClearUnoccludedChildren(const UWorld* World, const FChunk* 
 		if(ChildNode.HasOverlap(World, Chunk->Location, ChildLayerIdx))
 		{
 			RecursiveClearUnoccludedChildren(World, Chunk, ChildNode, ChildLayerIdx);
+			return;
 		}
-		else if(ChildNode.IsFilled())
+
+		ChildNode.SetOccluded(false);
+		if(ChildNode.IsFilled())
 		{
 			RecursiveClearAllChildren(Chunk, ChildNode, ChildLayerIdx);
 			ChildNode.SetFilled(false);
-			ChildNode.SetOccluded(false);
 		}
 	});
 }

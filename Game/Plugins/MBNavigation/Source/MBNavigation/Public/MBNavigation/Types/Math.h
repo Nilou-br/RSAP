@@ -420,24 +420,25 @@ struct TBounds
 	auto GetNonOverlapping(const TBounds<F3DVector32>& Other) const -> std::enable_if_t<std::is_same_v<T, F3DVector32>, TArray<TBounds<F3DVector32>>>
 	{
 		if(!HasSimpleOverlap(Other)) return { *this }; // Return the whole instance when there is no overlap between the two bounds.
+		
 		TArray<TBounds> BoundsList;
 		TBounds RemainingBounds = *this;
 		
-		if(Max.X > Other.Max.X){ // X
+		if(Max.X > Other.Max.X){  // + X
 			BoundsList.Emplace(VectorType(Other.Max.X, RemainingBounds.Min.Y, RemainingBounds.Min.Z), RemainingBounds.Max);
 			RemainingBounds.Max.X = Other.Max.X;
-		}if(Min.X < Other.Min.X){
+		}if(Min.X < Other.Min.X){ // + X
 			BoundsList.Emplace(RemainingBounds.Min, VectorType(Other.Min.X, RemainingBounds.Max.Y, RemainingBounds.Max.Z));
 			RemainingBounds.Min.X = Other.Min.X;
-		}if(Max.Y > Other.Max.Y){ // Y
+		}if(Max.Y > Other.Max.Y){ // + Y
 			BoundsList.Emplace(VectorType(RemainingBounds.Min.X, Other.Max.Y, RemainingBounds.Min.Z), RemainingBounds.Max);
 			RemainingBounds.Max.Y = Other.Max.Y;
-		}if(Min.Y < Other.Min.Y){
+		}if(Min.Y < Other.Min.Y){ // - Y
 			BoundsList.Emplace(RemainingBounds.Min, VectorType(RemainingBounds.Max.X, Other.Min.Y, RemainingBounds.Max.Z));
 			RemainingBounds.Min.Y = Other.Min.Y;
-		}if(Max.Z > Other.Max.Z){ // Z
+		}if(Max.Z > Other.Max.Z){ // + Z
 			BoundsList.Emplace(VectorType(RemainingBounds.Min.X, RemainingBounds.Min.Y, Other.Max.Z), RemainingBounds.Max);
-		}if(Min.Z < Other.Min.Z) {
+		}if(Min.Z < Other.Min.Z) { // - Z
 			BoundsList.Emplace(RemainingBounds.Min, VectorType(RemainingBounds.Max.X, RemainingBounds.Max.Y, Other.Min.Z));
 		}
 		
@@ -491,6 +492,7 @@ struct TBounds
 	FORCEINLINE auto HasOverlap(const UWorld* World) const -> std::enable_if_t<std::is_same_v<T, F3DVector32>, bool>
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE_STR("TBounds Has-Overlap");
+		DrawDebugBox(World, GetCenter().ToVector(), GetExtents().ToVector(), FColor::Blue, true, -1, 0, 2);
 		return FPhysicsInterface::GeomOverlapBlockingTest(
 			World,
 			FCollisionShape::MakeBox(GetExtents().ToVector() - 0.1f), // Decrease by small amount to avoid floating-point inaccuracy.
