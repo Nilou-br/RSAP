@@ -115,11 +115,6 @@ struct F3DVector10
 	{}
 };
 
-
-// todo: add this template type to F3DVector32 and change name 'F3DVector32' to something else.
-template<typename T>
-concept global_vector_type = std::is_same_v<T, int_fast32_t> || std::is_same_v<T, int_fast64_t>;
-
 /**
  * Coordinates used for chunks or nodes that exist in global-space.
  */
@@ -215,8 +210,12 @@ struct F3DVector32
 
 	FORCEINLINE F3DVector32 operator&(const uint32 Mask) const
 	{
-		// todo check negative values?
 		return F3DVector32(X & Mask, Y & Mask, Z & Mask);
+	}
+
+	FORCEINLINE F3DVector32 operator&(const int32 Mask) const
+	{
+		return F3DVector32(X & Mask | X & INT_MIN, Y & Mask | Y & INT_MIN, Z & Mask | Z & INT_MIN);
 	}
 
 	FORCEINLINE bool operator==(const F3DVector32& Other) const {
@@ -263,9 +262,9 @@ struct F3DVector32
 
 	explicit F3DVector32(const F3DVector10 &InVector)
 	{
-		X = static_cast<int_fast32_t>(std::round(InVector.X));
-		Y = static_cast<int_fast32_t>(std::round(InVector.Y));
-		Z = static_cast<int_fast32_t>(std::round(InVector.Z));
+		X = static_cast<int_fast32_t>(InVector.X);
+		Y = static_cast<int_fast32_t>(InVector.Y);
+		Z = static_cast<int_fast32_t>(InVector.Z);
 	}
 
 	explicit F3DVector32(const int32 InValue)
@@ -314,7 +313,7 @@ struct TBounds
 	TBounds(const VectorType& VectorMin, const VectorType& VectorMax, const bool InValid = true)
 		: Min(VectorMin), Max(VectorMax), bIsValid(InValid)
 	{}
-
+	
 	explicit TBounds(const AActor* Actor) : bIsValid(true)
 	{
 		FVector Origin, Extent;
@@ -367,9 +366,16 @@ struct TBounds
 		return TBounds(Min >> Value, Max >> Value, bIsValid);
 	}
 
-	TBounds operator&(const uint16 MortonMask) const
+	template<typename T = VectorType>
+	FORCEINLINE auto operator&(const int32 MortonMask) const -> std::enable_if_t<std::is_same_v<T, F3DVector32>, TBounds<F3DVector32>>
 	{
-		return TBounds(Min & MortonMask, Max & MortonMask, bIsValid);
+		return TBounds<F3DVector32>(Min & MortonMask, Max & MortonMask, bIsValid);
+	}
+
+	template<typename T = VectorType>
+	FORCEINLINE auto operator&(const uint16 MortonMask) const -> std::enable_if_t<std::is_same_v<T, F3DVector10>, TBounds<F3DVector10>>
+	{
+		return TBounds<F3DVector10>(Min & MortonMask, Max & MortonMask, bIsValid);
 	}
 
 	FORCEINLINE bool operator!() const
@@ -377,23 +383,36 @@ struct TBounds
 		return	Max.X == 0 && Max.Y == 0 && Max.Z == 0 &&
 				Min.X == 0 && Min.Y == 0 && Min.Z == 0;
 	}
+
+	template<typename T = VectorType>
+	FORCEINLINE auto Round(const uint8 LayerIdx) const -> std::enable_if_t<std::is_same_v<T, F3DVector32>, TBounds<F3DVector32>>
+	{
+		const int32 NodeMask = ~(((1 << (10 - LayerIdx)) >> FNavMeshStatic::VoxelSizeExponent) - 1);
+		TBounds<F3DVector32> Rounded = *this & NodeMask;
+
+		// Round the Max bounds up, but only if it is smaller than the un-rounded bounds ( its possible for the un-rounded value to already equal the rounded-up ).
+		if(Rounded.Max.X < Max.X) Rounded.Max.X += FNavMeshStatic::NodeSizes[LayerIdx];
+		if(Rounded.Max.Y < Max.Y) Rounded.Max.Y += FNavMeshStatic::NodeSizes[LayerIdx];
+		if(Rounded.Max.Z < Max.Z) Rounded.Max.Z += FNavMeshStatic::NodeSizes[LayerIdx];
+		return Rounded;
+	}
 	
 	template<typename T = VectorType>
-	FORCEINLINE auto Round(const uint8 LayerIndex) const -> std::enable_if_t<std::is_same_v<T, F3DVector10>, TBounds<F3DVector10>>
+	FORCEINLINE auto Round(const uint8 LayerIdx) const -> std::enable_if_t<std::is_same_v<T, F3DVector10>, TBounds<F3DVector10>>
 	{
-		TBounds<F3DVector10> Rounded = *this & FNavMeshStatic::MortonMasks[LayerIndex];
-		Rounded.Max = Rounded.Max + FNavMeshStatic::MortonOffsets[LayerIndex] - 1;
+		TBounds<F3DVector10> Rounded = *this & FNavMeshStatic::MortonMasks[LayerIdx];
+		Rounded.Max = Rounded.Max + FNavMeshStatic::MortonOffsets[LayerIdx] - 1; // Round the max up.
 		return Rounded;
 	}
 
 	template<typename T = VectorType>
-	auto GetMortonCodesWithin(const uint8 LayerIndex) const -> std::enable_if_t<std::is_same_v<T, F3DVector10>, TArray<uint_fast32_t>>
+	auto GetMortonCodesWithin(const uint8 LayerIndex) const -> std::enable_if_t<std::is_same_v<T, F3DVector10>, std::vector<uint_fast32_t>>
 	{
-		TArray<uint_fast32_t> MortonCodes;
+		std::vector<uint_fast32_t> MortonCodes;
 		for (uint_fast16_t X = Min.X; X < Max.X; X+=FNavMeshStatic::MortonOffsets[LayerIndex]) {
 			for (uint_fast16_t Y = Min.Y; Y < Max.Y; Y+=FNavMeshStatic::MortonOffsets[LayerIndex]) {
 				for (uint_fast16_t Z = Min.Z; Z < Max.Z; Z+=FNavMeshStatic::MortonOffsets[LayerIndex]) {
-					MortonCodes.Add(F3DVector10::ToMortonCode(X, Y, Z));
+					MortonCodes.push_back(F3DVector10::ToMortonCode(X, Y, Z));
 				}
 			}
 		}
@@ -417,29 +436,29 @@ struct TBounds
 	// Gets the remaining parts of the bounds that are not overlapping with the given bounds.
 	// only supports F3DVector32 due to the nature of morton-codes.
 	template<typename T = VectorType>
-	auto GetNonOverlapping(const TBounds<F3DVector32>& Other) const -> std::enable_if_t<std::is_same_v<T, F3DVector32>, TArray<TBounds<F3DVector32>>>
+	auto GetNonOverlapping(const TBounds<F3DVector32>& Other) const -> std::enable_if_t<std::is_same_v<T, F3DVector32>, std::vector<TBounds<F3DVector32>>>
 	{
 		if(!HasSimpleOverlap(Other)) return { *this }; // Return the whole instance when there is no overlap between the two bounds.
 		
-		TArray<TBounds> BoundsList;
+		std::vector<TBounds> BoundsList;
 		TBounds RemainingBounds = *this;
 		
 		if(Max.X > Other.Max.X){  // + X
-			BoundsList.Emplace(VectorType(Other.Max.X, RemainingBounds.Min.Y, RemainingBounds.Min.Z), RemainingBounds.Max);
+			BoundsList.push_back(TBounds<F3DVector32>(VectorType(Other.Max.X, RemainingBounds.Min.Y, RemainingBounds.Min.Z), RemainingBounds.Max));
 			RemainingBounds.Max.X = Other.Max.X;
 		}if(Min.X < Other.Min.X){ // + X
-			BoundsList.Emplace(RemainingBounds.Min, VectorType(Other.Min.X, RemainingBounds.Max.Y, RemainingBounds.Max.Z));
+			BoundsList.push_back(TBounds<F3DVector32>(RemainingBounds.Min, VectorType(Other.Min.X, RemainingBounds.Max.Y, RemainingBounds.Max.Z)));
 			RemainingBounds.Min.X = Other.Min.X;
 		}if(Max.Y > Other.Max.Y){ // + Y
-			BoundsList.Emplace(VectorType(RemainingBounds.Min.X, Other.Max.Y, RemainingBounds.Min.Z), RemainingBounds.Max);
+			BoundsList.push_back(TBounds<F3DVector32>(VectorType(RemainingBounds.Min.X, Other.Max.Y, RemainingBounds.Min.Z), RemainingBounds.Max));
 			RemainingBounds.Max.Y = Other.Max.Y;
 		}if(Min.Y < Other.Min.Y){ // - Y
-			BoundsList.Emplace(RemainingBounds.Min, VectorType(RemainingBounds.Max.X, Other.Min.Y, RemainingBounds.Max.Z));
+			BoundsList.push_back(TBounds<F3DVector32>(RemainingBounds.Min, VectorType(RemainingBounds.Max.X, Other.Min.Y, RemainingBounds.Max.Z)));
 			RemainingBounds.Min.Y = Other.Min.Y;
 		}if(Max.Z > Other.Max.Z){ // + Z
-			BoundsList.Emplace(VectorType(RemainingBounds.Min.X, RemainingBounds.Min.Y, Other.Max.Z), RemainingBounds.Max);
+			BoundsList.push_back(TBounds<F3DVector32>(VectorType(RemainingBounds.Min.X, RemainingBounds.Min.Y, Other.Max.Z), RemainingBounds.Max));
 		}if(Min.Z < Other.Min.Z) { // - Z
-			BoundsList.Emplace(RemainingBounds.Min, VectorType(RemainingBounds.Max.X, RemainingBounds.Max.Y, Other.Min.Z));
+			BoundsList.push_back(TBounds<F3DVector32>(RemainingBounds.Min, VectorType(RemainingBounds.Max.X, RemainingBounds.Max.Y, Other.Min.Z)));
 		}
 		
 		return BoundsList;
@@ -471,11 +490,11 @@ struct TBounds
 	}
 
 	template<typename T = VectorType>
-	FORCEINLINE auto Draw(const UWorld* World, const FColor Color = FColor::Black) const -> std::enable_if_t<std::is_same_v<T, F3DVector32>, void>
+	FORCEINLINE auto Draw(const UWorld* World, const FColor Color = FColor::Black, const float Thickness = 1) const -> std::enable_if_t<std::is_same_v<T, F3DVector32>, void>
 	{
 		const F3DVector32 Center = (Min + Max) >> 1;
 		const F3DVector32 Extents = (Max - Min) >> 1;
-		DrawDebugBox(World, Center.ToVector(), Extents.ToVector(), Color, true, -1, 0, 1);
+		DrawDebugBox(World, Center.ToVector(), Extents.ToVector(), Color, true, -1, 0, Thickness);
 	}
 
 	template<typename T = VectorType>

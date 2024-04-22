@@ -9,6 +9,9 @@ DECLARE_LOG_CATEGORY_EXTERN(LogNavMeshUpdater, Log, All);
 
 
 
+/**
+ * 
+ */
 class MBNAVIGATION_API FNavMeshUpdater
 {
 public:
@@ -16,7 +19,7 @@ public:
 		: NavMeshPtr(InNavMesh), World(nullptr)
 	{}
 	void SetWorld(const UWorld* InWorld) { World = InWorld; }
-	void UpdateStatic(const TArray<TBoundsPair<F3DVector32>>& BeforeAfterBoundsPairs);
+	void UpdateStatic(const std::vector<TBoundsPair<F3DVector32>>& BoundsPairs);
 
 private:
 	bool StartClearUnoccludedChildrenOfNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx);
@@ -24,7 +27,7 @@ private:
 	bool StartReRasterizeNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx);
 	
 	void UnRasterize(const FChunk* Chunk, const std::unordered_set<uint_fast32_t>& NodeMortonCodes, const uint8 LayerIdx);
-	void UpdateRelationsInBounds(const FChunk* Chunk, const TBounds<F3DVector10> Bounds, const uint8 StartingLayerIdx);
+	void UpdateRelations(const TBoundsPair<F3DVector32>& BoundsPair, std::vector<uint_fast32_t>& UpdatedMortonCodes, const uint8 LayerIdx);
 	
 	FNavMeshPtr NavMeshPtr;
 	const UWorld* World;

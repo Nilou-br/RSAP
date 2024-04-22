@@ -50,14 +50,14 @@ void FNavMeshGenerator::GenerateChunks(const TBounds<F3DVector32>& LevelBounds)
 	const F3DVector32 ChunksMinLoc(LevelMin.X & Mask, LevelMin.Y & Mask, LevelMin.Z & Mask);
 	const F3DVector32 ChunksMaxLoc(LevelMax.X & Mask, LevelMax.Y & Mask, LevelMax.Z & Mask);
 
-	// Reserve room for all chunks in navmesh.
+	// Reserve memory for all chunks.
 	const uint32 TotalChunks =
 		((ChunksMaxLoc.X << FNavMeshStatic::KeyShift) - (ChunksMinLoc.X << FNavMeshStatic::KeyShift)) *
 		((ChunksMaxLoc.Y << FNavMeshStatic::KeyShift) - (ChunksMinLoc.Y << FNavMeshStatic::KeyShift)) *
 		((ChunksMaxLoc.Z << FNavMeshStatic::KeyShift) - (ChunksMinLoc.Z << FNavMeshStatic::KeyShift)) + 1;
 	NavMeshPtr->reserve(TotalChunks);
 
-	if (TotalChunks <= 0)
+	if (TotalChunks == 0)
 	{
 		UE_LOG(LogNavMeshGenerator, Warning, TEXT("Aborting generation due to a likely NaN value on the level-boundaries."))
 		UE_LOG(LogNavMeshGenerator, Warning, TEXT("If you see this warning, please try generating again."))
