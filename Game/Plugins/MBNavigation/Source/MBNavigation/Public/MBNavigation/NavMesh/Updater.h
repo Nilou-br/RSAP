@@ -22,12 +22,15 @@ public:
 	void UpdateStatic(const std::vector<TBoundsPair<F3DVector32>>& BoundsPairs);
 
 private:
+	template<typename Func>
+	void ForEachChunkIntersection(const TBounds<F3DVector32>& Bounds, Func Callback);
+	
 	bool StartClearUnoccludedChildrenOfNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx);
 	static void StartClearAllChildrenOfNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx);
 	bool StartReRasterizeNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx);
 	
 	void UnRasterize(const FChunk* Chunk, const std::unordered_set<uint_fast32_t>& NodeMortonCodes, const uint8 LayerIdx);
-	void UpdateRelations(const TBoundsPair<F3DVector32>& BoundsPair, std::vector<uint_fast32_t>& UpdatedMortonCodes, const uint8 LayerIdx);
+	void UpdateRelations(const TBounds<F3DVector32>& CurrentBounds, std::vector<TBounds<F3DVector32>>& PreviousRemainders, std::vector<uint_fast32_t>& UpdatedMortonCodes, const uint8 LayerIdx);
 	
 	FNavMeshPtr NavMeshPtr;
 	const UWorld* World;

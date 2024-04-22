@@ -438,7 +438,8 @@ struct TBounds
 	template<typename T = VectorType>
 	auto GetNonOverlapping(const TBounds<F3DVector32>& Other) const -> std::enable_if_t<std::is_same_v<T, F3DVector32>, std::vector<TBounds<F3DVector32>>>
 	{
-		if(!HasSimpleOverlap(Other)) return { *this }; // Return the whole instance when there is no overlap between the two bounds.
+		if(!IsValid()) return {};
+		if(!Other.IsValid() || !HasSimpleOverlap(Other)) return { *this }; // Return the whole instance when there is no overlap between the two bounds.
 		
 		std::vector<TBounds> BoundsList;
 		TBounds RemainingBounds = *this;

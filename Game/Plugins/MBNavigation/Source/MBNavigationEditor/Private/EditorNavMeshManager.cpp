@@ -177,12 +177,17 @@ void UEditorNavMeshManager::GenerateAndDrawNavMesh()
 
 void UEditorNavMeshManager::UpdateAndDrawNavMesh(const FActorBoundsPairMap& ActorBoundPairs)
 {
-	TArray<TBoundsPair<F3DVector32>> BoundPairs;
-	ActorBoundPairs.GenerateValueArray(BoundPairs);
+	// todo: temporary solution, convert FActorBoundsPairMap to ankerl::unordered_dense::map later.
+	std::vector<TBoundsPair<F3DVector32>> BoundPairs;
+	for (auto ActorBoundPair : ActorBoundPairs)
+	{
+		BoundPairs.push_back(ActorBoundPair.Value);
+	}
+	
 	UpdateAndDrawNavMesh(BoundPairs);
 }
 
-void UEditorNavMeshManager::UpdateAndDrawNavMesh(const TArray<TBoundsPair<F3DVector32>>& BoundPairs)
+void UEditorNavMeshManager::UpdateAndDrawNavMesh(const std::vector<TBoundsPair<F3DVector32>>& BoundPairs)
 {
 	NavMeshUpdater->UpdateStatic(BoundPairs);
 	NavMeshDebugger->Draw();
@@ -314,7 +319,7 @@ void UEditorNavMeshManager::PostUndo(bool bSuccess)
 void UEditorNavMeshManager::PostRedo(bool bSuccess)
 {
 	UE_LOG(LogEditorNavManager, Log, TEXT("Post Redo"));
-	if(!bSuccess || UndoRedoIndex >= UndoRedoSnapshots.Num()-1)
+	if(!bSuccess || UndoRedoIndex >= UndoRedoSnapshots.size()-1)
 	{
 		FEditorUndoClient::PostRedo(bSuccess);
 		return;
@@ -375,7 +380,7 @@ void UEditorNavMeshManager::AddSnapshot(const ESnapshotType SnapshotType, const 
 
 	// Create a new snapshot and set it active.
 	const FUndoRedoSnapshot Snapshot(SnapshotType, ActorBoundsPairMap);
-	UndoRedoSnapshots.Add(Snapshot);
+	UndoRedoSnapshots.push_back(Snapshot);
 	UndoRedoIndex++;
 	
 	FString SnapshotTypeString;
@@ -389,10 +394,9 @@ void UEditorNavMeshManager::AddSnapshot(const ESnapshotType SnapshotType, const 
 
 void UEditorNavMeshManager::ClearRedoSnapshots()
 {
-	const int32 LastIndex = UndoRedoSnapshots.Num()-1;
+	const int32 LastIndex = UndoRedoSnapshots.size()-1;
 	if(UndoRedoIndex == LastIndex) return;
-	const int32 Difference = LastIndex - UndoRedoIndex;
-	UndoRedoSnapshots.RemoveAt(UndoRedoIndex+1, Difference, false);
+	UndoRedoSnapshots.erase(UndoRedoSnapshots.begin() + UndoRedoIndex+1, UndoRedoSnapshots.begin()+LastIndex);
 }
 
 bool UEditorNavMeshManager::IsSnapshotActive(const FUndoRedoSnapshot& Snapshot)
@@ -450,21 +454,21 @@ TBounds<F3DVector32> UEditorNavMeshManager::GetLevelBoundaries() const
 
 void UEditorNavMeshManager::CheckMovingActors()
 {
-	if(!SelectedActors.Num())
+	if(!SelectedActors.size())
 	{
 		bIsMovingActors = false;
 		return;
 	}
 	
-	TArray<FGuid> InvalidActors;
-	TArray<TBoundsPair<F3DVector32>> MovedBoundsPairs;
+	std::vector<FGuid> InvalidActors;
+	std::vector<TBoundsPair<F3DVector32>> MovedBoundsPairs;
 	
 	for (auto& Iterator : MovingActorBoundsMap)
 	{
 		const AActor* Actor;
 		if(!FindActorFromGuid(Iterator.Key, Actor))
 		{
-			InvalidActors.Add(Iterator.Key);
+			InvalidActors.push_back(Iterator.Key);
 			continue;
 		}
 		
@@ -472,7 +476,7 @@ void UEditorNavMeshManager::CheckMovingActors()
 		const TBounds<F3DVector32> CurrentBounds(Actor);
 		
 		if(PreviousBounds->Equals(CurrentBounds)) continue;
-		MovedBoundsPairs.Emplace(*PreviousBounds, CurrentBounds);
+		MovedBoundsPairs.emplace_back(*PreviousBounds, CurrentBounds);
 		MovingActorBoundsMap[Iterator.Key] = CurrentBounds;
 	}
 
@@ -482,7 +486,7 @@ void UEditorNavMeshManager::CheckMovingActors()
 		MovingActorBoundsMap.Remove(Guid);
 	}
 
-	if(MovedBoundsPairs.Num())
+	if(MovedBoundsPairs.size())
 	{
 		UpdateAndDrawNavMesh(MovedBoundsPairs);
 	}
@@ -649,7 +653,7 @@ void UEditorNavMeshManager::OnPasteActorsBegin()
 	{
 		const AActor* Actor;
 		if(!FindActorFromGuid(Iterator.Key, Actor)) continue;
-		if(SelectedActors.Find(Actor) == INDEX_NONE) continue;
+		if(std::ranges::find(SelectedActors, Actor) == SelectedActors.end()) continue;
 		
 		const TBounds<F3DVector32> CurrentBounds(Actor);
 		if(Iterator.Value.Equals(CurrentBounds)) continue;
@@ -680,7 +684,7 @@ void UEditorNavMeshManager::OnDuplicateActorsBegin()
 	{
 		const AActor* Actor;
 		if(!FindActorFromGuid(Iterator.Key, Actor)) continue;
-		if(SelectedActors.Find(Actor) == INDEX_NONE) continue;
+		if(std::ranges::find(SelectedActors, Actor) == SelectedActors.end()) continue;
 		
 		const TBounds<F3DVector32> CurrentBounds(Actor);
 		if(Iterator.Value.Equals(CurrentBounds)) continue;
@@ -721,13 +725,13 @@ void UEditorNavMeshManager::OnDeleteActorsEnd()
 void UEditorNavMeshManager::OnActorSelectionChanged(const TArray<UObject*>& Actors, bool)
 {
 	bool bHasSelectionChanged = false;
-	TArray<const AActor*> CurrentSelectedActors;
+	std::vector<const AActor*> CurrentSelectedActors;
 	for (UObject* Actor : Actors)
 	{
 		if(!Actor->IsA(AStaticMeshActor::StaticClass())) continue;
 		const AActor* SMActor = Cast<AActor>(Actor);
-		CurrentSelectedActors.Add(SMActor);
-		if(SelectedActors.Find(SMActor) == INDEX_NONE) bHasSelectionChanged = true;
+		CurrentSelectedActors.push_back(SMActor);
+		if(std::ranges::find(SelectedActors, SMActor) == SelectedActors.end()) bHasSelectionChanged = true;
 	}
 	SelectedActors = CurrentSelectedActors;
 

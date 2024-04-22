@@ -157,116 +157,126 @@ FDirectionalNodeSteps CalculateNodeStepsForBounds(const TBounds<F3DVector10>& Bo
 	return NodeSteps;
 }
 
+/**
+ * @param Bounds Bounds to get the chunks that is resides in.
+ * @param Callback 
+ * @return 
+ */
+template<typename Func>
+void FNavMeshUpdater::ForEachChunkIntersection(const TBounds<F3DVector32>& Bounds, Func Callback)
+{
+	static_assert(std::is_invocable_v<Func, const FChunk*, const TBounds<F3DVector10>>, "Callback in ::ForEachChunkIntersection must be invocable with FChunk* and TBounds<F3DVector32>");
+	if(!Bounds.IsValid()) return;
+
+	// Get keys 
+	const F3DVector32 ChunkMin = Bounds.Min & FNavMeshStatic::ChunkMask;
+	const F3DVector32 ChunkMax = Bounds.Max & FNavMeshStatic::ChunkMask;
+	std::set<uint64_t> ChunkKeys;
+	for (int32 X = ChunkMin.X; X <= ChunkMax.X; X+=FNavMeshStatic::ChunkSize){
+		for (int32 Y = ChunkMin.Y; Y <= ChunkMax.Y; Y+=FNavMeshStatic::ChunkSize){
+			for (int32 Z = ChunkMin.Z; Z <= ChunkMax.Z; Z+=FNavMeshStatic::ChunkSize){
+				const F3DVector32 ChunkLocation = F3DVector32(X, Y, Z);
+				if(!Bounds.HasSimpleOverlap(TBounds(ChunkLocation, ChunkLocation+FNavMeshStatic::ChunkSize))) continue;
+				ChunkKeys.insert(ChunkLocation.ToKey()); // Insert if these bounds overlap with the chunk.
+			}
+		}
+	}
+	
+	// Iterate over the keys.
+	for (const auto ChunkKey : ChunkKeys)
+	{
+		// Get the chunk with this key, initialize it if it does not exists yet.
+		auto ChunkIterator = NavMeshPtr->find(ChunkKey);
+		if(ChunkIterator == NavMeshPtr->end()){
+			std::tie(ChunkIterator, std::ignore) = NavMeshPtr->emplace(ChunkKey, FChunk(F3DVector32::FromKey(ChunkKey)));
+		}
+
+		// Call the callback with the chunk and part of the bounds that are inside this chunk in morton-space.
+		Callback(&ChunkIterator->second, Bounds.GetIntersection(ChunkIterator->second.GetBounds()).ToMortonSpace(ChunkIterator->second.Location));
+	}
+}
+
 void FNavMeshUpdater::UpdateStatic(const std::vector<TBoundsPair<F3DVector32>>& BoundsPairs)
 {
 #if WITH_EDITOR
 	FlushPersistentDebugLines(World);
 	const auto StartTime = std::chrono::high_resolution_clock::now();
 #endif
-
-	// Lambda that calls given callback for-each chunk that the given bounds-pair is inside of, returns the intersected part of the BoundsPair with that chunk.
-	const auto ForEachChunkIntersection  = [&NavMeshPtr=NavMeshPtr, &World=World](const TBoundsPair<F3DVector32>& BoundsPair, auto Callback)
-	{
-		// Lambda that fills the sorted set of chunk-keys using the given bounds.
-		const auto GetChunkKeys = [&World=World](const TBounds<F3DVector32>& Bounds, std::set<uint64_t>& ChunkKeys)
-		{
-			const F3DVector32 ChunkMin = Bounds.Min & FNavMeshStatic::ChunkMask;
-			const F3DVector32 ChunkMax = Bounds.Max & FNavMeshStatic::ChunkMask;
-			for (int32 X = ChunkMin.X; X <= ChunkMax.X; X+=FNavMeshStatic::ChunkSize){
-				for (int32 Y = ChunkMin.Y; Y <= ChunkMax.Y; Y+=FNavMeshStatic::ChunkSize){
-					for (int32 Z = ChunkMin.Z; Z <= ChunkMax.Z; Z+=FNavMeshStatic::ChunkSize){
-						const F3DVector32 ChunkLocation = F3DVector32(X, Y, Z);
-						if(!Bounds.HasSimpleOverlap(TBounds(ChunkLocation, ChunkLocation+FNavMeshStatic::ChunkSize))) continue;
-						ChunkKeys.insert(ChunkLocation.ToKey()); // Insert if these bounds overlap with the chunk.
-					}
-				}
-			}
-		};
-
-		// Get the keys from both bounds.
-		std::set<uint64_t> ChunkKeys;
-		GetChunkKeys(BoundsPair.Previous, ChunkKeys); GetChunkKeys(BoundsPair.Current, ChunkKeys);
-
-		// Iterate over the keys.
-		for (const auto ChunkKey : ChunkKeys)
-		{
-			// Get the chunk with this key, initialize it if it does not exists yet.
-			auto ChunkIterator = NavMeshPtr->find(ChunkKey);
-			if(ChunkIterator == NavMeshPtr->end()){
-				std::tie(ChunkIterator, std::ignore) = NavMeshPtr->emplace(ChunkKey, FChunk(F3DVector32::FromKey(ChunkKey)));
-			}
-
-			// Get the intersection of these bounds that are inside this chunk.
-			// Bounds that do not overlap with this chunk are set to be invalid bounds, indicating it can be skipped.
-			TBounds<F3DVector32> ChunkBounds = ChunkIterator->second.GetBounds();
-			const TBounds<F3DVector32> PrevBounds = BoundsPair.Previous.HasSimpleOverlap(ChunkBounds)
-				? BoundsPair.Previous.GetIntersection(ChunkBounds) : TBounds<F3DVector32>();
-			const TBounds<F3DVector32> CurrBounds = BoundsPair.Current.HasSimpleOverlap(ChunkBounds)
-				? BoundsPair.Current.GetIntersection(ChunkBounds) : TBounds<F3DVector32>();
-
-			// Call the callback with this data.
-			Callback(&ChunkIterator->second, TBoundsPair(PrevBounds, CurrBounds));
-		}
-	};
-
-	// Update the nodes within each bounds-pair, and the relations for the nodes against it.
+	
+	// Update the nodes within each pair of bounds, along with the relations of the nodes against these bounds.
 	for (const auto BoundsPair : BoundsPairs)
 	{
-		// Get the layer-index used as the starting point for the overlap checks.
+		// Get the layer-index used as the starting point, which is an optimal layer to start because it skips a lot of unnecessary nodes and is a good point to start checking for overlaps.
 		const uint8 StartingLayerIdx = CalculateOptimalStartingLayer(BoundsPair);
 
 		// todo: first round the bounds directly here, secondly get the remainder of the prev-bounds, lastly use those to get the parts to update the relations for.
 		// todo: maybe use all of them in the chunk-intersection lambda?
+		// Round the bounds to the nearest node-size of the starting-layer.
+		const TBounds<F3DVector32> CurrentRounded = BoundsPair.Current.Round(StartingLayerIdx);
+		const TBounds<F3DVector32> PreviousRounded = BoundsPair.Previous.Round(StartingLayerIdx);
 
+		// Get the remainder of the previous-bounds intersected with the current-bounds, this is what will actually be used for the previous-bounds.
+		const std::vector<TBounds<F3DVector32>> PreviousRemainders = PreviousRounded.GetNonOverlapping(CurrentRounded);
+		
 		// Cache morton-codes that have been updated for updating the relations.
 		std::vector<uint_fast32_t> UpdatedMortonCodes;
-		
-		ForEachChunkIntersection(BoundsPair, [&](const FChunk* Chunk, const TBoundsPair<F3DVector32>& IntersectedBoundsPair)
-		{
-			std::unordered_set<uint_fast32_t> ParentsToClear;
-			std::unordered_set<uint_fast32_t> ParentsNotToClear;
-			std::vector<std::pair<uint_fast32_t, ENodeUpdate::Type>> MortonUpdatePairs = GetMortonCodesToUpdate(World, Chunk, IntersectedBoundsPair, StartingLayerIdx);
-			UpdatedMortonCodes.reserve(MortonUpdatePairs.size());
-			
-			for (const auto& [MortonCode, UpdateType] : MortonUpdatePairs)
-			{
-				UpdatedMortonCodes.push_back(MortonCode);
-				bool bShouldCheckParent = false;
 
+		// Update the nodes within the current-bounds, these should be re-rasterized.
+		ForEachChunkIntersection(CurrentRounded, [&](const FChunk* Chunk, const TBounds<F3DVector10>& IntersectedBounds)
+		{
+			// Keep track of the morton-codes of the parents that potentially have to be updated.
+			std::unordered_set<uint_fast32_t> NodesToUnRasterize;
+			std::unordered_set<uint_fast32_t> NodesNotToUnRasterize;
+			
+			for (const uint_fast32_t MortonCode : IntersectedBounds.GetMortonCodesWithin(StartingLayerIdx))
+			{
 				const FVector Global = F3DVector32::FromMortonVector(F3DVector10::FromMortonCode(MortonCode), Chunk->Location).ToVector();
 				const FVector Extent(FNavMeshStatic::NodeHalveSizes[StartingLayerIdx]);
+				DrawDebugBox(World, Global+Extent, Extent, FColor::Yellow, true, -1, 0, 1);
 				
-				switch (UpdateType) {
-				case ENodeUpdate::ClearUnoccludedChildren:
-					bShouldCheckParent = StartClearUnoccludedChildrenOfNode(Chunk, MortonCode, StartingLayerIdx);
-					DrawDebugBox(World, Global+Extent, Extent, FColor::Purple, true, -1, 0, 1);
-					break;
-				case ENodeUpdate::ClearAllChildren:
-					bShouldCheckParent = true;
-					StartClearAllChildrenOfNode(Chunk, MortonCode, StartingLayerIdx);
-					DrawDebugBox(World, Global+Extent, Extent, FColor::Red, true, -1, 0, 1);
-					break;
-				case ENodeUpdate::ReRasterize:
-					bShouldCheckParent = StartReRasterizeNode(Chunk, MortonCode, StartingLayerIdx);
-					DrawDebugBox(World, Global+Extent, Extent, FColor::Yellow, true, -1, 0, 1);
-					break;
-				}
-
-				// Nodes that are unoccluded will require the parent to potentially be cleared,
-				// if all the children are unoccluded, then it should clear them, and recursively do the same for the parent.
-				bShouldCheckParent	? ParentsToClear.insert(FOctreeNode::GetParentMortonCode(MortonCode, StartingLayerIdx))
-									: ParentsNotToClear.insert(FOctreeNode::GetParentMortonCode(MortonCode, StartingLayerIdx));
+				const bool bShouldCheckParent = StartReRasterizeNode(Chunk, MortonCode, StartingLayerIdx);
+				bShouldCheckParent	? NodesToUnRasterize.insert(FOctreeNode::GetParentMortonCode(MortonCode, StartingLayerIdx))
+									: NodesNotToUnRasterize.insert(FOctreeNode::GetParentMortonCode(MortonCode, StartingLayerIdx));
 			}
 
-			// Remove ParentsNotToClear from ParentsToClear. These are the parents that have at-least one child Node that is occluded, which we can skip.
+			// Remove NodesToUnRasterize from NodesNotToUnRasterize. These are the parent-nodes that have at-least one child-node that is occluded, which we can skip.
+			// Try to un-rasterize the remaining parent-nodes, which will happen if all child-nodes are occluded.
 			std::unordered_set<uint_fast32_t> Remainder;
-			std::ranges::set_difference(ParentsToClear, ParentsNotToClear, std::inserter(Remainder, Remainder.begin()));
-			
-			// Try to un-rasterize these remaining parents, which will happen if all children are occluded.
-			if(Remainder.size()) UnRasterize(Chunk, ParentsToClear, StartingLayerIdx-1);
+			std::ranges::set_difference(NodesToUnRasterize, NodesNotToUnRasterize, std::inserter(Remainder, Remainder.begin()));
+			if(Remainder.size()) UnRasterize(Chunk, Remainder, StartingLayerIdx-1);
 		});
+		
+		// Do the same for the previous-bounds, where they can either be cleared all at once, or only clear the unoccluded nodes.
+		for (auto PreviousRemainder : PreviousRemainders)
+		{
+			const bool bShouldClearAll = !PreviousRemainder.HasOverlap(World);
+			ForEachChunkIntersection(PreviousRemainder, [&](const FChunk* Chunk, const TBounds<F3DVector10>& IntersectedBounds)
+			{
+				std::unordered_set<uint_fast32_t> NodesToUnRasterize;
+				std::unordered_set<uint_fast32_t> NodesNotToUnRasterize;
+				
+				for (const uint_fast32_t MortonCode : IntersectedBounds.GetMortonCodesWithin(StartingLayerIdx))
+				{
+					const FVector Global = F3DVector32::FromMortonVector(F3DVector10::FromMortonCode(MortonCode), Chunk->Location).ToVector();
+					const FVector Extent(FNavMeshStatic::NodeHalveSizes[StartingLayerIdx]);
+					DrawDebugBox(World, Global+Extent, Extent, bShouldClearAll ? FColor::Red : FColor::Yellow, true, -1, 0, 1);
+					
+					bool bShouldCheckParent = true;
+					if(bShouldClearAll) StartClearAllChildrenOfNode(Chunk, MortonCode, StartingLayerIdx);
+					else bShouldCheckParent = StartClearUnoccludedChildrenOfNode(Chunk, MortonCode, StartingLayerIdx);
+					
+					// Call correct update method based on boolean.
+					bShouldCheckParent	? NodesToUnRasterize.insert(FOctreeNode::GetParentMortonCode(MortonCode, StartingLayerIdx))
+										: NodesNotToUnRasterize.insert(FOctreeNode::GetParentMortonCode(MortonCode, StartingLayerIdx));
+				}
 
-		//
+				std::unordered_set<uint_fast32_t> Remainder;
+				std::ranges::set_difference(NodesToUnRasterize, NodesNotToUnRasterize, std::inserter(Remainder, Remainder.begin()));
+				if(Remainder.size()) UnRasterize(Chunk, Remainder, StartingLayerIdx-1);
+			});
+		}
+
+		// All affected nodes have been re-rasterized, now we will need to update the relations.
 		UpdateRelations(BoundsPair, UpdatedMortonCodes, StartingLayerIdx);
 	}
 
@@ -566,17 +576,14 @@ void FNavMeshUpdater::UnRasterize(const FChunk* Chunk, const std::unordered_set<
  * TODO: maybe optimize this later on. Not because of performance ( because this is run once per update ), but because I don't like all these "remainder" checks.
  * Updates the relations for all nodes within, and one node-size around, the given pair of bounds.
  * Will iterate over these nodes in sorted order from negative to positive, looking into the negative direction for-each node to find the neighbours and update the relations for both.
- * @param BoundsPair Pair of bounds to update the nodes that are against it in the positive direction.
  * @param UpdatedMortonCodes Morton-codes of nodes that have been updated which we can skip having to recompute again.
  * @param LayerIdx Layer-index to start the recursive update from.
  */
-void FNavMeshUpdater::UpdateRelations(const TBoundsPair<F3DVector32>& BoundsPair, std::vector<uint_fast32_t>& UpdatedMortonCodes, const uint8 LayerIdx)
+void FNavMeshUpdater::UpdateRelations(const TBounds<F3DVector32>& CurrentBounds, std::vector<TBounds<F3DVector32>>& PreviousRemainders, std::vector<uint_fast32_t>& UpdatedMortonCodes, const uint8 LayerIdx)
 {
 	// Fill the BoundsToUpdate with the bounds one node-size thick outside the BoundsPair in its positive direction. These are the parts that contains the nodes that should have their relations updated as well.
 	// These bounds could exist inside different chunks than the one's containing the prev/curr bounds, so we should pair these with chunk-keys to determine the chunk they are in.
 	
-	const TBounds<F3DVector32> PreviousRounded = BoundsPair.Previous.Round(LayerIdx);
-	const TBounds<F3DVector32> CurrentRounded = BoundsPair.Current.Round(LayerIdx);
 	std::vector<TBounds<F3DVector32>> BoundsToUpdate;
 
 	// Get the bounds positively against the previous-bounds.

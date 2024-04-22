@@ -71,7 +71,7 @@ private:
 	void InitStaticNavMeshData();
 	FORCEINLINE void GenerateAndDrawNavMesh();
 	FORCEINLINE void UpdateAndDrawNavMesh(const FActorBoundsPairMap& ActorBoundPairs);
-	FORCEINLINE void UpdateAndDrawNavMesh(const TArray<TBoundsPair<F3DVector32>>& BoundPairs);
+	FORCEINLINE void UpdateAndDrawNavMesh(const std::vector<TBoundsPair<F3DVector32>>& BoundPairs);
 	void SaveNavMesh() const;
 	
 public:
@@ -167,11 +167,11 @@ private:
 	FActorBoundsMap CachedActorBoundsMap; // Caches the actor bounds.
 	FActorBoundsPairMap DeletedActorBoundsPairMap; // Actors to delete in OnDeleteActorsEnd.
 	FActorBoundsMap MovingActorBoundsMap; // Keeps track of the bounds of actors that are currently in a moving state ( holding the gizmo ).
-	UPROPERTY() TArray<const AActor*> SelectedActors;
+	std::vector<const AActor*> SelectedActors;
 	bool bIsMovingActors;
 	bool bAddActorOccured;
 	
-	TArray<FUndoRedoSnapshot> UndoRedoSnapshots;
+	std::vector<FUndoRedoSnapshot> UndoRedoSnapshots;
 	int32 UndoRedoIndex = -1;
 	TArray<uint8> UndoBatchCounts;
 };
