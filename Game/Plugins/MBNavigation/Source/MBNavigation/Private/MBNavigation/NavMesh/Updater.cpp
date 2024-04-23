@@ -221,7 +221,7 @@ void FNavMeshUpdater::UpdateStatic(const std::vector<TBoundsPair<F3DVector32>>& 
 		// Cache morton-codes that have been updated for updating the relations.
 		std::vector<uint_fast32_t> UpdatedMortonCodes;
 
-		// Update the nodes within the current-bounds, these should be re-rasterized.
+		// Update the nodes within the current-bounds, these should all be re-rasterized.
 		ForEachChunkIntersection(CurrentRounded, [&](const FChunk* Chunk, const TBounds<F3DVector10>& IntersectedBounds)
 		{
 			// Keep track of the morton-codes of the parents that potentially have to be updated.
@@ -246,10 +246,10 @@ void FNavMeshUpdater::UpdateStatic(const std::vector<TBoundsPair<F3DVector32>>& 
 			if(Remainder.size()) UnRasterize(Chunk, Remainder, StartingLayerIdx-1);
 		});
 		
-		// Do the same for the previous-bounds, where they can either be cleared all at once, or only clear the unoccluded nodes.
+		// Do the same for the previous-bounds, these should either clear all nodes at once, or only clear the unoccluded nodes.
 		for (auto PreviousRemainder : PreviousRemainders)
 		{
-			const bool bShouldClearAll = !PreviousRemainder.HasOverlap(World);
+			const bool bShouldClearAll = !PreviousRemainder.HasOverlap(World); // Clear all if it does not overlap anything.
 			ForEachChunkIntersection(PreviousRemainder, [&](const FChunk* Chunk, const TBounds<F3DVector10>& IntersectedBounds)
 			{
 				std::unordered_set<uint_fast32_t> NodesToUnRasterize;
@@ -277,7 +277,7 @@ void FNavMeshUpdater::UpdateStatic(const std::vector<TBoundsPair<F3DVector32>>& 
 		}
 
 		// All affected nodes have been re-rasterized, now we will need to update the relations.
-		UpdateRelations(BoundsPair, UpdatedMortonCodes, StartingLayerIdx);
+		UpdateRelations(CurrentRounded, PreviousRemainders, UpdatedMortonCodes, StartingLayerIdx);
 	}
 
 #if WITH_EDITOR
@@ -576,69 +576,66 @@ void FNavMeshUpdater::UnRasterize(const FChunk* Chunk, const std::unordered_set<
  * TODO: maybe optimize this later on. Not because of performance ( because this is run once per update ), but because I don't like all these "remainder" checks.
  * Updates the relations for all nodes within, and one node-size around, the given pair of bounds.
  * Will iterate over these nodes in sorted order from negative to positive, looking into the negative direction for-each node to find the neighbours and update the relations for both.
+ * @param CurrentBounds 
+ * @param PreviousRemainders 
  * @param UpdatedMortonCodes Morton-codes of nodes that have been updated which we can skip having to recompute again.
  * @param LayerIdx Layer-index to start the recursive update from.
  */
-void FNavMeshUpdater::UpdateRelations(const TBounds<F3DVector32>& CurrentBounds, std::vector<TBounds<F3DVector32>>& PreviousRemainders, std::vector<uint_fast32_t>& UpdatedMortonCodes, const uint8 LayerIdx)
+void FNavMeshUpdater::UpdateRelations(const TBounds<F3DVector32>& CurrentBounds, const std::vector<TBounds<F3DVector32>>& PreviousRemainders, std::vector<uint_fast32_t>& UpdatedMortonCodes, const uint8 LayerIdx)
 {
-	// Fill the BoundsToUpdate with the bounds one node-size thick outside the BoundsPair in its positive direction. These are the parts that contains the nodes that should have their relations updated as well.
-	// These bounds could exist inside different chunks than the one's containing the prev/curr bounds, so we should pair these with chunk-keys to determine the chunk they are in.
-	
-	std::vector<TBounds<F3DVector32>> BoundsToUpdate;
-
-	// Get the bounds positively against the previous-bounds.
-	if(PreviousRounded.IsValid())
+	const auto GetPositiveBounds = [&LayerIdx](const TBounds<F3DVector32>& Bounds) -> std::vector<TBounds<F3DVector32>>
 	{
-		std::vector<TBounds<F3DVector32>> PrevRemainders;
-		if(CurrentRounded.IsValid()) PrevRemainders = PreviousRounded.GetNonOverlapping(CurrentRounded);
-		else PrevRemainders.push_back(PreviousRounded);
+		const TBounds<F3DVector32> PositiveX = TBounds<F3DVector32>(F3DVector32(Bounds.Max.X, Bounds.Min.Y, Bounds.Min.Z), F3DVector32(Bounds.Max.X + FNavMeshStatic::NodeSizes[LayerIdx], Bounds.Max.Y, Bounds.Max.Z));
+		const TBounds<F3DVector32> PositiveY = TBounds<F3DVector32>(F3DVector32(Bounds.Min.X, Bounds.Max.Y, Bounds.Min.Z), F3DVector32(Bounds.Max.X, Bounds.Max.Y + FNavMeshStatic::NodeSizes[LayerIdx], Bounds.Max.Z));
+		const TBounds<F3DVector32> PositiveZ = TBounds<F3DVector32>(F3DVector32(Bounds.Min.X, Bounds.Min.Y, Bounds.Max.Z), F3DVector32(Bounds.Max.X, Bounds.Max.Y, Bounds.Max.Z + FNavMeshStatic::NodeSizes[LayerIdx]));
+		return {PositiveX, PositiveY, PositiveZ};
+	};
+	
+	// Keep track of the bounds one node-size outside the current and previous bounds in their positive direction.
+	// These are the parts that contains the nodes that should have their relations updated as well.
+	std::vector<TBounds<F3DVector32>> PositiveBounds;
+	std::set<uint_fast32_t> PositiveNodes;
 
-		std::vector<TBounds<F3DVector32>> NonOverlappingRemainders;
-		for (auto PrevRemainder : PrevRemainders)
+	// Get the positive-bounds against the current-bounds that do not overlap with any of the remaining previous-bounds.
+	if(CurrentBounds.IsValid())
+	{
+		const std::vector<TBounds<F3DVector32>> CurrPositiveBounds = GetPositiveBounds(CurrentBounds);
+		if(PreviousRemainders.size())
 		{
-			const TBounds<F3DVector32> Rounded = PrevRemainder.Round(LayerIdx);
-			const std::vector<TBounds<F3DVector32>> NonOverlappingX = TBounds<F3DVector32>(F3DVector32(Rounded.Max.X, Rounded.Min.Y, Rounded.Min.Z), F3DVector32(Rounded.Max.X + FNavMeshStatic::NodeSizes[LayerIdx], Rounded.Max.Y, Rounded.Max.Z)).GetNonOverlapping(CurrentRounded);
-			const std::vector<TBounds<F3DVector32>> NonOverlappingY = TBounds<F3DVector32>(F3DVector32(Rounded.Min.X, Rounded.Max.Y, Rounded.Min.Z), F3DVector32(Rounded.Max.X, Rounded.Max.Y + FNavMeshStatic::NodeSizes[LayerIdx], Rounded.Max.Z)).GetNonOverlapping(CurrentRounded);
-			const std::vector<TBounds<F3DVector32>> NonOverlappingZ = TBounds<F3DVector32>(F3DVector32(Rounded.Min.X, Rounded.Min.Y, Rounded.Max.Z), F3DVector32(Rounded.Max.X, Rounded.Max.Y, Rounded.Max.Z + FNavMeshStatic::NodeSizes[LayerIdx])).GetNonOverlapping(CurrentRounded);
-			NonOverlappingRemainders.reserve(NonOverlappingX.size() + NonOverlappingY.size() + NonOverlappingZ.size());
-			NonOverlappingRemainders.insert(NonOverlappingRemainders.end(), NonOverlappingX.begin(), NonOverlappingX.end());
-			NonOverlappingRemainders.insert(NonOverlappingRemainders.end(), NonOverlappingY.begin(), NonOverlappingY.end());
-			NonOverlappingRemainders.insert(NonOverlappingRemainders.end(), NonOverlappingZ.begin(), NonOverlappingZ.end());
+			// Get the parts that do not overlap with any of the previous-remainders.
+			for (auto CurrPositive : CurrPositiveBounds)
+			{
+				for (auto PreviousRemainder : PreviousRemainders)
+				{
+					std::vector<TBounds<F3DVector32>> NonOverlapping = CurrPositive.GetNonOverlapping(PreviousRemainder);
+					PositiveBounds.insert(PositiveBounds.end(), NonOverlapping.begin(), NonOverlapping.end());
+				}
+			}
 		}
-
-		for (auto Remainder : NonOverlappingRemainders)
+		else
 		{
-			Remainder.Draw(World, FColor::Magenta, 2);
-			Remainder.Draw(World, FColor::Magenta, 2);
-			Remainder.Draw(World, FColor::Magenta, 2);
+			// There are no previous-remainders so we can directly insert the positive bounds.
+			PositiveBounds.insert(PositiveBounds.end(), CurrPositiveBounds.begin(), CurrPositiveBounds.end());
 		}
 	}
 
-	// Get the bounds positively against the current-bounds.
-	if(CurrentRounded.IsValid())
+	// Do the same with the remaining previous-bounds against the current-bounds.
+	for (auto PreviousRemainder : PreviousRemainders)
 	{
-		std::vector<TBounds<F3DVector32>> CurrRemainders;
-		if(PreviousRounded.IsValid()) CurrRemainders = CurrentRounded.GetNonOverlapping(PreviousRounded);
-		else CurrRemainders.push_back(PreviousRounded);
-
-		std::vector<TBounds<F3DVector32>> NonOverlappingRemainders;
-		for (auto CurrRemainder : CurrRemainders)
+		for (auto PrevPositiveBounds : GetPositiveBounds(PreviousRemainder))
 		{
-			const TBounds<F3DVector32> Rounded = CurrRemainder.Round(LayerIdx);
-			const std::vector<TBounds<F3DVector32>> NonOverlappingX = TBounds<F3DVector32>(F3DVector32(Rounded.Max.X, Rounded.Min.Y, Rounded.Min.Z), F3DVector32(Rounded.Max.X + FNavMeshStatic::NodeSizes[LayerIdx], Rounded.Max.Y, Rounded.Max.Z)).GetNonOverlapping(PreviousRounded);
-			const std::vector<TBounds<F3DVector32>> NonOverlappingY = TBounds<F3DVector32>(F3DVector32(Rounded.Min.X, Rounded.Max.Y, Rounded.Min.Z), F3DVector32(Rounded.Max.X, Rounded.Max.Y + FNavMeshStatic::NodeSizes[LayerIdx], Rounded.Max.Z)).GetNonOverlapping(PreviousRounded);
-			const std::vector<TBounds<F3DVector32>> NonOverlappingZ = TBounds<F3DVector32>(F3DVector32(Rounded.Min.X, Rounded.Min.Y, Rounded.Max.Z), F3DVector32(Rounded.Max.X, Rounded.Max.Y, Rounded.Max.Z + FNavMeshStatic::NodeSizes[LayerIdx])).GetNonOverlapping(PreviousRounded);
-			NonOverlappingRemainders.reserve(NonOverlappingX.size() + NonOverlappingY.size() + NonOverlappingZ.size());
-			NonOverlappingRemainders.insert(NonOverlappingRemainders.end(), NonOverlappingX.begin(), NonOverlappingX.end());
-			NonOverlappingRemainders.insert(NonOverlappingRemainders.end(), NonOverlappingY.begin(), NonOverlappingY.end());
-			NonOverlappingRemainders.insert(NonOverlappingRemainders.end(), NonOverlappingZ.begin(), NonOverlappingZ.end());
+			if(CurrentBounds.IsValid())
+			{
+				std::vector<TBounds<F3DVector32>> NonOverlapping = PrevPositiveBounds.GetNonOverlapping(CurrentBounds);
+				PositiveBounds.insert(PositiveBounds.end(), NonOverlapping.begin(), NonOverlapping.end());
+				continue;
+			}
+			PositiveBounds.push_back(PrevPositiveBounds);
 		}
+	}
 
-		for (auto Remainder : NonOverlappingRemainders)
-		{
-			Remainder.Draw(World, FColor::Emerald, 2);
-			Remainder.Draw(World, FColor::Emerald, 2);
-			Remainder.Draw(World, FColor::Emerald, 2);
-		}
+	for (auto Bounds : PositiveBounds)
+	{
+		Bounds.Draw(World, FColor::Emerald, 2);
 	}
 }

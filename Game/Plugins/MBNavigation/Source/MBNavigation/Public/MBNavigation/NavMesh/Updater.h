@@ -30,7 +30,7 @@ private:
 	bool StartReRasterizeNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx);
 	
 	void UnRasterize(const FChunk* Chunk, const std::unordered_set<uint_fast32_t>& NodeMortonCodes, const uint8 LayerIdx);
-	void UpdateRelations(const TBounds<F3DVector32>& CurrentBounds, std::vector<TBounds<F3DVector32>>& PreviousRemainders, std::vector<uint_fast32_t>& UpdatedMortonCodes, const uint8 LayerIdx);
+	void UpdateRelations(const TBounds<F3DVector32>& CurrentBounds, const std::vector<TBounds<F3DVector32>>& PreviousRemainders, std::vector<uint_fast32_t>& UpdatedMortonCodes, const uint8 LayerIdx);
 	
 	FNavMeshPtr NavMeshPtr;
 	const UWorld* World;

@@ -512,7 +512,7 @@ struct TBounds
 	FORCEINLINE auto HasOverlap(const UWorld* World) const -> std::enable_if_t<std::is_same_v<T, F3DVector32>, bool>
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE_STR("TBounds Has-Overlap");
-		DrawDebugBox(World, GetCenter().ToVector(), GetExtents().ToVector(), FColor::Blue, true, -1, 0, 2);
+		// DrawDebugBox(World, GetCenter().ToVector(), GetExtents().ToVector(), FColor::Blue, true, -1, 0, 2);
 		return FPhysicsInterface::GeomOverlapBlockingTest(
 			World,
 			FCollisionShape::MakeBox(GetExtents().ToVector() - 0.1f), // Decrease by small amount to avoid floating-point inaccuracy.
