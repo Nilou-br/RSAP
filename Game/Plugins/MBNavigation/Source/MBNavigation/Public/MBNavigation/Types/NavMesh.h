@@ -8,13 +8,6 @@
 #include "MBNavigation/Types/Math.h"
 #include "MBNavigation/Types/Static.h"
 
-#define DIRECTION_X_NEGATIVE 0b100000
-#define DIRECTION_Y_NEGATIVE 0b010000
-#define DIRECTION_Z_NEGATIVE 0b001000
-#define DIRECTION_X_POSITIVE 0b000100
-#define DIRECTION_Y_POSITIVE 0b000010
-#define DIRECTION_Z_POSITIVE 0b000001
-
 #define LAYER_INDEX_INVALID 11
 
 struct F3DVector32;
