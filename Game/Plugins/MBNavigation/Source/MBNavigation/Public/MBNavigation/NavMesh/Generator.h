@@ -28,8 +28,8 @@ private:
 	void GenerateChunks(const TBounds<F3DVector32>& LevelBounds);
 	void RasterizeStaticNode(FChunk* Chunk, FOctreeNode &Node, const uint8 LayerIndex);
 	void SetNegativeNeighbourRelations(const FChunk* Chunk);
-	void SetNodeRelations(FOctreeNode& Node, const F3DVector32& ChunkLocation, const uint8 LayerIndex);
-	static void RecursiveSetChildNodesRelation(const FOctreeNode* Node, const FChunk& Chunk, const uint8 LayerIndex, const uint8 LayerIndexToSet, const uint8 Direction);
+	void SetNodeRelations(const FChunk* Chunk, FOctreeNode& Node, const uint8 LayerIdx);
+	static void RecursiveSetChildNodesRelation(const FChunk* Chunk, const FOctreeNode* Node, const uint8 LayerIdx, const uint8 LayerIdxToSet, const uint8 Direction);
 
 	// Variables
 	FNavMeshPtr NavMeshPtr;

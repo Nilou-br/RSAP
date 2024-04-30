@@ -11,6 +11,8 @@
 #define DIRECTION_X_POSITIVE 0b000100
 #define DIRECTION_Y_POSITIVE 0b000010
 #define DIRECTION_Z_POSITIVE 0b000001
+#define DIRECTION_ALL_NEGATIVE 0b111000
+#define DIRECTION_ALL_POSITIVE 0b0000111
 #define DIRECTION_NONE 0b000000
 
 
@@ -284,22 +286,6 @@ struct F3DVector32
 
 	explicit F3DVector32()
 		: X(0), Y(0), Z(0) {}
-
-	FORCEINLINE bool HasOverlapWithinNodeExtent(const UWorld* World, const uint8 NodeLayerIndex) const
-	{
-		TRACE_CPUPROFILER_EVENT_SCOPE_STR("HasOverlapWithinExtent");
-		const FVector Extent = FVector(FNavMeshStatic::NodeHalveSizes[NodeLayerIndex]);
-		// DrawDebugBox(World, ToVector()+Extent, Extent, FColor::Black, true, -1, 0, 2);
-		return FPhysicsInterface::GeomOverlapBlockingTest(
-			World,
-			FCollisionShape::MakeBox(Extent),
-			ToVector() + Extent,
-			FQuat::Identity,
-			ECollisionChannel::ECC_WorldStatic,
-			FCollisionQueryParams::DefaultQueryParam,
-			FCollisionResponseParams::DefaultResponseParam
-		);
-	}
 };
 
 /**
@@ -418,14 +404,12 @@ struct TBounds
 
 	// Returns a list of morton-codes within the given bounds.
 	template<typename T = VectorType>
-	auto GetMortonCodesWithin(const uint8 LayerIndex) const -> std::enable_if_t<std::is_same_v<T, F3DVector10>, std::vector<uint_fast32_t>>
+	auto GetMortonCodes(const uint8 LayerIndex) const -> std::enable_if_t<std::is_same_v<T, F3DVector10>, std::vector<uint_fast32_t>>
 	{
-		const uint_fast16_t MortonOffset = FNavMeshStatic::MortonOffsets[LayerIndex];
-		
 		std::vector<uint_fast32_t> MortonCodes;
-		for (uint_fast16_t X = Min.X; X < Max.X; X+=MortonOffset) {
-			for (uint_fast16_t Y = Min.Y; Y < Max.Y; Y+=MortonOffset) {
-				for (uint_fast16_t Z = Min.Z; Z < Max.Z; Z+=MortonOffset) {
+		for (uint_fast16_t X = Min.X; X < Max.X; X+=FNavMeshStatic::MortonOffsets[LayerIndex]) {
+			for (uint_fast16_t Y = Min.Y; Y < Max.Y; Y+=FNavMeshStatic::MortonOffsets[LayerIndex]) {
+				for (uint_fast16_t Z = Min.Z; Z < Max.Z; Z+=FNavMeshStatic::MortonOffsets[LayerIndex]) {
 					MortonCodes.push_back(F3DVector10::ToMortonCode(X, Y, Z));
 				}
 			}
@@ -433,9 +417,9 @@ struct TBounds
 		return MortonCodes;
 	}
 
-	// Similar to GetMortonCodesWithin, but this also returns a direction value indicating if this node is the positive most node in one or more directions.
+	// Similar to GetMortonCodes, but this returns a pair of morton-code and the directions to update the relations for.
 	template<typename T = VectorType>
-	auto GetMortonDirectionPairsWithin(const uint8 LayerIndex, const uint8 ChunkPositiveDirection) const -> std::enable_if_t<std::is_same_v<T, F3DVector10>, std::vector<std::pair<uint_fast32_t, uint8>>>
+	auto GetMortonCodesWithDirectionsToUpdate(const uint8 LayerIndex, const uint8 ChunkPositiveDirection) const -> std::enable_if_t<std::is_same_v<T, F3DVector10>, std::vector<std::pair<uint_fast32_t, uint8>>>
 	{
 		const uint_fast16_t MortonOffset = FNavMeshStatic::MortonOffsets[LayerIndex];
 		
@@ -448,7 +432,10 @@ struct TBounds
 				
 				for (uint_fast16_t Z = Min.Z; Z < Max.Z; Z+=MortonOffset) {
 					const uint8 DirectionZ = ChunkPositiveDirection & DIRECTION_Z_POSITIVE && Z + MortonOffset == Max.Z ? DIRECTION_Z_POSITIVE : DIRECTION_NONE;
-					MortonDirectionPair.emplace_back(F3DVector10::ToMortonCode(X, Y, Z), DirectionX & DirectionY & DirectionZ);
+
+					// Emplace the morton-code with the directions to update.
+					// Negative directions always need to be checked, while positive only if this is specific node is the most positive in a certain axis of the given bounds.
+					MortonDirectionPair.emplace_back(F3DVector10::ToMortonCode(X, Y, Z), DIRECTION_ALL_NEGATIVE & (DirectionX & DirectionY & DirectionZ));
 				}
 			}
 		}

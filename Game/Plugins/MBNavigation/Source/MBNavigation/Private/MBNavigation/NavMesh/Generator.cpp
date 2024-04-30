@@ -5,6 +5,7 @@
 #include <chrono>
 #include <ranges>
 #include "unordered_dense.h"
+#include "MBNavigation/NavMesh/Shared.h"
 #include "MBNavigation/Types/NavMesh.h"
 #include "MBNavigation/Types/Math.h"
 
@@ -157,7 +158,7 @@ void FNavMeshGenerator::SetNegativeNeighbourRelations(const FChunk* Chunk)
 	{
 		for (auto& Node : NodesMap | std::views::values)
 		{
-			SetNodeRelations(Node, Chunk->Location, LayerIndex);
+			SetNodeRelations(Chunk, Node, LayerIndex);
 		}
 		LayerIndex++;
 	}
@@ -166,85 +167,38 @@ void FNavMeshGenerator::SetNegativeNeighbourRelations(const FChunk* Chunk)
 /**
  * Sets the neighbour relations in the negative direction of the given node.
  * 
+ * @param Chunk: Chunk the node is in.
  * @param Node: Node to set the relations of.
- * @param ChunkLocation: location of the chunk the given Node is in.
- * @param LayerIndex: layer-index of the given Node.
+ * @param LayerIdx: layer-index of the given node.
  */
-void FNavMeshGenerator::SetNodeRelations(FOctreeNode& Node, const F3DVector32& ChunkLocation, const uint8 LayerIndex)
+void FNavMeshGenerator::SetNodeRelations(const FChunk* Chunk, FOctreeNode& Node, const uint8 LayerIdx)
 {
 	const F3DVector10 NodeLocalLocation = Node.GetLocalLocation();
 	for (uint8 n = 0; n < 3; ++n)
 	{
 		const uint8 Direction = 0b100000 >> n;
+		const FChunk* NeighbourChunk = Node.ChunkBorder & Direction ? GetNeighbouringChunk(NavMeshPtr, Chunk->Location, Direction) : Chunk;
+		if(!NeighbourChunk) continue;
 
-		// Calculate ChunkOffset if the direction goes into a different chunk.
-		F3DVector32 ChunkOffset(0, 0, 0);
-		if (Node.ChunkBorder & Direction) {
-			switch (Direction) {
-			case DIRECTION_X_NEGATIVE:
-				ChunkOffset.X = -FNavMeshStatic::ChunkSize;
-				break;
-			case DIRECTION_Y_NEGATIVE:
-				ChunkOffset.Y = -FNavMeshStatic::ChunkSize;
-				break;
-			case DIRECTION_Z_NEGATIVE:
-				ChunkOffset.Z = -FNavMeshStatic::ChunkSize;
-				break;
-			case DIRECTION_X_POSITIVE:
-				ChunkOffset.X = FNavMeshStatic::ChunkSize;
-				break;
-			case DIRECTION_Y_POSITIVE:
-				ChunkOffset.Y = FNavMeshStatic::ChunkSize;
-				break;
-			case DIRECTION_Z_POSITIVE:
-				ChunkOffset.Z = FNavMeshStatic::ChunkSize;
-				break;
-			default:
-				break;
-			}
-		}
-
-		// Get the location we want to check by applying an offset based on its layer.
-		F3DVector10 LocalLocationToCheck;
+		// Get the morton-code of the node in this direction.
+		uint_fast32_t MortonCodeToCheck;
 		switch (Direction) {
-		case DIRECTION_X_NEGATIVE:
-			LocalLocationToCheck = NodeLocalLocation - F3DVector10(FNavMeshStatic::MortonOffsets[LayerIndex], 0, 0);
-			break;
-		case DIRECTION_Y_NEGATIVE:
-			LocalLocationToCheck = NodeLocalLocation - F3DVector10(0, FNavMeshStatic::MortonOffsets[LayerIndex], 0);
-			break;
-		case DIRECTION_Z_NEGATIVE:
-			LocalLocationToCheck = NodeLocalLocation - F3DVector10(0, 0, FNavMeshStatic::MortonOffsets[LayerIndex]);
-			break;
-		case DIRECTION_X_POSITIVE:
-			LocalLocationToCheck = NodeLocalLocation + F3DVector10(FNavMeshStatic::MortonOffsets[LayerIndex], 0, 0);
-			break;
-		case DIRECTION_Y_POSITIVE:
-			LocalLocationToCheck = NodeLocalLocation + F3DVector10(0, FNavMeshStatic::MortonOffsets[LayerIndex], 0);
-			break;
-		case DIRECTION_Z_POSITIVE:
-			LocalLocationToCheck = NodeLocalLocation + F3DVector10(0, 0, FNavMeshStatic::MortonOffsets[LayerIndex]);
-			break;
-		default:
-			break;
+		case DIRECTION_X_NEGATIVE: MortonCodeToCheck = FOctreeNode::GetMortonCodeFromLocalLocation(NodeLocalLocation - F3DVector10(FNavMeshStatic::MortonOffsets[LayerIdx], 0, 0)); break;
+		case DIRECTION_Y_NEGATIVE: MortonCodeToCheck = FOctreeNode::GetMortonCodeFromLocalLocation(NodeLocalLocation - F3DVector10(0, FNavMeshStatic::MortonOffsets[LayerIdx], 0)); break;
+		case DIRECTION_Z_NEGATIVE: MortonCodeToCheck = FOctreeNode::GetMortonCodeFromLocalLocation(NodeLocalLocation - F3DVector10(0, 0, FNavMeshStatic::MortonOffsets[LayerIdx])); break;
+		case DIRECTION_X_POSITIVE: MortonCodeToCheck = FOctreeNode::GetMortonCodeFromLocalLocation(NodeLocalLocation + F3DVector10(FNavMeshStatic::MortonOffsets[LayerIdx], 0, 0)); break;
+		case DIRECTION_Y_POSITIVE: MortonCodeToCheck = FOctreeNode::GetMortonCodeFromLocalLocation(NodeLocalLocation + F3DVector10(0, FNavMeshStatic::MortonOffsets[LayerIdx], 0)); break;
+		case DIRECTION_Z_POSITIVE: MortonCodeToCheck = FOctreeNode::GetMortonCodeFromLocalLocation(NodeLocalLocation + F3DVector10(0, 0, FNavMeshStatic::MortonOffsets[LayerIdx])); break;
+		default: break;
 		}
-
-		// Find chunk the neighbour is in.
-		const uint_fast64_t Key = (ChunkLocation + ChunkOffset).ToKey();
-		const auto ChunkIterator = NavMeshPtr->find(Key);
-		if (ChunkIterator == NavMeshPtr->end()) continue;
-		const FChunk& NeighbourChunk = ChunkIterator->second;
-
-		// Get morton-code we want to start checking from the calculated location.
-		uint_fast32_t MortonCodeToCheck = FOctreeNode::GetMortonCodeFromLocalLocation(LocalLocationToCheck);
 		
-		// Check each layer starting from the Node's current layer down until the lowest resolution node.
-		// Nodes can only have neighbours the same size, or bigger, than itself.
-		for (int LayerIndexToCheck = LayerIndex; LayerIndexToCheck >= 0; --LayerIndexToCheck)
+		// Find the neighbour by checking each layer one by one upwards in the octree until we find the neighbour. The root node on layer 0 always exists.
+		// Nodes can only have relations equaling or greater-than its own layer.
+		for (int LayerIndexToCheck = LayerIdx; LayerIndexToCheck >= 0; --LayerIndexToCheck)
 		{
 			// Try to find neighbour
-			const auto NodeIterator = NeighbourChunk.Octrees[0]->Layers[LayerIndexToCheck].find(MortonCodeToCheck);
-			if(NodeIterator == NeighbourChunk.Octrees[0]->Layers[LayerIndexToCheck].end())
+			const auto NodeIterator = NeighbourChunk->Octrees[0]->Layers[LayerIndexToCheck].find(MortonCodeToCheck);
+			if(NodeIterator == NeighbourChunk->Octrees[0]->Layers[LayerIndexToCheck].end())
 			{
 				// Continue the loop by setting the MortonCodeToCheck to the parent's morton-code.
 				// This way you will eventually find the node located in this direction.
@@ -262,18 +216,18 @@ void FNavMeshGenerator::SetNodeRelations(FOctreeNode& Node, const F3DVector32& C
 			{
 			case DIRECTION_X_NEGATIVE:
 				Node.Neighbours.NeighbourX_N = NeighbourLayerIndex;
-				NeighbourNode->Neighbours.NeighbourX_P = LayerIndexToCheck;
-				RecursiveSetChildNodesRelation(NeighbourNode, NeighbourChunk, NeighbourLayerIndex, LayerIndex, DIRECTION_X_POSITIVE);
+				NeighbourNode->Neighbours.NeighbourX_P = LayerIdx;
+				RecursiveSetChildNodesRelation(NeighbourChunk, NeighbourNode, NeighbourLayerIndex, LayerIdx, DIRECTION_X_POSITIVE);
 				break;
 			case DIRECTION_Y_NEGATIVE:
 				Node.Neighbours.NeighbourY_N = NeighbourLayerIndex;
-				NeighbourNode->Neighbours.NeighbourY_P = LayerIndexToCheck;
-				RecursiveSetChildNodesRelation(NeighbourNode, NeighbourChunk, NeighbourLayerIndex, LayerIndex, DIRECTION_Y_POSITIVE);
+				NeighbourNode->Neighbours.NeighbourY_P = LayerIdx;
+				RecursiveSetChildNodesRelation(NeighbourChunk, NeighbourNode, NeighbourLayerIndex, LayerIdx, DIRECTION_Y_POSITIVE);
 				break;
 			case DIRECTION_Z_NEGATIVE:
 				Node.Neighbours.NeighbourZ_N = NeighbourLayerIndex;
-				NeighbourNode->Neighbours.NeighbourZ_P = LayerIndexToCheck;
-				RecursiveSetChildNodesRelation(NeighbourNode, NeighbourChunk, NeighbourLayerIndex, LayerIndex, DIRECTION_Z_POSITIVE);	
+				NeighbourNode->Neighbours.NeighbourZ_P = LayerIdx;
+				RecursiveSetChildNodesRelation(NeighbourChunk, NeighbourNode, NeighbourLayerIndex, LayerIdx, DIRECTION_Z_POSITIVE);	
 				break;
 			default:
 				break;
@@ -290,17 +244,17 @@ void FNavMeshGenerator::SetNodeRelations(FOctreeNode& Node, const F3DVector32& C
  *
  * @param Node The Node where its children will have their Neighbour in given Direction set to LayerIndexToSet.
  * @param Chunk The Chunk the Node is in.
- * @param LayerIndex Layer-index of the given Node.
- * @param LayerIndexToSet LayerIndex of the Neighbour that will be set on the children.
+ * @param LayerIdx Layer-index of the given Node.
+ * @param LayerIdxToSet LayerIndex of the Neighbour that will be set on the children.
  * @param Direction Direction of Neighbour.
  * 
  */
-void FNavMeshGenerator::RecursiveSetChildNodesRelation(const FOctreeNode* Node, const FChunk& Chunk, const uint8 LayerIndex, const uint8 LayerIndexToSet, const uint8 Direction)
+void FNavMeshGenerator::RecursiveSetChildNodesRelation(const FChunk* Chunk, const FOctreeNode* Node, const uint8 LayerIdx, const uint8 LayerIdxToSet, const uint8 Direction)
 {
 	if(!Node->IsFilled()) return;
 	
 	const F3DVector10 ParentLocalLocation = Node->GetLocalLocation();
-	const uint8 ChildLayerIndex = LayerIndex+1;
+	const uint8 ChildLayerIndex = LayerIdx+1;
 	const uint16 MortonOffset = FNavMeshStatic::MortonOffsets[ChildLayerIndex];
 	std::array<uint_fast32_t, 4> ChildMortonCodes;
 	switch (Direction)
@@ -329,9 +283,9 @@ void FNavMeshGenerator::RecursiveSetChildNodesRelation(const FOctreeNode* Node, 
 	
 	for (auto ChildMortonCode : ChildMortonCodes)
 	{
-		const auto NodeIterator = Chunk.Octrees[0]->Layers[ChildLayerIndex].find(ChildMortonCode);
+		const auto NodeIterator = Chunk->Octrees[0]->Layers[ChildLayerIndex].find(ChildMortonCode);
 		FOctreeNode* ChildNode = &NodeIterator->second;
-		ChildNode->Neighbours.SetFromDirection(LayerIndexToSet, Direction);
-		RecursiveSetChildNodesRelation(ChildNode, Chunk, ChildLayerIndex, LayerIndexToSet, Direction);
+		ChildNode->Neighbours.SetFromDirection(LayerIdxToSet, Direction);
+		RecursiveSetChildNodesRelation(Chunk, ChildNode, ChildLayerIndex, LayerIdxToSet, Direction);
 	}
 }

@@ -195,11 +195,6 @@ struct FOctreeNode
 	{
 		return MortonCode & MortonMask;
 	}
-
-	FORCEINLINE static uint_fast32_t GetMortonCodeFromLocalLocation(const F3DVector10 LocalLocation)
-	{
-		return libmorton::morton3D_32_encode(LocalLocation.X, LocalLocation.Y, LocalLocation.Z);
-	}
 	
 	FORCEINLINE uint_fast32_t GetParentMortonCode(const uint8 LayerIndex) const
 	{
@@ -207,10 +202,10 @@ struct FOctreeNode
 		return GetMortonCode() & ParentMask;
 	}
 	
-	FORCEINLINE static uint_fast32_t GetParentMortonCode(const uint_fast32_t MortonCode, const uint8 LayerIndex)
+	FORCEINLINE static uint_fast32_t GetParentMortonCode(const uint_fast32_t NodeMortonCode, const uint8 NodeLayerIdx)
 	{
-		const uint_fast32_t ParentMask = ~((1 << ParentShiftAmount[LayerIndex-1]) - 1);
-		return MortonCode & ParentMask;
+		const uint_fast32_t ParentMask = ~((1 << ParentShiftAmount[NodeLayerIdx-1]) - 1);
+		return NodeMortonCode & ParentMask;
 	}
 
 	FORCEINLINE void SetFilled(const bool Value)
@@ -238,14 +233,14 @@ struct FOctreeNode
 	std::array<uint8, 6> GetNeighbourLayerIndexes() const;
 	std::array<FNodeLookupData, 6> GetNeighboursLookupData(const F3DVector32& ChunkLocation) const;
 	
-	FORCEINLINE bool HasOverlap(const UWorld* World, const F3DVector32& ChunkLocation, const uint8 LayerIndex) const
+	FORCEINLINE bool HasOverlap(const UWorld* World, const F3DVector32& ChunkLocation, const uint8 LayerIdx) const
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE_STR("Node Has-Overlap");
 		// if(LayerIndex == 5) DrawDebugBox(World, GetGlobalLocation(ChunkLocation).ToVector() + FNavMeshStatic::NodeHalveSizes[LayerIndex], FVector(FNavMeshStatic::NodeHalveSizes[LayerIndex]), FColor::Black, true, -1, 0, 2); // Test for starting-layer being 5
 		return FPhysicsInterface::GeomOverlapBlockingTest(
 			World,
-			FNavMeshStatic::CollisionBoxes[LayerIndex],
-			GetGlobalLocation(ChunkLocation).ToVector() + FNavMeshStatic::NodeHalveSizes[LayerIndex],
+			FNavMeshStatic::CollisionBoxes[LayerIdx],
+			GetGlobalLocation(ChunkLocation).ToVector() + FNavMeshStatic::NodeHalveSizes[LayerIdx],
 			FQuat::Identity,
 			ECollisionChannel::ECC_WorldStatic,
 			FCollisionQueryParams::DefaultQueryParam,
