@@ -26,16 +26,16 @@ private:
 	static void InitializeParents(const FChunk* Chunk, const uint_fast32_t MortonCode, const uint8 LayerIdx);
 	
 	bool StartReRasterizeNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx, const uint8 RelationsToUpdate);
-	void RecursiveReRasterizeNode(const FChunk* Chunk, FOctreeNode& Node, const F3DVector10 NodeMortonLocation, const uint8 NodeLayerIdx, const uint8 RelationsToUpdate);
+	void RecursiveReRasterizeNode(const FChunk* Chunk, FNode& Node, const F3DVector10 NodeMortonLocation, const uint8 NodeLayerIdx, const uint8 RelationsToUpdate);
 
 	bool StartClearUnoccludedChildren(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx);
-	void RecursiveClearUnoccludedChildren(const FChunk* Chunk, const FOctreeNode& Node, const uint8 LayerIdx);
+	void RecursiveClearUnoccludedChildren(const FChunk* Chunk, const FNode& Node, const uint8 LayerIdx);
 	
 	static void StartClearAllChildren(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx);
-	static void RecursiveClearAllChildren(const FChunk* Chunk, const FOctreeNode& Node, const uint8 LayerIdx);
+	static void RecursiveClearAllChildren(const FChunk* Chunk, const FNode& Node, const uint8 LayerIdx);
 	
 	void UnRasterize(const FChunk* Chunk, const std::unordered_set<uint_fast32_t>& NodeMortonCodes, const uint8 LayerIdx);
-	void SetNodeRelations(const FChunk* Chunk, FOctreeNode& Node, const uint8 NodeLayerIdx, uint8 RelationsToUpdate);
+	void SetNodeRelations(const FChunk* Chunk, FNode& Node, const uint8 NodeLayerIdx, uint8 RelationsToUpdate);
 	
 	FNavMeshPtr NavMeshPtr;
 	const UWorld* World;

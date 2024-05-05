@@ -89,49 +89,52 @@ struct FNodeLookupData
 };
 
 /**
- * *x* bit node used in the 3D navigation-mesh for pathfinding.
+ *   Octree node used in the navigation-mesh for pathfinding.
  *
- * - MortonCode: represents its location in a single value.
- *   Allows for memory coherency, and bitwise-operations to quickly calculate neighbours etc.
+ * - MortonCode: represents its 3d location in a single value for efficiency and used as a key to find nodes.
+ *				 Also allows the nodes to be coherent in memory, and be able to quickly find neighbours using bitwise-operators.
  * - Neighbours: Stores a 4 bit layer-index for locating each neighbour in the octree.
  * - DynamicIndex: Represents the octree the children of this node are stored on, 0 being the static octree. todo remove this, we only need to know d-index of neighbours/children.
  * - ChunkBorder: Bitmask for determining the border this voxel is next to.
  *   Used to efficiently calculate the next chunk.
  * - IsOccluded(): If the node is occluded.
- * - IsFilled(): If the node has children.
+ * - HasChildren(): If the node has children.
  *
  * todo change to class.
  */
-struct FOctreeNode
+class FNode
 {
-	static constexpr uint_fast32_t BoolFilledMask = 1u << 30;
-	static constexpr uint_fast32_t BoolOccludedMask = 1u << 31;
 	static constexpr uint_fast32_t MortonMask = (1u << 30) - 1;
+	static constexpr uint_fast32_t IsOccludedMask = 1u << 31;
+	static constexpr uint_fast32_t HasChildrenMask = 1u << 30;
 	static constexpr int LayerShiftAmount[10] = {30, 30, 27, 24, 21, 18, 15, 12, 9, 6}; // todo change to make 30, 27, 24 etc...
 	static constexpr int ParentShiftAmount[10] = {30, 27, 24, 21, 18, 15, 12, 9, 6, 3};
 
+	// The morton-code of a node also stores two additional booleans. IsOccluded and HasChildren.
 	uint_fast32_t MortonCode;
-	FNodeRelations Relations;
-	OctreeDirection ChunkBorder: 6;
 	// todo 8 bits for dynamic index for each neighbour + child + parent???? 128 dynamic-objects a chunk (0 index / first bit is for the static octree)
 
-	FOctreeNode():
+public:
+	FNodeRelations Relations;
+	OctreeDirection ChunkBorder: 6;
+	
+	FNode():
 		MortonCode(0), ChunkBorder(0)
 	{}
 
-	FOctreeNode(const uint_fast16_t MortonX, const uint_fast16_t MortonY, const uint_fast16_t MortonZ, const uint8 InChunkBorder = 0b000000):
+	FNode(const uint_fast16_t MortonX, const uint_fast16_t MortonY, const uint_fast16_t MortonZ, const OctreeDirection InChunkBorder = 0b000000):
 		ChunkBorder(InChunkBorder)
 	{
 		MortonCode = libmorton::morton3D_32_encode(MortonX, MortonY, MortonZ);
 	}
 
-	explicit FOctreeNode(const F3DVector10 MortonLocation, const uint8 InChunkBorder = 0b000000):
+	explicit FNode(const F3DVector10 MortonLocation, const OctreeDirection InChunkBorder = 0b000000):
 		ChunkBorder(InChunkBorder)
 	{
 		MortonCode = libmorton::morton3D_32_encode(MortonLocation.X, MortonLocation.Y, MortonLocation.Z);
 	}
 
-	explicit FOctreeNode(const uint_fast32_t InMortonCode, const uint8 InChunkBorder = 0b000000):
+	explicit FNode(const uint_fast32_t InMortonCode, const OctreeDirection InChunkBorder = 0b000000):
 		MortonCode(InMortonCode), ChunkBorder(InChunkBorder)
 	{}
 
@@ -159,9 +162,16 @@ struct FOctreeNode
 		return ChunkLocation + GetLocalLocation();
 	}
 
+	// Returns the morton-code of the node, where the additional booleans stored on the morton-code are masked away.
 	FORCEINLINE uint_fast32_t GetMortonCode() const
 	{
 		return MortonCode & MortonMask;
+	}
+
+	// Returns the unmasked morton-code of the node. This included the additional booleans, and should only be used for serializing the node.
+	FORCEINLINE uint_fast32_t GetUnmaskedMortonCode() const
+	{
+		return MortonCode;
 	}
 	
 	FORCEINLINE uint_fast32_t GetParentMortonCode(const uint8 LayerIndex) const
@@ -176,26 +186,26 @@ struct FOctreeNode
 		return NodeMortonCode & ParentMask;
 	}
 
-	FORCEINLINE void SetFilled(const bool Value)
+	FORCEINLINE void SetHasChildren(const bool Value)
 	{
-		if (Value) MortonCode |= BoolFilledMask;
-		else MortonCode &= ~BoolFilledMask;
+		if (Value) MortonCode |= HasChildrenMask;
+		else MortonCode &= ~HasChildrenMask;
 	}
 
 	FORCEINLINE void SetOccluded(const bool Value)
 	{
-		if (Value) MortonCode |= BoolOccludedMask;
-		else MortonCode &= ~BoolOccludedMask;
+		if (Value) MortonCode |= IsOccludedMask;
+		else MortonCode &= ~IsOccludedMask;
 	}
 	
-	FORCEINLINE bool IsFilled() const
+	FORCEINLINE bool HasChildren() const
 	{
-		return MortonCode & BoolFilledMask;
+		return MortonCode & HasChildrenMask;
 	}
 
 	FORCEINLINE bool IsOccluded() const
 	{
-		return MortonCode & BoolOccludedMask;
+		return MortonCode & IsOccludedMask;
 	}
 
 	std::array<uint8, 6> GetNeighbourLayerIndexes() const;
@@ -224,7 +234,7 @@ struct FOctreeNode
 };
 
 // typedef std::map<uint_fast32_t, FOctreeNode> FNodesMap;
-typedef ankerl::unordered_dense::map<uint_fast32_t, FOctreeNode> FNodesMap; // todo: rename to FOctreeLayer?
+typedef ankerl::unordered_dense::map<uint_fast32_t, FNode> FOctreeLayer; // todo: rename to FOctreeLayer?
 
 /**
  * The octree stores all the nodes in 10 different layers, each layer having higher resolution nodes.
@@ -235,14 +245,14 @@ typedef ankerl::unordered_dense::map<uint_fast32_t, FOctreeNode> FNodesMap; // t
  */
 struct FOctree
 {
-	std::array<FNodesMap, 10> Layers; // todo static array?
+	std::array<FOctreeLayer, 10> Layers;
 	TArray<FOctreeLeaf> Leafs;
 
 	FOctree()
 	{
 		for (uint8 i = 0; i < 10; i++)
 		{
-			Layers[i] = FNodesMap();
+			Layers[i] = FOctreeLayer();
 		}
 	}
 };
@@ -264,7 +274,7 @@ struct FChunk
 		Octrees.Add(MakeShared<FOctree>());
 
 		// Create the root node.
-		Octrees[0]->Layers[0].emplace(0, FOctreeNode(0, 0, 0, 0b111111));
+		Octrees[0]->Layers[0].emplace(0, FNode(0, 0, 0, DIRECTION_ALL));
 	}
 
 	FORCEINLINE FVector GetCenter(const uint32 ChunkHalveSize) const
@@ -283,9 +293,9 @@ struct FChunk
 
 	// Todo move somewhere else, maybe FOctree?
 	template<typename Func>
-	void ForEachChildOfNode(const FOctreeNode& Node, const uint8 LayerIdx, Func Callback) const
+	void ForEachChildOfNode(const FNode& Node, const uint8 LayerIdx, Func Callback) const
 	{
-		if(!Node.IsFilled()) return;
+		if(!Node.HasChildren()) return;
 		
 		const uint8 ChildLayerIdx = LayerIdx+1;
 		const int_fast16_t ChildOffset = FNavMeshStatic::MortonOffsets[ChildLayerIdx];
@@ -301,10 +311,6 @@ struct FChunk
 			const uint_fast32_t ChildMortonCode = ChildMortonLocation.ToMortonCode();
 			
 			const auto NodeIterator = Octrees[0]->Layers[ChildLayerIdx].find(ChildMortonCode);
-			if(NodeIterator == Octrees[0]->Layers[ChildLayerIdx].end())
-			{
-				continue;
-			}
 			Callback(NodeIterator->second);
 		}
 	}

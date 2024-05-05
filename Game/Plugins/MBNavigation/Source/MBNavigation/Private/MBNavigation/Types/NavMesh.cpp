@@ -4,7 +4,7 @@
 
 
 
-std::array<uint8, 6> FOctreeNode::GetNeighbourLayerIndexes() const
+std::array<uint8, 6> FNode::GetNeighbourLayerIndexes() const
 {
     std::array<uint8, 6> NeighbourLayerIndexes;
 
@@ -25,7 +25,7 @@ std::array<uint8, 6> FOctreeNode::GetNeighbourLayerIndexes() const
     return NeighbourLayerIndexes;
 }
 
-std::array<FNodeLookupData, 6> FOctreeNode::GetNeighboursLookupData(const F3DVector32& ChunkLocation) const
+std::array<FNodeLookupData, 6> FNode::GetNeighboursLookupData(const F3DVector32& ChunkLocation) const
 {
     std::array<FNodeLookupData, 6> NeighboursLookupData;
     

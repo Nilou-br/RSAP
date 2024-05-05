@@ -4,7 +4,6 @@
 #include "MBNavigation/Types/NavMesh.h"
 #include <ranges>
 
-
 void SerializeNavMesh(FNavMesh& NavMesh, FGuid& ID)
 {
 	const FString FilePath = FPaths::ProjectSavedDir() / TEXT("NavMeshData.bin");
@@ -85,10 +84,11 @@ FArchive& operator<<(FArchive& Ar, FNodeRelations& Relations)
 	return Ar;
 }
 
-FArchive& operator<<(FArchive& Ar, FOctreeNode& OctreeNode)
+FArchive& operator<<(FArchive& Ar, FNode& Node)
 {
-	Ar << OctreeNode.MortonCode;
-	Ar << OctreeNode.Relations;
+	uint_fast32_t UnmaskedMortonCode = Node.GetUnmaskedMortonCode();
+	Ar << UnmaskedMortonCode;
+	Ar << Node.Relations;
 
 	if (Ar.IsSaving())
 	{
@@ -96,14 +96,14 @@ FArchive& operator<<(FArchive& Ar, FOctreeNode& OctreeNode)
 		// Remove or adjust the following line according to your application logic.
 		// if(OctreeNode.DynamicIndex) OctreeNode.Booleans = 0;
 		// uint32 PackedData = (static_cast<uint32>(OctreeNode.Booleans) << 6) | static_cast<uint32>(OctreeNode.ChunkBorder);
-		uint32 ChunkBorder = OctreeNode.ChunkBorder;
+		uint32 ChunkBorder = Node.ChunkBorder;
 		Ar << ChunkBorder;
 	}
 	else if (Ar.IsLoading())
 	{
 		uint32 ChunkBorder;
 		Ar << ChunkBorder;
-		OctreeNode.ChunkBorder = ChunkBorder;
+		Node.ChunkBorder = ChunkBorder;
 		
 		// Correctly unpack ChunkBorder and the Booleans
 		// OctreeNode.Booleans = (PackedData >> 6) & 0x03;
@@ -113,25 +113,25 @@ FArchive& operator<<(FArchive& Ar, FOctreeNode& OctreeNode)
 	return Ar;
 }
 
-FArchive& operator<<(FArchive& Ar, FNodesMap& NodesMap)
+FArchive& operator<<(FArchive& Ar, FOctreeLayer& Layer)
 {
-	size_t Size = NodesMap.size();
+	size_t Size = Layer.size();
 	Ar << Size;
 	if(Ar.IsSaving())
 	{
-		for(FOctreeNode& Node : NodesMap | std::views::values)
+		for(FNode& Node : Layer | std::views::values)
 		{
 			Ar << Node;
 		}
 	}
 	else if (Ar.IsLoading())
 	{
-		NodesMap.clear();
+		Layer.clear();
 		for(size_t i = 0; i < Size; ++i)
 		{
-			FOctreeNode Node;
+			FNode Node;
 			Ar << Node;
-			NodesMap.emplace(Node.GetMortonCode(), Node);
+			Layer.emplace(Node.GetMortonCode(), Node);
 		}
 	}
 	return Ar;
