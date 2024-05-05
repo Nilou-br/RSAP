@@ -1,10 +1,9 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #include "MBNavigation/NavMesh/Updater.h"
-#include <set>
+#include "MBNavigation/NavMesh/Shared.h"
 
 DEFINE_LOG_CATEGORY(LogNavMeshUpdater)
-
 
 
 /**
@@ -214,9 +213,11 @@ void FNavMeshUpdater::ForEachChunkIntersection(const TBounds<F3DVector32>& Bound
 	if(!Bounds.IsValid()) return;
 	const uint_fast16_t MortonOffset = FNavMeshStatic::MortonOffsets[LayerIdx];
 
-	// For-each chunk intersecting the bounds.
+	// Get the total-boundaries of all the chunks intersecting with the bounds.
 	const F3DVector32 ChunkMin = Bounds.Min & FNavMeshStatic::ChunkMask;
-	const F3DVector32 ChunkMax = Bounds.Max & FNavMeshStatic::ChunkMask;
+	const F3DVector32 ChunkMax = Bounds.Max-1 & FNavMeshStatic::ChunkMask;
+
+	// For-each chunk intersecting the bounds.
 	for (int32 GlobalX = ChunkMin.X; GlobalX <= ChunkMax.X; GlobalX+=FNavMeshStatic::ChunkSize){
 		const uint8 ChunkPositiveX = GlobalX == ChunkMax.X ? DIRECTION_X_POSITIVE : DIRECTION_NONE;
 		
@@ -230,9 +231,6 @@ void FNavMeshUpdater::ForEachChunkIntersection(const TBounds<F3DVector32>& Bound
 				const F3DVector32 ChunkLocation = F3DVector32(GlobalX, GlobalY, GlobalZ);
 				const TBounds<F3DVector32> IntersectedBounds = Bounds.GetIntersection(TBounds(ChunkLocation, ChunkLocation+FNavMeshStatic::ChunkSize));
 
-				// Skip this chunk if the intersected bounds is not occluding anything in the world.
-				// if(!IntersectedBounds.HasOverlap(World)) continue;
-
 				// Get this chunk, initialize it if it does not exists yet.
 				const uint64_t ChunkKey = ChunkLocation.ToKey();
 				auto ChunkIterator = NavMeshPtr->find(ChunkKey);
@@ -242,7 +240,7 @@ void FNavMeshUpdater::ForEachChunkIntersection(const TBounds<F3DVector32>& Bound
 				const TBounds<F3DVector10> MortonBounds = IntersectedBounds.ToMortonSpace(ChunkLocation);
 				std::vector<std::pair<uint_fast32_t, uint8>> UpdatePairs;
 
-				// For-each node-location in the MortonBounds, check if that node is the most positive in any direction.
+				// Get each node's morton-code within the MortonBounds, and check if that node is the most positive in any direction.
 				for (uint_fast16_t MortonX = MortonBounds.Min.X; MortonX < MortonBounds.Max.X; MortonX+=MortonOffset) {
 					const uint8 NodePositiveX = ChunkPositiveX && MortonX + MortonOffset == MortonBounds.Max.X ? DIRECTION_X_POSITIVE : DIRECTION_NONE; // First check if this chunk is the most positive, then the same for the node.
 			
@@ -301,7 +299,7 @@ void FNavMeshUpdater::UpdateStatic(const std::vector<TBoundsPair<F3DVector32>>& 
 			
 			for (const auto [MortonCode, RelationsToUpdate] : UpdatePair)
 			{
-				// DrawNodeFromMorton(World, Chunk, MortonCode, StartingLayerIdx);
+				DrawNodeFromMorton(World, Chunk, MortonCode, StartingLayerIdx);
 				
 				const bool bShouldCheckParent = StartReRasterizeNode(Chunk, MortonCode, StartingLayerIdx);
 				bShouldCheckParent	? NodesToUnRasterize.insert(FOctreeNode::GetParentMortonCode(MortonCode, StartingLayerIdx))

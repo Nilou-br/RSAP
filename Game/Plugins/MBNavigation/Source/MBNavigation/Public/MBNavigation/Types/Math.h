@@ -172,6 +172,11 @@ struct F3DVector32
 		return Vector32;
 	}
 
+	static F3DVector32 FromMortonCode(const uint_fast32_t MortonCode, const F3DVector32& ChunkLocation)
+	{
+		return ChunkLocation + (F3DVector32(F3DVector10::FromMortonCode(MortonCode)) << FNavMeshStatic::VoxelSizeExponent);
+	}
+
 	FORCEINLINE F3DVector32 ComponentMin(const F3DVector32& Other) const
 	{
 		return F3DVector32(FMath::Min(X, Other.X), FMath::Min(Y, Other.Y), FMath::Min(Z, Other.Z));
