@@ -251,9 +251,9 @@ struct F3DVector32
 		return FVector(X, Y, Z);
 	}
 
-	static F3DVector32 FromMortonVector(const F3DVector10 MortonLocation, const F3DVector32& ChunkLocation)
+	static F3DVector32 FromMortonCode(const uint_fast32_t MortonCode, const F3DVector32& ChunkLocation)
 	{
-		return ChunkLocation + (F3DVector32(MortonLocation) << FNavMeshStatic::VoxelSizeExponent);
+		return ChunkLocation + (F3DVector32(F3DVector10::FromMortonCode(MortonCode)) << FNavMeshStatic::VoxelSizeExponent);
 	}
 	
 	// Make sure every axis value fits in 10 bits, unsigned.

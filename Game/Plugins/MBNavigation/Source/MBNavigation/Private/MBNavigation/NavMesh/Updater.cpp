@@ -113,6 +113,8 @@ void FNavMeshUpdater::UpdateStatic(const std::vector<TBoundsPair<F3DVector32>>& 
 			
 			for (const auto [MortonCode, RelationsToUpdate] : UpdatePair)
 			{
+				DrawNodeFromMorton(World, Chunk, MortonCode, StartingLayerIdx);
+				
 				const bool bShouldCheckParent = StartReRasterizeNode(Chunk, MortonCode, StartingLayerIdx, RelationsToUpdate);
 				bShouldCheckParent	? NodesToUnRasterize.insert(FNode::GetParentMortonCode(MortonCode, StartingLayerIdx))
 									: NodesNotToUnRasterize.insert(FNode::GetParentMortonCode(MortonCode, StartingLayerIdx));
@@ -272,7 +274,7 @@ void FNavMeshUpdater::InitializeParents(const FChunk* Chunk, const uint_fast32_t
 		return;
 	}
 	
-	// Parent does not exist, so continue with recursion which will eventually init all missing parents.
+	// Parent does not exist, so continue with recursion which will eventually initialize all missing parents.
 	InitializeParents(Chunk, ParentMortonCode, ParentLayerIdx);
 
 	// The parent guaranteed to exist now, so we can init its children.
@@ -287,14 +289,14 @@ void FNavMeshUpdater::InitializeParents(const FChunk* Chunk, const uint_fast32_t
  * Updates the properties on the affected Nodes accordingly.
  * @return True if the starting Node is unoccluded. False otherwise.
  */
-bool FNavMeshUpdater::StartReRasterizeNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx, const uint8 RelationsToUpdate)
+bool FNavMeshUpdater::StartReRasterizeNode(const FChunk* Chunk, const uint_fast32_t MortonCode, const uint8 LayerIdx, const uint8 RelationsToUpdate)
 {
-	auto NodeIterator = Chunk->Octrees[0]->Layers[LayerIdx].find(NodeMortonCode);
+	auto NodeIterator = Chunk->Octrees[0]->Layers[LayerIdx].find(MortonCode);
 	const bool bFoundNode = NodeIterator != Chunk->Octrees[0]->Layers[LayerIdx].end();
 
 	const bool bHasOverlap = bFoundNode
 		? NodeIterator->second.HasOverlap(World, Chunk->Location, LayerIdx)
-		: HasOverlap(World, NodeMortonCode, LayerIdx, Chunk->Location);
+		: NodeHasOverlap(World, Chunk, MortonCode, LayerIdx);
 
 	if(!bHasOverlap)
 	{
@@ -317,8 +319,8 @@ bool FNavMeshUpdater::StartReRasterizeNode(const FChunk* Chunk, const uint_fast3
 	{
 		// There is an occlusion, but the node does not exist, meaning that there is no parent for this node yet.
 		// We can initialize the parent by rasterizing upwards in the octree, which will in-turn initialize this node.
-		InitializeParents(Chunk, NodeMortonCode, LayerIdx);
-		NodeIterator = Chunk->Octrees[0]->Layers[LayerIdx].find(NodeMortonCode);
+		InitializeParents(Chunk, MortonCode, LayerIdx);
+		NodeIterator = Chunk->Octrees[0]->Layers[LayerIdx].find(MortonCode);
 	}
 	FNode& Node = NodeIterator->second;
 

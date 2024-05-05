@@ -214,7 +214,6 @@ public:
 	FORCEINLINE bool HasOverlap(const UWorld* World, const F3DVector32& ChunkLocation, const uint8 LayerIdx) const
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE_STR("Node Has-Overlap");
-		// if(LayerIndex == 5) DrawDebugBox(World, GetGlobalLocation(ChunkLocation).ToVector() + FNavMeshStatic::NodeHalveSizes[LayerIndex], FVector(FNavMeshStatic::NodeHalveSizes[LayerIndex]), FColor::Black, true, -1, 0, 2); // Test for starting-layer being 5
 		return FPhysicsInterface::GeomOverlapBlockingTest(
 			World,
 			FNavMeshStatic::CollisionBoxes[LayerIdx],
@@ -311,6 +310,7 @@ struct FChunk
 			const uint_fast32_t ChildMortonCode = ChildMortonLocation.ToMortonCode();
 			
 			const auto NodeIterator = Octrees[0]->Layers[ChildLayerIdx].find(ChildMortonCode);
+			// if(NodeIterator == Octrees[0]->Layers[ChildLayerIdx].end()) continue;
 			Callback(NodeIterator->second);
 		}
 	}

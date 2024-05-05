@@ -25,7 +25,7 @@ private:
 	template<typename Func> void ForEachChunkIntersectingBounds(const TBounds<F3DVector32>& Bounds, const uint8 LayerIdx, Func Callback);
 	static void InitializeParents(const FChunk* Chunk, const uint_fast32_t MortonCode, const uint8 LayerIdx);
 	
-	bool StartReRasterizeNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx, const uint8 RelationsToUpdate);
+	bool StartReRasterizeNode(const FChunk* Chunk, const uint_fast32_t MortonCode, const uint8 LayerIdx, const uint8 RelationsToUpdate);
 	void RecursiveReRasterizeNode(const FChunk* Chunk, FNode& Node, const F3DVector10 NodeMortonLocation, const uint8 NodeLayerIdx, const uint8 RelationsToUpdate);
 
 	bool StartClearUnoccludedChildren(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx);
