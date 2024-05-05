@@ -22,7 +22,7 @@ public:
 	void UpdateStatic(const std::vector<TBoundsPair<F3DVector32>>& BoundsPairs);
 
 private:
-	template<typename Func> void ForEachChunkIntersection(const TBounds<F3DVector32>& Bounds, Func Callback);
+	template<typename Func> void ForEachChunkIntersectingBounds(const TBounds<F3DVector32>& Bounds, const uint8 LayerIdx, Func Callback);
 	static void InitializeParents(const FChunk* Chunk, const uint_fast32_t MortonCode, const uint8 LayerIdx);
 	
 	bool StartReRasterizeNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx, const uint8 RelationsToUpdate);
@@ -35,7 +35,7 @@ private:
 	static void RecursiveClearAllChildren(const FChunk* Chunk, const FOctreeNode& Node, const uint8 LayerIdx);
 	
 	void UnRasterize(const FChunk* Chunk, const std::unordered_set<uint_fast32_t>& NodeMortonCodes, const uint8 LayerIdx);
-	void SetNodeRelations(const FChunk* Chunk, FOctreeNode& Node, const uint8 NodeLayerIdx, uint8 DirectionsToUpdate);
+	void SetNodeRelations(const FChunk* Chunk, FOctreeNode& Node, const uint8 NodeLayerIdx, uint8 RelationsToUpdate);
 	
 	FNavMeshPtr NavMeshPtr;
 	const UWorld* World;

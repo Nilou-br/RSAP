@@ -5,6 +5,13 @@
 #include "morton.h"
 #include "Static.h"
 
+typedef uint_fast32_t MortonCode;
+typedef uint_fast64_t ChunkKey;
+
+// Directions within my custom navmesh are handles using 6 bits to represent '-XYZ +XYZ' values.
+// For example, 0b001100 is negative on the Z, and positive on the X.
+typedef uint8 OctreeDirection;
+
 #define DIRECTION_X_NEGATIVE 0b100000
 #define DIRECTION_Y_NEGATIVE 0b010000
 #define DIRECTION_Z_NEGATIVE 0b001000
@@ -289,10 +296,7 @@ struct F3DVector32
 };
 
 /**
- * Stores min/max boundaries.
- * These are rounded down to the nearest integer which is efficient for cache and calculations.
- *
- * @note Default type is F3DVector32.
+ * Lightweight AABB in 3d space.
  */
 template<typename VectorType>
 struct TBounds
@@ -402,7 +406,7 @@ struct TBounds
 		return Rounded;
 	}
 
-	// Returns a list of morton-codes within the given bounds.
+	// Returns a list of morton-codes within the given bounds (in morton space).
 	template<typename T = VectorType>
 	auto GetMortonCodes(const uint8 LayerIndex) const -> std::enable_if_t<std::is_same_v<T, F3DVector10>, std::vector<uint_fast32_t>>
 	{
@@ -415,31 +419,6 @@ struct TBounds
 			}
 		}
 		return MortonCodes;
-	}
-
-	// Similar to GetMortonCodes, but this returns a pair of morton-code and the directions to update the relations for.
-	template<typename T = VectorType>
-	auto GetMortonCodesWithDirectionsToUpdate(const uint8 LayerIndex, const uint8 ChunkPositiveDirection) const -> std::enable_if_t<std::is_same_v<T, F3DVector10>, std::vector<std::pair<uint_fast32_t, uint8>>>
-	{
-		const uint_fast16_t MortonOffset = FNavMeshStatic::MortonOffsets[LayerIndex];
-		
-		std::vector<std::pair<uint_fast32_t, uint8>> MortonDirectionPair;
-		for (uint_fast16_t X = Min.X; X < Max.X; X+=MortonOffset) {
-			const uint8 DirectionX = ChunkPositiveDirection & DIRECTION_X_POSITIVE && X + MortonOffset == Max.X ? DIRECTION_X_POSITIVE : DIRECTION_NONE;
-			
-			for (uint_fast16_t Y = Min.Y; Y < Max.Y; Y+=MortonOffset) {
-				const uint8 DirectionY = ChunkPositiveDirection & DIRECTION_Y_POSITIVE && Y + MortonOffset == Max.Y ? DIRECTION_Y_POSITIVE : DIRECTION_NONE;
-				
-				for (uint_fast16_t Z = Min.Z; Z < Max.Z; Z+=MortonOffset) {
-					const uint8 DirectionZ = ChunkPositiveDirection & DIRECTION_Z_POSITIVE && Z + MortonOffset == Max.Z ? DIRECTION_Z_POSITIVE : DIRECTION_NONE;
-
-					// Emplace the morton-code with the directions to update.
-					// Negative directions always need to be checked, while positive only if this is specific node is the most positive in a certain axis of the given bounds.
-					MortonDirectionPair.emplace_back(F3DVector10::ToMortonCode(X, Y, Z), DIRECTION_ALL_NEGATIVE & (DirectionX & DirectionY & DirectionZ));
-				}
-			}
-		}
-		return MortonDirectionPair;
 	}
 
 	// Returns the part of the bounds that intersects with another.

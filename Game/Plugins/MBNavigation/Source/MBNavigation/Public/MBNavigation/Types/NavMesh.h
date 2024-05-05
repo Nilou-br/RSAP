@@ -14,9 +14,7 @@ struct F3DVector32;
 struct F3DVector10;
 
 
-// todo: convert all int_t/uint_t types to int/uint without the '_t' for platform compatibility ( globally across all files ).
-
-// todo: convert NodeHalveSizes to hold floats or doubles instead because the smallest node of 1 needs to be 0.5.
+// todo: convert all int_t/uint_t types to int/uint without the '_t' for platform compatibility.
 
 
 
@@ -27,89 +25,59 @@ struct FOctreeLeaf
 };
 
 /**
- * Stores a 4-bit layer-index value for each neighbour a node has.
+ * Stores layer-index for each direction, which is used for storing the relations of a node with others.
  */
-struct FOctreeNeighbours
+struct FNodeRelations
 {
-	uint8 NeighbourX_N: 4 = LAYER_INDEX_INVALID; // X negative
-	uint8 NeighbourY_N: 4 = LAYER_INDEX_INVALID; // Y negative
-	uint8 NeighbourZ_N: 4 = LAYER_INDEX_INVALID; // Z negative
-	uint8 NeighbourX_P: 4 = LAYER_INDEX_INVALID; // X positive
-	uint8 NeighbourY_P: 4 = LAYER_INDEX_INVALID; // Y positive
-	uint8 NeighbourZ_P: 4 = LAYER_INDEX_INVALID; // Z positive
+	OctreeDirection X_Negative: 4 = LAYER_INDEX_INVALID;
+	OctreeDirection Y_Negative: 4 = LAYER_INDEX_INVALID;
+	OctreeDirection Z_Negative: 4 = LAYER_INDEX_INVALID;
+	OctreeDirection X_Positive: 4 = LAYER_INDEX_INVALID;
+	OctreeDirection Y_Positive: 4 = LAYER_INDEX_INVALID;
+	OctreeDirection Z_Positive: 4 = LAYER_INDEX_INVALID;
 
-	FORCEINLINE uint8 GetFromDirection(const uint8 Direction) const
+	FORCEINLINE OctreeDirection GetFromDirection(const OctreeDirection Direction) const
 	{
-		switch (Direction)
-		{
-		case DIRECTION_X_NEGATIVE:
-			return NeighbourX_N;
-		case DIRECTION_Y_NEGATIVE:
-			return NeighbourY_N;
-		case DIRECTION_Z_NEGATIVE:
-			return NeighbourZ_N;
-		case DIRECTION_X_POSITIVE:
-			return NeighbourX_P;
-		case DIRECTION_Y_POSITIVE:
-			return NeighbourY_P;
-		case DIRECTION_Z_POSITIVE:
-			return NeighbourZ_P;
-		default:
-			return LAYER_INDEX_INVALID;
+		switch (Direction) {
+			case DIRECTION_X_NEGATIVE: return X_Negative;
+			case DIRECTION_Y_NEGATIVE: return Y_Negative;
+			case DIRECTION_Z_NEGATIVE: return Z_Negative;
+			case DIRECTION_X_POSITIVE: return X_Positive;
+			case DIRECTION_Y_POSITIVE: return Y_Positive;
+			case DIRECTION_Z_POSITIVE: return Z_Positive;
+			default: return LAYER_INDEX_INVALID;
 		}
 	}
 
-	FORCEINLINE void SetFromDirection(const uint8 LayerIndex, const uint8 Direction)
+	FORCEINLINE void SetFromDirection(const uint8 LayerIndex, const OctreeDirection Direction)
 	{
-		switch (Direction)
-		{
-		case DIRECTION_X_NEGATIVE:
-			NeighbourX_N = LayerIndex;
-			break;
-		case DIRECTION_Y_NEGATIVE:
-			NeighbourY_N = LayerIndex;
-			break;
-		case DIRECTION_Z_NEGATIVE:
-			NeighbourZ_N = LayerIndex;
-			break;
-		case DIRECTION_X_POSITIVE:
-			NeighbourX_P = LayerIndex;
-			break;
-		case DIRECTION_Y_POSITIVE:
-			NeighbourY_P = LayerIndex;
-			break;
-		case DIRECTION_Z_POSITIVE:
-			NeighbourZ_P = LayerIndex;
-			break;
-		default:
-			break;
+		switch (Direction) {
+			case DIRECTION_X_NEGATIVE: X_Negative = LayerIndex; break;
+			case DIRECTION_Y_NEGATIVE: Y_Negative = LayerIndex; break;
+			case DIRECTION_Z_NEGATIVE: Z_Negative = LayerIndex; break;
+			case DIRECTION_X_POSITIVE: X_Positive = LayerIndex; break;
+			case DIRECTION_Y_POSITIVE: Y_Positive = LayerIndex; break;
+			case DIRECTION_Z_POSITIVE: Z_Positive = LayerIndex; break;
+			default: break;
 		}
 	}
 
-	FORCEINLINE bool IsNeighbourValid(const uint8 Direction) const
+	FORCEINLINE bool IsRelationValid(const OctreeDirection Direction) const
 	{
-		switch (Direction)
-		{
-		case DIRECTION_X_NEGATIVE:
-			return NeighbourX_N != LAYER_INDEX_INVALID;
-		case DIRECTION_Y_NEGATIVE:
-			return NeighbourY_N != LAYER_INDEX_INVALID;
-		case DIRECTION_Z_NEGATIVE:
-			return NeighbourZ_N != LAYER_INDEX_INVALID;
-		case DIRECTION_X_POSITIVE:
-			return NeighbourX_P != LAYER_INDEX_INVALID;
-		case DIRECTION_Y_POSITIVE:
-			return NeighbourY_P != LAYER_INDEX_INVALID;
-		case DIRECTION_Z_POSITIVE:
-			return NeighbourZ_P != LAYER_INDEX_INVALID;
-		default:
-			return false;
+		switch (Direction) {
+			case DIRECTION_X_NEGATIVE: return X_Negative != LAYER_INDEX_INVALID;
+			case DIRECTION_Y_NEGATIVE: return Y_Negative != LAYER_INDEX_INVALID;
+			case DIRECTION_Z_NEGATIVE: return Z_Negative != LAYER_INDEX_INVALID;
+			case DIRECTION_X_POSITIVE: return X_Positive != LAYER_INDEX_INVALID;
+			case DIRECTION_Y_POSITIVE: return Y_Positive != LAYER_INDEX_INVALID;
+			case DIRECTION_Z_POSITIVE: return Z_Positive != LAYER_INDEX_INVALID;
+			default: return false;
 		}
 	}
 };
 
 /**
- * Necessary data for finding any given node.
+ * Data necessary for finding any node.
  */
 struct FNodeLookupData
 {
@@ -143,8 +111,8 @@ struct FOctreeNode
 	static constexpr int ParentShiftAmount[10] = {30, 27, 24, 21, 18, 15, 12, 9, 6, 3};
 
 	uint_fast32_t MortonCode;
-	FOctreeNeighbours Neighbours;
-	uint8 ChunkBorder: 6;
+	FNodeRelations Relations;
+	OctreeDirection ChunkBorder: 6;
 	// todo 8 bits for dynamic index for each neighbour + child + parent???? 128 dynamic-objects a chunk (0 index / first bit is for the static octree)
 
 	FOctreeNode():
@@ -256,7 +224,7 @@ struct FOctreeNode
 };
 
 // typedef std::map<uint_fast32_t, FOctreeNode> FNodesMap;
-typedef ankerl::unordered_dense::map<uint_fast32_t, FOctreeNode> FNodesMap;
+typedef ankerl::unordered_dense::map<uint_fast32_t, FOctreeNode> FNodesMap; // todo: rename to FOctreeLayer?
 
 /**
  * The octree stores all the nodes in 10 different layers, each layer having higher resolution nodes.
@@ -315,24 +283,28 @@ struct FChunk
 
 	// Todo move somewhere else, maybe FOctree?
 	template<typename Func>
-	void ForEachChildOfNode(const FOctreeNode& Node, const uint8 LayerIndex, Func Callback) const
+	void ForEachChildOfNode(const FOctreeNode& Node, const uint8 LayerIdx, Func Callback) const
 	{
 		if(!Node.IsFilled()) return;
 		
-		const uint8 ChildLayerIndex = LayerIndex+1;
-		const int_fast16_t ChildMortonOffset = FNavMeshStatic::MortonOffsets[ChildLayerIndex];
-		const F3DVector10 MortonLocation = Node.GetMortonLocation();
+		const uint8 ChildLayerIdx = LayerIdx+1;
+		const int_fast16_t ChildOffset = FNavMeshStatic::MortonOffsets[ChildLayerIdx];
+		const F3DVector10 NodeMortonLocation = Node.GetMortonLocation();
 		
 		for (uint8 i = 0; i < 8; ++i)
 		{
-			const uint_fast16_t ChildMortonX = MortonLocation.X + ((i & 1) ? ChildMortonOffset : 0);
-			const uint_fast16_t ChildMortonY = MortonLocation.Y + ((i & 2) ? ChildMortonOffset : 0);
-			const uint_fast16_t ChildMortonZ = MortonLocation.Z + ((i & 4) ? ChildMortonOffset : 0);
+			const uint_fast16_t ChildMortonX = NodeMortonLocation.X + ((i & 1) ? ChildOffset : 0);
+			const uint_fast16_t ChildMortonY = NodeMortonLocation.Y + ((i & 2) ? ChildOffset : 0);
+			const uint_fast16_t ChildMortonZ = NodeMortonLocation.Z + ((i & 4) ? ChildOffset : 0);
 
 			const F3DVector10 ChildMortonLocation = F3DVector10(ChildMortonX, ChildMortonY, ChildMortonZ);
 			const uint_fast32_t ChildMortonCode = ChildMortonLocation.ToMortonCode();
 			
-			const auto NodeIterator = Octrees[0]->Layers[ChildLayerIndex].find(ChildMortonCode);
+			const auto NodeIterator = Octrees[0]->Layers[ChildLayerIdx].find(ChildMortonCode);
+			if(NodeIterator == Octrees[0]->Layers[ChildLayerIdx].end())
+			{
+				continue;
+			}
 			Callback(NodeIterator->second);
 		}
 	}

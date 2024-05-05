@@ -11,7 +11,7 @@ MBNAVIGATION_API void SerializeNavMesh(FNavMesh& NavMesh, FGuid& ID);
 MBNAVIGATION_API bool DeserializeNavMesh(FNavMesh& OutNavMesh, FGuid& OutID);
 
 MBNAVIGATION_API FArchive& operator<<(FArchive& Ar, F3DVector32& Vector32);
-MBNAVIGATION_API FArchive& operator<<(FArchive& Ar, FOctreeNeighbours& OctreeNeighbours);
+MBNAVIGATION_API FArchive& operator<<(FArchive& Ar, FNodeRelations& Relations);
 MBNAVIGATION_API FArchive& operator<<(FArchive& Ar, FOctreeNode& OctreeNode);
 MBNAVIGATION_API FArchive& operator<<(FArchive& Ar, FNodesMap& NodesMap);
 MBNAVIGATION_API FArchive& operator<<(FArchive& Ar, TSharedPtr<FOctree>& Octree);

@@ -54,32 +54,32 @@ FArchive& operator<<(FArchive& Ar, F3DVector32& Vector32)
 	return Ar;
 }
 
-FArchive& operator<<(FArchive& Ar, FOctreeNeighbours& OctreeNeighbours)
+FArchive& operator<<(FArchive& Ar, FNodeRelations& Relations)
 {
 	if (Ar.IsSaving())
 	{
 		// Pack the 6 neighbour indices into a single uint32
-		uint32 PackedNeighbours =
-			(static_cast<uint32>(OctreeNeighbours.NeighbourX_N) << 28) |
-			(static_cast<uint32>(OctreeNeighbours.NeighbourY_N) << 24) |
-			(static_cast<uint32>(OctreeNeighbours.NeighbourZ_N) << 20) |
-			(static_cast<uint32>(OctreeNeighbours.NeighbourX_P) << 16) |
-			(static_cast<uint32>(OctreeNeighbours.NeighbourY_P) << 12) |
-			(static_cast<uint32>(OctreeNeighbours.NeighbourZ_P) << 8);
-		Ar << PackedNeighbours;
+		uint32 PackedRelations =
+			(static_cast<uint32>(Relations.X_Negative) << 28) |
+			(static_cast<uint32>(Relations.X_Negative) << 24) |
+			(static_cast<uint32>(Relations.X_Negative) << 20) |
+			(static_cast<uint32>(Relations.X_Negative) << 16) |
+			(static_cast<uint32>(Relations.X_Negative) << 12) |
+			(static_cast<uint32>(Relations.X_Negative) << 8);
+		Ar << PackedRelations;
 	}
 	else if (Ar.IsLoading())
 	{
-		uint32 PackedNeighbours;
-		Ar << PackedNeighbours;
+		uint32 PackedRelations;
+		Ar << PackedRelations;
 
 		// Unpack the neighbour indices from the PackedNeighbours
-		OctreeNeighbours.NeighbourX_N = (PackedNeighbours >> 28) & 0xF;
-		OctreeNeighbours.NeighbourY_N = (PackedNeighbours >> 24) & 0xF;
-		OctreeNeighbours.NeighbourZ_N = (PackedNeighbours >> 20) & 0xF;
-		OctreeNeighbours.NeighbourX_P = (PackedNeighbours >> 16) & 0xF;
-		OctreeNeighbours.NeighbourY_P = (PackedNeighbours >> 12) & 0xF;
-		OctreeNeighbours.NeighbourZ_P = (PackedNeighbours >> 8) & 0xF;
+		Relations.X_Negative = (PackedRelations >> 28) & 0xF;
+		Relations.Y_Negative = (PackedRelations >> 24) & 0xF;
+		Relations.Z_Negative = (PackedRelations >> 20) & 0xF;
+		Relations.X_Positive = (PackedRelations >> 16) & 0xF;
+		Relations.Y_Positive = (PackedRelations >> 12) & 0xF;
+		Relations.Z_Positive = (PackedRelations >> 8) & 0xF;
 	}
 
 	return Ar;
@@ -88,7 +88,7 @@ FArchive& operator<<(FArchive& Ar, FOctreeNeighbours& OctreeNeighbours)
 FArchive& operator<<(FArchive& Ar, FOctreeNode& OctreeNode)
 {
 	Ar << OctreeNode.MortonCode;
-	Ar << OctreeNode.Neighbours;
+	Ar << OctreeNode.Relations;
 
 	if (Ar.IsSaving())
 	{
@@ -158,7 +158,7 @@ FArchive& operator<<(FArchive& Ar, FChunk& Chunk)
 {
 	Ar << Chunk.Location;
 
-	// Serialize only the 'static' octree.
+	// Only serialize the static octree.
 	Ar << Chunk.Octrees[0]; // todo: Ensure TSharedPtr<FOctree> serialization is implemented
 	
 	return Ar;
