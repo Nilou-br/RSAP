@@ -32,8 +32,7 @@ private:
 	void AddRelationToUpdate(const FChunk* Chunk, const uint_fast32_t MortonCode, const uint8 UpdateDirection);
 	
 	static std::unordered_set<uint_fast32_t>& GetMortonSetForChunk(const FChunk* Chunk, FChunkMortonSetMap& ChunkMortonSetMap);
-	template<typename Func>
-	void ForEachChunkIntersection(const TBounds<F3DVector32>& Bounds, Func Callback);
+	template<typename Func> void ForEachChunkIntersection(const TBounds<F3DVector32>& Bounds, const uint8 LayerIdx, Func Callback);
 	
 	bool StartClearUnoccludedChildrenOfNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx);
 	static void StartClearAllChildrenOfNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx);
