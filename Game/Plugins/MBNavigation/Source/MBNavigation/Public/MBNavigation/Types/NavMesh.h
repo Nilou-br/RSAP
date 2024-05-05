@@ -310,7 +310,7 @@ struct FChunk
 			const uint_fast32_t ChildMortonCode = ChildMortonLocation.ToMortonCode();
 			
 			const auto NodeIterator = Octrees[0]->Layers[ChildLayerIdx].find(ChildMortonCode);
-			// if(NodeIterator == Octrees[0]->Layers[ChildLayerIdx].end()) continue;
+			if(NodeIterator == Octrees[0]->Layers[ChildLayerIdx].end()) continue;
 			Callback(NodeIterator->second);
 		}
 	}

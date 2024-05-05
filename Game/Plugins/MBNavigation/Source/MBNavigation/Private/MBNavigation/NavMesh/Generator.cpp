@@ -183,13 +183,13 @@ void FNavMeshGenerator::SetNodeRelations(const FChunk* Chunk, FNode& Node, const
 		// Get the morton-code of the node in this direction.
 		uint_fast32_t MortonCodeToCheck;
 		switch (Direction) {
-		case DIRECTION_X_NEGATIVE: MortonCodeToCheck = (NodeLocalLocation - F3DVector10(FNavMeshStatic::MortonOffsets[NodeLayerIdx], 0, 0)).ToMortonCode(); break;
-		case DIRECTION_Y_NEGATIVE: MortonCodeToCheck = (NodeLocalLocation - F3DVector10(0, FNavMeshStatic::MortonOffsets[NodeLayerIdx], 0)).ToMortonCode(); break;
-		case DIRECTION_Z_NEGATIVE: MortonCodeToCheck = (NodeLocalLocation - F3DVector10(0, 0, FNavMeshStatic::MortonOffsets[NodeLayerIdx])).ToMortonCode(); break;
-		case DIRECTION_X_POSITIVE: MortonCodeToCheck = (NodeLocalLocation + F3DVector10(FNavMeshStatic::MortonOffsets[NodeLayerIdx], 0, 0)).ToMortonCode(); break;
-		case DIRECTION_Y_POSITIVE: MortonCodeToCheck = (NodeLocalLocation + F3DVector10(0, FNavMeshStatic::MortonOffsets[NodeLayerIdx], 0)).ToMortonCode(); break;
-		case DIRECTION_Z_POSITIVE: MortonCodeToCheck = (NodeLocalLocation + F3DVector10(0, 0, FNavMeshStatic::MortonOffsets[NodeLayerIdx])).ToMortonCode(); break;
-		default: break;
+			case DIRECTION_X_NEGATIVE: MortonCodeToCheck = (NodeLocalLocation - F3DVector10(FNavMeshStatic::MortonOffsets[NodeLayerIdx], 0, 0)).ToMortonCode(); break;
+			case DIRECTION_Y_NEGATIVE: MortonCodeToCheck = (NodeLocalLocation - F3DVector10(0, FNavMeshStatic::MortonOffsets[NodeLayerIdx], 0)).ToMortonCode(); break;
+			case DIRECTION_Z_NEGATIVE: MortonCodeToCheck = (NodeLocalLocation - F3DVector10(0, 0, FNavMeshStatic::MortonOffsets[NodeLayerIdx])).ToMortonCode(); break;
+			case DIRECTION_X_POSITIVE: MortonCodeToCheck = (NodeLocalLocation + F3DVector10(FNavMeshStatic::MortonOffsets[NodeLayerIdx], 0, 0)).ToMortonCode(); break;
+			case DIRECTION_Y_POSITIVE: MortonCodeToCheck = (NodeLocalLocation + F3DVector10(0, FNavMeshStatic::MortonOffsets[NodeLayerIdx], 0)).ToMortonCode(); break;
+			case DIRECTION_Z_POSITIVE: MortonCodeToCheck = (NodeLocalLocation + F3DVector10(0, 0, FNavMeshStatic::MortonOffsets[NodeLayerIdx])).ToMortonCode(); break;
+			default: break;
 		}
 		
 		// Find the neighbour by checking each layer one by one upwards in the octree until we find the neighbour. The root node on layer 0 always exists.
