@@ -8,7 +8,7 @@
 typedef uint_fast32_t MortonCode;
 typedef uint_fast64_t ChunkKey;
 
-// Directions within my custom navmesh are handles using 6 bits to represent '-XYZ +XYZ' values.
+// Directions within my custom navmesh are handled using 6 bits to represent '-XYZ +XYZ' values.
 // For example, 0b001100 is negative on the Z, and positive on the X.
 typedef uint8 OctreeDirection;
 
