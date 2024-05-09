@@ -13,7 +13,7 @@
 #include "MBNavigation/NavMesh/Generator.h"
 #include "MBNavigation/NavMesh/Settings.h"
 #include "MBNavigation/NavMesh/Updater.h"
-#include "MBNavigation/Types/Serialize.h"
+#include "MBNavigation/NavMesh/Serialize.h"
 #include "UObject/ObjectSaveContext.h"
 
 DEFINE_LOG_CATEGORY(LogEditorNavManager)

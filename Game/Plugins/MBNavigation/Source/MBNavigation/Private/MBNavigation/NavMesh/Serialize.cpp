@@ -1,9 +1,8 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-#include "MBNavigation/Types/Serialize.h"
+#include "MBNavigation/NavMesh/Serialize.h"
 #include "MBNavigation/Types/NavMesh.h"
 #include <ranges>
-
 
 void SerializeNavMesh(FNavMesh& NavMesh, FGuid& ID)
 {
@@ -54,41 +53,42 @@ FArchive& operator<<(FArchive& Ar, F3DVector32& Vector32)
 	return Ar;
 }
 
-FArchive& operator<<(FArchive& Ar, FOctreeNeighbours& OctreeNeighbours)
+FArchive& operator<<(FArchive& Ar, FNodeRelations& Relations)
 {
 	if (Ar.IsSaving())
 	{
 		// Pack the 6 neighbour indices into a single uint32
-		uint32 PackedNeighbours =
-			(static_cast<uint32>(OctreeNeighbours.NeighbourX_N) << 28) |
-			(static_cast<uint32>(OctreeNeighbours.NeighbourY_N) << 24) |
-			(static_cast<uint32>(OctreeNeighbours.NeighbourZ_N) << 20) |
-			(static_cast<uint32>(OctreeNeighbours.NeighbourX_P) << 16) |
-			(static_cast<uint32>(OctreeNeighbours.NeighbourY_P) << 12) |
-			(static_cast<uint32>(OctreeNeighbours.NeighbourZ_P) << 8);
-		Ar << PackedNeighbours;
+		uint32 PackedRelations =
+			(static_cast<uint32>(Relations.X_Negative) << 28) |
+			(static_cast<uint32>(Relations.X_Negative) << 24) |
+			(static_cast<uint32>(Relations.X_Negative) << 20) |
+			(static_cast<uint32>(Relations.X_Negative) << 16) |
+			(static_cast<uint32>(Relations.X_Negative) << 12) |
+			(static_cast<uint32>(Relations.X_Negative) << 8);
+		Ar << PackedRelations;
 	}
 	else if (Ar.IsLoading())
 	{
-		uint32 PackedNeighbours;
-		Ar << PackedNeighbours;
+		uint32 PackedRelations;
+		Ar << PackedRelations;
 
 		// Unpack the neighbour indices from the PackedNeighbours
-		OctreeNeighbours.NeighbourX_N = (PackedNeighbours >> 28) & 0xF;
-		OctreeNeighbours.NeighbourY_N = (PackedNeighbours >> 24) & 0xF;
-		OctreeNeighbours.NeighbourZ_N = (PackedNeighbours >> 20) & 0xF;
-		OctreeNeighbours.NeighbourX_P = (PackedNeighbours >> 16) & 0xF;
-		OctreeNeighbours.NeighbourY_P = (PackedNeighbours >> 12) & 0xF;
-		OctreeNeighbours.NeighbourZ_P = (PackedNeighbours >> 8) & 0xF;
+		Relations.X_Negative = (PackedRelations >> 28) & 0xF;
+		Relations.Y_Negative = (PackedRelations >> 24) & 0xF;
+		Relations.Z_Negative = (PackedRelations >> 20) & 0xF;
+		Relations.X_Positive = (PackedRelations >> 16) & 0xF;
+		Relations.Y_Positive = (PackedRelations >> 12) & 0xF;
+		Relations.Z_Positive = (PackedRelations >> 8) & 0xF;
 	}
 
 	return Ar;
 }
 
-FArchive& operator<<(FArchive& Ar, FOctreeNode& OctreeNode)
+FArchive& operator<<(FArchive& Ar, FNode& Node)
 {
-	Ar << OctreeNode.MortonCode;
-	Ar << OctreeNode.Neighbours;
+	uint_fast32_t UnmaskedMortonCode = Node.GetUnmaskedMortonCode();
+	Ar << UnmaskedMortonCode;
+	Ar << Node.Relations;
 
 	if (Ar.IsSaving())
 	{
@@ -96,14 +96,14 @@ FArchive& operator<<(FArchive& Ar, FOctreeNode& OctreeNode)
 		// Remove or adjust the following line according to your application logic.
 		// if(OctreeNode.DynamicIndex) OctreeNode.Booleans = 0;
 		// uint32 PackedData = (static_cast<uint32>(OctreeNode.Booleans) << 6) | static_cast<uint32>(OctreeNode.ChunkBorder);
-		uint32 ChunkBorder = OctreeNode.ChunkBorder;
+		uint32 ChunkBorder = Node.ChunkBorder;
 		Ar << ChunkBorder;
 	}
 	else if (Ar.IsLoading())
 	{
 		uint32 ChunkBorder;
 		Ar << ChunkBorder;
-		OctreeNode.ChunkBorder = ChunkBorder;
+		Node.ChunkBorder = ChunkBorder;
 		
 		// Correctly unpack ChunkBorder and the Booleans
 		// OctreeNode.Booleans = (PackedData >> 6) & 0x03;
@@ -113,25 +113,25 @@ FArchive& operator<<(FArchive& Ar, FOctreeNode& OctreeNode)
 	return Ar;
 }
 
-FArchive& operator<<(FArchive& Ar, FNodesMap& NodesMap)
+FArchive& operator<<(FArchive& Ar, FOctreeLayer& Layer)
 {
-	size_t Size = NodesMap.size();
+	size_t Size = Layer.size();
 	Ar << Size;
 	if(Ar.IsSaving())
 	{
-		for(FOctreeNode& Node : NodesMap | std::views::values)
+		for(FNode& Node : Layer | std::views::values)
 		{
 			Ar << Node;
 		}
 	}
 	else if (Ar.IsLoading())
 	{
-		NodesMap.clear();
+		Layer.clear();
 		for(size_t i = 0; i < Size; ++i)
 		{
-			FOctreeNode Node;
+			FNode Node;
 			Ar << Node;
-			NodesMap.emplace(Node.GetMortonCode(), Node);
+			Layer.emplace(Node.GetMortonCode(), Node);
 		}
 	}
 	return Ar;
@@ -158,7 +158,7 @@ FArchive& operator<<(FArchive& Ar, FChunk& Chunk)
 {
 	Ar << Chunk.Location;
 
-	// Serialize only the 'static' octree.
+	// Only serialize the static octree.
 	Ar << Chunk.Octrees[0]; // todo: Ensure TSharedPtr<FOctree> serialization is implemented
 	
 	return Ar;

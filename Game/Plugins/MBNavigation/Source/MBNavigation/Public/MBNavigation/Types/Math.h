@@ -172,11 +172,6 @@ struct F3DVector32
 		return Vector32;
 	}
 
-	static F3DVector32 FromMortonCode(const uint_fast32_t MortonCode, const F3DVector32& ChunkLocation)
-	{
-		return ChunkLocation + (F3DVector32(F3DVector10::FromMortonCode(MortonCode)) << FNavMeshStatic::VoxelSizeExponent);
-	}
-
 	FORCEINLINE F3DVector32 ComponentMin(const F3DVector32& Other) const
 	{
 		return F3DVector32(FMath::Min(X, Other.X), FMath::Min(Y, Other.Y), FMath::Min(Z, Other.Z));
@@ -256,9 +251,9 @@ struct F3DVector32
 		return FVector(X, Y, Z);
 	}
 
-	static F3DVector32 FromMortonVector(const F3DVector10 MortonLocation, const F3DVector32& ChunkLocation)
+	static F3DVector32 FromMortonCode(const uint_fast32_t MortonCode, const F3DVector32& ChunkLocation)
 	{
-		return ChunkLocation + (F3DVector32(MortonLocation) << FNavMeshStatic::VoxelSizeExponent);
+		return ChunkLocation + (F3DVector32(F3DVector10::FromMortonCode(MortonCode)) << FNavMeshStatic::VoxelSizeExponent);
 	}
 	
 	// Make sure every axis value fits in 10 bits, unsigned.
@@ -299,29 +294,10 @@ struct F3DVector32
 
 	explicit F3DVector32()
 		: X(0), Y(0), Z(0) {}
-
-	FORCEINLINE bool HasOverlapWithinNodeExtent(const UWorld* World, const uint8 NodeLayerIndex) const
-	{
-		TRACE_CPUPROFILER_EVENT_SCOPE_STR("HasOverlapWithinExtent");
-		const FVector Extent = FVector(FNavMeshStatic::NodeHalveSizes[NodeLayerIndex]);
-		// DrawDebugBox(World, ToVector()+Extent, Extent, FColor::Black, true, -1, 0, 2);
-		return FPhysicsInterface::GeomOverlapBlockingTest(
-			World,
-			FCollisionShape::MakeBox(Extent),
-			ToVector() + Extent,
-			FQuat::Identity,
-			ECollisionChannel::ECC_WorldStatic,
-			FCollisionQueryParams::DefaultQueryParam,
-			FCollisionResponseParams::DefaultResponseParam
-		);
-	}
 };
 
 /**
- * Stores min/max boundaries.
- * These are rounded down to the nearest integer which is efficient for cache and calculations.
- *
- * @note Default type is F3DVector32.
+ * Lightweight AABB in 3d space.
  */
 template<typename VectorType>
 struct TBounds
@@ -431,43 +407,19 @@ struct TBounds
 		return Rounded;
 	}
 
-	// Returns a list of morton-codes within the given bounds.
+	// Returns a list of morton-codes within the given bounds (in morton space).
 	template<typename T = VectorType>
-	auto GetMortonCodesWithin(const uint8 LayerIndex) const -> std::enable_if_t<std::is_same_v<T, F3DVector10>, std::vector<uint_fast32_t>>
+	auto GetMortonCodes(const uint8 LayerIndex) const -> std::enable_if_t<std::is_same_v<T, F3DVector10>, std::vector<uint_fast32_t>>
 	{
-		const uint_fast16_t MortonOffset = FNavMeshStatic::MortonOffsets[LayerIndex];
-		
 		std::vector<uint_fast32_t> MortonCodes;
-		for (uint_fast16_t X = Min.X; X < Max.X; X+=MortonOffset) {
-			for (uint_fast16_t Y = Min.Y; Y < Max.Y; Y+=MortonOffset) {
-				for (uint_fast16_t Z = Min.Z; Z < Max.Z; Z+=MortonOffset) {
+		for (uint_fast16_t X = Min.X; X < Max.X; X+=FNavMeshStatic::MortonOffsets[LayerIndex]) {
+			for (uint_fast16_t Y = Min.Y; Y < Max.Y; Y+=FNavMeshStatic::MortonOffsets[LayerIndex]) {
+				for (uint_fast16_t Z = Min.Z; Z < Max.Z; Z+=FNavMeshStatic::MortonOffsets[LayerIndex]) {
 					MortonCodes.push_back(F3DVector10::ToMortonCode(X, Y, Z));
 				}
 			}
 		}
 		return MortonCodes;
-	}
-
-	// Similar to GetMortonCodesWithin, but this also returns a direction value indicating if this node is the positive most node in one or more directions.
-	template<typename T = VectorType>
-	auto GetMortonDirectionPairsWithin(const uint8 LayerIndex, const uint8 ChunkPositiveDirection) const -> std::enable_if_t<std::is_same_v<T, F3DVector10>, std::vector<std::pair<uint_fast32_t, uint8>>>
-	{
-		const uint_fast16_t MortonOffset = FNavMeshStatic::MortonOffsets[LayerIndex];
-		
-		std::vector<std::pair<uint_fast32_t, uint8>> MortonDirectionPair;
-		for (uint_fast16_t X = Min.X; X < Max.X; X+=MortonOffset) {
-			const uint8 DirectionX = ChunkPositiveDirection & DIRECTION_X_POSITIVE && X + MortonOffset == Max.X ? DIRECTION_X_POSITIVE : DIRECTION_NONE;
-			
-			for (uint_fast16_t Y = Min.Y; Y < Max.Y; Y+=MortonOffset) {
-				const uint8 DirectionY = ChunkPositiveDirection & DIRECTION_Y_POSITIVE && Y + MortonOffset == Max.Y ? DIRECTION_Y_POSITIVE : DIRECTION_NONE;
-				
-				for (uint_fast16_t Z = Min.Z; Z < Max.Z; Z+=MortonOffset) {
-					const uint8 DirectionZ = ChunkPositiveDirection & DIRECTION_Z_POSITIVE && Z + MortonOffset == Max.Z ? DIRECTION_Z_POSITIVE : DIRECTION_NONE;
-					MortonDirectionPair.emplace_back(F3DVector10::ToMortonCode(X, Y, Z), DirectionX & DirectionY & DirectionZ);
-				}
-			}
-		}
-		return MortonDirectionPair;
 	}
 
 	// Returns the part of the bounds that intersects with another.

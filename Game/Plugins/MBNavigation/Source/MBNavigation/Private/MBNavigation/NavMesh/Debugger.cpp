@@ -116,7 +116,7 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const uint8 Layer
 {
 	const auto NodeIterator = Chunk->Octrees[0]->Layers[LayerIndex].find(NodeMorton);
 	if(NodeIterator == Chunk->Octrees[0]->Layers[LayerIndex].end()) return;
-	const FOctreeNode* Node = &NodeIterator->second;
+	const FNode* Node = &NodeIterator->second;
 	
 	if(!Node->IsOccluded()) return;
 	const FVector NodeGlobalCenterLocation = (Node->GetGlobalLocation(Chunk->Location) + FNavMeshStatic::NodeHalveSizes[LayerIndex]).ToVector();
@@ -187,7 +187,7 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const uint8 Layer
 						
 			const auto NeighbourIterator = NeighbourChunk.Octrees[0]->Layers[NeighbourLookupData.LayerIndex].find(NeighbourLookupData.MortonCode);
 			if(NeighbourIterator == Chunk->Octrees[0]->Layers[NeighbourLookupData.LayerIndex].end()) continue;
-			const FOctreeNode& NeighbourNode = NeighbourIterator->second;
+			const FNode& NeighbourNode = NeighbourIterator->second;
 						
 			const F3DVector32 NeighbourGlobalCenterLocation = NeighbourNode.GetGlobalLocation(NeighbourChunk.Location) + FNavMeshStatic::NodeHalveSizes[NeighbourLookupData.LayerIndex];
 			DrawDebugLine(World, NodeGlobalCenterLocation, NeighbourGlobalCenterLocation.ToVector(), FColor::White, true, -1, 11, 1);
@@ -203,7 +203,7 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const uint8 Layer
 	}
 
 	// Continue drawing the children if the node has any.
-	if(LayerIndex == FNavMeshStatic::StaticDepth || !Node->IsFilled()) return;
+	if(LayerIndex == FNavMeshStatic::StaticDepth || !Node->HasChildren()) return;
 	const F3DVector10 NodeLocalLocation = Node->GetLocalLocation();
 	const uint8 ChildLayerIndex = LayerIndex+1;
 	const int_fast16_t ChildMortonOffset = FNavMeshStatic::MortonOffsets[ChildLayerIndex];
