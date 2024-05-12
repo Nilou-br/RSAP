@@ -118,7 +118,7 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const uint8 Layer
 	if(NodeIterator == Chunk->Octrees[0]->Layers[LayerIndex].end()) return;
 	const FNode* Node = &NodeIterator->second;
 	
-	if(!Node->IsOccluded()) return;
+	// if(!Node->IsOccluded()) return;
 	const FVector NodeGlobalCenterLocation = (Node->GetGlobalLocation(Chunk->Location) + FNavMeshStatic::NodeHalveSizes[LayerIndex]).ToVector();
 
 	// Return if distance between camera and node is larger than the calculated distance for this specific node's layer.
@@ -190,7 +190,7 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const uint8 Layer
 			const FNode& NeighbourNode = NeighbourIterator->second;
 						
 			const F3DVector32 NeighbourGlobalCenterLocation = NeighbourNode.GetGlobalLocation(NeighbourChunk.Location) + FNavMeshStatic::NodeHalveSizes[NeighbourLookupData.LayerIndex];
-			DrawDebugLine(World, NodeGlobalCenterLocation, NeighbourGlobalCenterLocation.ToVector(), FColor::White, true, -1, 11, 1);
+			DrawDebugLine(World, NodeGlobalCenterLocation, NeighbourGlobalCenterLocation.ToVector(), LayerColors[LayerIndex], true, -1, 11, 1);
 		}
 	}
 
