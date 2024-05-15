@@ -42,9 +42,9 @@ FORCEINLINE FChunk* GetNeighbouringChunk(const FNavMeshPtr& NavMeshPtr, F3DVecto
 	return &ChunkIterator->second;
 }
 
-FORCEINLINE void DrawNodeFromMorton(const UWorld* World, const FChunk* Chunk, const uint_fast32_t MortonCode, const uint8 LayerIdx)
+FORCEINLINE void DrawNodeFromMorton(const UWorld* World, const FChunk* Chunk, const uint_fast32_t MortonCode, const uint8 LayerIdx, FColor Color = FColor::Black)
 {
 	const F3DVector32 GlobalNodeLocation = F3DVector32::FromMortonCode(MortonCode, Chunk->Location);
 	const TBounds<F3DVector32> NodeBoundaries(GlobalNodeLocation, GlobalNodeLocation+FNavMeshStatic::NodeSizes[LayerIdx]);
-	NodeBoundaries.Draw(World);
+	NodeBoundaries.Draw(World, Color);
 }

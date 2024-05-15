@@ -26,10 +26,10 @@ typedef uint8 OctreeDirection;
 
 
 /**
- * Used to represent the location of a node within a chunk's local-space.
- * A chunk's origin will be in its negative-most corner meaning that all node's inside it have positive coordinates.
+ * Represents the location of a node within a chunk.
+ * Each axis has 10 bit allocated, meaning that it allows for 1024 points per axis in the chunk.
  *
- * Any axis value can safely under/over-flow because it will always be a valid location in the chunk/octree.
+ * @note It's called a morton-vector because it can be directly translated to a valid morton-code.
  */
 struct F3DVector10
 {

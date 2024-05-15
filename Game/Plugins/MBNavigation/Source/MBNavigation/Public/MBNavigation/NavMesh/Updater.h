@@ -35,7 +35,7 @@ private:
 	void StartClearAllChildrenOfNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate);
 	static void RecursiveClearAllChildren(const FChunk* Chunk, const FNode& Node, const uint8 LayerIdx);
 	
-	void InitializeParents(const FChunk* Chunk, const uint_fast32_t MortonCode, const uint8 LayerIdx);
+	void InitializeParents(const FChunk* Chunk, const uint_fast32_t ChildMortonCode, const uint8 ChildLayerIdx);
 	void TryUnRasterizeNodes(const FChunk* Chunk,  const std::unordered_set<MortonCode>& NodeMortonCodes, const uint8 LayerIdx);
 	
 	void UpdateRelationsForNode(const FChunk* Chunk, FNode& Node, const uint8 LayerIdx, uint8 RelationsToUpdate);
