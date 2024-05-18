@@ -13,6 +13,10 @@
 struct F3DVector32;
 struct F3DVector10;
 
+struct FChunk;
+typedef ankerl::unordered_dense::map<uint_fast64_t, FChunk> FNavMesh;
+typedef std::shared_ptr<FNavMesh> FNavMeshPtr;
+
 
 // todo: convert all int_t/uint_t types to int/uint without the '_t' for platform compatibility.
 
@@ -99,8 +103,6 @@ struct FNodeLookupData
  *   Used to efficiently calculate the next chunk.
  * - IsOccluded(): If the node is occluded.
  * - HasChildren(): If the node has children.
- *
- * todo change to class.
  */
 class FNode
 {
@@ -110,8 +112,9 @@ class FNode
 	static constexpr int LayerShiftAmount[10] = {30, 30, 27, 24, 21, 18, 15, 12, 9, 6}; // todo change to make 30, 27, 24 etc...
 	static constexpr int ParentShiftAmount[10] = {30, 27, 24, 21, 18, 15, 12, 9, 6, 3};
 
-	// The morton-code of a node also stores two additional booleans. IsOccluded and HasChildren.
+	// The morton-code of a node also stores two additional booleans for checking occlusion and if it has children.
 	uint_fast32_t MortonCode;
+	
 	// todo 8 bits for dynamic index for each neighbour + child + parent???? 128 dynamic-objects a chunk (0 index / first bit is for the static octree)
 
 public:
@@ -162,13 +165,13 @@ public:
 		return ChunkLocation + GetLocalLocation();
 	}
 
-	// Returns the morton-code of the node, where the additional booleans stored on the morton-code are masked away.
+	// Returns the morton-code of the node, where the additional booleans stored on the morton-code are masked away. Used to find nodes, or get their location within a chunk.
 	FORCEINLINE uint_fast32_t GetMortonCode() const
 	{
 		return MortonCode & MortonMask;
 	}
 
-	// Returns the unmasked morton-code of the node. This included the additional booleans, and should only be used for serializing the node.
+	// Returns the unmasked morton-code of the node. This includes the additional booleans, and should only be used for serializing the node.
 	FORCEINLINE uint_fast32_t GetUnmaskedMortonCode() const
 	{
 		return MortonCode;
@@ -210,6 +213,8 @@ public:
 
 	std::array<uint8, 6> GetNeighbourLayerIndexes() const;
 	std::array<FNodeLookupData, 6> GetNeighboursLookupData(const F3DVector32& ChunkLocation) const;
+
+	void UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk* Chunk, const uint8 LayerIdx, OctreeDirection RelationsToUpdate);
 	
 	FORCEINLINE bool HasOverlap(const UWorld* World, const F3DVector32& ChunkLocation, const uint8 LayerIdx) const
 	{
