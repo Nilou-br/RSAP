@@ -1,6 +1,6 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-#include "MBNavigation/Types/Serialize.h"
+#include "MBNavigation/NavMesh/Serialize.h"
 #include "MBNavigation/Types/NavMesh.h"
 #include <ranges>
 

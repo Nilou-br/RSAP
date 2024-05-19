@@ -2,7 +2,7 @@
 
 #include "MBNavigation/WorldNavMeshManager.h"
 
-#include "MBNavigation/Types/Serialize.h"
+#include "MBNavigation/NavMesh/Serialize.h"
 
 #if WITH_EDITOR
 #include "MBNavigation/NavMesh/Debugger.h"

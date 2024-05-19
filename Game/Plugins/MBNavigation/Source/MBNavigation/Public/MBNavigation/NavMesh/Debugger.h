@@ -42,4 +42,10 @@ private:
 		{0, 128, 128},     // Teal
 		{128, 128, 0}      // Olive
 	};
+
+	static FORCEINLINE FColor AdjustBrightness(const FColor& Color, float Factor)
+	{
+		Factor = std::clamp(Factor, 0.0f, 1.0f);
+		return FColor(Color.R * Factor, Color.G * Factor, Color.B * Factor, Color.A);
+	}
 };

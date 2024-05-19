@@ -42,9 +42,32 @@ FORCEINLINE FChunk* GetNeighbouringChunk(const FNavMeshPtr& NavMeshPtr, F3DVecto
 	return &ChunkIterator->second;
 }
 
-FORCEINLINE void DrawNodeFromMorton(const UWorld* World, const FChunk* Chunk, const uint_fast32_t MortonCode, const uint8 LayerIdx)
+FORCEINLINE void DrawNodeFromMorton(const UWorld* World, const FChunk* Chunk, const uint_fast32_t MortonCode, const uint8 LayerIdx, FColor Color = FColor::Black)
 {
 	const F3DVector32 GlobalNodeLocation = F3DVector32::FromMortonCode(MortonCode, Chunk->Location);
 	const TBounds<F3DVector32> NodeBoundaries(GlobalNodeLocation, GlobalNodeLocation+FNavMeshStatic::NodeSizes[LayerIdx]);
-	NodeBoundaries.Draw(World);
+	NodeBoundaries.Draw(World, Color);
+}
+
+template <typename Func>
+static void ForEachChild(const FChunk* Chunk, const FNode Node, const uint8 LayerIdx, Func Callback)
+{
+	if(!Node.HasChildren()) return;
+		
+	const uint8 ChildLayerIdx = LayerIdx+1;
+	const int_fast16_t ChildOffset = FNavMeshStatic::MortonOffsets[ChildLayerIdx];
+	const F3DVector10 NodeMortonLocation = Node.GetMortonLocation();
+		
+	for (uint8 i = 0; i < 8; ++i)
+	{
+		const uint_fast16_t ChildMortonX = NodeMortonLocation.X + ((i & 1) ? ChildOffset : 0);
+		const uint_fast16_t ChildMortonY = NodeMortonLocation.Y + ((i & 2) ? ChildOffset : 0);
+		const uint_fast16_t ChildMortonZ = NodeMortonLocation.Z + ((i & 4) ? ChildOffset : 0);
+
+		const F3DVector10 ChildMortonLocation = F3DVector10(ChildMortonX, ChildMortonY, ChildMortonZ);
+		const uint_fast32_t ChildMortonCode = ChildMortonLocation.ToMortonCode();
+			
+		const auto NodeIterator = Chunk->Octrees[0]->Layers[ChildLayerIdx].find(ChildMortonCode);
+		Callback(NodeIterator->second);
+	}
 }

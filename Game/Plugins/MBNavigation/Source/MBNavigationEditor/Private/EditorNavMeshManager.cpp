@@ -13,7 +13,7 @@
 #include "MBNavigation/NavMesh/Generator.h"
 #include "MBNavigation/NavMesh/Settings.h"
 #include "MBNavigation/NavMesh/Updater.h"
-#include "MBNavigation/Types/Serialize.h"
+#include "MBNavigation/NavMesh/Serialize.h"
 #include "UObject/ObjectSaveContext.h"
 
 DEFINE_LOG_CATEGORY(LogEditorNavManager)
@@ -30,7 +30,6 @@ void UEditorNavMeshManager::Initialize(FSubsystemCollectionBase& Collection)
 	
 	NavMeshPtr = std::make_shared<FNavMesh>();
 	NavMeshGenerator = new FNavMeshGenerator(NavMeshPtr);
-	NavMeshUpdater = new FNavMeshUpdater(NavMeshPtr);
 	NavMeshDebugger = new FNavMeshDebugger(NavMeshPtr);
 }
 
@@ -189,8 +188,22 @@ void UEditorNavMeshManager::UpdateAndDrawNavMesh(const FActorBoundsPairMap& Acto
 
 void UEditorNavMeshManager::UpdateAndDrawNavMesh(const std::vector<TBoundsPair<F3DVector32>>& BoundPairs)
 {
-	NavMeshUpdater->UpdateStatic(BoundPairs);
-	NavMeshDebugger->Draw();
+	if(NavMeshUpdater && NavMeshUpdater->IsRunning())
+	{
+		return;
+	}
+	
+	const TSharedPtr<TPromise<void>> Promise = MakeShared<TPromise<void>>();
+	Promise->GetFuture().Next([this](int)
+	{
+		UE_LOG(LogTemp, Log, TEXT("Promise navmesh updater."));
+		
+		FFunctionGraphTask::CreateAndDispatchWhenReady([this]()
+		{
+			NavMeshDebugger->Draw();
+		}, TStatId(), nullptr, ENamedThreads::GameThread);
+	});
+	NavMeshUpdater = new FNavMeshUpdater(Promise, NavMeshPtr, GEditor->GetEditorWorldContext().World(), BoundPairs);
 }
 
 void UEditorNavMeshManager::SaveNavMesh() const
@@ -515,7 +528,6 @@ void UEditorNavMeshManager::OnMapOpened(const FString& Filename, bool bAsTemplat
 {
 	EditorWorld = GEditor->GetEditorWorldContext().World();
 	NavMeshGenerator->SetWorld(EditorWorld);
-	NavMeshUpdater->SetWorld(EditorWorld);
 	NavMeshDebugger->SetWorld(EditorWorld);
 
 	LoadLevelNavMeshSettings();
