@@ -62,8 +62,6 @@ protected:
 		RETURN_QUICK_DECLARE_CYCLE_STAT(UEditorNavManager, STATGROUP_Tickables);
 	}
 
-	
-
 private:
 	void SetDelegates();
 	void ClearDelegates();
@@ -153,12 +151,15 @@ private:
 	/* End delegates */
 	
 	
-	// Variables
 	UPROPERTY() const UWorld* EditorWorld;
 	UPROPERTY() UNavMeshSettings* NavMeshSettings;
+	
 	FNavMeshGenerator* NavMeshGenerator;
 	FNavMeshUpdater* NavMeshUpdater;
 	FNavMeshDebugger* NavMeshDebugger;
+	
+	std::vector<TBoundsPair<F3DVector32>> AccumulatedPendingBoundsPairs;
+	
 	FNavMeshPtr NavMeshPtr;
 	FMBNavigationModule MainModule;
 

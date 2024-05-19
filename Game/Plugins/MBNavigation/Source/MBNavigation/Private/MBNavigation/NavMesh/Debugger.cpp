@@ -179,6 +179,7 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const uint8 Layer
 		for (const auto NeighbourLookupData : NeighboursLookupData)
 		{
 			if(NeighbourLookupData.LayerIndex == LAYER_INDEX_INVALID) continue;
+			if(LayerIndex != FNavMeshStatic::StaticDepth) continue;
 						
 			// Find chunk the neighbour is in.
 			const auto ChunkIterator = NavMeshPtr->find(NeighbourLookupData.ChunkKey);
@@ -190,7 +191,7 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const uint8 Layer
 			const FNode& NeighbourNode = NeighbourIterator->second;
 						
 			const F3DVector32 NeighbourGlobalCenterLocation = NeighbourNode.GetGlobalLocation(NeighbourChunk.Location) + FNavMeshStatic::NodeHalveSizes[NeighbourLookupData.LayerIndex];
-			DrawDebugLine(World, NodeGlobalCenterLocation, NeighbourGlobalCenterLocation.ToVector(), LayerColors[LayerIndex], true, -1, 11, 1);
+			DrawDebugLine(World, NodeGlobalCenterLocation, NeighbourGlobalCenterLocation.ToVector(), AdjustBrightness(LayerColors[LayerIndex], 0.8), true, -1, 11, 1);
 		}
 	}
 

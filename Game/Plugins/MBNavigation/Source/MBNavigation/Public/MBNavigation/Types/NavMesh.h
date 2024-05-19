@@ -215,7 +215,7 @@ public:
 	std::array<FNodeLookupData, 6> GetNeighboursLookupData(const F3DVector32& ChunkLocation) const;
 
 	void UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk* Chunk, const uint8 LayerIdx, OctreeDirection RelationsToUpdate);
-	
+
 	FORCEINLINE bool HasOverlap(const UWorld* World, const F3DVector32& ChunkLocation, const uint8 LayerIdx) const
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE_STR("Node Has-Overlap");
@@ -293,31 +293,6 @@ struct FChunk
 	FORCEINLINE TBounds<F3DVector32> GetBounds() const
 	{
 		return TBounds(Location, Location+FNavMeshStatic::ChunkSize);
-	}
-
-	// Todo move somewhere else, maybe FOctree?
-	template<typename Func>
-	void ForEachChildOfNode(const FNode& Node, const uint8 LayerIdx, Func Callback) const
-	{
-		if(!Node.HasChildren()) return;
-		
-		const uint8 ChildLayerIdx = LayerIdx+1;
-		const int_fast16_t ChildOffset = FNavMeshStatic::MortonOffsets[ChildLayerIdx];
-		const F3DVector10 NodeMortonLocation = Node.GetMortonLocation();
-		
-		for (uint8 i = 0; i < 8; ++i)
-		{
-			const uint_fast16_t ChildMortonX = NodeMortonLocation.X + ((i & 1) ? ChildOffset : 0);
-			const uint_fast16_t ChildMortonY = NodeMortonLocation.Y + ((i & 2) ? ChildOffset : 0);
-			const uint_fast16_t ChildMortonZ = NodeMortonLocation.Z + ((i & 4) ? ChildOffset : 0);
-
-			const F3DVector10 ChildMortonLocation = F3DVector10(ChildMortonX, ChildMortonY, ChildMortonZ);
-			const uint_fast32_t ChildMortonCode = ChildMortonLocation.ToMortonCode();
-			
-			const auto NodeIterator = Octrees[0]->Layers[ChildLayerIdx].find(ChildMortonCode);
-			// if(NodeIterator == Octrees[0]->Layers[ChildLayerIdx].end()) continue;
-			Callback(NodeIterator->second);
-		}
 	}
 };
 
