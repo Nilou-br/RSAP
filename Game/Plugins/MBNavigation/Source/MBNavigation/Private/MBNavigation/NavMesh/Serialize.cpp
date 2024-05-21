@@ -37,7 +37,7 @@ bool DeserializeNavMesh(FNavMesh& OutNavMesh, FGuid& OutID)
 	return true;
 }
 
-FArchive& operator<<(FArchive& Ar, F3DVector32& Vector32)
+FArchive& operator<<(FArchive& Ar, FGlobalVector& Vector32)
 {
 	if (Ar.IsSaving())
 	{
@@ -48,7 +48,7 @@ FArchive& operator<<(FArchive& Ar, F3DVector32& Vector32)
 	{
 		uint64_t Key;
 		Ar << Key;
-		Vector32 = F3DVector32::FromKey(Key);
+		Vector32 = FGlobalVector::FromKey(Key);
 	}
 	return Ar;
 }

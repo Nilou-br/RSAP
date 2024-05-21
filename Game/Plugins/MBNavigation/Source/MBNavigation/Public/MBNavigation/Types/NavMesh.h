@@ -10,8 +10,8 @@
 
 #define LAYER_INDEX_INVALID 11
 
-struct F3DVector32;
-struct F3DVector10;
+struct FGlobalVector;
+struct FMortonVector;
 
 struct FChunk;
 typedef ankerl::unordered_dense::map<uint_fast64_t, FChunk> FNavMesh;
@@ -131,7 +131,7 @@ public:
 		MortonCode = libmorton::morton3D_32_encode(MortonX, MortonY, MortonZ);
 	}
 
-	explicit FNode(const F3DVector10 MortonLocation, const OctreeDirection InChunkBorder = 0b000000):
+	explicit FNode(const FMortonVector MortonLocation, const OctreeDirection InChunkBorder = 0b000000):
 		ChunkBorder(InChunkBorder)
 	{
 		MortonCode = libmorton::morton3D_32_encode(MortonLocation.X, MortonLocation.Y, MortonLocation.Z);
@@ -141,14 +141,14 @@ public:
 		MortonCode(InMortonCode), ChunkBorder(InChunkBorder)
 	{}
 
-	FORCEINLINE F3DVector10 GetMortonLocation() const
+	FORCEINLINE FMortonVector GetMortonLocation() const
 	{
 		uint_fast16_t TempX, TempY, TempZ;
 		libmorton::morton3D_32_decode(GetMortonCode(), TempX, TempY, TempZ);
-		return F3DVector10(TempX, TempY, TempZ);
+		return FMortonVector(TempX, TempY, TempZ);
 	}
 
-	FORCEINLINE F3DVector10 GetLocalLocation() const
+	FORCEINLINE FMortonVector GetLocalLocation() const
 	{
 		uint_fast16_t TempX, TempY, TempZ;
 		libmorton::morton3D_32_decode(GetMortonCode(), TempX, TempY, TempZ);
@@ -157,10 +157,10 @@ public:
 		TempX <<= FNavMeshStatic::VoxelSizeExponent;
 		TempY <<= FNavMeshStatic::VoxelSizeExponent;
 		TempZ <<= FNavMeshStatic::VoxelSizeExponent;
-		return F3DVector10(TempX, TempY, TempZ);
+		return FMortonVector(TempX, TempY, TempZ);
 	}
 	
-	FORCEINLINE F3DVector32 GetGlobalLocation(const F3DVector32 &ChunkLocation) const
+	FORCEINLINE FGlobalVector GetGlobalLocation(const FGlobalVector &ChunkLocation) const
 	{
 		return ChunkLocation + GetLocalLocation();
 	}
@@ -212,11 +212,11 @@ public:
 	}
 
 	std::array<uint8, 6> GetNeighbourLayerIndexes() const;
-	std::array<FNodeLookupData, 6> GetNeighboursLookupData(const F3DVector32& ChunkLocation) const;
+	std::array<FNodeLookupData, 6> GetNeighboursLookupData(const FGlobalVector& ChunkLocation) const;
 
 	void UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk* Chunk, const uint8 LayerIdx, OctreeDirection RelationsToUpdate);
 
-	FORCEINLINE bool HasOverlap(const UWorld* World, const F3DVector32& ChunkLocation, const uint8 LayerIdx) const
+	FORCEINLINE bool HasOverlap(const UWorld* World, const FGlobalVector& ChunkLocation, const uint8 LayerIdx) const
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE_STR("Node Has-Overlap");
 		return FPhysicsInterface::GeomOverlapBlockingTest(
@@ -230,10 +230,10 @@ public:
 		);
 	}
 
-	FORCEINLINE void Draw(const UWorld* World, const F3DVector32& ChunkLocation, const uint8 LayerIndex, const FColor Color = FColor::Black, const uint32 Thickness = 0) const
+	FORCEINLINE void Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const uint8 LayerIndex, const FColor Color = FColor::Black, const uint32 Thickness = 0) const
 	{
 		const float NodeHalveSize = FNavMeshStatic::NodeHalveSizes[LayerIndex];
-		DrawDebugBox(World, F3DVector32(GetGlobalLocation(ChunkLocation)).ToVector()+NodeHalveSize, F3DVector32(NodeHalveSize).ToVector(), Color, true, -1, 0, Thickness);
+		DrawDebugBox(World, FGlobalVector(GetGlobalLocation(ChunkLocation)).ToVector()+NodeHalveSize, FGlobalVector(NodeHalveSize).ToVector(), Color, true, -1, 0, Thickness);
 	}
 };
 
@@ -268,10 +268,10 @@ struct FOctree
  */
 struct FChunk
 {
-	F3DVector32 Location; // Located at the negative most location.
+	FGlobalVector Location; // Located at the negative most location.
 	TArray<TSharedPtr<FOctree>> Octrees;
 	
-	explicit FChunk(const F3DVector32& InLocation = F3DVector32(0, 0, 0))
+	explicit FChunk(const FGlobalVector& InLocation = FGlobalVector(0, 0, 0))
 		: Location(InLocation)
 	{
 		// Create the static octree.
@@ -290,14 +290,14 @@ struct FChunk
 		);
 	}
 
-	FORCEINLINE TBounds<F3DVector32> GetBounds() const
+	FORCEINLINE TBounds<FGlobalVector> GetBounds() const
 	{
 		return TBounds(Location, Location+FNavMeshStatic::ChunkSize);
 	}
 };
 
 // The Navigation-Mesh is a hashmap of Chunks, where each chunk can be found using a uint64 key.
-// The key is the location of the chunk divided by the chunk-size ( F3DVector32::ToKey ).
+// The key is the location of the chunk divided by the chunk-size ( FGlobalVector::ToKey ).
 typedef ankerl::unordered_dense::map<uint_fast64_t, FChunk> FNavMesh;
 typedef std::shared_ptr<FNavMesh> FNavMeshPtr;
 

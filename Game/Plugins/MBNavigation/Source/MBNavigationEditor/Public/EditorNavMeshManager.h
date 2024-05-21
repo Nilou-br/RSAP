@@ -28,8 +28,8 @@ enum class ESnapshotType
 	Deleted
 };
 
-typedef TMap<FGuid, TBounds<F3DVector32>> FActorBoundsMap;
-typedef TMap<FGuid, TBoundsPair<F3DVector32>> FActorBoundsPairMap;
+typedef TMap<FGuid, TBounds<FGlobalVector>> FActorBoundsMap;
+typedef TMap<FGuid, TBoundsPair<FGlobalVector>> FActorBoundsPairMap;
 
 struct FUndoRedoSnapshot
 {
@@ -69,7 +69,7 @@ private:
 	void InitStaticNavMeshData();
 	FORCEINLINE void GenerateAndDrawNavMesh();
 	FORCEINLINE void UpdateAndDrawNavMesh(const FActorBoundsPairMap& ActorBoundPairs);
-	FORCEINLINE void UpdateAndDrawNavMesh(const std::vector<TBoundsPair<F3DVector32>>& BoundPairs);
+	FORCEINLINE void UpdateAndDrawNavMesh(const std::vector<TBoundsPair<FGlobalVector>>& BoundPairs);
 	void SaveNavMesh() const;
 	
 public:
@@ -93,7 +93,7 @@ private:
 	void AddSnapshot(const ESnapshotType SnapshotType, const FActorBoundsPairMap& ActorBoundsPairMap);
 	void ClearRedoSnapshots();
 	bool IsSnapshotActive(const FUndoRedoSnapshot& Snapshot);
-	TBounds<F3DVector32> GetLevelBoundaries() const;
+	TBounds<FGlobalVector> GetLevelBoundaries() const;
 	void CheckMovingActors();
 	bool FindActorFromGuid(const FGuid& ActorGuid, const AActor*& OutActor);
 
@@ -158,7 +158,7 @@ private:
 	FNavMeshUpdater* NavMeshUpdater;
 	FNavMeshDebugger* NavMeshDebugger;
 	
-	std::vector<TBoundsPair<F3DVector32>> AccumulatedPendingBoundsPairs;
+	std::vector<TBoundsPair<FGlobalVector>> AccumulatedPendingBoundsPairs;
 	
 	FNavMeshPtr NavMeshPtr;
 	FMBNavigationModule MainModule;

@@ -11,7 +11,7 @@
 DEFINE_LOG_CATEGORY(LogNavMeshGenerator)
 
 
-void FNavMeshGenerator::Generate(const TBounds<F3DVector32>& LevelBounds)
+void FNavMeshGenerator::Generate(const TBounds<FGlobalVector>& LevelBounds)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("NavMesh Generate");
 	if (!World)
@@ -40,15 +40,15 @@ void FNavMeshGenerator::Generate(const TBounds<F3DVector32>& LevelBounds)
  * Create a grid of chunks filling the entire area of the level-boundaries.
  * Chunks are be placed so that their origin align with the world coordinates x0,y0,z0.
  */
-void FNavMeshGenerator::GenerateChunks(const TBounds<F3DVector32>& LevelBounds)
+void FNavMeshGenerator::GenerateChunks(const TBounds<FGlobalVector>& LevelBounds)
 {
-	const F3DVector32 LevelMin = LevelBounds.Min;
-	const F3DVector32 LevelMax = LevelBounds.Max;
+	const FGlobalVector LevelMin = LevelBounds.Min;
+	const FGlobalVector LevelMax = LevelBounds.Max;
 
 	// Determine the min/max coordinates of the chunks.
 	const int32 Mask = ~((1<<FNavMeshStatic::KeyShift)-1);
-	const F3DVector32 ChunksMinLoc(LevelMin.X & Mask, LevelMin.Y & Mask, LevelMin.Z & Mask);
-	const F3DVector32 ChunksMaxLoc(LevelMax.X & Mask, LevelMax.Y & Mask, LevelMax.Z & Mask);
+	const FGlobalVector ChunksMinLoc(LevelMin.X & Mask, LevelMin.Y & Mask, LevelMin.Z & Mask);
+	const FGlobalVector ChunksMaxLoc(LevelMax.X & Mask, LevelMax.Y & Mask, LevelMax.Z & Mask);
 
 	// Reserve memory for all chunks.
 	const uint32 TotalChunks =
@@ -71,7 +71,7 @@ void FNavMeshGenerator::GenerateChunks(const TBounds<F3DVector32>& LevelBounds)
 		{
 			for (int32 Z = ChunksMinLoc.Z; Z <= ChunksMaxLoc.Z; Z+=FNavMeshStatic::ChunkSize)
 			{
-				F3DVector32 ChunkLocation = F3DVector32(X, Y, Z);
+				FGlobalVector ChunkLocation = FGlobalVector(X, Y, Z);
 				auto [ChunkIterator, IsInserted] = NavMeshPtr->emplace(ChunkLocation.ToKey(), FChunk(ChunkLocation));
 				FChunk* Chunk = &ChunkIterator->second;
 
@@ -107,7 +107,7 @@ void FNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FNode& Node, const ui
 
 	// Reserve memory for 8 child-nodes on the lower layer and initialize them.
 	ChildLayer.reserve(8);
-	const F3DVector10 NodeMortonLocation = Node.GetMortonLocation();
+	const FMortonVector NodeMortonLocation = Node.GetMortonLocation();
 	for (uint8 i = 0; i < 8; ++i)
 	{
 		// Add the offset to certain children depending on their location in the parent. todo: check performance compared to switch??

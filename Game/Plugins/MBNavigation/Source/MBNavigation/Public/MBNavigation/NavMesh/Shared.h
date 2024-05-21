@@ -10,7 +10,7 @@ FORCEINLINE bool NodeHasOverlap(const UWorld* World, const FChunk* Chunk, const 
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("NodeHasOverlap");
 	
-	const F3DVector32 GlobalLocation = F3DVector32::FromMortonCode(MortonCode, Chunk->Location);
+	const FGlobalVector GlobalLocation = FGlobalVector::FromMortonCode(MortonCode, Chunk->Location);
 	const FVector Extent = FVector(FNavMeshStatic::NodeHalveSizes[LayerIdx]);
 	// DrawDebugBox(World, ToVector()+Extent, Extent, FColor::Black, true, -1, 0, 2);
 	
@@ -25,7 +25,7 @@ FORCEINLINE bool NodeHasOverlap(const UWorld* World, const FChunk* Chunk, const 
 	);
 }
 
-FORCEINLINE FChunk* GetNeighbouringChunk(const FNavMeshPtr& NavMeshPtr, F3DVector32 ChunkLocation, const uint8 Direction)
+FORCEINLINE FChunk* GetNeighbouringChunk(const FNavMeshPtr& NavMeshPtr, FGlobalVector ChunkLocation, const uint8 Direction)
 {
 	switch (Direction) {
 		case DIRECTION_X_NEGATIVE: ChunkLocation.X = -FNavMeshStatic::ChunkSize; break;
@@ -44,8 +44,8 @@ FORCEINLINE FChunk* GetNeighbouringChunk(const FNavMeshPtr& NavMeshPtr, F3DVecto
 
 FORCEINLINE void DrawNodeFromMorton(const UWorld* World, const FChunk* Chunk, const uint_fast32_t MortonCode, const uint8 LayerIdx, FColor Color = FColor::Black)
 {
-	const F3DVector32 GlobalNodeLocation = F3DVector32::FromMortonCode(MortonCode, Chunk->Location);
-	const TBounds<F3DVector32> NodeBoundaries(GlobalNodeLocation, GlobalNodeLocation+FNavMeshStatic::NodeSizes[LayerIdx]);
+	const FGlobalVector GlobalNodeLocation = FGlobalVector::FromMortonCode(MortonCode, Chunk->Location);
+	const TBounds<FGlobalVector> NodeBoundaries(GlobalNodeLocation, GlobalNodeLocation+FNavMeshStatic::NodeSizes[LayerIdx]);
 	NodeBoundaries.Draw(World, Color);
 }
 
@@ -56,7 +56,7 @@ static void ForEachChild(const FChunk* Chunk, const FNode Node, const uint8 Laye
 		
 	const uint8 ChildLayerIdx = LayerIdx+1;
 	const int_fast16_t ChildOffset = FNavMeshStatic::MortonOffsets[ChildLayerIdx];
-	const F3DVector10 NodeMortonLocation = Node.GetMortonLocation();
+	const FMortonVector NodeMortonLocation = Node.GetMortonLocation();
 		
 	for (uint8 i = 0; i < 8; ++i)
 	{
@@ -64,7 +64,7 @@ static void ForEachChild(const FChunk* Chunk, const FNode Node, const uint8 Laye
 		const uint_fast16_t ChildMortonY = NodeMortonLocation.Y + ((i & 2) ? ChildOffset : 0);
 		const uint_fast16_t ChildMortonZ = NodeMortonLocation.Z + ((i & 4) ? ChildOffset : 0);
 
-		const F3DVector10 ChildMortonLocation = F3DVector10(ChildMortonX, ChildMortonY, ChildMortonZ);
+		const FMortonVector ChildMortonLocation = FMortonVector(ChildMortonX, ChildMortonY, ChildMortonZ);
 		const uint_fast32_t ChildMortonCode = ChildMortonLocation.ToMortonCode();
 			
 		const auto NodeIterator = Chunk->Octrees[0]->Layers[ChildLayerIdx].find(ChildMortonCode);

@@ -17,12 +17,12 @@ public:
 		: NavMeshPtr(InNavMesh), World(nullptr)
 	{}
 	void SetWorld(const UWorld* InWorld) { World = InWorld; }
-	void Generate(const TBounds<F3DVector32>& LevelBounds);
+	void Generate(const TBounds<FGlobalVector>& LevelBounds);
 
 private:
 
 	// Generation methods
-	void GenerateChunks(const TBounds<F3DVector32>& LevelBounds);
+	void GenerateChunks(const TBounds<FGlobalVector>& LevelBounds);
 	void RasterizeStaticNode(FChunk* Chunk, FNode &Node, const uint8 LayerIndex);
 	void SetNegativeNeighbourRelations(const FChunk* Chunk);
 

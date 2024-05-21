@@ -19,7 +19,7 @@ typedef std::pair<MortonCode, OctreeDirection> FNodeRelationPair;
 class MBNAVIGATION_API FNavMeshUpdater final : public FRunnable
 {
 public:
-	explicit FNavMeshUpdater(const TSharedPtr<TPromise<void>>& Promise, const FNavMeshPtr& InNavMeshPtr, const UWorld* InWorld, const std::vector<TBoundsPair<F3DVector32>>& InBoundsPairs)
+	explicit FNavMeshUpdater(const TSharedPtr<TPromise<void>>& Promise, const FNavMeshPtr& InNavMeshPtr, const UWorld* InWorld, const std::vector<TBoundsPair<FGlobalVector>>& InBoundsPairs)
 		: NavMeshPtr(InNavMeshPtr), World(InWorld), BoundsPairs(InBoundsPairs), StopTaskCounter(0)
 	{
 		this->Promise = Promise;
@@ -41,10 +41,10 @@ public:
 	bool IsRunning() const { return bIsRunning; }
 
 private:
-	template<typename Func> void ForEachChunkIntersection(const TBounds<F3DVector32>& Bounds, const uint8 LayerIdx, Func Callback);
+	template<typename Func> void ForEachChunkIntersection(const TBounds<FGlobalVector>& Bounds, const uint8 LayerIdx, Func Callback);
 
 	bool StartReRasterizeNode(const FChunk* Chunk, const uint_fast32_t MortonCode, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate);
-	static void RecursiveReRasterizeNode(const UWorld* World, const FChunk* Chunk, FNode& Node, const uint8 LayerIdx, const F3DVector10 MortonLocation);
+	static void RecursiveReRasterizeNode(const UWorld* World, const FChunk* Chunk, FNode& Node, const uint8 LayerIdx, const FMortonVector MortonLocation);
 	
 	bool StartClearUnoccludedChildrenOfNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate);
 	void RecursiveClearUnoccludedChildren(const FChunk* Chunk, FNode& Node, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate);
@@ -58,7 +58,7 @@ private:
 	TSharedPtr<TPromise<void>> Promise;
 	FNavMeshPtr NavMeshPtr;
 	const UWorld* World;
-	std::vector<TBoundsPair<F3DVector32>> BoundsPairs;
+	std::vector<TBoundsPair<FGlobalVector>> BoundsPairs;
 
 	FRunnableThread* Thread;
 	FThreadSafeCounter StopTaskCounter;
