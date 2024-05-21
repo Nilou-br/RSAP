@@ -18,15 +18,15 @@ class MBNAVIGATION_API UNavMeshSettings : public UAssetUserData
 	GENERATED_BODY()
 
 public:
-	// Used to find the stored navmesh. Resets to a new ID every time the level is saved.
+	// Used to to determine if a serialized navmesh is in-sync with the level. Generates a new ID every time the level is saved.
 	UPROPERTY(VisibleAnywhere, Category="Data")
 	FGuid ID;
 
-	// Size the voxels/nodes will increase by exponentially. Base voxel-size is 1cm.
+	// Determines the base size of the nodes. Size equals 1 to the power of this variable.
 	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category="Data")
 	uint8 VoxelSizeExponent = 2;
 
-	// How deep the static-nodes will be rasterized in the octree.
+	// How deep the static octree will be rasterized in the octree.
 	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category="Data")
 	uint8 StaticDepth = 6;
 };

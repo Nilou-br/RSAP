@@ -153,7 +153,6 @@ struct FGlobalVector
 			Result |= ((Val < 0) ? 1ULL : 0ULL) << 20;
 			return Result;
 		};
-		
 		return (Encode(X) << 42) | (Encode(Y) << 21) | Encode(Z);
 	}
 

@@ -17,9 +17,9 @@ DECLARE_LOG_CATEGORY_EXTERN(LogEditorNavManager, Log, All);
 
 /**
  * Enum for determining the operation that changed a static-mesh-actor.
- * - Moved: Existing Actor has changed location/rotation/scale.
- * - Added: New Actor has been added in the level by either dropping it in the level, or duplicating/pasting one.
- * - Deleted: An existing Actor has been removed from the level.
+ * - <b>Moved:</b> An actor has changed location/rotation/scale (transform).
+ * - <b>Added:</b> A new actor has been added in the level by either dragging one into the viewport, or duplicating/pasting one.
+ * - <b>Deleted:</b> An actor has been removed from the level.
  */
 enum class ESnapshotType
 {
@@ -28,15 +28,15 @@ enum class ESnapshotType
 	Deleted
 };
 
-typedef TMap<FGuid, TBounds<FGlobalVector>> FActorBoundsMap;
-typedef TMap<FGuid, TBoundsPair<FGlobalVector>> FActorBoundsPairMap;
+typedef TMap<FGuid, TBounds<FGlobalVector>> FBoundsMap;
+typedef TMap<FGuid, TBoundsPair<FGlobalVector>> FBoundsPairMap;
 
 struct FUndoRedoSnapshot
 {
 	ESnapshotType SnapshotType;
-	FActorBoundsPairMap ActorBoundsPairMap;
+	FBoundsPairMap ActorBoundsPairMap;
 
-	FUndoRedoSnapshot(const ESnapshotType InE_SnapshotType, const FActorBoundsPairMap& InActorBoundsPairMap):
+	FUndoRedoSnapshot(const ESnapshotType InE_SnapshotType, const FBoundsPairMap& InActorBoundsPairMap):
 		SnapshotType(InE_SnapshotType), ActorBoundsPairMap(InActorBoundsPairMap)
 	{}
 };
@@ -44,9 +44,10 @@ struct FUndoRedoSnapshot
 /**
  * Handles everything related to the navmesh while using the editor.
  *
- * - <b>(re)generates</b> the navmesh when its settings change, or no navmesh exists yet when opening a level.
- * - <b>Updates</b> the navmesh when the geometry of the level changes.
- * - <b>Switches</b> the navmesh when changing levels.
+ * - <b>(re)generates</b> the navmesh when its settings change, or when there is no existing navmesh when opening a level.
+ * - <b>Updates</b> the navmesh when the geometry inside the level changes.
+ * - <b>Serializes</b> the navmesh when when saving the level.
+ * - <b>Unloads/loads</b> the navmesh when changing levels.
  */
 UCLASS()
 class UEditorNavMeshManager final : public UEditorSubsystem, public FEditorUndoClient, public FTickableEditorObject
@@ -57,10 +58,7 @@ protected:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
 	virtual void Tick(float DeltaTime) override;
-	virtual TStatId GetStatId() const override
-	{
-		RETURN_QUICK_DECLARE_CYCLE_STAT(UEditorNavManager, STATGROUP_Tickables);
-	}
+	virtual TStatId GetStatId() const override { RETURN_QUICK_DECLARE_CYCLE_STAT(UEditorNavManager, STATGROUP_Tickables); }
 
 private:
 	void SetDelegates();
@@ -68,9 +66,11 @@ private:
 	void LoadLevelNavMeshSettings();
 	void InitStaticNavMeshData();
 	FORCEINLINE void GenerateAndDrawNavMesh();
-	FORCEINLINE void UpdateAndDrawNavMesh(const FActorBoundsPairMap& ActorBoundPairs);
-	FORCEINLINE void UpdateAndDrawNavMesh(const std::vector<TBoundsPair<FGlobalVector>>& BoundPairs);
+	
+	FORCEINLINE void StageForUpdate(const FBoundsPairMap& BoundsPairMap);
+	FORCEINLINE void UpdateNavMesh(const std::vector<TBoundsPair<FGlobalVector>>& BoundsPairs);
 	void SaveNavMesh() const;
+	FORCEINLINE bool IsUpdaterRunning() const;
 	
 public:
 	UFUNCTION(BlueprintCallable, Category="Settings")
@@ -90,66 +90,12 @@ protected:
 	virtual void PostRedo(bool bSuccess) override;
 
 private:
-	void AddSnapshot(const ESnapshotType SnapshotType, const FActorBoundsPairMap& ActorBoundsPairMap);
+	void AddSnapshot(const ESnapshotType SnapshotType, const FBoundsPairMap& ActorBoundsPairMap);
 	void ClearRedoSnapshots();
 	bool IsSnapshotActive(const FUndoRedoSnapshot& Snapshot);
 	TBounds<FGlobalVector> GetLevelBoundaries() const;
 	void CheckMovingActors();
 	bool FindActorFromGuid(const FGuid& ActorGuid, const AActor*& OutActor);
-
-	
-	/* Delegates */
-	
-	// Level
-	FDelegateHandle OnMapLoadDelegateHandle;
-	void OnMapLoad(const FString& Filename, FCanLoadMap& OutCanLoadMap);
-	FDelegateHandle OnMapOpenedDelegateHandle;
-	void OnMapOpened(const FString& Filename, bool bAsTemplate);
-	FDelegateHandle PreSaveWorldDelegateHandle;
-	void PreWorldSaved(UWorld* World, FObjectPreSaveContext ObjectPreSaveContext);
-	FDelegateHandle PostSaveWorldDelegateHandle;
-	void PostWorldSaved(UWorld* World, FObjectPostSaveContext ObjectSaveContext);
-	
-	// Camera
-	FDelegateHandle OnCameraMovedDelegateHandle;
-	void OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation, ELevelViewportType LevelViewportType, int32) const;
-	
-	// Actor movement
-	FDelegateHandle OnObjectMovedDelegateHandle;
-	void OnObjectMoved(AActor* Actor);
-	FDelegateHandle OnBeginObjectMovementDelegateHandle;
-	void OnBeginObjectMovement(UObject& Object);
-	FDelegateHandle OnEndObjectMovementDelegateHandle;
-	void OnEndObjectMovement(UObject& Object);
-
-	// Actor dropped
-	FDelegateHandle OnNewActorsDroppedDelegateHandle;
-	void OnNewActorsDropped(const TArray<UObject*>& Objects, const TArray<AActor*>& Actors);
-
-	// Actor paste
-	FDelegateHandle OnEditPasteActorsBeginDelegateHandle;
-	void OnPasteActorsBegin();
-	FDelegateHandle OnEditPasteActorsEndDelegateHandle;
-	void OnPasteActorsEnd();
-
-	// Actor duplicate
-	FDelegateHandle OnDuplicateActorsBeginDelegateHandle;
-	void OnDuplicateActorsBegin();
-	FDelegateHandle OnDuplicateActorsEndDelegateHandle;
-	void OnDuplicateActorsEnd();
-
-	// Actor delete
-	FDelegateHandle OnDeleteActorsBeginDelegateHandle;
-	void OnDeleteActorsBegin();
-	FDelegateHandle OnDeleteActorsEndDelegateHandle;
-	void OnDeleteActorsEnd();
-
-	// Actor selection
-	FDelegateHandle OnActorSelectionChangedDelegateHandle;
-	void OnActorSelectionChanged(const TArray<UObject*>& Actors, bool);
-
-	/* End delegates */
-	
 	
 	UPROPERTY() const UWorld* EditorWorld;
 	UPROPERTY() UNavMeshSettings* NavMeshSettings;
@@ -158,21 +104,43 @@ private:
 	FNavMeshUpdater* NavMeshUpdater;
 	FNavMeshDebugger* NavMeshDebugger;
 	
-	std::vector<TBoundsPair<FGlobalVector>> AccumulatedPendingBoundsPairs;
+	std::vector<TBoundsPair<FGlobalVector>> StagedBoundsPairs;
 	
 	FNavMeshPtr NavMeshPtr;
 	FMBNavigationModule MainModule;
-
 	
-	TMap<FGuid, TWeakObjectPtr<const AActor>> StaticMeshActorsMap; // For quickly finding an actor using its GUID.
-	FActorBoundsMap CachedActorBoundsMap; // Caches the actor bounds.
-	FActorBoundsPairMap DeletedActorBoundsPairMap; // Actors to delete in OnDeleteActorsEnd.
-	FActorBoundsMap MovingActorBoundsMap; // Keeps track of the bounds of actors that are currently in a moving state ( holding the gizmo ).
-	std::vector<const AActor*> SelectedActors;
+	TMap<FGuid, TWeakObjectPtr<const AActor>> CachedSMActors; // For quickly finding an actor using its GUID.
+	UPROPERTY() TArray<const AActor*> SelectedActors;
+	FBoundsMap MovingActorBounds; // Keeps track of the bounds of actors that are currently in a moving state ( holding the gizmo ).
+	FBoundsMap CachedActorBounds;
+	FBoundsPairMap DeletedActorBoundsPairs; // Actors to delete in OnDeleteActorsEnd.
 	bool bIsMovingActors;
 	bool bAddActorOccured;
 	
 	std::vector<FUndoRedoSnapshot> UndoRedoSnapshots;
 	int32 UndoRedoIndex = -1;
 	TArray<uint8> UndoBatchCounts;
+
+	
+	/* Start delegates */
+	
+	FDelegateHandle OnMapLoadDelegateHandle; void OnMapLoad(const FString& Filename, FCanLoadMap& OutCanLoadMap);
+	FDelegateHandle OnMapOpenedDelegateHandle; void OnMapOpened(const FString& Filename, bool bAsTemplate);
+	FDelegateHandle PreSaveWorldDelegateHandle; void PreWorldSaved(UWorld* World, FObjectPreSaveContext ObjectPreSaveContext);
+	FDelegateHandle PostSaveWorldDelegateHandle; void PostWorldSaved(UWorld* World, FObjectPostSaveContext ObjectSaveContext);
+	
+	FDelegateHandle OnBeginObjectMovementDelegateHandle; void OnBeginObjectMovement(UObject& Object);
+	FDelegateHandle OnEndObjectMovementDelegateHandle; void OnEndObjectMovement(UObject& Object);
+	FDelegateHandle OnNewActorsDroppedDelegateHandle; void OnNewActorsDropped(const TArray<UObject*>& Objects, const TArray<AActor*>& Actors);
+	FDelegateHandle OnEditPasteActorsBeginDelegateHandle; void OnPasteActorsBegin();
+	FDelegateHandle OnEditPasteActorsEndDelegateHandle; void OnPasteActorsEnd();
+	FDelegateHandle OnDuplicateActorsBeginDelegateHandle; void OnDuplicateActorsBegin();
+	FDelegateHandle OnDuplicateActorsEndDelegateHandle; void OnDuplicateActorsEnd();
+	FDelegateHandle OnDeleteActorsBeginDelegateHandle; void OnDeleteActorsBegin();
+	FDelegateHandle OnDeleteActorsEndDelegateHandle; void OnDeleteActorsEnd();
+	FDelegateHandle OnActorSelectionChangedDelegateHandle; void OnActorSelectionChanged(const TArray<UObject*>& Actors, bool);
+
+	FDelegateHandle OnCameraMovedDelegateHandle; void OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation, ELevelViewportType LevelViewportType, int32) const;
+
+	/* End delegates */
 };
