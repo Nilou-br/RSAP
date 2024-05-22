@@ -28,12 +28,12 @@ public:
 
 	virtual ~FUpdateTask() override
 	{
-		if (Thread) {
-			Thread->Kill(true);
-			delete Thread;
-		}
+		if (!Thread) return;
+		Thread->Kill(true);
+		delete Thread;
 	}
-	
+
+protected:
 	virtual bool Init() override { return true; }
 	virtual void Exit() override { Promise->SetValue(); }
 	virtual uint32 Run() override;
@@ -76,7 +76,11 @@ private:
  */
 class MBNAVIGATION_API FNavMeshUpdater final : public FTickableGameObject
 {
+	DECLARE_DELEGATE(FOnNavMeshUpdatedDelegate);
+	
 public:
+	FOnNavMeshUpdatedDelegate OnNavMeshUpdatedDelegate;
+	
 	explicit FNavMeshUpdater(const FNavMeshPtr& InNavMeshPtr)
 		: NavMeshPtr(InNavMeshPtr), World(nullptr)
 	{}

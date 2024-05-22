@@ -16,12 +16,11 @@ public:
 		: NavMeshPtr(InNavMesh), World(nullptr)
 	{}
 	void SetWorld(const UWorld* InWorld) { World = InWorld; }
-	void Draw();
-	void Draw(const FVector& CameraLocation, const FRotator& CameraRotation);
+	void Draw() const;
+	void Draw(const FVector& CameraLocation, const FRotator& CameraRotation) const;
 	void UpdateSettings(const FNavMeshDebugSettings InNavMeshDebugSettings){ NavMeshDebugSettings = InNavMeshDebugSettings;	}
 
 private:
-	void PerformConditionalDraw(const FVector& CameraLocation, const FVector& CameraForwardVector);
 	void DrawNodes(const FVector& CameraLocation, const FVector& CameraForwardVector) const;
 	void RecursiveDrawNodes(const FChunk* Chunk, const uint8 LayerIndex, const uint_fast32_t& NodeMorton,
 		const FVector& CameraLocation, const FVector& CameraForwardVector) const;

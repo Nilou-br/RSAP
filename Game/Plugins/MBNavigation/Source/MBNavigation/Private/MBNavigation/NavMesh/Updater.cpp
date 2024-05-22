@@ -26,19 +26,19 @@ void FNavMeshUpdater::Update()
 	const TSharedPtr<TPromise<void>> Promise = MakeShared<TPromise<void>>();
 	Promise->GetFuture().Next([this](int)
 	{
-		UE_LOG(LogTemp, Log, TEXT("Navmesh has been updated."));
-		bIsRunning = false;
-		
-		// FFunctionGraphTask::CreateAndDispatchWhenReady([this]()
-		// {
-		// 	bIsRunning = false;
-		// }, TStatId(), nullptr, ENamedThreads::GameThread);
+		// Broadcast the completion on the game-thread.
+		FFunctionGraphTask::CreateAndDispatchWhenReady([this]()
+		{
+			UE_LOG(LogTemp, Log, TEXT("Navmesh has been updated."));
+			bIsRunning = false;
+			if(OnNavMeshUpdatedDelegate.IsBound()) OnNavMeshUpdatedDelegate.Execute();
+		}, TStatId(), nullptr, ENamedThreads::GameThread);
 	});
 
 	UE_LOG(LogTemp, Log, TEXT("Starting navmesh update..."));
 	bIsRunning = true;
 	const std::vector<TBoundsPair<FGlobalVector>> TempBoundPairs = std::move(StagedBoundsPairs); // Clear the StagedBoundsPairs so that new data can be accumulated during the update.
-	FUpdateTask* UpdateTask = new FUpdateTask(Promise, GEditor->GetEditorWorldContext().World(), NavMeshPtr, TempBoundPairs);
+	FUpdateTask* UpdateTask = new FUpdateTask(Promise, GEditor->GetEditorWorldContext().World(), NavMeshPtr, TempBoundPairs); // todo clear this variable after completion??
 }
 
 
@@ -90,7 +90,7 @@ uint8 CalculateOptimalStartingLayer(const TBoundsPair<FGlobalVector>& BoundsPair
 uint32 FUpdateTask::Run()
 {
 #if WITH_EDITOR
-	// FlushPersistentDebugLines(World);
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("FUpdateTask ::Run");
 	const auto StartTime = std::chrono::high_resolution_clock::now();
 #endif
 
@@ -195,6 +195,8 @@ template<typename Func>
 void FUpdateTask::ForEachChunkIntersection(const TBounds<FGlobalVector>& Bounds, const uint8 LayerIdx, Func Callback)
 {
 	static_assert(std::is_invocable_v<Func, const FChunk*, const std::vector<std::pair<MortonCode, OctreeDirection>>>, "'::ForEachChunkIntersection' callback has wrong arguments.");
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("ForEachChunkIntersection");
+	
 	if(!Bounds.IsValid()) return;
 	const uint_fast16_t MortonOffset = FNavMeshStatic::MortonOffsets[LayerIdx];
 
@@ -255,6 +257,7 @@ void FUpdateTask::ForEachChunkIntersection(const TBounds<FGlobalVector>& Bounds,
  */
 bool FUpdateTask::StartReRasterizeNode(const FChunk* Chunk, const uint_fast32_t MortonCode, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("StartReRasterizeNode");
 	auto NodeIterator = Chunk->Octrees[0]->Layers[LayerIdx].find(MortonCode);
 	const bool bFoundNode = NodeIterator != Chunk->Octrees[0]->Layers[LayerIdx].end();
 
@@ -298,6 +301,7 @@ bool FUpdateTask::StartReRasterizeNode(const FChunk* Chunk, const uint_fast32_t 
 // Recursive re-rasterization of nodes.
 void FUpdateTask::RecursiveReRasterizeNode(const UWorld* World, const FChunk* Chunk, FNode& Node, const uint8 LayerIdx, const FMortonVector MortonLocation)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("RecursiveReRasterizeNode");
 	if(LayerIdx >= FNavMeshStatic::StaticDepth) return;
 	const uint8 ChildLayerIdx = LayerIdx+1;
 	
@@ -361,6 +365,7 @@ void FUpdateTask::RecursiveReRasterizeNode(const UWorld* World, const FChunk* Ch
  */
 bool FUpdateTask::StartClearUnoccludedChildrenOfNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("StartClearUnoccludedChildrenOfNode");
 	// return True if the Node does not exist.
 	const auto NodeIterator = Chunk->Octrees[0]->Layers[LayerIdx].find(NodeMortonCode);
 	if(NodeIterator == Chunk->Octrees[0]->Layers[LayerIdx].end()) return true;
@@ -393,6 +398,7 @@ bool FUpdateTask::StartClearUnoccludedChildrenOfNode(const FChunk* Chunk, const 
 // Recursively clears unoccluded children of the given Node.
 void FUpdateTask::RecursiveClearUnoccludedChildren(const FChunk* Chunk, FNode& Node, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("RecursiveClearUnoccludedChildren");
 	ForEachChild(Chunk, Node, LayerIdx, [&](FNode& ChildNode)
 	{
 		const uint8 ChildLayerIdx = LayerIdx+1;
@@ -419,6 +425,7 @@ void FUpdateTask::RecursiveClearUnoccludedChildren(const FChunk* Chunk, FNode& N
  */
 void FUpdateTask::StartClearAllChildrenOfNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("StartClearAllChildrenOfNode");
 	const auto NodeIterator = Chunk->Octrees[0]->Layers[LayerIdx].find(NodeMortonCode);
 	if(NodeIterator == Chunk->Octrees[0]->Layers[LayerIdx].end()) return;
 	FNode& Node = NodeIterator->second;
@@ -434,6 +441,7 @@ void FUpdateTask::StartClearAllChildrenOfNode(const FChunk* Chunk, const uint_fa
 // Recursively clears all children of the given Node.
 void FUpdateTask::RecursiveClearAllChildren(const FChunk* Chunk, const FNode& Node, const uint8 LayerIdx)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("RecursiveClearAllChildren");
 	ForEachChild(Chunk, Node, LayerIdx, [&](const FNode& ChildNode)
 	{
 		const uint8 ChildLayerIdx = LayerIdx+1;
@@ -445,6 +453,7 @@ void FUpdateTask::RecursiveClearAllChildren(const FChunk* Chunk, const FNode& No
 // Initializes the missing parents of the node with the given morton-code, which will in-turn initialize the node.
 void FUpdateTask::InitializeParents(const FChunk* Chunk, const uint_fast32_t ChildMortonCode, const uint8 ChildLayerIdx)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("InitializeParents");
 	const auto CreateChildren = [Chunk, ChildLayerIdx](FNode& Node) // todo: Move to FNode ??
 	{
 		Node.SetHasChildren(true);
@@ -517,6 +526,7 @@ void FUpdateTask::InitializeParents(const FChunk* Chunk, const uint_fast32_t Chi
  */
 void FUpdateTask::TryUnRasterizeNodes(const FChunk* Chunk, const std::unordered_set<MortonCode>& NodeMortonCodes, const uint8 LayerIdx)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("TryUnRasterizeNodes");
 	std::unordered_set<MortonCode> ParentMortonCodes;
 	for (uint_fast32_t NodeMC : NodeMortonCodes)
 	{
@@ -560,6 +570,7 @@ void FUpdateTask::TryUnRasterizeNodes(const FChunk* Chunk, const std::unordered_
 // todo: temp method in the meantime. Replace eventually.
 void FUpdateTask::SetNegativeNeighbourRelations(const FChunk* Chunk)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("SetNegativeNeighbourRelations");
 	// Loop through all static nodes sorted by morton-code.
 	uint8 LayerIndex = 0;
 	for (FOctreeLayer& NodesMap : Chunk->Octrees[0]->Layers)

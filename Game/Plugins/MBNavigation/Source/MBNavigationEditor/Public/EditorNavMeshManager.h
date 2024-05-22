@@ -67,6 +67,7 @@ private:
 	void InitStaticNavMeshData();
 	FORCEINLINE void GenerateAndDrawNavMesh();
 	void SaveNavMesh() const;
+	void OnNavMeshUpdated();
 	
 public:
 	UFUNCTION(BlueprintCallable, Category="Settings")

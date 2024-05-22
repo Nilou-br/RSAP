@@ -16,10 +16,8 @@ FString To6BitBinaryString(const uint8 Value) {
 	return FString(BinaryString.substr(2, 6).c_str());
 }
 
-void FNavMeshDebugger::Draw()
+void FNavMeshDebugger::Draw() const
 {
-	if(!FNavMeshDebugSettings::ShouldDisplayDebug() || !NavMeshPtr) return;
-	
 	FVector CameraLocation;
 	FRotator CameraRotation;
 	
@@ -47,30 +45,18 @@ void FNavMeshDebugger::Draw()
 		CameraRotation = CameraManager->GetCameraRotation();
 	}
 	
-	const FVector CameraForwardVector = FRotationMatrix(CameraRotation).GetUnitAxis(EAxis::X);
-	PerformConditionalDraw(CameraLocation, CameraForwardVector);
+	Draw(CameraLocation, CameraRotation);
 }
 
-void FNavMeshDebugger::Draw(const FVector& CameraLocation, const FRotator& CameraRotation)
+void FNavMeshDebugger::Draw(const FVector& CameraLocation, const FRotator& CameraRotation) const
 {
-	if(!FNavMeshDebugSettings::ShouldDisplayDebug() || !NavMeshPtr) return;
-	
-	const FVector CameraForwardVector = FRotationMatrix(CameraRotation).GetUnitAxis(EAxis::X);
-	PerformConditionalDraw(CameraLocation, CameraForwardVector);
-}
+	if(!NavMeshPtr || !FNavMeshDebugSettings::ShouldDisplayDebug()) return;
 
-void FNavMeshDebugger::PerformConditionalDraw(const FVector& CameraLocation, const FVector& CameraForwardVector)
-{
 	FlushPersistentDebugLines(World);
 	FlushDebugStrings(World);
-
-	const auto StartTime = std::chrono::high_resolution_clock::now();
 	
+	const FVector CameraForwardVector = FRotationMatrix(CameraRotation).GetUnitAxis(EAxis::X);
 	DrawNodes(CameraLocation, CameraForwardVector);
-	
-	const float DurationSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(
-		std::chrono::high_resolution_clock::now() - StartTime).count() / 1000.0f;
-	//UE_LOG(LogNavMeshDebugger, Log, TEXT("Drawing took : '%f' seconds"), DurationSeconds);
 }
 
 void FNavMeshDebugger::DrawNodes(const FVector& CameraLocation, const FVector& CameraForwardVector) const

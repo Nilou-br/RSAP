@@ -19,19 +19,20 @@
 DEFINE_LOG_CATEGORY(LogEditorNavManager)
 
 
+
 void UEditorNavMeshManager::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
-
-	SetDelegates();
+	
 	GEditor->RegisterForUndo(this);
-
 	MainModule = FModuleManager::LoadModuleChecked<FMBNavigationModule>("MBNavigation");
 	
 	NavMeshPtr = std::make_shared<FNavMesh>();
 	NavMeshGenerator = new FNavMeshGenerator(NavMeshPtr);
 	NavMeshUpdater = new FNavMeshUpdater(NavMeshPtr);
 	NavMeshDebugger = new FNavMeshDebugger(NavMeshPtr);
+
+	SetDelegates();
 }
 
 void UEditorNavMeshManager::Deinitialize()
@@ -86,6 +87,8 @@ void UEditorNavMeshManager::SetDelegates()
 	FLevelEditorModule& LevelEditorModule = FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor");
 	OnActorSelectionChangedDelegateHandle = LevelEditorModule.OnActorSelectionChanged().AddUObject(this, &ThisClass::OnActorSelectionChanged);
 
+	// NavMesh updated delegate
+	NavMeshUpdater->OnNavMeshUpdatedDelegate.BindUObject(this, &ThisClass::OnNavMeshUpdated);
 	
 	// todo OnLevelDeleted / OnApplyObjectToActor
 }
@@ -124,7 +127,8 @@ void UEditorNavMeshManager::ClearDelegates()
 	FLevelEditorModule& LevelEditorModule = FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor");
 	LevelEditorModule.OnActorSelectionChanged().Remove(OnActorSelectionChangedDelegateHandle); OnActorSelectionChangedDelegateHandle.Reset();
 
-
+	// NavMesh updated delegate
+	NavMeshUpdater->OnNavMeshUpdatedDelegate.Unbind();
 	
 	// todo OnLevelDeleted / OnApplyObjectToActor
 }
@@ -161,6 +165,11 @@ void UEditorNavMeshManager::SaveNavMesh() const
 {
 	if(!NavMeshPtr) return;
 	SerializeNavMesh(*NavMeshPtr, NavMeshSettings->ID);
+}
+
+void UEditorNavMeshManager::OnNavMeshUpdated()
+{
+	NavMeshDebugger->Draw();
 }
 
 void UEditorNavMeshManager::UpdateGenerationSettings(const float VoxelSizeExponentFloat, const float StaticDepthFloat)
@@ -701,5 +710,5 @@ void UEditorNavMeshManager::OnActorSelectionChanged(const TArray<UObject*>& Acto
 
 void UEditorNavMeshManager::OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation, ELevelViewportType LevelViewportType, int32) const
 {
-	NavMeshDebugger->Draw(CameraLocation, CameraRotation);
+	if(!NavMeshUpdater->IsRunning()) NavMeshDebugger->Draw(CameraLocation, CameraRotation);
 }
