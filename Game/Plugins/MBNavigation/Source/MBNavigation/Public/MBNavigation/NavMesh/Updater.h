@@ -9,36 +9,35 @@
 
 DECLARE_LOG_CATEGORY_EXTERN(LogNavMeshUpdater, Log, All);
 
-
-
+typedef TMap<FGuid, TBoundsPair<FGlobalVector>> FBoundsPairMap;
 typedef std::pair<MortonCode, OctreeDirection> FNodeRelationPair;
 
+
+
 /**
- * 
+ * FRunnable task which is responsible for updating the navmesh in the background.
  */
-class MBNAVIGATION_API FNavMeshUpdater final : public FRunnable
+class MBNAVIGATION_API FUpdateTask final : public FRunnable
 {
 public:
-	explicit FNavMeshUpdater(const TSharedPtr<TPromise<void>>& Promise, const FNavMeshPtr& InNavMeshPtr, const UWorld* InWorld, const std::vector<TBoundsPair<FGlobalVector>>& InBoundsPairs)
-		: NavMeshPtr(InNavMeshPtr), World(InWorld), BoundsPairs(InBoundsPairs), StopTaskCounter(0)
+	explicit FUpdateTask(const TSharedPtr<TPromise<void>>& Promise, const UWorld* InWorld, const FNavMeshPtr& InNavMeshPtr, const std::vector<TBoundsPair<FGlobalVector>>& BoundsPairs)
+		: Promise(Promise), StopTaskCounter(0),  World(InWorld), NavMeshPtr(InNavMeshPtr), BoundsPairs(BoundsPairs)
 	{
-		this->Promise = Promise;
 		Thread = FRunnableThread::Create(this, TEXT("NavMeshUpdateThread"));
 	}
 
-	virtual ~FNavMeshUpdater() override
+	virtual ~FUpdateTask() override
 	{
 		if (Thread) {
 			Thread->Kill(true);
 			delete Thread;
 		}
 	}
-
+	
 	virtual bool Init() override { return true; }
 	virtual void Exit() override { Promise->SetValue(); }
 	virtual uint32 Run() override;
 	virtual void Stop() override { StopTaskCounter.Increment(); }
-	bool IsRunning() const { return bIsRunning; }
 
 private:
 	template<typename Func> void ForEachChunkIntersection(const TBounds<FGlobalVector>& Bounds, const uint8 LayerIdx, Func Callback);
@@ -54,16 +53,49 @@ private:
 	
 	void InitializeParents(const FChunk* Chunk, const uint_fast32_t ChildMortonCode, const uint8 ChildLayerIdx);
 	void TryUnRasterizeNodes(const FChunk* Chunk,  const std::unordered_set<MortonCode>& NodeMortonCodes, const uint8 LayerIdx);
-
+	
+	void SetNegativeNeighbourRelations(const FChunk* Chunk); // todo: temp method. Remove when neighbour bug is fixed.
+	
 	TSharedPtr<TPromise<void>> Promise;
-	FNavMeshPtr NavMeshPtr;
-	const UWorld* World;
-	std::vector<TBoundsPair<FGlobalVector>> BoundsPairs;
-
 	FRunnableThread* Thread;
 	FThreadSafeCounter StopTaskCounter;
+	
+	const UWorld* World;
+	FNavMeshPtr NavMeshPtr;
+	std::vector<TBoundsPair<FGlobalVector>> BoundsPairs;
+};
+
+/**
+ * Class that handles updating the navmesh.
+ * 
+ * Call StageData with the changes that need to be updated, this can be called repeatedly.
+ * This staged-data will be accumulated when the updater is currently busy with another update task, and duplicate data is filtered.
+ *
+ * The updater runs every frame to check if there is data ready to be updated, and will run the task if it is not busy with another.
+ * Updates happen asynchronously in a background thread.
+ */
+class MBNAVIGATION_API FNavMeshUpdater final : public FTickableGameObject
+{
+public:
+	explicit FNavMeshUpdater(const FNavMeshPtr& InNavMeshPtr)
+		: NavMeshPtr(InNavMeshPtr), World(nullptr)
+	{}
+	
+	void SetWorld(const UWorld* InWorld) { World = InWorld; }
+	void StageData(const FBoundsPairMap& BoundsPairMap);
+	bool IsRunning() const { return bIsRunning; }
+	
+	virtual void Tick(float DeltaTime) override;
+	virtual TStatId GetStatId() const override { RETURN_QUICK_DECLARE_CYCLE_STAT(FNavMeshUpdater, STATGROUP_Tickables); }
+	virtual bool IsTickable() const override { return World != nullptr; }
+	virtual bool IsTickableInEditor() const override { return true; }
+
+private:
+	void Update();
+	
+	FNavMeshPtr NavMeshPtr;
+	const UWorld* World;
 	bool bIsRunning = false;
 
-	// todo: temp method in the meantime. Replace eventually.
-	void SetNegativeNeighbourRelations(const FChunk* Chunk);
+	std::vector<TBoundsPair<FGlobalVector>> StagedBoundsPairs;
 };

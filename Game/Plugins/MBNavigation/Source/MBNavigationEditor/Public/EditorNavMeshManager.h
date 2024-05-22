@@ -66,11 +66,7 @@ private:
 	void LoadLevelNavMeshSettings();
 	void InitStaticNavMeshData();
 	FORCEINLINE void GenerateAndDrawNavMesh();
-	
-	FORCEINLINE void StageForUpdate(const FBoundsPairMap& BoundsPairMap);
-	FORCEINLINE void UpdateNavMesh(const std::vector<TBoundsPair<FGlobalVector>>& BoundsPairs);
 	void SaveNavMesh() const;
-	FORCEINLINE bool IsUpdaterRunning() const;
 	
 public:
 	UFUNCTION(BlueprintCallable, Category="Settings")
@@ -103,8 +99,6 @@ private:
 	FNavMeshGenerator* NavMeshGenerator;
 	FNavMeshUpdater* NavMeshUpdater;
 	FNavMeshDebugger* NavMeshDebugger;
-	
-	std::vector<TBoundsPair<FGlobalVector>> StagedBoundsPairs;
 	
 	FNavMeshPtr NavMeshPtr;
 	FMBNavigationModule MainModule;

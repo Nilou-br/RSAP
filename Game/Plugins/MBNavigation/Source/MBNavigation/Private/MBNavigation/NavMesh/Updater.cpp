@@ -8,6 +8,40 @@
 DEFINE_LOG_CATEGORY(LogNavMeshUpdater)
 
 
+void FNavMeshUpdater::StageData(const FBoundsPairMap& BoundsPairMap)
+{
+	for (auto ActorBoundsPair : BoundsPairMap)
+	{
+		StagedBoundsPairs.push_back(ActorBoundsPair.Value);
+	}
+}
+
+void FNavMeshUpdater::Tick(float DeltaTime)
+{
+	if(!IsRunning() && StagedBoundsPairs.size()) Update();
+}
+
+void FNavMeshUpdater::Update()
+{
+	const TSharedPtr<TPromise<void>> Promise = MakeShared<TPromise<void>>();
+	Promise->GetFuture().Next([this](int)
+	{
+		UE_LOG(LogTemp, Log, TEXT("Navmesh has been updated."));
+		bIsRunning = false;
+		
+		// FFunctionGraphTask::CreateAndDispatchWhenReady([this]()
+		// {
+		// 	bIsRunning = false;
+		// }, TStatId(), nullptr, ENamedThreads::GameThread);
+	});
+
+	UE_LOG(LogTemp, Log, TEXT("Starting navmesh update..."));
+	bIsRunning = true;
+	const std::vector<TBoundsPair<FGlobalVector>> TempBoundPairs = std::move(StagedBoundsPairs); // Clear the StagedBoundsPairs so that new data can be accumulated during the update.
+	FUpdateTask* UpdateTask = new FUpdateTask(Promise, GEditor->GetEditorWorldContext().World(), NavMeshPtr, TempBoundPairs);
+}
+
+
 // Stores the given pair of morton-code / relation-to-update in the list.
 // If the same morton-code already exists in this list, then it update the second value with a combination of both the old/new value with a bitwise OR. 
 void StoreNodeRelationPair(std::vector<FNodeRelationPair>& List, const FNodeRelationPair& PairToInsert) {
@@ -53,10 +87,8 @@ uint8 CalculateOptimalStartingLayer(const TBoundsPair<FGlobalVector>& BoundsPair
 /**
  * Updates the navmesh using the given list of bound-pairs which indicates the areas that needs to be updated.
  */
-uint32 FNavMeshUpdater::Run()
+uint32 FUpdateTask::Run()
 {
-	bIsRunning = true;
-	
 #if WITH_EDITOR
 	// FlushPersistentDebugLines(World);
 	const auto StartTime = std::chrono::high_resolution_clock::now();
@@ -147,8 +179,6 @@ uint32 FNavMeshUpdater::Run()
 		std::chrono::high_resolution_clock::now() - StartTime).count() / 1000.0f;
 	UE_LOG(LogNavMeshUpdater, Log, TEXT("Update took : '%f' seconds"), DurationSeconds);
 #endif
-
-	bIsRunning = false;
 	return 0;
 }
 
@@ -162,7 +192,7 @@ uint32 FNavMeshUpdater::Run()
  * @note Chunks that do not exist are initialized.
  */
 template<typename Func>
-void FNavMeshUpdater::ForEachChunkIntersection(const TBounds<FGlobalVector>& Bounds, const uint8 LayerIdx, Func Callback)
+void FUpdateTask::ForEachChunkIntersection(const TBounds<FGlobalVector>& Bounds, const uint8 LayerIdx, Func Callback)
 {
 	static_assert(std::is_invocable_v<Func, const FChunk*, const std::vector<std::pair<MortonCode, OctreeDirection>>>, "'::ForEachChunkIntersection' callback has wrong arguments.");
 	if(!Bounds.IsValid()) return;
@@ -223,7 +253,7 @@ void FNavMeshUpdater::ForEachChunkIntersection(const TBounds<FGlobalVector>& Bou
  * Updates the properties on the affected Nodes accordingly.
  * @return True if the starting Node is unoccluded. False otherwise.
  */
-bool FNavMeshUpdater::StartReRasterizeNode(const FChunk* Chunk, const uint_fast32_t MortonCode, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate)
+bool FUpdateTask::StartReRasterizeNode(const FChunk* Chunk, const uint_fast32_t MortonCode, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate)
 {
 	auto NodeIterator = Chunk->Octrees[0]->Layers[LayerIdx].find(MortonCode);
 	const bool bFoundNode = NodeIterator != Chunk->Octrees[0]->Layers[LayerIdx].end();
@@ -266,7 +296,7 @@ bool FNavMeshUpdater::StartReRasterizeNode(const FChunk* Chunk, const uint_fast3
 }
 
 // Recursive re-rasterization of nodes.
-void FNavMeshUpdater::RecursiveReRasterizeNode(const UWorld* World, const FChunk* Chunk, FNode& Node, const uint8 LayerIdx, const FMortonVector MortonLocation)
+void FUpdateTask::RecursiveReRasterizeNode(const UWorld* World, const FChunk* Chunk, FNode& Node, const uint8 LayerIdx, const FMortonVector MortonLocation)
 {
 	if(LayerIdx >= FNavMeshStatic::StaticDepth) return;
 	const uint8 ChildLayerIdx = LayerIdx+1;
@@ -329,7 +359,7 @@ void FNavMeshUpdater::RecursiveReRasterizeNode(const UWorld* World, const FChunk
  * Updates the properties on the affected Nodes accordingly.
  * @return True if the starting Node is unoccluded, or if it did not exist in the first place. False otherwise.
  */
-bool FNavMeshUpdater::StartClearUnoccludedChildrenOfNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate)
+bool FUpdateTask::StartClearUnoccludedChildrenOfNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate)
 {
 	// return True if the Node does not exist.
 	const auto NodeIterator = Chunk->Octrees[0]->Layers[LayerIdx].find(NodeMortonCode);
@@ -361,7 +391,7 @@ bool FNavMeshUpdater::StartClearUnoccludedChildrenOfNode(const FChunk* Chunk, co
 }
 
 // Recursively clears unoccluded children of the given Node.
-void FNavMeshUpdater::RecursiveClearUnoccludedChildren(const FChunk* Chunk, FNode& Node, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate)
+void FUpdateTask::RecursiveClearUnoccludedChildren(const FChunk* Chunk, FNode& Node, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate)
 {
 	ForEachChild(Chunk, Node, LayerIdx, [&](FNode& ChildNode)
 	{
@@ -387,7 +417,7 @@ void FNavMeshUpdater::RecursiveClearUnoccludedChildren(const FChunk* Chunk, FNod
  * Clears all the children of the Node with the given MortonCode in given LayerIdx.
  * Updates the properties on the starting Node accordingly.
  */
-void FNavMeshUpdater::StartClearAllChildrenOfNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate)
+void FUpdateTask::StartClearAllChildrenOfNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate)
 {
 	const auto NodeIterator = Chunk->Octrees[0]->Layers[LayerIdx].find(NodeMortonCode);
 	if(NodeIterator == Chunk->Octrees[0]->Layers[LayerIdx].end()) return;
@@ -402,7 +432,7 @@ void FNavMeshUpdater::StartClearAllChildrenOfNode(const FChunk* Chunk, const uin
 }
 
 // Recursively clears all children of the given Node.
-void FNavMeshUpdater::RecursiveClearAllChildren(const FChunk* Chunk, const FNode& Node, const uint8 LayerIdx)
+void FUpdateTask::RecursiveClearAllChildren(const FChunk* Chunk, const FNode& Node, const uint8 LayerIdx)
 {
 	ForEachChild(Chunk, Node, LayerIdx, [&](const FNode& ChildNode)
 	{
@@ -413,7 +443,7 @@ void FNavMeshUpdater::RecursiveClearAllChildren(const FChunk* Chunk, const FNode
 }
 
 // Initializes the missing parents of the node with the given morton-code, which will in-turn initialize the node.
-void FNavMeshUpdater::InitializeParents(const FChunk* Chunk, const uint_fast32_t ChildMortonCode, const uint8 ChildLayerIdx)
+void FUpdateTask::InitializeParents(const FChunk* Chunk, const uint_fast32_t ChildMortonCode, const uint8 ChildLayerIdx)
 {
 	const auto CreateChildren = [Chunk, ChildLayerIdx](FNode& Node) // todo: Move to FNode ??
 	{
@@ -485,7 +515,7 @@ void FNavMeshUpdater::InitializeParents(const FChunk* Chunk, const uint_fast32_t
  * @param NodeMortonCodes Morton-codes of the nodes to check and clear if all its children are unoccluded.
  * @param LayerIdx Layer the nodes are in.
  */
-void FNavMeshUpdater::TryUnRasterizeNodes(const FChunk* Chunk, const std::unordered_set<MortonCode>& NodeMortonCodes, const uint8 LayerIdx)
+void FUpdateTask::TryUnRasterizeNodes(const FChunk* Chunk, const std::unordered_set<MortonCode>& NodeMortonCodes, const uint8 LayerIdx)
 {
 	std::unordered_set<MortonCode> ParentMortonCodes;
 	for (uint_fast32_t NodeMC : NodeMortonCodes)
@@ -528,7 +558,7 @@ void FNavMeshUpdater::TryUnRasterizeNodes(const FChunk* Chunk, const std::unorde
 }
 
 // todo: temp method in the meantime. Replace eventually.
-void FNavMeshUpdater::SetNegativeNeighbourRelations(const FChunk* Chunk)
+void FUpdateTask::SetNegativeNeighbourRelations(const FChunk* Chunk)
 {
 	// Loop through all static nodes sorted by morton-code.
 	uint8 LayerIndex = 0;

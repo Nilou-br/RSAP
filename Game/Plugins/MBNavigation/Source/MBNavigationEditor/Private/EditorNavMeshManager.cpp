@@ -30,6 +30,7 @@ void UEditorNavMeshManager::Initialize(FSubsystemCollectionBase& Collection)
 	
 	NavMeshPtr = std::make_shared<FNavMesh>();
 	NavMeshGenerator = new FNavMeshGenerator(NavMeshPtr);
+	NavMeshUpdater = new FNavMeshUpdater(NavMeshPtr);
 	NavMeshDebugger = new FNavMeshDebugger(NavMeshPtr);
 }
 
@@ -37,7 +38,7 @@ void UEditorNavMeshManager::Deinitialize()
 {
 	ClearDelegates();
 	GEditor->UnregisterForUndo(this);
-
+	
 	NavMeshPtr.reset();
 	delete NavMeshGenerator;
 	delete NavMeshUpdater;
@@ -49,14 +50,6 @@ void UEditorNavMeshManager::Deinitialize()
 void UEditorNavMeshManager::Tick(float DeltaTime)
 {
 	if(bIsMovingActors) CheckMovingActors();
-
-	if(StagedBoundsPairs.size() && !IsUpdaterRunning())
-	{
-		const std::vector<TBoundsPair<FGlobalVector>> TempBoundsPairs = std::move(StagedBoundsPairs);
-		StagedBoundsPairs.clear();
-		UE_LOG(LogTemp, Warning, TEXT("Staged '%llu' bounds-pairs for the update."), TempBoundsPairs.size())
-		UpdateNavMesh(TempBoundsPairs);
-	}
 }
 
 void UEditorNavMeshManager::SetDelegates()
@@ -164,43 +157,10 @@ void UEditorNavMeshManager::GenerateAndDrawNavMesh()
 	NavMeshDebugger->Draw();
 }
 
-/**
- * Converts the given map into data that is usable for updating the navmesh, which is then staged before actual update.
- * 
- * @param BoundsPairMap Map 
- */
-void UEditorNavMeshManager::StageForUpdate(const FBoundsPairMap& BoundsPairMap)
-{
-	for (auto ActorBoundsPair : BoundsPairMap)
-	{
-		StagedBoundsPairs.push_back(ActorBoundsPair.Value);
-	}
-}
-
-void UEditorNavMeshManager::UpdateNavMesh(const std::vector<TBoundsPair<FGlobalVector>>& BoundsPairs)
-{
-	const TSharedPtr<TPromise<void>> Promise = MakeShared<TPromise<void>>();
-	Promise->GetFuture().Next([this](int)
-	{
-		UE_LOG(LogTemp, Log, TEXT("Promise navmesh updater."));
-		
-		FFunctionGraphTask::CreateAndDispatchWhenReady([this]()
-		{
-			NavMeshDebugger->Draw();
-		}, TStatId(), nullptr, ENamedThreads::GameThread);
-	});
-	NavMeshUpdater = new FNavMeshUpdater(Promise, NavMeshPtr, GEditor->GetEditorWorldContext().World(), BoundsPairs);
-}
-
 void UEditorNavMeshManager::SaveNavMesh() const
 {
 	if(!NavMeshPtr) return;
 	SerializeNavMesh(*NavMeshPtr, NavMeshSettings->ID);
-}
-
-bool UEditorNavMeshManager::IsUpdaterRunning() const
-{
-	return NavMeshUpdater && NavMeshUpdater->IsRunning();
 }
 
 void UEditorNavMeshManager::UpdateGenerationSettings(const float VoxelSizeExponentFloat, const float StaticDepthFloat)
@@ -313,7 +273,7 @@ void UEditorNavMeshManager::PostUndo(bool bSuccess)
 			}
 		}
 		
-		StageForUpdate(UndoBoundsPairMap);
+		NavMeshUpdater->StageData(UndoBoundsPairMap);
 	}
 	
 	FEditorUndoClient::PostUndo(bSuccess);
@@ -369,7 +329,7 @@ void UEditorNavMeshManager::PostRedo(bool bSuccess)
 			}
 		}
 		
-		StageForUpdate(RedoBoundsPairMap);
+		NavMeshUpdater->StageData(RedoBoundsPairMap);
 	}
 	
 	FEditorUndoClient::PostRedo(bSuccess);
@@ -485,7 +445,7 @@ void UEditorNavMeshManager::CheckMovingActors()
 	// Remove invalid actors from MovingActorBounds.
 	for (const FGuid& Guid : InvalidActors) MovingActorBounds.Remove(Guid);
 
-	if(MovedBoundsPairs.Num()) StageForUpdate(MovedBoundsPairs);
+	if(MovedBoundsPairs.Num()) NavMeshUpdater->StageData(MovedBoundsPairs);
 }
 
 bool UEditorNavMeshManager::FindActorFromGuid(const FGuid& ActorGuid, const AActor*& OutActor)
@@ -496,9 +456,6 @@ bool UEditorNavMeshManager::FindActorFromGuid(const FGuid& ActorGuid, const AAct
 	OutActor = ActorPtr.Get();
 	return true;
 }
-
-
-/* --- Delegate handles --- */
 
 void UEditorNavMeshManager::OnMapLoad(const FString& Filename, FCanLoadMap& OutCanLoadMap)
 {
@@ -511,6 +468,7 @@ void UEditorNavMeshManager::OnMapOpened(const FString& Filename, bool bAsTemplat
 {
 	EditorWorld = GEditor->GetEditorWorldContext().World();
 	NavMeshGenerator->SetWorld(EditorWorld);
+	NavMeshUpdater->SetWorld(EditorWorld);
 	NavMeshDebugger->SetWorld(EditorWorld);
 
 	LoadLevelNavMeshSettings();
@@ -601,7 +559,7 @@ void UEditorNavMeshManager::OnEndObjectMovement(UObject& Object)
 	}
 
 	if(BoundsPairsToSnapshot.Num()) AddSnapshot(ESnapshotType::Moved, BoundsPairsToSnapshot);
-	if(BoundsPairsToReflect.Num()) StageForUpdate(BoundsPairsToReflect);
+	if(BoundsPairsToReflect.Num()) NavMeshUpdater->StageData(BoundsPairsToReflect);
 }
 
 void UEditorNavMeshManager::OnNewActorsDropped(const TArray<UObject*>& Objects, const TArray<AActor*>& Actors)
@@ -616,7 +574,7 @@ void UEditorNavMeshManager::OnNewActorsDropped(const TArray<UObject*>& Objects, 
 	
 	if(!DroppedActorBoundsPairs.Num()) return;
 	AddSnapshot(ESnapshotType::Added, DroppedActorBoundsPairs);
-	StageForUpdate(DroppedActorBoundsPairs);
+	NavMeshUpdater->StageData(DroppedActorBoundsPairs);
 }
 
 void UEditorNavMeshManager::OnPasteActorsBegin()
@@ -695,7 +653,7 @@ void UEditorNavMeshManager::OnDeleteActorsBegin()
 
 void UEditorNavMeshManager::OnDeleteActorsEnd()
 {
-	StageForUpdate(DeletedActorBoundsPairs);
+	NavMeshUpdater->StageData(DeletedActorBoundsPairs);
 	DeletedActorBoundsPairs.Empty();
 }
 
@@ -730,7 +688,7 @@ void UEditorNavMeshManager::OnActorSelectionChanged(const TArray<UObject*>& Acto
 		
 		// New selected actors are the ones that had the operation applied to them.
 		AddSnapshot(ESnapshotType::Added, AddedActorBoundsPairMap);
-		StageForUpdate(AddedActorBoundsPairMap);
+		NavMeshUpdater->StageData(AddedActorBoundsPairMap);
 	}
 
 	if(!bIsMovingActors) return;
