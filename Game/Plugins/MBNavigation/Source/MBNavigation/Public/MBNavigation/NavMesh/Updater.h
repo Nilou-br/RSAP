@@ -10,7 +10,7 @@
 DECLARE_LOG_CATEGORY_EXTERN(LogNavMeshUpdater, Log, All);
 
 typedef std::pair<std::vector<TBounds<FGlobalVector>>, TBounds<FGlobalVector>> FStageType;
-typedef TMap<FGuid, FStageType> FStagedMap;
+typedef std::unordered_map<std::string, FStageType> FStagedMap;
 typedef std::pair<MortonCode, OctreeDirection> FNodeUpdateType;
 
 

@@ -18,14 +18,16 @@ void FNavMeshUpdater::StageData(const FChangedBoundsMap& BoundsPairMap)
 
 void FNavMeshUpdater::StageData(const FGuid& ActorID, const TChangedBounds<FGlobalVector>& ChangedBounds)
 {
-	auto& [BeforeList, After] = StagedData.FindOrAdd(ActorID);
-	BeforeList.emplace_back(ChangedBounds.Previous); // Keep track of all the 'before' states.
-	After = ChangedBounds.Current; // Keep track of only the last-known 'after' state ( current state
+	const std::string ActorIDString = TCHAR_TO_UTF8(*ActorID.ToString());
+	const auto [Iterator, bInserted] = StagedData.insert_or_assign(ActorIDString, FStageType());
+	auto& [BeforeList, After] = Iterator->second;
+	BeforeList.emplace_back(ChangedBounds.Previous); // Keep track of all the 'previous' bounds.
+	After = ChangedBounds.Current; // Keep track of only the last-known 'current' bounds.
 }
 
 void FNavMeshUpdater::Tick(float DeltaTime)
 {
-	if(!IsRunning() && StagedData.Num()) Update();
+	if(!IsRunning() && StagedData.size()) Update();
 }
 
 void FNavMeshUpdater::Update()
@@ -45,6 +47,8 @@ void FNavMeshUpdater::Update()
 	UE_LOG(LogTemp, Log, TEXT("Starting navmesh update..."));
 	bIsRunning = true;
 	FUpdateTask* UpdateTask = new FUpdateTask(Promise, GEditor->GetEditorWorldContext().World(), NavMeshPtr, StagedData); // todo clear this variable after completion??
+
+	UE_LOG(LogTemp, Log, TEXT("here..."));
 }
 
 /**
@@ -84,11 +88,8 @@ uint32 FUpdateTask::Run()
 	std::set<uint_fast64_t> ChunkKeys;
 	
 	// Loop through all stored boundaries for each actor.
-	for (const TPair<FGuid, FStageType>& StagedPair : StagedData)
+	for (const auto& [PreviousBoundsList, CurrentBounds] : StagedData | std::views::values)
 	{
-		const std::vector<TBounds<FGlobalVector>> PreviousBoundsList = StagedPair.Value.first;
-		const TBounds<FGlobalVector> CurrentBounds = StagedPair.Value.second;
-		
 		// Calculate the optimal starting-layer for updating the nodes around this actor.
 		// It could be slightly less optimal if the actor was scaled through multiple stored states, but it will be negligible if this factor was small.
 		const uint8 StartingLayerIdx = CalculateOptimalStartingLayer(TChangedBounds(PreviousBoundsList.back(), CurrentBounds));
