@@ -540,20 +540,27 @@ struct TBounds
 		}
 	}
 };
+typedef TMap<FGuid, TBounds<FGlobalVector>> FBoundsMap;
 
+/**
+ * Pair of bounds for storing changes that have happened.
+ * 
+ * @tparam VectorType FGlobalVector or FMortonVector
+ */
 template<typename VectorType>
-struct TBoundsPair
+struct TChangedBounds
 {
-	static_assert(std::is_same_v<VectorType, FGlobalVector> || std::is_same_v<VectorType, FMortonVector>, "TBoundsPair can only be instantiated with FGlobalVector or FMortonVector");
+	static_assert(std::is_same_v<VectorType, FGlobalVector> || std::is_same_v<VectorType, FMortonVector>, "TChangedBounds can only be instantiated with FGlobalVector or FMortonVector");
 	
 	TBounds<VectorType> Previous;
 	TBounds<VectorType> Current;
 
-	TBoundsPair() {}
+	TChangedBounds() {}
 	
-	TBoundsPair(const TBounds<VectorType>& InPrevious, const TBounds<VectorType>& InCurrent)
+	TChangedBounds(const TBounds<VectorType>& InPrevious, const TBounds<VectorType>& InCurrent)
 		: Previous(InPrevious), Current(InCurrent) {}
 
-	TBoundsPair(const TBounds<VectorType>& InPrevious, const AActor* Actor)
+	TChangedBounds(const TBounds<VectorType>& InPrevious, const AActor* Actor)
 		: Previous(InPrevious), Current(Actor) {}
 };
+typedef TMap<FGuid, TChangedBounds<FGlobalVector>> FChangedBoundsMap;

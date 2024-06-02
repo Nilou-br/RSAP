@@ -28,16 +28,13 @@ enum class ESnapshotType
 	Deleted
 };
 
-typedef TMap<FGuid, TBounds<FGlobalVector>> FBoundsMap;
-typedef TMap<FGuid, TBoundsPair<FGlobalVector>> FBoundsPairMap;
-
 struct FUndoRedoSnapshot
 {
 	ESnapshotType SnapshotType;
-	FBoundsPairMap ActorBoundsPairMap;
+	FChangedBoundsMap ChangedBoundsMap;
 
-	FUndoRedoSnapshot(const ESnapshotType InE_SnapshotType, const FBoundsPairMap& InActorBoundsPairMap):
-		SnapshotType(InE_SnapshotType), ActorBoundsPairMap(InActorBoundsPairMap)
+	FUndoRedoSnapshot(const ESnapshotType InE_SnapshotType, const FChangedBoundsMap& InChangedBoundsMap):
+		SnapshotType(InE_SnapshotType), ChangedBoundsMap(InChangedBoundsMap)
 	{}
 };
 
@@ -87,7 +84,7 @@ protected:
 	virtual void PostRedo(bool bSuccess) override;
 
 private:
-	void AddSnapshot(const ESnapshotType SnapshotType, const FBoundsPairMap& ActorBoundsPairMap);
+	void AddSnapshot(const ESnapshotType SnapshotType, const FChangedBoundsMap& ChangedBoundsMap);
 	void ClearRedoSnapshots();
 	bool IsSnapshotActive(const FUndoRedoSnapshot& Snapshot);
 	TBounds<FGlobalVector> GetLevelBoundaries() const;
@@ -108,7 +105,7 @@ private:
 	UPROPERTY() TArray<const AActor*> SelectedActors;
 	FBoundsMap MovingActorBounds; // Keeps track of the bounds of actors that are currently in a moving state ( holding the gizmo ).
 	FBoundsMap CachedActorBounds;
-	FBoundsPairMap DeletedActorBoundsPairs; // Actors to delete in OnDeleteActorsEnd.
+	FChangedBoundsMap DeletedChangedBoundsMap; // Actors to delete in OnDeleteActorsEnd.
 	bool bIsMovingActors;
 	bool bAddActorOccured;
 	

@@ -9,8 +9,9 @@
 
 DECLARE_LOG_CATEGORY_EXTERN(LogNavMeshUpdater, Log, All);
 
-typedef TMap<FGuid, TBoundsPair<FGlobalVector>> FBoundsPairMap;
-typedef std::pair<MortonCode, OctreeDirection> FNodeRelationPair;
+typedef std::pair<std::vector<TBounds<FGlobalVector>>, TBounds<FGlobalVector>> FStageType;
+typedef TMap<FGuid, FStageType> FStagedMap;
+typedef std::pair<MortonCode, OctreeDirection> FNodeUpdateType;
 
 
 
@@ -20,8 +21,8 @@ typedef std::pair<MortonCode, OctreeDirection> FNodeRelationPair;
 class MBNAVIGATION_API FUpdateTask final : public FRunnable
 {
 public:
-	explicit FUpdateTask(const TSharedPtr<TPromise<void>>& Promise, const UWorld* InWorld, const FNavMeshPtr& InNavMeshPtr, const std::vector<TBoundsPair<FGlobalVector>>& BoundsPairs)
-		: Promise(Promise), StopTaskCounter(0),  World(InWorld), NavMeshPtr(InNavMeshPtr), BoundsPairs(BoundsPairs)
+	explicit FUpdateTask(const TSharedPtr<TPromise<void>>& Promise, const UWorld* InWorld, const FNavMeshPtr& InNavMeshPtr, FStagedMap& StagedData)
+		: Promise(Promise), StopTaskCounter(0),  World(InWorld), NavMeshPtr(InNavMeshPtr), StagedData(std::move(StagedData))
 	{
 		Thread = FRunnableThread::Create(this, TEXT("NavMeshUpdateThread"));
 	}
@@ -62,7 +63,7 @@ private:
 	
 	const UWorld* World;
 	FNavMeshPtr NavMeshPtr;
-	std::vector<TBoundsPair<FGlobalVector>> BoundsPairs;
+	FStagedMap StagedData;
 };
 
 /**
@@ -86,7 +87,8 @@ public:
 	{}
 	
 	void SetWorld(const UWorld* InWorld) { World = InWorld; }
-	void StageData(const FBoundsPairMap& BoundsPairMap);
+	void StageData(const FChangedBoundsMap& BoundsPairMap);
+	void StageData(const FGuid& ActorID, const TChangedBounds<FGlobalVector>& ChangedBounds);
 	bool IsRunning() const { return bIsRunning; }
 	
 	virtual void Tick(float DeltaTime) override;
@@ -101,5 +103,5 @@ private:
 	const UWorld* World;
 	bool bIsRunning = false;
 
-	std::vector<TBoundsPair<FGlobalVector>> StagedBoundsPairs;
+	FStagedMap StagedData;
 };
