@@ -83,18 +83,19 @@ uint32 FUpdateTask::Run()
 	// TEMP
 	std::set<uint_fast64_t> ChunkKeys;
 	
-	// Update the nodes within each pair of bounds, along with the relations of the nodes against these bounds.
+	// Loop through all stored boundaries for each actor.
 	for (const TPair<FGuid, FStageType>& StagedPair : StagedData)
 	{
 		const std::vector<TBounds<FGlobalVector>> PreviousBoundsList = StagedPair.Value.first;
 		const TBounds<FGlobalVector> CurrentBounds = StagedPair.Value.second;
 		
-		// Calculate the optimal starting-layer for these boundaries once ( using the last stored values ).
+		// Calculate the optimal starting-layer for updating the nodes around this actor.
 		// It could be slightly less optimal if the actor was scaled through multiple stored states, but it will be negligible if this factor was small.
 		const uint8 StartingLayerIdx = CalculateOptimalStartingLayer(TChangedBounds(PreviousBoundsList.back(), CurrentBounds));
 		
 		const TBounds<FGlobalVector> CurrentRounded = CurrentBounds.Round(StartingLayerIdx);
 
+		// Loop through all the previous-bounds and add all nodes to a new list, filtering out all the duplicates.
 		for (const auto& PreviousBounds : PreviousBoundsList)
 		{
 			const TBounds<FGlobalVector> PreviousRounded = PreviousBounds.Round(StartingLayerIdx);
@@ -104,22 +105,23 @@ uint32 FUpdateTask::Run()
 			for (auto PreviousRemainder : PreviousRounded.GetNonOverlapping(CurrentRounded))
 			{
 				const bool bClearAll = !PreviousRemainder.HasOverlap(World); // Clear all if it does not overlap anything.
-				ForEachChunkIntersection(PreviousRemainder, StartingLayerIdx, [&](const FChunk* Chunk, const std::vector<std::pair<MortonCode, OctreeDirection>>& UpdatePair)
+				PreviousRemainder.ForEachChunk([&](const uint_fast64_t ChunkKey, const OctreeDirection ChunkPositiveDirections, const TBounds<FMortonVector>& Bounds)
 				{
+					const auto [Iterator, bInserted] = NavMeshPtr->insert_or_assign(ChunkKey, FChunk(ChunkKey));
+					const FChunk* Chunk = &Iterator->second;
+					
 					std::unordered_set<MortonCode> NodesToUnRasterize;
 					std::unordered_set<MortonCode> NodesToSkip;
 					
-					for (const auto [MortonCode, RelationsToUpdate] : UpdatePair)
+					for (const auto [MortonCode, RelationsToUpdate] : Bounds.GetMortonCodesWithin(StartingLayerIdx, ChunkPositiveDirections))
 					{
-						// DrawNodeFromMorton(World, Chunk, MortonCode, StartingLayerIdx, FColor::Red);
-						
 						bool bShouldCheckParent = true;
 						if(bClearAll) StartClearAllChildrenOfNode(Chunk, MortonCode, StartingLayerIdx, RelationsToUpdate);
 						else bShouldCheckParent = StartClearUnoccludedChildrenOfNode(Chunk, MortonCode, StartingLayerIdx, RelationsToUpdate);
 						
 						// Call correct update method based on boolean.
 						bShouldCheckParent	? NodesToUnRasterize.insert(FNode::GetParentMortonCode(MortonCode, StartingLayerIdx))
-										: NodesToSkip.insert(FNode::GetParentMortonCode(MortonCode, StartingLayerIdx));
+											: NodesToSkip.insert(FNode::GetParentMortonCode(MortonCode, StartingLayerIdx));
 					}
 
 					std::unordered_set<uint_fast32_t> Remainder;
@@ -127,22 +129,23 @@ uint32 FUpdateTask::Run()
 					if(Remainder.size()) TryUnRasterizeNodes(Chunk, Remainder, StartingLayerIdx-1);
 
 					// TEMP
-					ChunkKeys.insert(Chunk->Location.ToKey());
+					ChunkKeys.insert(ChunkKey);
 				});
 			}
 		}
 		
 		// Nodes within the current-bounds should all be re-rasterized.
-		ForEachChunkIntersection(CurrentRounded, StartingLayerIdx, [&](const FChunk* Chunk, const std::vector<std::pair<MortonCode, OctreeDirection>>& UpdatePair)
+		CurrentRounded.ForEachChunk([&](const uint_fast64_t ChunkKey, const OctreeDirection ChunkPositiveDirections, const TBounds<FMortonVector>& Bounds)
 		{
+			const auto [Iterator, bInserted] = NavMeshPtr->insert_or_assign(ChunkKey, FChunk(ChunkKey));
+			const FChunk* Chunk = &Iterator->second;
+			
 			// Keep track of the morton-codes of the parents that potentially have to be updated.
 			std::unordered_set<MortonCode> NodesToUnRasterize;
 			std::unordered_set<MortonCode> NodesToSkip;
 				
-			for (const auto [MortonCode, RelationsToUpdate] : UpdatePair)
+			for (const auto [MortonCode, RelationsToUpdate] : Bounds.GetMortonCodesWithin(StartingLayerIdx, ChunkPositiveDirections))
 			{
-				// DrawNodeFromMorton(World, Chunk, MortonCode, StartingLayerIdx, FColor::Green);
-					
 				const bool bShouldCheckParent = StartReRasterizeNode(Chunk, MortonCode, StartingLayerIdx, RelationsToUpdate);
 				bShouldCheckParent	? NodesToUnRasterize.insert(FNode::GetParentMortonCode(MortonCode, StartingLayerIdx))
 									: NodesToSkip.insert(FNode::GetParentMortonCode(MortonCode, StartingLayerIdx));
@@ -153,7 +156,7 @@ uint32 FUpdateTask::Run()
 			if(Remainder.size()) TryUnRasterizeNodes(Chunk, Remainder, StartingLayerIdx-1);
 
 			// TEMP
-			ChunkKeys.insert(Chunk->Location.ToKey());
+			ChunkKeys.insert(ChunkKey);
 		});
 	}
 

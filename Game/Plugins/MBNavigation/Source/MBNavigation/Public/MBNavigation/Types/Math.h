@@ -408,21 +408,6 @@ struct TBounds
 		return Rounded;
 	}
 
-	// Returns a list of morton-codes within the given bounds (in morton space).
-	template<typename T = VectorType>
-	auto GetMortonCodes(const uint8 LayerIndex) const -> std::enable_if_t<std::is_same_v<T, FMortonVector>, std::vector<uint_fast32_t>>
-	{
-		std::vector<uint_fast32_t> MortonCodes;
-		for (uint_fast16_t X = Min.X; X < Max.X; X+=FNavMeshStatic::MortonOffsets[LayerIndex]) {
-			for (uint_fast16_t Y = Min.Y; Y < Max.Y; Y+=FNavMeshStatic::MortonOffsets[LayerIndex]) {
-				for (uint_fast16_t Z = Min.Z; Z < Max.Z; Z+=FNavMeshStatic::MortonOffsets[LayerIndex]) {
-					MortonCodes.push_back(FMortonVector::ToMortonCode(X, Y, Z));
-				}
-			}
-		}
-		return MortonCodes;
-	}
-
 	// Returns the part of the bounds that intersects with another.
 	FORCEINLINE TBounds GetIntersection(const TBounds& Other) const
 	{
@@ -467,6 +452,75 @@ struct TBounds
 		}
 		
 		return BoundsList;
+	}
+	
+	/**
+	 * 
+	 * @tparam T type of Vector which must be an FMortonVector.
+	 * @param LayerIdx Layer to get the morton-codes of.
+	 * @param PositiveDirectionsToTrack What positive directions we should keep track of. This will be reflected in the returned OctreeDirection that is paired with a morton-code. Used for updating node relations.
+	 * @return List of morton-code/octree-direction pairs.
+	 */
+	template<typename T = VectorType>
+	auto GetMortonCodesWithin(const uint8 LayerIdx, const OctreeDirection PositiveDirectionsToTrack) const -> std::enable_if_t<std::is_same_v<T, FMortonVector>, std::vector<std::pair<MortonCode, OctreeDirection>>>
+	{
+		const uint_fast16_t MortonOffset = FNavMeshStatic::MortonOffsets[LayerIdx];
+		std::vector<std::pair<MortonCode, OctreeDirection>> Nodes;
+		
+		for (uint_fast16_t MortonX = Min.X; MortonX < Max.X; MortonX+=MortonOffset) {
+			const uint8 NodePositiveX = PositiveDirectionsToTrack && (MortonX + MortonOffset == Max.X ? DIRECTION_X_POSITIVE : DIRECTION_NONE);
+			
+			for (uint_fast16_t MortonY = Min.Y; MortonY < Max.Y; MortonY+=MortonOffset) {
+				const uint8 NodePositiveY = PositiveDirectionsToTrack && (MortonY + MortonOffset == Max.Y ? DIRECTION_Y_POSITIVE : DIRECTION_NONE);
+				
+				for (uint_fast16_t MortonZ = Min.Z; MortonZ < Max.Z; MortonZ+=MortonOffset) {
+					const uint8 NodePositiveZ = PositiveDirectionsToTrack && (MortonZ + MortonOffset == Max.Z ? DIRECTION_Z_POSITIVE : DIRECTION_NONE);
+
+					// Relations in negative directions always need to be updated.
+					Nodes.emplace_back(FMortonVector::ToMortonCode(MortonX, MortonY, MortonZ), DIRECTION_ALL_NEGATIVE | (NodePositiveX | NodePositiveY | NodePositiveZ));
+				}
+			}
+		}
+		
+		return Nodes;
+	}
+
+	/**
+	 * Calls the given callback for each chunk intersecting these bounds.
+	 * Passes the key of the chunk, the chunk's positive most axis of all intersecting chunks, and the intersected bounds converted to morton-space.
+	 * 
+	 * @note Chunks are NOT automatically initialized.
+	 * 
+	 * @tparam T VectorType which must be of type FGlobalVector.
+	 * @tparam Func <ChunkKey, OctreeDirection, TBounds<FMortonVector>>
+	 * @param Callback Called for each intersecting chunk.
+	 */
+	template<typename T = VectorType, typename Func>
+	std::enable_if_t<std::is_same_v<T, FGlobalVector>, void> ForEachChunk(Func Callback) const
+	{
+		static_assert(std::is_invocable_v<Func, const ChunkKey, const OctreeDirection, TBounds<FMortonVector>>, "'::ForEachChunk' callback must be invocable with 'const ChunkKey, const OctreeDirection, TBounds<FMortonVector>>'");
+		if(!IsValid()) return;
+
+		// Get the start/end axis of the chunks from the boundaries.
+		const FGlobalVector ChunkMin = Min & FNavMeshStatic::ChunkMask;
+		const FGlobalVector ChunkMax = Max-1 & FNavMeshStatic::ChunkMask;
+
+		// Loop over the chunks, keeping track of every axis the chunk is the most-positive in.
+		for (int32 GlobalX = ChunkMin.X; GlobalX <= ChunkMax.X; GlobalX+=FNavMeshStatic::ChunkSize){
+			const uint8 ChunkPositiveX = GlobalX == ChunkMax.X ? DIRECTION_X_POSITIVE : DIRECTION_NONE;
+		
+			for (int32 GlobalY = ChunkMin.Y; GlobalY <= ChunkMax.Y; GlobalY+=FNavMeshStatic::ChunkSize){
+				const uint8 ChunkPositiveY = GlobalY == ChunkMax.Y ? DIRECTION_Y_POSITIVE : DIRECTION_NONE;
+			
+				for (int32 GlobalZ = ChunkMin.Z; GlobalZ <= ChunkMax.Z; GlobalZ+=FNavMeshStatic::ChunkSize){
+					const uint8 ChunkPositiveZ = GlobalZ == ChunkMax.Z ? DIRECTION_Z_POSITIVE : DIRECTION_NONE;
+
+					const FGlobalVector ChunkLocation = FGlobalVector(GlobalX, GlobalY, GlobalZ);
+					const TBounds<FMortonVector> MortonBounds = GetIntersection(TBounds(ChunkLocation, ChunkLocation+FNavMeshStatic::ChunkSize)).ToMortonSpace(ChunkLocation);
+					Callback(ChunkLocation.ToKey(), ChunkPositiveX | ChunkPositiveY | ChunkPositiveZ, MortonBounds);
+				}
+			}
+		}
 	}
 
 	// Used to check if these bounds are overlapping with another.

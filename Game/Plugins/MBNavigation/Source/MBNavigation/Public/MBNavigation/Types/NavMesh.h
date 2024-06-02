@@ -271,14 +271,25 @@ struct FChunk
 	FGlobalVector Location; // Located at the negative most location.
 	TArray<TSharedPtr<FOctree>> Octrees;
 	
+	void Initialize()
+	{
+		if(Octrees.Num()) return;
+		
+		// Create the static octree, and add the root node.
+		Octrees.Add(MakeShared<FOctree>());
+		Octrees[0]->Layers[0].emplace(0, FNode(0, 0, 0, DIRECTION_ALL));
+	}
+	
 	explicit FChunk(const FGlobalVector& InLocation = FGlobalVector(0, 0, 0))
 		: Location(InLocation)
 	{
-		// Create the static octree.
-		Octrees.Add(MakeShared<FOctree>());
+		Initialize();
+	}
 
-		// Create the root node.
-		Octrees[0]->Layers[0].emplace(0, FNode(0, 0, 0, DIRECTION_ALL));
+	explicit FChunk(const uint_fast64_t ChunkKey)
+		: Location(FGlobalVector::FromKey(ChunkKey))
+	{
+		Initialize();
 	}
 
 	FORCEINLINE FVector GetCenter(const uint32 ChunkHalveSize) const
