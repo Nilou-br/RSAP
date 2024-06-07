@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <set>
+
 #include "morton.h"
 #include "Static.h"
 
@@ -521,6 +523,36 @@ struct TBounds
 				}
 			}
 		}
+	}
+
+	/**
+	 * Returns a set of chunk-keys for each chunk that is intersecting with these boundaries.
+	 * 
+	 * @note Chunks with these keys are NOT automatically initialized.
+	 * 
+	 * @tparam T VectorType which must be of type FGlobalVector.
+	 * @return std::unordered_set of uint_fast64_t chunk-keys.
+	 */
+	template<typename T = VectorType>
+	std::enable_if_t<std::is_same_v<T, FGlobalVector>, std::unordered_set<ChunkKey>> GetIntersectingChunks() const
+	{
+		std::unordered_set<ChunkKey> ChunkKeys;
+		if(!IsValid()) return ChunkKeys;
+
+		// Get the start/end axis of the chunks from the boundaries.
+		const FGlobalVector ChunkMin = Min & FNavMeshStatic::ChunkMask;
+		const FGlobalVector ChunkMax = Max-1 & FNavMeshStatic::ChunkMask;
+		
+		for (int32 GlobalX = ChunkMin.X; GlobalX <= ChunkMax.X; GlobalX+=FNavMeshStatic::ChunkSize){
+			for (int32 GlobalY = ChunkMin.Y; GlobalY <= ChunkMax.Y; GlobalY+=FNavMeshStatic::ChunkSize){
+				for (int32 GlobalZ = ChunkMin.Z; GlobalZ <= ChunkMax.Z; GlobalZ+=FNavMeshStatic::ChunkSize){
+					const FGlobalVector ChunkLocation = FGlobalVector(GlobalX, GlobalY, GlobalZ);
+					ChunkKeys.insert(ChunkLocation.ToKey());
+				}
+			}
+		}
+
+		return ChunkKeys;
 	}
 
 	// Used to check if these bounds are overlapping with another.

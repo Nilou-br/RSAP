@@ -22,7 +22,7 @@ class MBNAVIGATION_API FUpdateTask final : public FRunnable
 {
 public:
 	explicit FUpdateTask(const TSharedPtr<TPromise<void>>& Promise, const UWorld* InWorld, const FNavMeshPtr& InNavMeshPtr, FStagedMap& StagedData)
-		: Promise(Promise), StopTaskCounter(0),  World(InWorld), NavMeshPtr(InNavMeshPtr), StagedData(std::move(StagedData))
+		: Promise(Promise), StopTaskCounter(0),  World(InWorld), NavMeshPtr(InNavMeshPtr), StagedDataMap(std::move(StagedData))
 	{
 		Thread = FRunnableThread::Create(this, TEXT("NavMeshUpdateThread"));
 	}
@@ -63,7 +63,7 @@ private:
 	
 	const UWorld* World;
 	FNavMeshPtr NavMeshPtr;
-	FStagedMap StagedData;
+	FStagedMap StagedDataMap;
 };
 
 /**
@@ -103,5 +103,5 @@ private:
 	const UWorld* World;
 	bool bIsRunning = false;
 
-	FStagedMap StagedData;
+	FStagedMap StagedDataMap;
 };

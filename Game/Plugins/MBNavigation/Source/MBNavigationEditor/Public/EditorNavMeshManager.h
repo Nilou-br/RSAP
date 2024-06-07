@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "EditorTransformObserver.h"
 #include "MBNavigation/MBNavigation.h"
 #include "MBNavigation/Types/Math.h"
 #include "MBNavigation/Types/NavMesh.h"
@@ -16,55 +17,27 @@ DECLARE_LOG_CATEGORY_EXTERN(LogEditorNavManager, Log, All);
 
 
 /**
- * Enum for determining the operation that changed a static-mesh-actor.
- * - <b>Moved:</b> An actor has changed location/rotation/scale (transform).
- * - <b>Added:</b> A new actor has been added in the level by either dragging one into the viewport, or duplicating/pasting one.
- * - <b>Deleted:</b> An actor has been removed from the level.
- */
-enum class ESnapshotType
-{
-	Moved,
-	Added,
-	Deleted
-};
-
-struct FUndoRedoSnapshot
-{
-	ESnapshotType SnapshotType;
-	FChangedBoundsMap ChangedBoundsMap;
-
-	FUndoRedoSnapshot(const ESnapshotType InE_SnapshotType, const FChangedBoundsMap& InChangedBoundsMap):
-		SnapshotType(InE_SnapshotType), ChangedBoundsMap(InChangedBoundsMap)
-	{}
-};
-
-/**
- * Handles everything related to the navmesh while using the editor.
+ * Handles everything related to the navmesh within the editor.
  *
- * - <b>(re)generates</b> the navmesh when its settings change, or when there is no existing navmesh when opening a level.
- * - <b>Updates</b> the navmesh when the geometry inside the level changes.
- * - <b>Serializes</b> the navmesh when when saving the level.
+ * - <b>(re)generates</b> the navmesh when it doesnt exist yet, or when the level's geometry is unsynced with what is serialized.
+ * - <b>Updates</b> the navmesh when the geometry within a level changes, either from adding/deleting objects or changing their transform.
+ * - <b>Serializes</b> the navmesh when the user saves the level.
  * - <b>Unloads/loads</b> the navmesh when changing levels.
  */
 UCLASS()
-class UEditorNavMeshManager final : public UEditorSubsystem, public FEditorUndoClient, public FTickableEditorObject
+class UEditorNavMeshManager final : public UEditorSubsystem
 {
 	GENERATED_BODY()
 	
 protected:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
-	virtual void Tick(float DeltaTime) override;
-	virtual TStatId GetStatId() const override { RETURN_QUICK_DECLARE_CYCLE_STAT(UEditorNavManager, STATGROUP_Tickables); }
 
 private:
-	void SetDelegates();
-	void ClearDelegates();
 	void LoadLevelNavMeshSettings();
 	void InitStaticNavMeshData();
-	FORCEINLINE void GenerateAndDrawNavMesh();
 	void SaveNavMesh() const;
-	void OnNavMeshUpdated();
+	void OnNavMeshUpdated() const;
 	
 public:
 	UFUNCTION(BlueprintCallable, Category="Settings")
@@ -79,60 +52,21 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Settings")
 	UNavMeshSettings* GetNavMeshSettings() const { return NavMeshSettings; }
 
-protected:
-	virtual void PostUndo(bool bSuccess) override;
-	virtual void PostRedo(bool bSuccess) override;
-
 private:
-	void AddSnapshot(const ESnapshotType SnapshotType, const FChangedBoundsMap& ChangedBoundsMap);
-	void ClearRedoSnapshots();
-	bool IsSnapshotActive(const FUndoRedoSnapshot& Snapshot);
-	TBounds<FGlobalVector> GetLevelBoundaries() const;
-	void CheckMovingActors();
-	bool FindActorFromGuid(const FGuid& ActorGuid, const AActor*& OutActor);
-	
 	UPROPERTY() const UWorld* EditorWorld;
 	UPROPERTY() UNavMeshSettings* NavMeshSettings;
 	
 	FNavMeshGenerator* NavMeshGenerator;
 	FNavMeshUpdater* NavMeshUpdater;
 	FNavMeshDebugger* NavMeshDebugger;
+	UPROPERTY() UEditorTransformObserver* TransformObserver;
 	
 	FNavMeshPtr NavMeshPtr;
-	FMBNavigationModule MainModule;
-	
-	TMap<FGuid, TWeakObjectPtr<const AActor>> CachedSMActors; // For quickly finding an actor using its GUID.
-	UPROPERTY() TArray<const AActor*> SelectedActors;
-	FBoundsMap MovingActorBounds; // Keeps track of the bounds of actors that are currently in a moving state ( holding the gizmo ).
-	FBoundsMap CachedActorBounds;
-	FChangedBoundsMap DeletedChangedBoundsMap; // Actors to delete in OnDeleteActorsEnd.
-	bool bIsMovingActors;
-	bool bAddActorOccured;
-	
-	std::vector<FUndoRedoSnapshot> UndoRedoSnapshots;
-	int32 UndoRedoIndex = -1;
-	TArray<uint8> UndoBatchCounts;
-
-	
-	/* Start delegates */
+	FMBNavigationModule MBNavigationModule;
 	
 	FDelegateHandle OnMapLoadDelegateHandle; void OnMapLoad(const FString& Filename, FCanLoadMap& OutCanLoadMap);
-	FDelegateHandle OnMapOpenedDelegateHandle; void OnMapOpened(const FString& Filename, bool bAsTemplate);
+	FDelegateHandle OnLevelActorsInitializedDelegateHandle; void OnLevelActorsInitialized(const FBoundsMap& BoundsMap);
 	FDelegateHandle PreSaveWorldDelegateHandle; void PreWorldSaved(UWorld* World, FObjectPreSaveContext ObjectPreSaveContext);
 	FDelegateHandle PostSaveWorldDelegateHandle; void PostWorldSaved(UWorld* World, FObjectPostSaveContext ObjectSaveContext);
-	
-	FDelegateHandle OnBeginObjectMovementDelegateHandle; void OnBeginObjectMovement(UObject& Object);
-	FDelegateHandle OnEndObjectMovementDelegateHandle; void OnEndObjectMovement(UObject& Object);
-	FDelegateHandle OnNewActorsDroppedDelegateHandle; void OnNewActorsDropped(const TArray<UObject*>& Objects, const TArray<AActor*>& Actors);
-	FDelegateHandle OnEditPasteActorsBeginDelegateHandle; void OnPasteActorsBegin();
-	FDelegateHandle OnEditPasteActorsEndDelegateHandle; void OnPasteActorsEnd();
-	FDelegateHandle OnDuplicateActorsBeginDelegateHandle; void OnDuplicateActorsBegin();
-	FDelegateHandle OnDuplicateActorsEndDelegateHandle; void OnDuplicateActorsEnd();
-	FDelegateHandle OnDeleteActorsBeginDelegateHandle; void OnDeleteActorsBegin();
-	FDelegateHandle OnDeleteActorsEndDelegateHandle; void OnDeleteActorsEnd();
-	FDelegateHandle OnActorSelectionChangedDelegateHandle; void OnActorSelectionChanged(const TArray<UObject*>& Actors, bool);
-
 	FDelegateHandle OnCameraMovedDelegateHandle; void OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation, ELevelViewportType LevelViewportType, int32) const;
-
-	/* End delegates */
 };

@@ -19,7 +19,9 @@ void FNavMeshUpdater::StageData(const FChangedBoundsMap& BoundsPairMap)
 void FNavMeshUpdater::StageData(const FGuid& ActorID, const TChangedBounds<FGlobalVector>& ChangedBounds)
 {
 	const std::string ActorIDString = TCHAR_TO_UTF8(*ActorID.ToString());
-	const auto [Iterator, bInserted] = StagedData.insert_or_assign(ActorIDString, FStageType());
+	auto Iterator = StagedDataMap.find(ActorIDString);
+	if(Iterator == StagedDataMap.end()) std::tie(Iterator, std::ignore) = StagedDataMap.emplace(ActorIDString, FStageType());
+	
 	auto& [BeforeList, After] = Iterator->second;
 	BeforeList.emplace_back(ChangedBounds.Previous); // Keep track of all the 'previous' bounds.
 	After = ChangedBounds.Current; // Keep track of only the last-known 'current' bounds.
@@ -27,7 +29,7 @@ void FNavMeshUpdater::StageData(const FGuid& ActorID, const TChangedBounds<FGlob
 
 void FNavMeshUpdater::Tick(float DeltaTime)
 {
-	if(!IsRunning() && StagedData.size()) Update();
+	if(!IsRunning() && StagedDataMap.size()) Update();
 }
 
 void FNavMeshUpdater::Update()
@@ -46,7 +48,7 @@ void FNavMeshUpdater::Update()
 
 	UE_LOG(LogTemp, Log, TEXT("Starting navmesh update..."));
 	bIsRunning = true;
-	FUpdateTask* UpdateTask = new FUpdateTask(Promise, GEditor->GetEditorWorldContext().World(), NavMeshPtr, StagedData); // todo clear this variable after completion??
+	FUpdateTask* UpdateTask = new FUpdateTask(Promise, GEditor->GetEditorWorldContext().World(), NavMeshPtr, StagedDataMap); // todo clear this variable after completion??
 
 	UE_LOG(LogTemp, Log, TEXT("here..."));
 }
@@ -88,7 +90,7 @@ uint32 FUpdateTask::Run()
 	std::set<uint_fast64_t> ChunkKeys;
 	
 	// Loop through all stored boundaries for each actor.
-	for (const auto& [PreviousBoundsList, CurrentBounds] : StagedData | std::views::values)
+	for (const auto& [PreviousBoundsList, CurrentBounds] : StagedDataMap | std::views::values)
 	{
 		// Calculate the optimal starting-layer for updating the nodes around this actor.
 		// It could be slightly less optimal if the actor was scaled through multiple stored states, but it will be negligible if this factor was small.
@@ -108,7 +110,8 @@ uint32 FUpdateTask::Run()
 				const bool bClearAll = !PreviousRemainder.HasOverlap(World); // Clear all if it does not overlap anything.
 				PreviousRemainder.ForEachChunk([&](const uint_fast64_t ChunkKey, const OctreeDirection ChunkPositiveDirections, const TBounds<FMortonVector>& Bounds)
 				{
-					const auto [Iterator, bInserted] = NavMeshPtr->insert_or_assign(ChunkKey, FChunk(ChunkKey));
+					auto Iterator = NavMeshPtr->find(ChunkKey);
+					if(Iterator == NavMeshPtr->end()) std::tie(Iterator, std::ignore) = NavMeshPtr->emplace(ChunkKey, FChunk(ChunkKey));
 					const FChunk* Chunk = &Iterator->second;
 					
 					std::unordered_set<MortonCode> NodesToUnRasterize;
@@ -138,7 +141,8 @@ uint32 FUpdateTask::Run()
 		// Nodes within the current-bounds should all be re-rasterized.
 		CurrentRounded.ForEachChunk([&](const uint_fast64_t ChunkKey, const OctreeDirection ChunkPositiveDirections, const TBounds<FMortonVector>& Bounds)
 		{
-			const auto [Iterator, bInserted] = NavMeshPtr->insert_or_assign(ChunkKey, FChunk(ChunkKey));
+			auto Iterator = NavMeshPtr->find(ChunkKey);
+			if(Iterator == NavMeshPtr->end()) std::tie(Iterator, std::ignore) = NavMeshPtr->emplace(ChunkKey, FChunk(ChunkKey));
 			const FChunk* Chunk = &Iterator->second;
 			
 			// Keep track of the morton-codes of the parents that potentially have to be updated.

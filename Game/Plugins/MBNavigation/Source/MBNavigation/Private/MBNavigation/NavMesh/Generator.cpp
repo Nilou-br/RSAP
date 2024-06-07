@@ -11,7 +11,7 @@
 DEFINE_LOG_CATEGORY(LogNavMeshGenerator)
 
 
-void FNavMeshGenerator::Generate(const TBounds<FGlobalVector>& LevelBounds)
+void FNavMeshGenerator::Generate(const FBoundsMap& BoundsList)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("NavMesh Generate");
 	if (!World)
@@ -26,7 +26,7 @@ void FNavMeshGenerator::Generate(const TBounds<FGlobalVector>& LevelBounds)
 
 	// Start generation
 	NavMeshPtr->clear(); // todo check if this clears everything
-	GenerateChunks(LevelBounds);
+	GenerateChunks(BoundsList);
 
 #if WITH_EDITOR
 	const float DurationSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -40,50 +40,30 @@ void FNavMeshGenerator::Generate(const TBounds<FGlobalVector>& LevelBounds)
  * Create a grid of chunks filling the entire area of the level-boundaries.
  * Chunks are be placed so that their origin align with the world coordinates x0,y0,z0.
  */
-void FNavMeshGenerator::GenerateChunks(const TBounds<FGlobalVector>& LevelBounds)
+void FNavMeshGenerator::GenerateChunks(const FBoundsMap& BoundsMap)
 {
-	const FGlobalVector LevelMin = LevelBounds.Min;
-	const FGlobalVector LevelMax = LevelBounds.Max;
-
-	// Determine the min/max coordinates of the chunks.
-	const int32 Mask = ~((1<<FNavMeshStatic::KeyShift)-1);
-	const FGlobalVector ChunksMinLoc(LevelMin.X & Mask, LevelMin.Y & Mask, LevelMin.Z & Mask);
-	const FGlobalVector ChunksMaxLoc(LevelMax.X & Mask, LevelMax.Y & Mask, LevelMax.Z & Mask);
-
-	// Reserve memory for all chunks.
-	const uint32 TotalChunks =
-		((ChunksMaxLoc.X << FNavMeshStatic::KeyShift) - (ChunksMinLoc.X << FNavMeshStatic::KeyShift)) *
-		((ChunksMaxLoc.Y << FNavMeshStatic::KeyShift) - (ChunksMinLoc.Y << FNavMeshStatic::KeyShift)) *
-		((ChunksMaxLoc.Z << FNavMeshStatic::KeyShift) - (ChunksMinLoc.Z << FNavMeshStatic::KeyShift)) + 1;
-	NavMeshPtr->reserve(TotalChunks);
-
-	if (TotalChunks == 0)
+	// Get all the chunks.
+	std::set<ChunkKey> ChunkKeys;
+	for (auto Pair : BoundsMap)
 	{
-		UE_LOG(LogNavMeshGenerator, Warning, TEXT("Aborting generation due to a likely NaN value on the level-boundaries."))
-		UE_LOG(LogNavMeshGenerator, Warning, TEXT("If you see this warning, please try generating again."))
-		return;
+		const std::unordered_set<ChunkKey> IntersectingChunks = Pair.Value.GetIntersectingChunks();
+		ChunkKeys.insert(IntersectingChunks.begin(), IntersectingChunks.end());
 	}
+	if(!ChunkKeys.size()) return;
 
-	// Fill navmesh with chunks.
-	for (int32 X = ChunksMinLoc.X; X <= ChunksMaxLoc.X; X+=FNavMeshStatic::ChunkSize)
+	for (auto ChunkKey : ChunkKeys)
 	{
-		for (int32 Y = ChunksMinLoc.Y; Y <= ChunksMaxLoc.Y; Y+=FNavMeshStatic::ChunkSize)
-		{
-			for (int32 Z = ChunksMinLoc.Z; Z <= ChunksMaxLoc.Z; Z+=FNavMeshStatic::ChunkSize)
-			{
-				FGlobalVector ChunkLocation = FGlobalVector(X, Y, Z);
-				auto [ChunkIterator, IsInserted] = NavMeshPtr->emplace(ChunkLocation.ToKey(), FChunk(ChunkLocation));
-				FChunk* Chunk = &ChunkIterator->second;
+		// todo check chunk overlap first before creating one
+		auto [ChunkIterator, IsInserted] = NavMeshPtr->emplace(ChunkKey, FChunk(ChunkKey));
+		FChunk* Chunk = &ChunkIterator->second;
 
-				// Rasterize the static-octree starting from the root-node until static-depth is reached.
-				FNode& RootNode = Chunk->Octrees[0]->Layers[0][0];
-				RasterizeStaticNode(Chunk, RootNode, 0);
+		// Rasterize the static-octree starting from the root-node until static-depth is reached.
+		FNode& RootNode = Chunk->Octrees[0]->Layers[0][0];
+		RasterizeStaticNode(Chunk, RootNode, 0);
 
-				// Set all the relations to the nodes that are in the negative direction from this chunk.
-				// Chunks are generated from negative to positive, so any chunks in the positive direction do not exist yet.
-				SetNegativeNeighbourRelations(Chunk);
-			}
-		}
+		// Set all the relations to the nodes that are in the negative direction from this chunk.
+		// Chunks are generated from negative to positive, so any chunks in the positive direction do not exist yet.
+		SetNegativeNeighbourRelations(Chunk);
 	}
 }
 

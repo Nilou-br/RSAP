@@ -14,5 +14,6 @@
 	<s:Boolean x:Key="/Default/UserDictionary/Words/=undos/@EntryIndexedValue">True</s:Boolean>
 	<s:Boolean x:Key="/Default/UserDictionary/Words/=unnocluded/@EntryIndexedValue">True</s:Boolean>
 	<s:Boolean x:Key="/Default/UserDictionary/Words/=Unoccluded/@EntryIndexedValue">True</s:Boolean>
+	<s:Boolean x:Key="/Default/UserDictionary/Words/=unsynced/@EntryIndexedValue">True</s:Boolean>
 	
 	</wpf:ResourceDictionary>
