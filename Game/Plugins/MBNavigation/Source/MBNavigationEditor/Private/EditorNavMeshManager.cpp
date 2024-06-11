@@ -2,11 +2,8 @@
 
 #include "EditorNavMeshManager.h"
 #include "Editor.h"
-#include "LevelEditor.h"
 #include "Engine/Level.h"
-#include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
-#include "Kismet/GameplayStatics.h"
 #include "MBNavigation/MBNavigation.h"
 #include "MBNavigation/NavMesh/Debugger.h"
 #include "MBNavigation/NavMesh/Generator.h"
@@ -37,6 +34,7 @@ void UEditorNavMeshManager::Initialize(FSubsystemCollectionBase& Collection)
 	OnCameraMovedDelegateHandle = FEditorDelegates::OnEditorCameraMoved.AddUObject(this, &ThisClass::OnCameraMoved);
 	NavMeshUpdater->OnNavMeshUpdatedDelegate.BindUObject(this, &ThisClass::OnNavMeshUpdated);
 	TransformObserver->OnLevelActorsInitialized.BindUObject(this, &ThisClass::OnLevelActorsInitialized);
+	TransformObserver->OnActorBoundsChanged.BindUObject(this, &ThisClass::OnActorBoundsChanged);
 }
 
 void UEditorNavMeshManager::Deinitialize()
@@ -67,17 +65,6 @@ void UEditorNavMeshManager::LoadLevelNavMeshSettings()
 	}
 }
 
-/**
- * Initializes the static variables in FNavMeshStatic in both modules.
- * Updating static variables in module-1 won't be reflected to module-2 so we have to explicitly initialize it from within the other module.
- */
-void UEditorNavMeshManager::InitStaticNavMeshData()
-{
-	if(!NavMeshSettings) return;
-	FNavMeshStatic::Initialize(NavMeshSettings);
-	MBNavigationModule.InitializeNavMeshSettings(NavMeshSettings);
-}
-
 void UEditorNavMeshManager::SaveNavMesh() const
 {
 	if(!NavMeshPtr) return;
@@ -89,34 +76,20 @@ void UEditorNavMeshManager::OnNavMeshUpdated() const
 	NavMeshDebugger->Draw();
 }
 
-void UEditorNavMeshManager::UpdateGenerationSettings(const float VoxelSizeExponentFloat, const float StaticDepthFloat)
+void UEditorNavMeshManager::Regenerate()
 {
 	if(!EditorWorld)
 	{
-		UE_LOG(LogEditorNavManager, Warning, TEXT("Cannot update the navmesh-settings because there is no active world."));
+		UE_LOG(LogEditorNavManager, Warning, TEXT("Cannot regenerate the navmesh without an active world."));
 		return;
 	}
 	
-	const uint8 VoxelSizeExponent = static_cast<uint8>(FMath::Clamp(VoxelSizeExponentFloat, 0.f, 8.0f));
-	const uint8 StaticDepth = static_cast<uint8>(FMath::Clamp(StaticDepthFloat, 0.f, 9.0f));
-	const bool bShouldRegenerate = VoxelSizeExponent != NavMeshSettings->VoxelSizeExponent || StaticDepth != NavMeshSettings->StaticDepth;
-
-	NavMeshSettings->VoxelSizeExponent = VoxelSizeExponent;
-	NavMeshSettings->StaticDepth = StaticDepth;
-	InitStaticNavMeshData();
-
-	if(bShouldRegenerate)
+	NavMeshGenerator->Generate(GEditor->GetEditorSubsystem<UEditorTransformObserver>()->GetLevelActorBounds());
+	if(const UPackage* Package = Cast<UPackage>(EditorWorld->GetOuter()); Package->IsDirty() && Package->MarkPackageDirty())
 	{
-		NavMeshGenerator->Generate(GEditor->GetEditorSubsystem<UEditorTransformObserver>()->GetLevelActorBounds());
-		
-		// Don't save the navmesh if the level has unsaved changes, it will be saved when the user saves the level manually.
-		if(const UPackage* Package = Cast<UPackage>(EditorWorld->GetOuter()); Package->IsDirty() && Package->MarkPackageDirty())
-		{
-			UE_LOG(LogEditorNavManager, Log, TEXT("Level is marked dirty. The 'sound-navigation-mesh' will be saved when the user saves the level."))
-		}
-		return;
+		UE_LOG(LogEditorNavManager, Log, TEXT("Level is marked dirty. The 'sound-navigation-mesh' will be saved when the user saves the level."))
 	}
-	
+
 	NavMeshDebugger->Draw();
 }
 
@@ -129,7 +102,7 @@ void UEditorNavMeshManager::UpdateDebugSettings (
 	FlushDebugStrings(EditorWorld);
 	
 	FNavMeshDebugSettings::Initialize(bDebugEnabled, bDisplayNodes, bDisplayNodeBorder, bDisplayRelations, bDisplayPaths, bDisplayChunks);
-	MBNavigationModule.InitializeNavMeshDebugSettings(bDebugEnabled, bDisplayNodes, bDisplayNodeBorder, bDisplayRelations, bDisplayPaths, bDisplayChunks);
+	MBNavigationModule.InitializeDebugSettings(bDebugEnabled, bDisplayNodes, bDisplayNodeBorder, bDisplayRelations, bDisplayPaths, bDisplayChunks);
 	NavMeshDebugger->Draw();
 }
 
@@ -148,21 +121,20 @@ void UEditorNavMeshManager::OnLevelActorsInitialized(const FBoundsMap& BoundsMap
 	NavMeshDebugger->SetWorld(EditorWorld);
 
 	LoadLevelNavMeshSettings();
-	InitStaticNavMeshData();
 
 	// Get cached navmesh.
 	FGuid CachedID;
 	DeserializeNavMesh(*NavMeshPtr, CachedID);
 
-	// If the cached ID is not the same, then the navmesh and the level are not in sync, so we just regenerate a new one.
-	// Should only happen in cases where the level is shared outside of version-control, where the serialized .bin file is not in sync with the received level.
+	// If the cached ID is not the same, then the navmesh and the level are not in sync, and a new one needs to be regenerated.
+	// If version-control is used properly, then a regeneration should not happen.
 	// todo: this should be checked, something is not right.
 	if(!NavMeshPtr->empty() && NavMeshSettings->ID == CachedID) return;
 	
 	NavMeshGenerator->Generate(BoundsMap);
 	if(EditorWorld->GetOuter()->MarkPackageDirty())
 	{
-		UE_LOG(LogEditorNavManager, Log, TEXT("Level is marked dirty. The 'sound-navigation-mesh' will be saved when the user saves the level."))
+		UE_LOG(LogEditorNavManager, Log, TEXT("Level is marked dirty. The 'Sound Navigation Mesh' will be serialized when the level is saved."))
 	}
 }
 
@@ -189,4 +161,10 @@ void UEditorNavMeshManager::PostWorldSaved(UWorld* World, FObjectPostSaveContext
 void UEditorNavMeshManager::OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation, ELevelViewportType LevelViewportType, int32) const
 {
 	if(!NavMeshUpdater->IsRunning()) NavMeshDebugger->Draw(CameraLocation, CameraRotation);
+}
+
+void UEditorNavMeshManager::OnActorBoundsChanged(const FGuid& ActorID, const TChangedBounds<FGlobalVector>& ChangedBounds)
+{
+	UE_LOG(LogEditorTransformSubsystem, Log, TEXT("OnActorBoundsChanged"));
+	NavMeshUpdater->StageData(ActorID, ChangedBounds);
 }

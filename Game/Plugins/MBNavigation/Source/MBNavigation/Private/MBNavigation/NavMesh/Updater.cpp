@@ -49,8 +49,6 @@ void FNavMeshUpdater::Update()
 	UE_LOG(LogTemp, Log, TEXT("Starting navmesh update..."));
 	bIsRunning = true;
 	FUpdateTask* UpdateTask = new FUpdateTask(Promise, GEditor->GetEditorWorldContext().World(), NavMeshPtr, StagedDataMap); // todo clear this variable after completion??
-
-	UE_LOG(LogTemp, Log, TEXT("here..."));
 }
 
 /**
@@ -128,9 +126,8 @@ uint32 FUpdateTask::Run()
 											: NodesToSkip.insert(FNode::GetParentMortonCode(MortonCode, StartingLayerIdx));
 					}
 
-					std::unordered_set<uint_fast32_t> Remainder;
-					std::ranges::set_difference(NodesToUnRasterize, NodesToSkip, std::inserter(Remainder, Remainder.begin()));
-					if(Remainder.size()) TryUnRasterizeNodes(Chunk, Remainder, StartingLayerIdx-1);
+					for (MortonCode MC : NodesToSkip) NodesToUnRasterize.erase(MC);
+					if(NodesToUnRasterize.size()) TryUnRasterizeNodes(Chunk, NodesToUnRasterize, StartingLayerIdx-1);
 
 					// TEMP
 					ChunkKeys.insert(ChunkKey);
@@ -156,9 +153,8 @@ uint32 FUpdateTask::Run()
 									: NodesToSkip.insert(FNode::GetParentMortonCode(MortonCode, StartingLayerIdx));
 			}
 
-			std::unordered_set<uint_fast32_t> Remainder;
-			std::ranges::set_difference(NodesToUnRasterize, NodesToSkip, std::inserter(Remainder, Remainder.begin()));
-			if(Remainder.size()) TryUnRasterizeNodes(Chunk, Remainder, StartingLayerIdx-1);
+			for (MortonCode MC : NodesToSkip) NodesToUnRasterize.erase(MC);
+			if(NodesToUnRasterize.size()) TryUnRasterizeNodes(Chunk, NodesToUnRasterize, StartingLayerIdx-1);
 
 			// TEMP
 			ChunkKeys.insert(ChunkKey);
@@ -262,7 +258,7 @@ bool FUpdateTask::StartReRasterizeNode(const FChunk* Chunk, const uint_fast32_t 
 
 	const bool bHasOverlap = bFoundNode
 		? NodeIterator->second.HasOverlap(World, Chunk->Location, LayerIdx)
-		: NodeHasOverlap(World, Chunk, MortonCode, LayerIdx);
+		: HasOverlap(World, Chunk, MortonCode, LayerIdx);
 
 	if(!bHasOverlap)
 	{
@@ -338,7 +334,7 @@ void FUpdateTask::RecursiveReRasterizeNode(const UWorld* World, const FChunk* Ch
 	}
 
 	// Re-rasterize existing children.
-	ForEachChild(Chunk, Node, LayerIdx, [&](FNode& ChildNode)
+	Node.ForEachChild(Chunk, LayerIdx, [&](FNode& ChildNode)
 	{
 		if(!ChildNode.HasOverlap(World, Chunk->Location, ChildLayerIdx))
 		{
@@ -398,7 +394,7 @@ bool FUpdateTask::StartClearUnoccludedChildrenOfNode(const FChunk* Chunk, const 
 void FUpdateTask::RecursiveClearUnoccludedChildren(const FChunk* Chunk, FNode& Node, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("RecursiveClearUnoccludedChildren");
-	ForEachChild(Chunk, Node, LayerIdx, [&](FNode& ChildNode)
+	Node.ForEachChild(Chunk, LayerIdx, [&](FNode& ChildNode)
 	{
 		const uint8 ChildLayerIdx = LayerIdx+1;
 		
@@ -441,7 +437,7 @@ void FUpdateTask::StartClearAllChildrenOfNode(const FChunk* Chunk, const uint_fa
 void FUpdateTask::RecursiveClearAllChildren(const FChunk* Chunk, const FNode& Node, const uint8 LayerIdx)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("RecursiveClearAllChildren");
-	ForEachChild(Chunk, Node, LayerIdx, [&](const FNode& ChildNode)
+	Node.ForEachChild(Chunk, LayerIdx, [&](const FNode& ChildNode)
 	{
 		const uint8 ChildLayerIdx = LayerIdx+1;
 		if(ChildNode.HasChildren()) RecursiveClearAllChildren(Chunk, ChildNode, ChildLayerIdx);
@@ -491,7 +487,7 @@ void FUpdateTask::InitializeParents(const FChunk* Chunk, const uint_fast32_t Chi
 		if(!ParentNode.HasChildren())
 		{
 			CreateChildren(ParentNode);
-			ForEachChild(Chunk, ParentNode, ParentLayerIdx, [&](FNode& ChildNode)
+			ParentNode.ForEachChild(Chunk, ParentLayerIdx, [&](FNode& ChildNode)
 			{
 				//ChildNode.UpdateRelations(NavMeshPtr, Chunk, ChildLayerIdx, DIRECTION_ALL);
 			});
@@ -509,7 +505,7 @@ void FUpdateTask::InitializeParents(const FChunk* Chunk, const uint_fast32_t Chi
 	//ParentNode.UpdateRelations(NavMeshPtr, Chunk, ParentLayerIdx, DIRECTION_ALL);
 	
 	CreateChildren(ParentNode);
-	ForEachChild(Chunk, ParentNode, ParentLayerIdx, [&](FNode& ChildNode)
+	ParentNode.ForEachChild(Chunk, ParentLayerIdx, [&](FNode& ChildNode)
 	{
 		//ChildNode.UpdateRelations(NavMeshPtr, Chunk, ChildLayerIdx, DIRECTION_ALL);
 	});
@@ -536,7 +532,7 @@ void FUpdateTask::TryUnRasterizeNodes(const FChunk* Chunk, const std::unordered_
 			// Check if all children are unoccluded.
 			TArray<MortonCode> ChildMortonCodes;
 			bool bDeleteChildren = true;
-			ForEachChild(Chunk, Node, LayerIdx, [&](const FNode& ChildNode) -> void
+			Node.ForEachChild(Chunk, LayerIdx, [&](const FNode& ChildNode) -> void
 			{
 				ChildMortonCodes.Add(ChildNode.GetMortonCode());
 				if(bDeleteChildren && ChildNode.IsOccluded()) bDeleteChildren = false;

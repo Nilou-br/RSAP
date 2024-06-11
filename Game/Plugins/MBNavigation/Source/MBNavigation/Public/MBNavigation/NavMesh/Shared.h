@@ -6,18 +6,34 @@
 
 
 
-FORCEINLINE bool NodeHasOverlap(const UWorld* World, const FChunk* Chunk, const uint_fast32_t MortonCode, const uint8 LayerIdx)
+FORCEINLINE bool HasOverlap(const UWorld* World, const FChunk* Chunk, const uint_fast32_t MortonCode, const uint8 LayerIdx)
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("NodeHasOverlap");
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("HasOverlap");
 	
-	const FGlobalVector GlobalLocation = FGlobalVector::FromMortonCode(MortonCode, Chunk->Location);
+	const FGlobalVector Location = FGlobalVector::FromMortonCode(MortonCode, Chunk->Location);
 	const FVector Extent = FVector(FNavMeshStatic::NodeHalveSizes[LayerIdx]);
-	// DrawDebugBox(World, ToVector()+Extent, Extent, FColor::Black, true, -1, 0, 2);
 	
 	return FPhysicsInterface::GeomOverlapBlockingTest(
 		World,
-		FCollisionShape::MakeBox(Extent),
-		GlobalLocation.ToVector() + Extent,
+		FNavMeshStatic::CollisionBoxes[LayerIdx],
+		Location.ToVector() + Extent,
+		FQuat::Identity,
+		ECollisionChannel::ECC_WorldStatic,
+		FCollisionQueryParams::DefaultQueryParam,
+		FCollisionResponseParams::DefaultResponseParam
+	);
+}
+
+FORCEINLINE bool HasOverlap(const UWorld* World, const FGlobalVector Location, const uint8 LayerIdx)
+{
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("HasOverlap");
+	
+	const FVector Extent = FVector(FNavMeshStatic::NodeHalveSizes[LayerIdx]);
+	
+	return FPhysicsInterface::GeomOverlapBlockingTest(
+		World,
+		FNavMeshStatic::CollisionBoxes[LayerIdx],
+		Location.ToVector() + Extent,
 		FQuat::Identity,
 		ECollisionChannel::ECC_WorldStatic,
 		FCollisionQueryParams::DefaultQueryParam,
@@ -47,27 +63,4 @@ FORCEINLINE void DrawNodeFromMorton(const UWorld* World, const FChunk* Chunk, co
 	const FGlobalVector GlobalNodeLocation = FGlobalVector::FromMortonCode(MortonCode, Chunk->Location);
 	const TBounds<FGlobalVector> NodeBoundaries(GlobalNodeLocation, GlobalNodeLocation+FNavMeshStatic::NodeSizes[LayerIdx]);
 	NodeBoundaries.Draw(World, Color);
-}
-
-template <typename Func>
-static void ForEachChild(const FChunk* Chunk, const FNode Node, const uint8 LayerIdx, Func Callback)
-{
-	if(!Node.HasChildren()) return;
-		
-	const uint8 ChildLayerIdx = LayerIdx+1;
-	const int_fast16_t ChildOffset = FNavMeshStatic::MortonOffsets[ChildLayerIdx];
-	const FMortonVector NodeMortonLocation = Node.GetMortonLocation();
-		
-	for (uint8 i = 0; i < 8; ++i)
-	{
-		const uint_fast16_t ChildMortonX = NodeMortonLocation.X + ((i & 1) ? ChildOffset : 0);
-		const uint_fast16_t ChildMortonY = NodeMortonLocation.Y + ((i & 2) ? ChildOffset : 0);
-		const uint_fast16_t ChildMortonZ = NodeMortonLocation.Z + ((i & 4) ? ChildOffset : 0);
-
-		const FMortonVector ChildMortonLocation = FMortonVector(ChildMortonX, ChildMortonY, ChildMortonZ);
-		const uint_fast32_t ChildMortonCode = ChildMortonLocation.ToMortonCode();
-			
-		const auto NodeIterator = Chunk->Octrees[0]->Layers[ChildLayerIdx].find(ChildMortonCode);
-		Callback(NodeIterator->second);
-	}
 }

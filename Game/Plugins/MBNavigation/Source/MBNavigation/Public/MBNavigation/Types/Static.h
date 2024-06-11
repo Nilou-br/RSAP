@@ -12,19 +12,18 @@
  *
  * Initialize should be called everytime a new level is opened with the settings for that level.
  */
-struct FNavMeshStatic // todo, new level does not have correct settings in the widget.
+struct FNavMeshStatic // todo: update for leaf nodes.
 {
-	static inline constexpr uint_fast16_t MortonOffsets[10] = {1024, 512, 256, 128, 64, 32, 16, 8, 4, 2}; // todo: update for leaf nodes.
-	static inline constexpr uint8 DynamicDepth = 10;
-	static inline uint8 StaticDepth = 6;
-	static inline uint8 VoxelSizeExponent = 0;
-	static inline uint8 SmallestNodeSize = 1;
-	static inline int32 ChunkSize = 1024 << VoxelSizeExponent;
-	static inline uint8 KeyShift = 12;
-	static inline uint32 ChunkMask = ~((1<<KeyShift)-1);
-	static inline int32 NodeSizes[10] = {1024, 512, 256, 128, 64, 32, 16, 8, 4, 2}; // todo: update for leaf nodes.
-	static inline float NodeHalveSizes[10] = {512.f, 256.f, 128.f, 64.f, 32.f, 16.f, 8.f, 4.f, 2.f, 1.f}; // todo: update for leaf nodes.
-	static inline FCollisionShape CollisionBoxes[10];
+	static inline constexpr uint8 MaxDepth = 10;
+	static inline constexpr uint8 StaticDepth = 5;
+	static inline constexpr uint8 VoxelSizeExponent = 0;
+	static inline constexpr int32 ChunkSize = 1024;
+	static inline constexpr uint8 ChunkKeyShift = 10 + VoxelSizeExponent;
+	static inline constexpr uint32 ChunkMask = ~((1<<ChunkKeyShift)-1);
+	static inline constexpr uint_fast16_t MortonOffsets[10] = {1024, 512, 256, 128, 64, 32, 16, 8, 4, 2};
+	static inline constexpr uint8 SmallestNodeSize = 1;
+	static inline constexpr int32 NodeSizes[10] = {1024, 512, 256, 128, 64, 32, 16, 8, 4, 2};
+	static inline constexpr float NodeHalveSizes[10] = {512.f, 256.f, 128.f, 64.f, 32.f, 16.f, 8.f, 4.f, 2.f, 1.f};
 	static inline constexpr uint16 MortonMasks[10] = {
 		static_cast<uint16>(~((1<<10)-1)), static_cast<uint16>(~((1<<9)-1)),
 		static_cast<uint16>(~((1<<8)-1)), static_cast<uint16>(~((1<<7)-1)),
@@ -33,19 +32,11 @@ struct FNavMeshStatic // todo, new level does not have correct settings in the w
 		static_cast<uint16>(~((1<<2)-1)), static_cast<uint16>(~((1<<1)-1)), // todo: change last one to '0' for leaf nodes.
 	};
 	
-	static void Initialize(const UNavMeshSettings* NavMeshSettings)
+	static inline FCollisionShape CollisionBoxes[10];
+	static void Initialize()
 	{
-		VoxelSizeExponent = NavMeshSettings->VoxelSizeExponent;
-		StaticDepth = NavMeshSettings->StaticDepth;
-		ChunkSize = 1024 << VoxelSizeExponent;
-		KeyShift = 10 + VoxelSizeExponent;
-		ChunkMask = ~((1<<KeyShift)-1);
-		SmallestNodeSize = 1 << VoxelSizeExponent;
-		
-		for (uint8 LayerIndex = 0; LayerIndex < DynamicDepth; ++LayerIndex)
+		for (uint8 LayerIndex = 0; LayerIndex < MaxDepth; ++LayerIndex)
 		{
-			NodeSizes[LayerIndex] = ChunkSize >> LayerIndex;
-			NodeHalveSizes[LayerIndex] = static_cast<float>(NodeSizes[LayerIndex]) / 2;
 			CollisionBoxes[LayerIndex] = FCollisionShape::MakeBox(FVector(NodeHalveSizes[LayerIndex]));
 		}
 	}

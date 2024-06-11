@@ -69,7 +69,7 @@ void FNavMeshGenerator::GenerateChunks(const FBoundsMap& BoundsMap)
 
 /**
  * Rasterize a static node, only if it occludes anything.
- * This method is called recursively until it either reaches the static-depth or if it doesn't occlude anything.
+ * This method is called recursively until it either reaches the static-depth or if it does not occlude anything.
  */
 void FNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FNode& Node, const uint8 LayerIndex)
 {

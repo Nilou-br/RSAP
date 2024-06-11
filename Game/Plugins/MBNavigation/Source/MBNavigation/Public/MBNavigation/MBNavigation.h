@@ -16,8 +16,7 @@ public:
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
 
-	static void InitializeNavMeshSettings(const UNavMeshSettings* NavMeshData);
-	static void InitializeNavMeshDebugSettings(
+	static void InitializeDebugSettings(
 		const bool bDebugEnabled, const bool bDisplayNodes,
 		const bool bDisplayNodeBorder, const bool bDisplayRelations,
 		const bool bDisplayPaths, const bool bDisplayChunks);

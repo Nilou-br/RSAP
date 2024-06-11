@@ -215,30 +215,15 @@ public:
 	std::array<FNodeLookupData, 6> GetNeighboursLookupData(const FGlobalVector& ChunkLocation) const;
 
 	void UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk* Chunk, const uint8 LayerIdx, OctreeDirection RelationsToUpdate);
+	bool HasOverlap(const UWorld* World, const FGlobalVector& ChunkLocation, const uint8 LayerIdx) const;
+	void Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const uint8 LayerIndex, const FColor Color = FColor::Black, const uint32 Thickness = 0) const;
 
-	FORCEINLINE bool HasOverlap(const UWorld* World, const FGlobalVector& ChunkLocation, const uint8 LayerIdx) const
-	{
-		TRACE_CPUPROFILER_EVENT_SCOPE_STR("Node Has-Overlap");
-		return FPhysicsInterface::GeomOverlapBlockingTest(
-			World,
-			FNavMeshStatic::CollisionBoxes[LayerIdx],
-			GetGlobalLocation(ChunkLocation).ToVector() + FNavMeshStatic::NodeHalveSizes[LayerIdx],
-			FQuat::Identity,
-			ECollisionChannel::ECC_WorldStatic,
-			FCollisionQueryParams::DefaultQueryParam,
-			FCollisionResponseParams::DefaultResponseParam
-		);
-	}
-
-	FORCEINLINE void Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const uint8 LayerIndex, const FColor Color = FColor::Black, const uint32 Thickness = 0) const
-	{
-		const float NodeHalveSize = FNavMeshStatic::NodeHalveSizes[LayerIndex];
-		DrawDebugBox(World, FGlobalVector(GetGlobalLocation(ChunkLocation)).ToVector()+NodeHalveSize, FGlobalVector(NodeHalveSize).ToVector(), Color, true, -1, 0, Thickness);
-	}
+	template<typename Func>
+	void ForEachChild(const FChunk* Chunk, const uint8 LayerIdx, Func Callback) const;
 };
 
-// typedef std::map<uint_fast32_t, FOctreeNode> FNodesMap;
-typedef ankerl::unordered_dense::map<uint_fast32_t, FNode> FOctreeLayer; // todo: rename to FOctreeLayer?
+// typedef std::map<MortonCode, FNode> FOctreeLayer;
+typedef ankerl::unordered_dense::map<MortonCode, FNode> FOctreeLayer;
 
 /**
  * The octree stores all the nodes in 10 different layers, each layer having higher resolution nodes.
@@ -250,7 +235,6 @@ typedef ankerl::unordered_dense::map<uint_fast32_t, FNode> FOctreeLayer; // todo
 struct FOctree
 {
 	std::array<FOctreeLayer, 10> Layers;
-	TArray<FOctreeLeaf> Leafs;
 
 	FOctree()
 	{
@@ -313,3 +297,29 @@ typedef ankerl::unordered_dense::map<uint_fast64_t, FChunk> FNavMesh;
 typedef std::shared_ptr<FNavMesh> FNavMeshPtr;
 
 // typedef std::map<uint_fast64_t, FChunk> FNavMesh;
+
+
+
+
+template <typename Func>
+void FNode::ForEachChild(const FChunk* Chunk, const uint8 LayerIdx, Func Callback) const
+{
+	if(!HasChildren()) return;
+		
+	const uint8 ChildLayerIdx = LayerIdx+1;
+	const int_fast16_t ChildOffset = FNavMeshStatic::MortonOffsets[ChildLayerIdx];
+	const FMortonVector NodeMortonLocation = GetMortonLocation();
+		
+	for (uint8 i = 0; i < 8; ++i)
+	{
+		const uint_fast16_t ChildMortonX = NodeMortonLocation.X + ((i & 1) ? ChildOffset : 0);
+		const uint_fast16_t ChildMortonY = NodeMortonLocation.Y + ((i & 2) ? ChildOffset : 0);
+		const uint_fast16_t ChildMortonZ = NodeMortonLocation.Z + ((i & 4) ? ChildOffset : 0);
+
+		const FMortonVector ChildMortonLocation = FMortonVector(ChildMortonX, ChildMortonY, ChildMortonZ);
+		const uint_fast32_t ChildMortonCode = ChildMortonLocation.ToMortonCode();
+			
+		const auto NodeIterator = Chunk->Octrees[0]->Layers[ChildLayerIdx].find(ChildMortonCode);
+		Callback(NodeIterator->second);
+	}
+}

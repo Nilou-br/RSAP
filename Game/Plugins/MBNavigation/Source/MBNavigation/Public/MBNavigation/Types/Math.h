@@ -151,7 +151,7 @@ struct FGlobalVector
 	// The FGlobalVector can have max 31 bits per axis to support this method.
 	FORCEINLINE uint64_t ToKey() const {
 		auto Encode = [](const int_fast32_t Val) -> uint64_t {
-			uint64_t Result = (Val >> FNavMeshStatic::KeyShift) & 0xFFFFF;
+			uint64_t Result = (Val >> FNavMeshStatic::ChunkKeyShift) & 0xFFFFF;
 			Result |= ((Val < 0) ? 1ULL : 0ULL) << 20;
 			return Result;
 		};
@@ -165,7 +165,7 @@ struct FGlobalVector
 			if (Val & (1 << 20)) {
 				Result |= 0xFFF00000;
 			}
-			return Result << FNavMeshStatic::KeyShift;
+			return Result << FNavMeshStatic::ChunkKeyShift;
 		};
 
 		FGlobalVector Vector32;

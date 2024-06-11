@@ -227,3 +227,25 @@ void FNode::UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk* Chunk, 
 		}
 	}
 }
+
+bool FNode::HasOverlap(const UWorld* World, const FGlobalVector& ChunkLocation, const uint8 LayerIdx) const
+{
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Node Has-Overlap");
+	return FPhysicsInterface::GeomOverlapBlockingTest(
+		World,
+		FNavMeshStatic::CollisionBoxes[LayerIdx],
+		GetGlobalLocation(ChunkLocation).ToVector() + FNavMeshStatic::NodeHalveSizes[LayerIdx],
+		FQuat::Identity,
+		ECollisionChannel::ECC_WorldStatic,
+		FCollisionQueryParams::DefaultQueryParam,
+		FCollisionResponseParams::DefaultResponseParam
+	);
+}
+
+void FNode::Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const uint8 LayerIndex, const FColor Color, const uint32 Thickness) const
+{
+	const float NodeHalveSize = FNavMeshStatic::NodeHalveSizes[LayerIndex];
+	const FVector GlobalCenter = GetGlobalLocation(ChunkLocation).ToVector() + NodeHalveSize;
+	const FVector Extent(NodeHalveSize);
+	DrawDebugBox(World, GlobalCenter, Extent, Color, true, -1, 0, Thickness);
+}

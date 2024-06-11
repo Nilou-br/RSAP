@@ -43,6 +43,9 @@ void UEditorTransformObserver::Initialize(FSubsystemCollectionBase& Collection)
 
 	// Actor selection delegate
 	OnActorSelectionChangedDelegateHandle = FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor").OnActorSelectionChanged().AddUObject(this, &ThisClass::OnActorSelectionChanged);
+
+	
+	FCoreUObjectDelegates::OnObjectPropertyChanged.AddUObject(this, &ThisClass::OnPropertyChangedEvent);
 	
 
 	// todo OnLevelDeleted / OnApplyObjectToActor
@@ -75,7 +78,7 @@ void UEditorTransformObserver::Deinitialize()
 	FEditorDelegates::OnDeleteActorsEnd.Remove(OnDeleteActorsEndDelegateHandle); OnDeleteActorsEndDelegateHandle.Reset();
 	
 	// Actor selection delegate
-	FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor").OnActorSelectionChanged().Remove(OnActorSelectionChangedDelegateHandle); OnActorSelectionChangedDelegateHandle.Reset();	
+	FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor").OnActorSelectionChanged().Remove(OnActorSelectionChangedDelegateHandle); OnActorSelectionChangedDelegateHandle.Reset();
 	
 	Super::Deinitialize();
 }
@@ -83,6 +86,10 @@ void UEditorTransformObserver::Deinitialize()
 void UEditorTransformObserver::Tick(float DeltaTime)
 {
 	if(bIsMovingActors) CheckMovingActors();
+	if(SelectedActors.Num())
+	{
+		// UE_LOG(LogEditorTransformSubsystem, Log, TEXT("Tick selected-actors. %s %f"), *SelectedActors[0]->GetName(), DeltaTime)
+	}
 }
 
 void UEditorTransformObserver::PostUndo(bool bSuccess)
@@ -299,6 +306,8 @@ void UEditorTransformObserver::OnMapOpened(const FString& Filename, bool bAsTemp
 		// Cache all of their boundaries.
 		for (AActor* Actor : FoundActors)
 		{
+			const AStaticMeshActor* SMActor = Cast<AStaticMeshActor>(Actor);
+			
 			// Skip the actors that don't have any collision.
 			bool bHasCollision = false;
 			TArray<UActorComponent*> Components = Actor->K2_GetComponentsByClass(UPrimitiveComponent::StaticClass());
@@ -500,4 +509,20 @@ void UEditorTransformObserver::OnActorSelectionChanged(const TArray<UObject*>& A
 	{
 		MovingActorBounds.Add(Actor->GetActorGuid(), TBounds<FGlobalVector>(Actor));
 	}
+}
+
+void UEditorTransformObserver::OnPropertyChangedEvent(UObject* Object, FPropertyChangedEvent& PropertyChangedEvent)
+{
+	const AActor* Actor = Cast<AActor>(Object);
+	if(!Actor) return;
+	
+	const FGuid& ActorID = Actor->GetActorGuid();
+	const TBounds<FGlobalVector>* StoredBounds = CurrentActorBounds.Find(ActorID);
+	if(!StoredBounds) return;
+	
+	const TBounds<FGlobalVector> NewBounds(Actor);
+	if(NewBounds.Equals(*StoredBounds)) return;
+
+	CurrentActorBounds.Emplace(ActorID, NewBounds);
+	if(OnActorBoundsChanged.IsBound()) OnActorBoundsChanged.Execute(ActorID, TChangedBounds<FGlobalVector>(*StoredBounds, NewBounds));
 }

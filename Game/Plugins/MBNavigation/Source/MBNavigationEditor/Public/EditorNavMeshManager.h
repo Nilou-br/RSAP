@@ -35,21 +35,20 @@ protected:
 
 private:
 	void LoadLevelNavMeshSettings();
-	void InitStaticNavMeshData();
 	void SaveNavMesh() const;
 	void OnNavMeshUpdated() const;
 	
 public:
-	UFUNCTION(BlueprintCallable, Category="Settings")
-	void UpdateGenerationSettings(const float VoxelSizeExponentFloat, const float StaticDepthFloat);
+	UFUNCTION(BlueprintCallable, Category="Sound Navigation Mesh")
+	void Regenerate();
 
-	UFUNCTION(BlueprintCallable, Category="Settings")
+	UFUNCTION(BlueprintCallable, Category="Sound Navigation Mesh")
 	void UpdateDebugSettings(
 		const bool bDebugEnabled, const bool bDisplayNodes,
 		const bool bDisplayNodeBorder, const bool bDisplayRelations,
 		const bool bDisplayPaths, const bool bDisplayChunks);
 
-	UFUNCTION(BlueprintCallable, Category="Settings")
+	UFUNCTION(BlueprintCallable, Category="Sound Navigation Mesh")
 	UNavMeshSettings* GetNavMeshSettings() const { return NavMeshSettings; }
 
 private:
@@ -69,4 +68,5 @@ private:
 	FDelegateHandle PreSaveWorldDelegateHandle; void PreWorldSaved(UWorld* World, FObjectPreSaveContext ObjectPreSaveContext);
 	FDelegateHandle PostSaveWorldDelegateHandle; void PostWorldSaved(UWorld* World, FObjectPostSaveContext ObjectSaveContext);
 	FDelegateHandle OnCameraMovedDelegateHandle; void OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation, ELevelViewportType LevelViewportType, int32) const;
+	FDelegateHandle OnActorBoundsChangedDelegateHandle; void OnActorBoundsChanged(const FGuid& ActorID, const TChangedBounds<FGlobalVector>& ChangedBounds);
 };

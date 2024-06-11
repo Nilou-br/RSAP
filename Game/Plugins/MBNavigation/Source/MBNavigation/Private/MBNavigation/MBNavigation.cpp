@@ -9,7 +9,7 @@
 
 void FMBNavigationModule::StartupModule()
 {
-	
+	FNavMeshStatic::Initialize();
 }
 
 void FMBNavigationModule::ShutdownModule()
@@ -17,12 +17,7 @@ void FMBNavigationModule::ShutdownModule()
 	
 }
 
-void FMBNavigationModule::InitializeNavMeshSettings(const UNavMeshSettings* NavMeshData)
-{
-	FNavMeshStatic::Initialize(NavMeshData);
-}
-
-void FMBNavigationModule::InitializeNavMeshDebugSettings(
+void FMBNavigationModule::InitializeDebugSettings(
 	const bool bDebugEnabled, const bool bDisplayNodes,
 	const bool bDisplayNodeBorder, const bool bDisplayRelations,
 	const bool bDisplayPaths, const bool bDisplayChunks)

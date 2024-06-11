@@ -38,6 +38,7 @@ class UEditorTransformObserver final : public UEditorSubsystem, public FEditorUn
 	GENERATED_BODY()
 
 	DECLARE_DELEGATE_OneParam(FOnLevelActorsInitialized, const FBoundsMap&);
+	DECLARE_DELEGATE_TwoParams(FOnActorBoundsChanged, const FGuid&, const TChangedBounds<FGlobalVector>&);
 
 protected:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
@@ -50,6 +51,8 @@ protected:
 
 public:
 	FOnLevelActorsInitialized OnLevelActorsInitialized;
+	FOnActorBoundsChanged OnActorBoundsChanged;
+	
 	FORCEINLINE FBoundsMap& GetLevelActorBounds(){ return CurrentActorBounds; }
 	
 private:
@@ -84,4 +87,6 @@ private:
 	FDelegateHandle OnDeleteActorsBeginDelegateHandle; void OnDeleteActorsBegin();
 	FDelegateHandle OnDeleteActorsEndDelegateHandle; void OnDeleteActorsEnd();
 	FDelegateHandle OnActorSelectionChangedDelegateHandle; void OnActorSelectionChanged(const TArray<UObject*>& Actors, bool);
+
+	void OnPropertyChangedEvent(UObject* Object, FPropertyChangedEvent& PropertyChangedEvent);
 };
