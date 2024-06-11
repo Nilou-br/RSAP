@@ -424,10 +424,9 @@ struct TBounds
 		return TBounds(ClampedMin, ClampedMax, bIsValid);
 	}
 
-	// Gets the remaining parts of the bounds that are not overlapping with the given bounds.
-	// only supports FGlobalVector due to the nature of morton-codes.
+	// Gets the remaining parts of the bounds that are not overlapping with the other bounds. A boolean-cut.
 	template<typename T = VectorType>
-	auto GetNonOverlapping(const TBounds<FGlobalVector>& Other) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, std::vector<TBounds<FGlobalVector>>>
+	auto Cut(const TBounds<FGlobalVector>& Other) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, std::vector<TBounds<FGlobalVector>>>
 	{
 		if(!IsValid()) return {};
 		if(!Other.IsValid() || !HasSimpleOverlap(Other)) return { *this }; // Return the whole instance when there is no overlap between the two bounds.

@@ -123,10 +123,10 @@ uint32 FUpdateTask::Run()
 
 			// Get the remainder of the previous-bounds intersected with the current-bounds, this is what will actually be used for the previous-bounds.
 			// Nodes within these bounds should either all be cleared at once, or only clear the unoccluded nodes.
-			for (auto PreviousRemainder : PreviousRounded.GetNonOverlapping(CurrentRounded))
+			for (auto PreviousRemainder : PreviousRounded.Cut(CurrentRounded))
 			{
 				const bool bClearAll = !PreviousRemainder.HasOverlap(World); // Clear all if it does not overlap anything.
-				PreviousRounded.Draw(World, bClearAll ? FColor::Red : FColor::Green);
+				PreviousRemainder.Draw(World, bClearAll ? FColor::Red : FColor::Green);
 				
 				PreviousRemainder.ForEachChunk([&](const uint_fast64_t ChunkKey, const OctreeDirection ChunkPositiveDirections, const TBounds<FMortonVector>& Bounds)
 				{
@@ -140,7 +140,7 @@ uint32 FUpdateTask::Run()
 					{
 						bool bIsNodeOccluding = false;
 						if(bClearAll) StartClearAllChildrenOfNode(Chunk, MortonCode, StartingLayerIdx, RelationsToUpdate);
-						else bIsNodeOccluding = StartClearUnoccludedChildrenOfNode(Chunk, MortonCode, StartingLayerIdx, RelationsToUpdate);
+						else bIsNodeOccluding = !StartClearUnoccludedChildrenOfNode(Chunk, MortonCode, StartingLayerIdx, RelationsToUpdate);
 
 						if(!bIsNodeOccluding)
 						{
