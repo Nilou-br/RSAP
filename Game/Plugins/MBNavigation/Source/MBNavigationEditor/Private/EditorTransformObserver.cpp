@@ -515,14 +515,20 @@ void UEditorTransformObserver::OnPropertyChangedEvent(UObject* Object, FProperty
 {
 	const AActor* Actor = Cast<AActor>(Object);
 	if(!Actor) return;
-	
+
+	// Get the cached bounds for this actor.
 	const FGuid& ActorID = Actor->GetActorGuid();
 	const TBounds<FGlobalVector>* StoredBounds = CurrentActorBounds.Find(ActorID);
 	if(!StoredBounds) return;
-	
-	const TBounds<FGlobalVector> NewBounds(Actor);
-	if(NewBounds.Equals(*StoredBounds)) return;
 
-	CurrentActorBounds.Emplace(ActorID, NewBounds);
-	if(OnActorBoundsChanged.IsBound()) OnActorBoundsChanged.Execute(ActorID, TChangedBounds<FGlobalVector>(*StoredBounds, NewBounds));
+	// Get the current bounds and check if there is a change.
+	const TBounds<FGlobalVector> CurrentBounds(Actor);
+	if(CurrentBounds.Equals(*StoredBounds)) return;
+
+	// Get the actual value behind pointer before replacing it with the new one.
+	const TBounds<FGlobalVector> PreviousBounds = *StoredBounds;
+	CurrentActorBounds.Emplace(ActorID, CurrentBounds);
+
+	// Broadcast the change.
+	if(OnActorBoundsChanged.IsBound()) OnActorBoundsChanged.Execute(ActorID, TChangedBounds(PreviousBounds, CurrentBounds));
 }

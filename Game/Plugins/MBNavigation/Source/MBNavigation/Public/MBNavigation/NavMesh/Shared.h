@@ -29,7 +29,6 @@ FORCEINLINE bool HasOverlap(const UWorld* World, const FGlobalVector Location, c
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("HasOverlap");
 	
 	const FVector Extent = FVector(FNavMeshStatic::NodeHalveSizes[LayerIdx]);
-	
 	return FPhysicsInterface::GeomOverlapBlockingTest(
 		World,
 		FNavMeshStatic::CollisionBoxes[LayerIdx],

@@ -594,7 +594,7 @@ struct TBounds
 		ToGlobalSpace(ChunkLocation).Draw(World, Color);
 	}
 
-	FORCEINLINE FGlobalVector GetCenter() const { return Min+Max >> 1; }
+	FORCEINLINE FGlobalVector GetCenter () const { return Min+Max >> 1; }
 	FORCEINLINE FGlobalVector GetExtents() const { return Max-Min >> 1; }
 	FORCEINLINE FGlobalVector GetLengths() const { return FGlobalVector(Max.X - Min.X, Max.Y - Min.Y, Max.Z - Min.Z); }
 
@@ -602,7 +602,6 @@ struct TBounds
 	FORCEINLINE auto HasOverlap(const UWorld* World) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, bool>
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE_STR("TBounds Has-Overlap");
-		// DrawDebugBox(World, GetCenter().ToVector(), GetExtents().ToVector(), FColor::Blue, true, -1, 0, 2);
 		return FPhysicsInterface::GeomOverlapBlockingTest(
 			World,
 			FCollisionShape::MakeBox(GetExtents().ToVector() - 0.1f), // Decrease by small amount to avoid floating-point inaccuracy.
@@ -640,6 +639,7 @@ struct TChangedBounds
 	
 	TBounds<VectorType> Previous;
 	TBounds<VectorType> Current;
+	
 
 	TChangedBounds() {}
 	
@@ -648,5 +648,12 @@ struct TChangedBounds
 
 	TChangedBounds(const TBounds<VectorType>& InPrevious, const AActor* Actor)
 		: Previous(InPrevious), Current(Actor) {}
+
+	
+	FORCEINLINE void Draw(const UWorld* World) const
+	{
+		Previous.Draw(World, FColor::Red);
+		Current.Draw(World, FColor::Green);
+	}
 };
 typedef TMap<FGuid, TChangedBounds<FGlobalVector>> FChangedBoundsMap;

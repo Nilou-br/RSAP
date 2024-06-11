@@ -84,6 +84,26 @@ uint32 FUpdateTask::Run()
 	const auto StartTime = std::chrono::high_resolution_clock::now();
 #endif
 
+	FlushPersistentDebugLines(World);
+
+	// Lambda that returns an FChunk* which can be a nullptr.
+	// Will be initialized if it occludes any actor, erased otherwise.
+	const auto InitOrClearChunk = [&](const uint_fast64_t ChunkKey) -> FChunk*
+	{
+		auto Iterator = NavMeshPtr->find(ChunkKey);
+		const bool bChunkExists = Iterator != NavMeshPtr->end();
+		const FGlobalVector ChunkLocation = FGlobalVector::FromKey(ChunkKey);
+		
+		if(!HasOverlap(World, ChunkLocation, 0))
+		{
+			if(bChunkExists) NavMeshPtr->erase(ChunkKey);
+			return nullptr;
+		}
+					
+		if(!bChunkExists) std::tie(Iterator, std::ignore) = NavMeshPtr->emplace(ChunkKey, FChunk(ChunkLocation));
+		return &Iterator->second;
+	};
+
 	// TEMP
 	std::set<uint_fast64_t> ChunkKeys;
 	
@@ -96,7 +116,7 @@ uint32 FUpdateTask::Run()
 		
 		const TBounds<FGlobalVector> CurrentRounded = CurrentBounds.Round(StartingLayerIdx);
 
-		// Loop through all the previous-bounds and add all nodes to a new list, filtering out all the duplicates.
+		// Loop through all the previous-bounds and add all nodes to a new list, filtering out all the duplicates. todo: this has not been implemented yet it seems???
 		for (const auto& PreviousBounds : PreviousBoundsList)
 		{
 			const TBounds<FGlobalVector> PreviousRounded = PreviousBounds.Round(StartingLayerIdx);
@@ -106,24 +126,34 @@ uint32 FUpdateTask::Run()
 			for (auto PreviousRemainder : PreviousRounded.GetNonOverlapping(CurrentRounded))
 			{
 				const bool bClearAll = !PreviousRemainder.HasOverlap(World); // Clear all if it does not overlap anything.
+				PreviousRounded.Draw(World, bClearAll ? FColor::Red : FColor::Green);
+				
 				PreviousRemainder.ForEachChunk([&](const uint_fast64_t ChunkKey, const OctreeDirection ChunkPositiveDirections, const TBounds<FMortonVector>& Bounds)
 				{
-					auto Iterator = NavMeshPtr->find(ChunkKey);
-					if(Iterator == NavMeshPtr->end()) std::tie(Iterator, std::ignore) = NavMeshPtr->emplace(ChunkKey, FChunk(ChunkKey));
-					const FChunk* Chunk = &Iterator->second;
+					const FChunk* Chunk = InitOrClearChunk(ChunkKey);
+					if(!Chunk) return;
 					
 					std::unordered_set<MortonCode> NodesToUnRasterize;
 					std::unordered_set<MortonCode> NodesToSkip;
 					
 					for (const auto [MortonCode, RelationsToUpdate] : Bounds.GetMortonCodesWithin(StartingLayerIdx, ChunkPositiveDirections))
 					{
-						bool bShouldCheckParent = true;
+						bool bIsNodeOccluding = false;
 						if(bClearAll) StartClearAllChildrenOfNode(Chunk, MortonCode, StartingLayerIdx, RelationsToUpdate);
-						else bShouldCheckParent = StartClearUnoccludedChildrenOfNode(Chunk, MortonCode, StartingLayerIdx, RelationsToUpdate);
-						
-						// Call correct update method based on boolean.
-						bShouldCheckParent	? NodesToUnRasterize.insert(FNode::GetParentMortonCode(MortonCode, StartingLayerIdx))
-											: NodesToSkip.insert(FNode::GetParentMortonCode(MortonCode, StartingLayerIdx));
+						else bIsNodeOccluding = StartClearUnoccludedChildrenOfNode(Chunk, MortonCode, StartingLayerIdx, RelationsToUpdate);
+
+						if(!bIsNodeOccluding)
+						{
+							if(StartingLayerIdx != 0)
+							{
+								NodesToUnRasterize.insert(FNode::GetParentMortonCode(MortonCode, StartingLayerIdx));
+								continue;
+							}
+
+							// Erase this chunk, we are on the root node that does not overlap anything.
+							NavMeshPtr->erase(ChunkKey);
+						}
+						NodesToSkip.insert(FNode::GetParentMortonCode(MortonCode, StartingLayerIdx));
 					}
 
 					for (MortonCode MC : NodesToSkip) NodesToUnRasterize.erase(MC);
@@ -138,9 +168,8 @@ uint32 FUpdateTask::Run()
 		// Nodes within the current-bounds should all be re-rasterized.
 		CurrentRounded.ForEachChunk([&](const uint_fast64_t ChunkKey, const OctreeDirection ChunkPositiveDirections, const TBounds<FMortonVector>& Bounds)
 		{
-			auto Iterator = NavMeshPtr->find(ChunkKey);
-			if(Iterator == NavMeshPtr->end()) std::tie(Iterator, std::ignore) = NavMeshPtr->emplace(ChunkKey, FChunk(ChunkKey));
-			const FChunk* Chunk = &Iterator->second;
+			const FChunk* Chunk = InitOrClearChunk(ChunkKey);
+			if(!Chunk) return;
 			
 			// Keep track of the morton-codes of the parents that potentially have to be updated.
 			std::unordered_set<MortonCode> NodesToUnRasterize;
@@ -148,9 +177,20 @@ uint32 FUpdateTask::Run()
 				
 			for (const auto [MortonCode, RelationsToUpdate] : Bounds.GetMortonCodesWithin(StartingLayerIdx, ChunkPositiveDirections))
 			{
-				const bool bShouldCheckParent = StartReRasterizeNode(Chunk, MortonCode, StartingLayerIdx, RelationsToUpdate);
-				bShouldCheckParent	? NodesToUnRasterize.insert(FNode::GetParentMortonCode(MortonCode, StartingLayerIdx))
-									: NodesToSkip.insert(FNode::GetParentMortonCode(MortonCode, StartingLayerIdx));
+				if(!StartReRasterizeNode(Chunk, MortonCode, StartingLayerIdx, RelationsToUpdate))
+				{
+					NodesToSkip.insert(FNode::GetParentMortonCode(MortonCode, StartingLayerIdx));
+					continue;
+				}
+				
+				if(StartingLayerIdx != 0)
+				{
+					NodesToUnRasterize.insert(FNode::GetParentMortonCode(MortonCode, StartingLayerIdx));
+					continue;
+				}
+
+				// Erase this chunk, we are on the root node that does not overlap anything.
+				NavMeshPtr->erase(ChunkKey);
 			}
 
 			for (MortonCode MC : NodesToSkip) NodesToUnRasterize.erase(MC);
@@ -248,7 +288,7 @@ void FUpdateTask::ForEachChunkIntersection(const TBounds<FGlobalVector>& Bounds,
 /**
  * Recursively re-rasterizes the octree from the Node with the given MortonCode in given LayerIdx.
  * Updates the properties on the affected Nodes accordingly.
- * @return True if the starting Node is unoccluded. False otherwise.
+ * @return False if the starting Node is occluded. True otherwise.
  */
 bool FUpdateTask::StartReRasterizeNode(const FChunk* Chunk, const uint_fast32_t MortonCode, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate)
 {
@@ -356,7 +396,7 @@ void FUpdateTask::RecursiveReRasterizeNode(const UWorld* World, const FChunk* Ch
 /**
  * Clears the children of the Node with the given MortonCode in given LayerIdx if it is unoccluded.
  * Updates the properties on the affected Nodes accordingly.
- * @return True if the starting Node is unoccluded, or if it did not exist in the first place. False otherwise.
+ * @return False if the starting Node is occluded. True otherwise.
  */
 bool FUpdateTask::StartClearUnoccludedChildrenOfNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate)
 {
