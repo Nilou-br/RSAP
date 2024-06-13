@@ -18,6 +18,8 @@ void FNavMeshUpdater::StageData(const FChangedBoundsMap& BoundsPairMap)
 
 void FNavMeshUpdater::StageData(const FGuid& ActorID, const TChangedBounds<FGlobalVector>& ChangedBounds)
 {
+	const uint32 ActorKey = GetTypeHash(ActorID);
+	
 	const std::string ActorIDString = TCHAR_TO_UTF8(*ActorID.ToString());
 	auto Iterator = StagedDataMap.find(ActorIDString);
 	if(Iterator == StagedDataMap.end()) std::tie(Iterator, std::ignore) = StagedDataMap.emplace(ActorIDString, FStageType());
@@ -88,7 +90,7 @@ uint32 FUpdateTask::Run()
 
 	// Lambda that returns an FChunk* which can be a nullptr.
 	// Will be initialized if it occludes any actor, erased otherwise.
-	const auto InitOrClearChunk = [&](const uint_fast64_t ChunkKey) -> FChunk*
+	const auto InitOrClearChunk = [&](const ChunkKeyType ChunkKey) -> FChunk*
 	{
 		auto Iterator = NavMeshPtr->find(ChunkKey);
 		const bool bChunkExists = Iterator != NavMeshPtr->end();
@@ -104,8 +106,11 @@ uint32 FUpdateTask::Run()
 		return &Iterator->second;
 	};
 
+	// Defining a nested hashmap for filtering the "previous" nodes. This benefit performance when large amount of actors are moved at once.
+	ankerl::unordered_dense::map<ChunkKeyType, ankerl::unordered_dense::map<std::string, std::unordered_set<MortonCodeType>>> Test;
+
 	// TEMP
-	std::set<uint_fast64_t> ChunkKeys;
+	std::set<ChunkKeyType> ChunkKeys;
 	
 	// Loop through all stored boundaries for each actor.
 	for (const auto& [PreviousBoundsList, CurrentBounds] : StagedDataMap | std::views::values)
@@ -113,28 +118,25 @@ uint32 FUpdateTask::Run()
 		// Calculate the optimal starting-layer for updating the nodes around this actor.
 		// It could be slightly less optimal if the actor was scaled through multiple stored states, but it will be negligible if this factor was small.
 		const uint8 StartingLayerIdx = CalculateOptimalStartingLayer(TChangedBounds(PreviousBoundsList.back(), CurrentBounds));
-		
 		const TBounds<FGlobalVector> CurrentRounded = CurrentBounds.Round(StartingLayerIdx);
 
 		// Loop through all the previous-bounds and add all nodes to a new list, filtering out all the duplicates. todo: this has not been implemented yet it seems???
 		for (const auto& PreviousBounds : PreviousBoundsList)
 		{
-			const TBounds<FGlobalVector> PreviousRounded = PreviousBounds.Round(StartingLayerIdx);
-
-			// Get the remainder of the previous-bounds intersected with the current-bounds, this is what will actually be used for the previous-bounds.
-			// Nodes within these bounds should either all be cleared at once, or only clear the unoccluded nodes.
-			for (auto PreviousRemainder : PreviousRounded.Cut(CurrentRounded))
+			// Do a boolean cut using the rounded current-bounds on the rounded previous-bounds.
+			// The nodes within the remaining parts is what should be cleared if unoccluded.
+			for (auto PreviousRemainder : CurrentRounded.Cut(PreviousBounds.Round(StartingLayerIdx)))
 			{
-				const bool bClearAll = !PreviousRemainder.HasOverlap(World); // Clear all if it does not overlap anything.
+				const bool bClearAll = !PreviousRemainder.HasOverlap(World); // Clear all nodes at once if this whole part is not occluding any geometry.
 				PreviousRemainder.Draw(World, bClearAll ? FColor::Red : FColor::Green);
 				
-				PreviousRemainder.ForEachChunk([&](const uint_fast64_t ChunkKey, const OctreeDirection ChunkPositiveDirections, const TBounds<FMortonVector>& Bounds)
+				PreviousRemainder.ForEachChunk([&](const ChunkKeyType ChunkKey, const NavmeshDirection ChunkPositiveDirections, const TBounds<FMortonVector>& Bounds)
 				{
 					const FChunk* Chunk = InitOrClearChunk(ChunkKey);
 					if(!Chunk) return;
 					
-					std::unordered_set<MortonCode> NodesToUnRasterize;
-					std::unordered_set<MortonCode> NodesToSkip;
+					std::unordered_set<MortonCodeType> NodesToUnRasterize;
+					std::unordered_set<MortonCodeType> NodesToSkip;
 					
 					for (const auto [MortonCode, RelationsToUpdate] : Bounds.GetMortonCodesWithin(StartingLayerIdx, ChunkPositiveDirections))
 					{
@@ -156,7 +158,7 @@ uint32 FUpdateTask::Run()
 						NodesToSkip.insert(FNode::GetParentMortonCode(MortonCode, StartingLayerIdx));
 					}
 
-					for (MortonCode MC : NodesToSkip) NodesToUnRasterize.erase(MC);
+					for (MortonCodeType MC : NodesToSkip) NodesToUnRasterize.erase(MC);
 					if(NodesToUnRasterize.size()) TryUnRasterizeNodes(Chunk, NodesToUnRasterize, StartingLayerIdx-1);
 
 					// TEMP
@@ -166,14 +168,14 @@ uint32 FUpdateTask::Run()
 		}
 		
 		// Nodes within the current-bounds should all be re-rasterized.
-		CurrentRounded.ForEachChunk([&](const uint_fast64_t ChunkKey, const OctreeDirection ChunkPositiveDirections, const TBounds<FMortonVector>& Bounds)
+		CurrentRounded.ForEachChunk([&](const ChunkKeyType ChunkKey, const NavmeshDirection ChunkPositiveDirections, const TBounds<FMortonVector>& Bounds)
 		{
 			const FChunk* Chunk = InitOrClearChunk(ChunkKey);
 			if(!Chunk) return;
 			
 			// Keep track of the morton-codes of the parents that potentially have to be updated.
-			std::unordered_set<MortonCode> NodesToUnRasterize;
-			std::unordered_set<MortonCode> NodesToSkip;
+			std::unordered_set<MortonCodeType> NodesToUnRasterize;
+			std::unordered_set<MortonCodeType> NodesToSkip;
 				
 			for (const auto [MortonCode, RelationsToUpdate] : Bounds.GetMortonCodesWithin(StartingLayerIdx, ChunkPositiveDirections))
 			{
@@ -193,7 +195,7 @@ uint32 FUpdateTask::Run()
 				NavMeshPtr->erase(ChunkKey);
 			}
 
-			for (MortonCode MC : NodesToSkip) NodesToUnRasterize.erase(MC);
+			for (MortonCodeType MC : NodesToSkip) NodesToUnRasterize.erase(MC);
 			if(NodesToUnRasterize.size()) TryUnRasterizeNodes(Chunk, NodesToUnRasterize, StartingLayerIdx-1);
 
 			// TEMP
@@ -222,14 +224,14 @@ uint32 FUpdateTask::Run()
  * 
  * Callback takes:
  * - const FChunk*
- * - const std::vector<std::pair<MortonCode, OctreeDirection>>
+ * - const std::vector<std::pair<MortonCode, NavmeshDirection>>
  * 
  * @note Chunks that do not exist are initialized.
  */
 template<typename Func>
 void FUpdateTask::ForEachChunkIntersection(const TBounds<FGlobalVector>& Bounds, const uint8 LayerIdx, Func Callback)
 {
-	static_assert(std::is_invocable_v<Func, const FChunk*, const std::vector<std::pair<MortonCode, OctreeDirection>>>, "'::ForEachChunkIntersection' callback has wrong arguments.");
+	static_assert(std::is_invocable_v<Func, const FChunk*, const std::vector<std::pair<MortonCodeType, NavmeshDirection>>>, "'::ForEachChunkIntersection' callback has wrong arguments.");
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("ForEachChunkIntersection");
 	
 	if(!Bounds.IsValid()) return;
@@ -260,7 +262,7 @@ void FUpdateTask::ForEachChunkIntersection(const TBounds<FGlobalVector>& Bounds,
 
 				// Get the update-pairs for-each node within the intersected-bounds.
 				const TBounds<FMortonVector> MortonBounds = IntersectedBounds.ToMortonSpace(ChunkLocation);
-				std::vector<std::pair<MortonCode, OctreeDirection>> UpdatePairs;
+				std::vector<std::pair<MortonCodeType, NavmeshDirection>> UpdatePairs;
 
 				// Get each node's morton-code within the MortonBounds, and check if that node is the most positive in any direction.
 				for (uint_fast16_t MortonX = MortonBounds.Min.X; MortonX < MortonBounds.Max.X; MortonX+=MortonOffset) {
@@ -290,7 +292,7 @@ void FUpdateTask::ForEachChunkIntersection(const TBounds<FGlobalVector>& Bounds,
  * Updates the properties on the affected Nodes accordingly.
  * @return False if the starting Node is occluded. True otherwise.
  */
-bool FUpdateTask::StartReRasterizeNode(const FChunk* Chunk, const uint_fast32_t MortonCode, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate)
+bool FUpdateTask::StartReRasterizeNode(const FChunk* Chunk, const MortonCodeType MortonCode, const uint8 LayerIdx, const NavmeshDirection RelationsToUpdate)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("StartReRasterizeNode");
 	auto NodeIterator = Chunk->Octrees[0]->Layers[LayerIdx].find(MortonCode);
@@ -398,7 +400,7 @@ void FUpdateTask::RecursiveReRasterizeNode(const UWorld* World, const FChunk* Ch
  * Updates the properties on the affected Nodes accordingly.
  * @return False if the starting Node is occluded. True otherwise.
  */
-bool FUpdateTask::StartClearUnoccludedChildrenOfNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate)
+bool FUpdateTask::StartClearUnoccludedChildrenOfNode(const FChunk* Chunk, const MortonCodeType NodeMortonCode, const uint8 LayerIdx, const NavmeshDirection RelationsToUpdate)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("StartClearUnoccludedChildrenOfNode");
 	// return True if the Node does not exist.
@@ -431,7 +433,7 @@ bool FUpdateTask::StartClearUnoccludedChildrenOfNode(const FChunk* Chunk, const 
 }
 
 // Recursively clears unoccluded children of the given Node.
-void FUpdateTask::RecursiveClearUnoccludedChildren(const FChunk* Chunk, FNode& Node, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate)
+void FUpdateTask::RecursiveClearUnoccludedChildren(const FChunk* Chunk, FNode& Node, const uint8 LayerIdx, const NavmeshDirection RelationsToUpdate)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("RecursiveClearUnoccludedChildren");
 	Node.ForEachChild(Chunk, LayerIdx, [&](FNode& ChildNode)
@@ -458,7 +460,7 @@ void FUpdateTask::RecursiveClearUnoccludedChildren(const FChunk* Chunk, FNode& N
  * Clears all the children of the Node with the given MortonCode in given LayerIdx.
  * Updates the properties on the starting Node accordingly.
  */
-void FUpdateTask::StartClearAllChildrenOfNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate)
+void FUpdateTask::StartClearAllChildrenOfNode(const FChunk* Chunk, const MortonCodeType NodeMortonCode, const uint8 LayerIdx, const NavmeshDirection RelationsToUpdate)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("StartClearAllChildrenOfNode");
 	const auto NodeIterator = Chunk->Octrees[0]->Layers[LayerIdx].find(NodeMortonCode);
@@ -486,7 +488,7 @@ void FUpdateTask::RecursiveClearAllChildren(const FChunk* Chunk, const FNode& No
 }
 
 // Initializes the missing parents of the node with the given morton-code, which will in-turn initialize the node.
-void FUpdateTask::InitializeParents(const FChunk* Chunk, const uint_fast32_t ChildMortonCode, const uint8 ChildLayerIdx)
+void FUpdateTask::InitializeParents(const FChunk* Chunk, const MortonCodeType ChildMortonCode, const uint8 ChildLayerIdx)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("InitializeParents");
 	const auto CreateChildren = [Chunk, ChildLayerIdx](FNode& Node) // todo: Move to FNode ??
@@ -514,7 +516,7 @@ void FUpdateTask::InitializeParents(const FChunk* Chunk, const uint_fast32_t Chi
 		}
 	};
 	
-	const uint_fast32_t ParentMortonCode = FNode::GetParentMortonCode(ChildMortonCode, ChildLayerIdx);
+	const MortonCodeType ParentMortonCode = FNode::GetParentMortonCode(ChildMortonCode, ChildLayerIdx);
 	const uint8 ParentLayerIdx = ChildLayerIdx-1;
 
 	// If parent exists, update it, create its children if they don't exist, and stop the recursion.
@@ -556,21 +558,21 @@ void FUpdateTask::InitializeParents(const FChunk* Chunk, const uint_fast32_t Chi
  * When the children of any given node are cleared, then it will recursively do the same check for the parent of this affected node.
  * @note If even a single child of a node is occluded, then it will stop un-rasterizing that node, which in-turn keeps all its children alive.
  * @param Chunk Chunk the nodes are in.
- * @param NodeMortonCodes Morton-codes of the nodes to check and clear if all its children are unoccluded.
+ * @param MortonCodes Morton-codes of the nodes to check and clear if all its children are unoccluded.
  * @param LayerIdx Layer the nodes are in.
  */
-void FUpdateTask::TryUnRasterizeNodes(const FChunk* Chunk, const std::unordered_set<MortonCode>& NodeMortonCodes, const uint8 LayerIdx)
+void FUpdateTask::TryUnRasterizeNodes(const FChunk* Chunk, const std::unordered_set<MortonCodeType>& MortonCodes, const uint8 LayerIdx)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("TryUnRasterizeNodes");
-	std::unordered_set<MortonCode> ParentMortonCodes;
-	for (uint_fast32_t NodeMC : NodeMortonCodes)
+	std::unordered_set<MortonCodeType> ParentMortonCodes;
+	for (MortonCodeType MortonCode : MortonCodes)
 	{
-		if(const auto NodeIterator = Chunk->Octrees[0]->Layers[LayerIdx].find(NodeMC); NodeIterator != Chunk->Octrees[0]->Layers[LayerIdx].end())
+		if(const auto NodeIterator = Chunk->Octrees[0]->Layers[LayerIdx].find(MortonCode); NodeIterator != Chunk->Octrees[0]->Layers[LayerIdx].end())
 		{
 			FNode& Node = NodeIterator->second;
 
 			// Check if all children are unoccluded.
-			TArray<MortonCode> ChildMortonCodes;
+			TArray<MortonCodeType> ChildMortonCodes;
 			bool bDeleteChildren = true;
 			Node.ForEachChild(Chunk, LayerIdx, [&](const FNode& ChildNode) -> void
 			{
@@ -587,7 +589,7 @@ void FUpdateTask::TryUnRasterizeNodes(const FChunk* Chunk, const std::unordered_
 		}
 
 		// Do the same for the parent of this node.
-		ParentMortonCodes.insert(FNode::GetParentMortonCode(NodeMC, LayerIdx));
+		ParentMortonCodes.insert(FNode::GetParentMortonCode(MortonCode, LayerIdx));
 	}
 	if(ParentMortonCodes.empty()) return;
 

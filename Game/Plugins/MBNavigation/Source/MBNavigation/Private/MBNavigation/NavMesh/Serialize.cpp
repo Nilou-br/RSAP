@@ -37,18 +37,18 @@ bool DeserializeNavMesh(FNavMesh& OutNavMesh, FGuid& OutID)
 	return true;
 }
 
-FArchive& operator<<(FArchive& Ar, FGlobalVector& Vector32)
+FArchive& operator<<(FArchive& Ar, FGlobalVector& GlobalVector)
 {
 	if (Ar.IsSaving())
 	{
-		uint64_t Key = Vector32.ToKey();
+		uint64_t Key = GlobalVector.ToKey();
 		Ar << Key;
 	}
 	else if(Ar.IsLoading())
 	{
 		uint64_t Key;
 		Ar << Key;
-		Vector32 = FGlobalVector::FromKey(Key);
+		GlobalVector = FGlobalVector::FromKey(Key);
 	}
 	return Ar;
 }
@@ -86,16 +86,12 @@ FArchive& operator<<(FArchive& Ar, FNodeRelations& Relations)
 
 FArchive& operator<<(FArchive& Ar, FNode& Node)
 {
-	uint_fast32_t UnmaskedMortonCode = Node.GetUnmaskedMortonCode();
+	MortonCodeType UnmaskedMortonCode = Node.GetUnmaskedMortonCode();
 	Ar << UnmaskedMortonCode;
 	Ar << Node.Relations;
 
 	if (Ar.IsSaving())
 	{
-		// Ensure Booleans are correctly set before packing
-		// Remove or adjust the following line according to your application logic.
-		// if(OctreeNode.DynamicIndex) OctreeNode.Booleans = 0;
-		// uint32 PackedData = (static_cast<uint32>(OctreeNode.Booleans) << 6) | static_cast<uint32>(OctreeNode.ChunkBorder);
 		uint32 ChunkBorder = Node.ChunkBorder;
 		Ar << ChunkBorder;
 	}
@@ -104,10 +100,6 @@ FArchive& operator<<(FArchive& Ar, FNode& Node)
 		uint32 ChunkBorder;
 		Ar << ChunkBorder;
 		Node.ChunkBorder = ChunkBorder;
-		
-		// Correctly unpack ChunkBorder and the Booleans
-		// OctreeNode.Booleans = (PackedData >> 6) & 0x03;
-		// OctreeNode.ChunkBorder = PackedData & 0x3F;
 	}
 
 	return Ar;

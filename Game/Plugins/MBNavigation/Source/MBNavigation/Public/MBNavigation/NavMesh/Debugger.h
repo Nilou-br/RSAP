@@ -22,8 +22,7 @@ public:
 
 private:
 	void DrawNodes(const FVector& CameraLocation, const FVector& CameraForwardVector) const;
-	void RecursiveDrawNodes(const FChunk* Chunk, const uint8 LayerIndex, const uint_fast32_t& NodeMorton,
-		const FVector& CameraLocation, const FVector& CameraForwardVector) const;
+	void RecursiveDrawNodes(const FChunk* Chunk, const LayerIdxType LayerIdx, const MortonCodeType& NodeMorton, const FVector& CameraLocation, const FVector& CameraForwardVector) const;
 
 	FNavMeshPtr NavMeshPtr;
 	const UWorld* World;

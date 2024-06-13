@@ -10,7 +10,7 @@
 MBNAVIGATION_API void SerializeNavMesh(FNavMesh& NavMesh, FGuid& ID);
 MBNAVIGATION_API bool DeserializeNavMesh(FNavMesh& OutNavMesh, FGuid& OutID);
 
-MBNAVIGATION_API FArchive& operator<<(FArchive& Ar, FGlobalVector& Vector32);
+MBNAVIGATION_API FArchive& operator<<(FArchive& Ar, FGlobalVector& GlobalVector);
 MBNAVIGATION_API FArchive& operator<<(FArchive& Ar, FNodeRelations& Relations);
 MBNAVIGATION_API FArchive& operator<<(FArchive& Ar, FNode& Node);
 MBNAVIGATION_API FArchive& operator<<(FArchive& Ar, FOctreeLayer& Layer);

@@ -4,7 +4,10 @@
 
 #include <chrono>
 #include <ranges>
+#include <set>
+
 #include "unordered_dense.h"
+#include "MBNavigation/NavMesh/Shared.h"
 #include "MBNavigation/Types/NavMesh.h"
 #include "MBNavigation/Types/Math.h"
 
@@ -25,7 +28,7 @@ void FNavMeshGenerator::Generate(const FBoundsMap& BoundsList)
 #endif
 
 	// Start generation
-	NavMeshPtr->clear(); // todo check if this clears everything
+	NavMeshPtr->clear();
 	GenerateChunks(BoundsList);
 
 #if WITH_EDITOR
@@ -43,21 +46,24 @@ void FNavMeshGenerator::Generate(const FBoundsMap& BoundsList)
 void FNavMeshGenerator::GenerateChunks(const FBoundsMap& BoundsMap)
 {
 	// Get all the chunks.
-	std::set<ChunkKey> ChunkKeys;
+	std::set<ChunkKeyType> ChunkKeys;
 	for (auto Pair : BoundsMap)
 	{
-		const std::unordered_set<ChunkKey> IntersectingChunks = Pair.Value.GetIntersectingChunks();
+		const std::unordered_set<ChunkKeyType> IntersectingChunks = Pair.Value.GetIntersectingChunks();
 		ChunkKeys.insert(IntersectingChunks.begin(), IntersectingChunks.end());
 	}
 	if(!ChunkKeys.size()) return;
 
 	for (auto ChunkKey : ChunkKeys)
 	{
-		// todo check chunk overlap first before creating one
+		// Skip this chunk if it does not overlap anything.
+		if(!HasOverlap(World, FGlobalVector::FromKey(ChunkKey), 0)) continue;
+
+		// Initialize chunk.
 		auto [ChunkIterator, IsInserted] = NavMeshPtr->emplace(ChunkKey, FChunk(ChunkKey));
 		FChunk* Chunk = &ChunkIterator->second;
 
-		// Rasterize the static-octree starting from the root-node until static-depth is reached.
+		// Rasterize the octree starting from the root-node until static-depth is reached.
 		FNode& RootNode = Chunk->Octrees[0]->Layers[0][0];
 		RasterizeStaticNode(Chunk, RootNode, 0);
 
@@ -71,24 +77,24 @@ void FNavMeshGenerator::GenerateChunks(const FBoundsMap& BoundsMap)
  * Rasterize a static node, only if it occludes anything.
  * This method is called recursively until it either reaches the static-depth or if it does not occlude anything.
  */
-void FNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FNode& Node, const uint8 LayerIndex)
+void FNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FNode& Node, const LayerIdxType LayerIdx)
 {
 	// If overlapping any static object.
-	if (!Node.HasOverlap(World, Chunk->Location, LayerIndex)) return;
+	if (!Node.HasOverlap(World, Chunk->Location, LayerIdx)) return;
 	Node.SetOccluded(true);
 
 	// Stop recursion if end reached.
-	if (LayerIndex >= FNavMeshStatic::StaticDepth) return;
+	if (LayerIdx >= FNavMeshStatic::StaticDepth) return;
 	Node.SetHasChildren(true);
 
-	const uint8 ChildLayerIndex = LayerIndex + 1;
+	const LayerIdxType ChildLayerIndex = LayerIdx + 1;
 	FOctreeLayer& ChildLayer = Chunk->Octrees[0].Get()->Layers[ChildLayerIndex];
 	const int_fast16_t ChildMortonOffset = FNavMeshStatic::MortonOffsets[ChildLayerIndex];
 
 	// Reserve memory for 8 child-nodes on the lower layer and initialize them.
 	ChildLayer.reserve(8);
 	const FMortonVector NodeMortonLocation = Node.GetMortonLocation();
-	for (uint8 i = 0; i < 8; ++i)
+	for (LayerIdxType i = 0; i < 8; ++i)
 	{
 		// Add the offset to certain children depending on their location in the parent. todo: check performance compared to switch??
 		const uint_fast16_t ChildMortonX = NodeMortonLocation.X + ((i & 1) ? ChildMortonOffset : 0);
@@ -132,13 +138,13 @@ void FNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FNode& Node, const ui
 void FNavMeshGenerator::SetNegativeNeighbourRelations(const FChunk* Chunk)
 {
 	// Loop through all static nodes sorted by morton-code.
-	uint8 LayerIndex = 0;
+	LayerIdxType LayerIdx = 0;
 	for (FOctreeLayer& NodesMap : Chunk->Octrees[0]->Layers)
 	{
 		for (auto& Node : NodesMap | std::views::values)
 		{
-			Node.UpdateRelations(NavMeshPtr, Chunk, LayerIndex, DIRECTION_ALL_NEGATIVE);
+			Node.UpdateRelations(NavMeshPtr, Chunk, LayerIdx, DIRECTION_ALL_NEGATIVE);
 		}
-		LayerIndex++;
+		LayerIdx++;
 	}
 }

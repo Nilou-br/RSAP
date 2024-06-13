@@ -519,7 +519,7 @@ void UEditorTransformObserver::OnPropertyChangedEvent(UObject* Object, FProperty
 	// Get the cached bounds for this actor.
 	const FGuid& ActorID = Actor->GetActorGuid();
 	const TBounds<FGlobalVector>* StoredBounds = CurrentActorBounds.Find(ActorID);
-	if(!StoredBounds) return;
+	if(!StoredBounds) return; // todo: this whole class :)
 
 	// Get the current bounds and check if there is a change.
 	const TBounds<FGlobalVector> CurrentBounds(Actor);

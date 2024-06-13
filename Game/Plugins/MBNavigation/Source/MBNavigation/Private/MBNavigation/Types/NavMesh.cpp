@@ -55,7 +55,7 @@ std::array<FNodeLookupData, 6> FNode::GetNeighboursLookupData(const FGlobalVecto
         
         // Calculate the local location of the neighbour.
         const uint_fast16_t MortonOffset = FNavMeshStatic::MortonOffsets[RelationLayerIndex];
-        const uint_fast32_t ParentMortonCode = GetMortonCode() & ~((1 << ParentShiftAmount[RelationLayerIndex]) - 1);
+        const MortonCodeType ParentMortonCode = GetMortonCode() & ~((1 << ParentShiftAmount[RelationLayerIndex]) - 1);
         const FMortonVector ParentLocalLocation = FMortonVector::FromMortonCode(ParentMortonCode);
         FMortonVector NeighbourLocalLocation;
         switch (Direction) {
@@ -77,14 +77,14 @@ std::array<FNodeLookupData, 6> FNode::GetNeighboursLookupData(const FGlobalVecto
 }
 
 // For the given node, set its children's relation in the Direction to the given LayerIdxToSet. Only the children against the same border in this direction will be updated.
-static void UpdateChildRelations(const FChunk* Chunk, const FNode* Node, const uint8 LayerIdx, const uint8 LayerIdxToSet, const OctreeDirection Direction)
+static void UpdateChildRelations(const FChunk* Chunk, const FNode* Node, const uint8 LayerIdx, const uint8 LayerIdxToSet, const NavmeshDirection Direction)
 {
 	if(!Node->HasChildren()) return;
 	
 	const FMortonVector ParentLocalLocation = Node->GetLocalLocation();
 	const uint8 ChildLayerIndex = LayerIdx+1;
 	const uint16 MortonOffset = FNavMeshStatic::MortonOffsets[ChildLayerIndex];
-	std::array<MortonCode, 4> ChildMortonCodes;
+	std::array<MortonCodeType, 4> ChildMortonCodes;
 
 	// Get the morton-codes of the children facing the direction. ( Children against the border of their parent in this direction. )
 	switch (Direction)
@@ -140,7 +140,7 @@ static void UpdateChildRelations(const FChunk* Chunk, const FNode* Node, const u
 
 // Updates the relations for the given Node, but only the relations specified in the given RelationsToUpdate.
 // Will also update the neighbours, including their children (against the node), to point to this node.
-void FNode::UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk* Chunk, const uint8 LayerIdx, OctreeDirection RelationsToUpdate)
+void FNode::UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk* Chunk, const uint8 LayerIdx, NavmeshDirection RelationsToUpdate)
 {
     const FMortonVector NodeLocalLocation = GetLocalLocation();
 	
@@ -161,7 +161,7 @@ void FNode::UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk* Chunk, 
 		}
 
 		// Get the morton-code of the neighbour in this direction, in the same layer as the given node.
-		uint_fast32_t NeighbourMortonCode;
+		MortonCodeType NeighbourMortonCode;
 		switch (Direction) {
 			case DIRECTION_X_NEGATIVE: NeighbourMortonCode = (NodeLocalLocation - FMortonVector(FNavMeshStatic::MortonOffsets[LayerIdx], 0, 0)).ToMortonCode(); break;
 			case DIRECTION_Y_NEGATIVE: NeighbourMortonCode = (NodeLocalLocation - FMortonVector(0, FNavMeshStatic::MortonOffsets[LayerIdx], 0)).ToMortonCode(); break;

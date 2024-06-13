@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include "map"
 #include "morton.h"
 #include "unordered_dense.h"
 #include "MBNavigation/Types/Math.h"
@@ -14,7 +13,7 @@ struct FGlobalVector;
 struct FMortonVector;
 
 struct FChunk;
-typedef ankerl::unordered_dense::map<uint_fast64_t, FChunk> FNavMesh;
+typedef ankerl::unordered_dense::map<ChunkKeyType, FChunk> FNavMesh;
 typedef std::shared_ptr<FNavMesh> FNavMeshPtr;
 
 
@@ -22,25 +21,19 @@ typedef std::shared_ptr<FNavMesh> FNavMeshPtr;
 
 
 
-// todo
-struct FOctreeLeaf
-{
-	uint_fast64_t SubNodes = 0;
-};
-
 /**
  * Stores layer-index for each direction, which is used for storing the relations of a node with others.
  */
 struct FNodeRelations
 {
-	OctreeDirection X_Negative: 4 = LAYER_INDEX_INVALID;
-	OctreeDirection Y_Negative: 4 = LAYER_INDEX_INVALID;
-	OctreeDirection Z_Negative: 4 = LAYER_INDEX_INVALID;
-	OctreeDirection X_Positive: 4 = LAYER_INDEX_INVALID;
-	OctreeDirection Y_Positive: 4 = LAYER_INDEX_INVALID;
-	OctreeDirection Z_Positive: 4 = LAYER_INDEX_INVALID;
+	NavmeshDirection X_Negative: 4 = LAYER_INDEX_INVALID;
+	NavmeshDirection Y_Negative: 4 = LAYER_INDEX_INVALID;
+	NavmeshDirection Z_Negative: 4 = LAYER_INDEX_INVALID;
+	NavmeshDirection X_Positive: 4 = LAYER_INDEX_INVALID;
+	NavmeshDirection Y_Positive: 4 = LAYER_INDEX_INVALID;
+	NavmeshDirection Z_Positive: 4 = LAYER_INDEX_INVALID;
 
-	FORCEINLINE OctreeDirection GetFromDirection(const OctreeDirection Direction) const
+	FORCEINLINE NavmeshDirection GetFromDirection(const NavmeshDirection Direction) const
 	{
 		switch (Direction) {
 			case DIRECTION_X_NEGATIVE: return X_Negative;
@@ -53,7 +46,7 @@ struct FNodeRelations
 		}
 	}
 
-	FORCEINLINE void SetFromDirection(const uint8 LayerIndex, const OctreeDirection Direction)
+	FORCEINLINE void SetFromDirection(const LayerIdxType LayerIndex, const NavmeshDirection Direction)
 	{
 		switch (Direction) {
 			case DIRECTION_X_NEGATIVE: X_Negative = LayerIndex; break;
@@ -66,7 +59,7 @@ struct FNodeRelations
 		}
 	}
 
-	FORCEINLINE bool IsRelationValid(const OctreeDirection Direction) const
+	FORCEINLINE bool IsRelationValid(const NavmeshDirection Direction) const
 	{
 		switch (Direction) {
 			case DIRECTION_X_NEGATIVE: return X_Negative != LAYER_INDEX_INVALID;
@@ -85,9 +78,9 @@ struct FNodeRelations
  */
 struct FNodeLookupData
 {
-	uint_fast32_t MortonCode;
-	uint8 LayerIndex;
-	uint64_t ChunkKey;
+	MortonCodeType MortonCode;
+	LayerIdxType LayerIndex;
+	ChunkKeyType ChunkKey;
 
 	FNodeLookupData(): MortonCode(0), LayerIndex(LAYER_INDEX_INVALID), ChunkKey(0){}
 };
@@ -106,38 +99,38 @@ struct FNodeLookupData
  */
 class FNode
 {
-	static constexpr uint_fast32_t MortonMask = (1u << 30) - 1;
-	static constexpr uint_fast32_t IsOccludedMask = 1u << 31;
-	static constexpr uint_fast32_t HasChildrenMask = 1u << 30;
+	static constexpr MortonCodeType MortonMask = (1u << 30) - 1;
+	static constexpr MortonCodeType IsOccludedMask = 1u << 31;
+	static constexpr MortonCodeType HasChildrenMask = 1u << 30;
 	static constexpr int LayerShiftAmount[10] = {30, 30, 27, 24, 21, 18, 15, 12, 9, 6}; // todo change to make 30, 27, 24 etc...
 	static constexpr int ParentShiftAmount[10] = {30, 27, 24, 21, 18, 15, 12, 9, 6, 3};
 
 	// The morton-code of a node also stores two additional booleans for checking occlusion and if it has children.
-	uint_fast32_t MortonCode;
+	MortonCodeType MortonCode;
 	
 	// todo 8 bits for dynamic index for each neighbour + child + parent???? 128 dynamic-objects a chunk (0 index / first bit is for the static octree)
 
 public:
 	FNodeRelations Relations;
-	OctreeDirection ChunkBorder: 6;
+	NavmeshDirection ChunkBorder: 6;
 	
 	FNode():
 		MortonCode(0), ChunkBorder(0)
 	{}
 
-	FNode(const uint_fast16_t MortonX, const uint_fast16_t MortonY, const uint_fast16_t MortonZ, const OctreeDirection InChunkBorder = 0b000000):
+	FNode(const uint_fast16_t MortonX, const uint_fast16_t MortonY, const uint_fast16_t MortonZ, const NavmeshDirection InChunkBorder = 0b000000):
 		ChunkBorder(InChunkBorder)
 	{
 		MortonCode = libmorton::morton3D_32_encode(MortonX, MortonY, MortonZ);
 	}
 
-	explicit FNode(const FMortonVector MortonLocation, const OctreeDirection InChunkBorder = 0b000000):
+	explicit FNode(const FMortonVector MortonLocation, const NavmeshDirection InChunkBorder = 0b000000):
 		ChunkBorder(InChunkBorder)
 	{
 		MortonCode = libmorton::morton3D_32_encode(MortonLocation.X, MortonLocation.Y, MortonLocation.Z);
 	}
 
-	explicit FNode(const uint_fast32_t InMortonCode, const OctreeDirection InChunkBorder = 0b000000):
+	explicit FNode(const MortonCodeType InMortonCode, const NavmeshDirection InChunkBorder = 0b000000):
 		MortonCode(InMortonCode), ChunkBorder(InChunkBorder)
 	{}
 
@@ -166,26 +159,26 @@ public:
 	}
 
 	// Returns the morton-code of the node, where the additional booleans stored on the morton-code are masked away. Used to find nodes, or get their location within a chunk.
-	FORCEINLINE uint_fast32_t GetMortonCode() const
+	FORCEINLINE MortonCodeType GetMortonCode() const
 	{
 		return MortonCode & MortonMask;
 	}
 
 	// Returns the unmasked morton-code of the node. This includes the additional booleans, and should only be used for serializing the node.
-	FORCEINLINE uint_fast32_t GetUnmaskedMortonCode() const
+	FORCEINLINE MortonCodeType GetUnmaskedMortonCode() const
 	{
 		return MortonCode;
 	}
 	
-	FORCEINLINE uint_fast32_t GetParentMortonCode(const uint8 LayerIndex) const
+	FORCEINLINE MortonCodeType GetParentMortonCode(const LayerIdxType LayerIndex) const
 	{
-		const uint_fast32_t ParentMask = ~((1 << ParentShiftAmount[LayerIndex-1]) - 1);
+		const MortonCodeType ParentMask = ~((1 << ParentShiftAmount[LayerIndex-1]) - 1); // todo: these masks can be made constexpr as well.
 		return GetMortonCode() & ParentMask;
 	}
 	
-	FORCEINLINE static uint_fast32_t GetParentMortonCode(const uint_fast32_t NodeMortonCode, const uint8 NodeLayerIdx)
+	FORCEINLINE static MortonCodeType GetParentMortonCode(const MortonCodeType NodeMortonCode, const LayerIdxType NodeLayerIdx)
 	{
-		const uint_fast32_t ParentMask = ~((1 << ParentShiftAmount[NodeLayerIdx-1]) - 1);
+		const MortonCodeType ParentMask = ~((1 << ParentShiftAmount[NodeLayerIdx-1]) - 1); // todo: these masks can be made constexpr as well.
 		return NodeMortonCode & ParentMask;
 	}
 
@@ -211,19 +204,19 @@ public:
 		return MortonCode & IsOccludedMask;
 	}
 
-	std::array<uint8, 6> GetNeighbourLayerIndexes() const;
+	std::array<LayerIdxType, 6> GetNeighbourLayerIndexes() const;
 	std::array<FNodeLookupData, 6> GetNeighboursLookupData(const FGlobalVector& ChunkLocation) const;
 
-	void UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk* Chunk, const uint8 LayerIdx, OctreeDirection RelationsToUpdate);
-	bool HasOverlap(const UWorld* World, const FGlobalVector& ChunkLocation, const uint8 LayerIdx) const;
-	void Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const uint8 LayerIndex, const FColor Color = FColor::Black, const uint32 Thickness = 0) const;
+	void UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk* Chunk, const LayerIdxType LayerIdx, NavmeshDirection RelationsToUpdate);
+	bool HasOverlap(const UWorld* World, const FGlobalVector& ChunkLocation, const LayerIdxType LayerIdx) const;
+	void Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const LayerIdxType LayerIndex, const FColor Color = FColor::Black, const uint32 Thickness = 0) const;
 
 	template<typename Func>
-	void ForEachChild(const FChunk* Chunk, const uint8 LayerIdx, Func Callback) const;
+	void ForEachChild(const FChunk* Chunk, const LayerIdxType LayerIdx, Func Callback) const;
 };
 
 // typedef std::map<MortonCode, FNode> FOctreeLayer;
-typedef ankerl::unordered_dense::map<MortonCode, FNode> FOctreeLayer;
+typedef ankerl::unordered_dense::map<MortonCodeType, FNode> FOctreeLayer;
 
 /**
  * The octree stores all the nodes in 10 different layers, each layer having higher resolution nodes.
@@ -232,13 +225,13 @@ typedef ankerl::unordered_dense::map<MortonCode, FNode> FOctreeLayer;
  * The origin is located at the negative most voxel's center point.
  * This makes the morton-codes align correctly since the morton codes represent the node's center point.
  */
-struct FOctree
+struct FOctree // todo: reduce size?
 {
 	std::array<FOctreeLayer, 10> Layers;
 
 	FOctree()
 	{
-		for (uint8 i = 0; i < 10; i++)
+		for (LayerIdxType i = 0; i < 10; i++)
 		{
 			Layers[i] = FOctreeLayer();
 		}
@@ -270,7 +263,7 @@ struct FChunk
 		Initialize();
 	}
 
-	explicit FChunk(const uint_fast64_t ChunkKey)
+	explicit FChunk(const ChunkKeyType ChunkKey)
 		: Location(FGlobalVector::FromKey(ChunkKey))
 	{
 		Initialize();
@@ -293,20 +286,18 @@ struct FChunk
 
 // The Navigation-Mesh is a hashmap of Chunks, where each chunk can be found using a uint64 key.
 // The key is the location of the chunk divided by the chunk-size ( FGlobalVector::ToKey ).
-typedef ankerl::unordered_dense::map<uint_fast64_t, FChunk> FNavMesh;
+typedef ankerl::unordered_dense::map<ChunkKeyType, FChunk> FNavMesh;
 typedef std::shared_ptr<FNavMesh> FNavMeshPtr;
-
-// typedef std::map<uint_fast64_t, FChunk> FNavMesh;
 
 
 
 
 template <typename Func>
-void FNode::ForEachChild(const FChunk* Chunk, const uint8 LayerIdx, Func Callback) const
+void FNode::ForEachChild(const FChunk* Chunk, const LayerIdxType LayerIdx, Func Callback) const
 {
 	if(!HasChildren()) return;
 		
-	const uint8 ChildLayerIdx = LayerIdx+1;
+	const LayerIdxType ChildLayerIdx = LayerIdx+1;
 	const int_fast16_t ChildOffset = FNavMeshStatic::MortonOffsets[ChildLayerIdx];
 	const FMortonVector NodeMortonLocation = GetMortonLocation();
 		
@@ -317,7 +308,7 @@ void FNode::ForEachChild(const FChunk* Chunk, const uint8 LayerIdx, Func Callbac
 		const uint_fast16_t ChildMortonZ = NodeMortonLocation.Z + ((i & 4) ? ChildOffset : 0);
 
 		const FMortonVector ChildMortonLocation = FMortonVector(ChildMortonX, ChildMortonY, ChildMortonZ);
-		const uint_fast32_t ChildMortonCode = ChildMortonLocation.ToMortonCode();
+		const MortonCodeType ChildMortonCode = ChildMortonLocation.ToMortonCode();
 			
 		const auto NodeIterator = Chunk->Octrees[0]->Layers[ChildLayerIdx].find(ChildMortonCode);
 		Callback(NodeIterator->second);

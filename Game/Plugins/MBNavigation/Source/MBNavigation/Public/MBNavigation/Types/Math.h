@@ -2,35 +2,15 @@
 
 #pragma once
 
-#include <set>
-
 #include "morton.h"
 #include "Static.h"
-
-typedef uint_fast32_t MortonCode;
-typedef uint_fast64_t ChunkKey;
-
-// Directions within my custom navmesh are handled using 6 bits to represent '-XYZ +XYZ' values.
-// For example, 0b001100 is negative on the Z, and positive on the X.
-typedef uint8 OctreeDirection;
-
-#define DIRECTION_X_NEGATIVE 0b100000
-#define DIRECTION_Y_NEGATIVE 0b010000
-#define DIRECTION_Z_NEGATIVE 0b001000
-#define DIRECTION_X_POSITIVE 0b000100
-#define DIRECTION_Y_POSITIVE 0b000010
-#define DIRECTION_Z_POSITIVE 0b000001
-#define DIRECTION_ALL_NEGATIVE 0b111000
-#define DIRECTION_ALL_POSITIVE 0b0000111
-#define DIRECTION_ALL 0b111111
-#define DIRECTION_NONE 0b000000
+#include "Global.h"
 
 
 
 /**
  * Used for local-locations within a chunk, and can be converted to morton-codes directly.
- * 
- * @note Each axis has 10 bit allocated. This fits inside a 32-bit morton-code used for the nodes in the octree.
+ * Each axis has 10 bit allocated, which fits inside a 32-bit morton-code used for the nodes in the octree.
  */
 struct FMortonVector
 {
@@ -39,17 +19,17 @@ struct FMortonVector
 	uint_fast16_t Z: 10;
 
 	// Converts the coordinates on this vector to a 1-dimensional 32-bit Morton-Code.
-	FORCEINLINE uint_fast32_t ToMortonCode() const
+	FORCEINLINE MortonCodeType ToMortonCode() const
 	{
 		return libmorton::morton3D_32_encode(X, Y, Z);
 	}
 
-	static FORCEINLINE uint_fast32_t ToMortonCode(const uint_fast16_t X, const uint_fast16_t Y, const uint_fast16_t Z)
+	static FORCEINLINE MortonCodeType ToMortonCode(const uint_fast16_t X, const uint_fast16_t Y, const uint_fast16_t Z)
 	{
 		return libmorton::morton3D_32_encode(X, Y, Z);
 	}
 	
-	FORCEINLINE static FMortonVector FromMortonCode(const uint_fast32_t MortonCode)
+	FORCEINLINE static FMortonVector FromMortonCode(const MortonCodeType MortonCode)
 	{
 		uint_fast16_t OutX;
 		uint_fast16_t OutY;
@@ -125,7 +105,7 @@ struct FMortonVector
 	explicit FMortonVector(const uint_fast16_t InX, const uint_fast16_t InY, const uint_fast16_t InZ)
 		: X(InX), Y(InY), Z(InZ) {}
 
-	explicit FMortonVector(const uint_fast32_t MortonCode)
+	explicit FMortonVector(const MortonCodeType MortonCode)
 	{
 		uint_fast16_t TempX, TempY ,TempZ;
 		libmorton::morton3D_32_decode(MortonCode, TempX, TempY, TempZ);
@@ -195,14 +175,14 @@ struct FGlobalVector
 		return FGlobalVector(X - Value, Y - Value, Z - Value);
 	}
 
-	FORCEINLINE FGlobalVector operator+(const FMortonVector& Vector10) const
+	FORCEINLINE FGlobalVector operator+(const FMortonVector& MortonVector) const
 	{
-		return FGlobalVector(X + Vector10.X, Y + Vector10.Y, Z + Vector10.Z);
+		return FGlobalVector(X + MortonVector.X, Y + MortonVector.Y, Z + MortonVector.Z);
 	}
 
-	FORCEINLINE FGlobalVector operator-(const FMortonVector& Vector10) const
+	FORCEINLINE FGlobalVector operator-(const FMortonVector& MortonVector) const
 	{
-		return FGlobalVector(X - Vector10.X, Y - Vector10.Y, Z - Vector10.Z);
+		return FGlobalVector(X - MortonVector.X, Y - MortonVector.Y, Z - MortonVector.Z);
 	}
 
 	FORCEINLINE FGlobalVector operator+(const FGlobalVector& Other) const
@@ -254,13 +234,13 @@ struct FGlobalVector
 		return FVector(X, Y, Z);
 	}
 
-	static FGlobalVector FromMortonCode(const uint_fast32_t MortonCode, const FGlobalVector& ChunkLocation)
+	static FGlobalVector FromMortonCode(const MortonCodeType MortonCode, const FGlobalVector& ChunkLocation)
 	{
 		return ChunkLocation + (FGlobalVector(FMortonVector::FromMortonCode(MortonCode)) << FNavMeshStatic::VoxelSizeExponent);
 	}
 	
 	// Make sure every axis value fits in 10 bits, unsigned.
-	FORCEINLINE FMortonVector ToVector10() const
+	FORCEINLINE FMortonVector ToMortonVector() const
 	{
 		return FMortonVector(static_cast<uint_fast16_t>(X), static_cast<uint_fast16_t>(Y), static_cast<uint_fast16_t>(Z));
 	}
@@ -389,7 +369,7 @@ struct TBounds
 
 	// Rounds the given bounds to the node-size of the given layer-index. Min will be rounded down, Max will be rounded up.
 	template<typename T = VectorType>
-	FORCEINLINE auto Round(const uint8 LayerIdx) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, TBounds<FGlobalVector>>
+	FORCEINLINE auto Round(const LayerIdxType LayerIdx) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, TBounds<FGlobalVector>>
 	{
 		const int32 NodeMask = ~(((1 << (10 - LayerIdx)) >> FNavMeshStatic::VoxelSizeExponent) - 1);
 		TBounds<FGlobalVector> Rounded = *this & NodeMask;
@@ -403,14 +383,14 @@ struct TBounds
 
 	// Rounds the given bounds to the node-size in morton-space of the given layer-index. Min will be rounded down, Max will be rounded up.
 	template<typename T = VectorType>
-	FORCEINLINE auto Round(const uint8 LayerIdx) const -> std::enable_if_t<std::is_same_v<T, FMortonVector>, TBounds<FMortonVector>>
+	FORCEINLINE auto Round(const LayerIdxType LayerIdx) const -> std::enable_if_t<std::is_same_v<T, FMortonVector>, TBounds<FMortonVector>>
 	{
 		TBounds<FMortonVector> Rounded = *this & FNavMeshStatic::MortonMasks[LayerIdx];
 		Rounded.Max = Rounded.Max + FNavMeshStatic::MortonOffsets[LayerIdx] - 1; // Round the max up.
 		return Rounded;
 	}
 
-	// Returns the part of the bounds that intersects with another.
+	// Returns the part of the bounds that intersects with an
 	FORCEINLINE TBounds GetIntersection(const TBounds& Other) const
 	{
 		const VectorType ClampedMin(
@@ -424,6 +404,37 @@ struct TBounds
 		return TBounds(ClampedMin, ClampedMax, bIsValid);
 	}
 
+	// // Gets the remaining parts of the bounds that are not overlapping with the other bounds. A boolean-cut.
+	// template<typename T = VectorType>
+	// auto Cut(const TBounds<FGlobalVector>& Other) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, std::vector<TBounds<FGlobalVector>>>
+	// {
+	// 	if(!IsValid()) return {};
+	// 	if(!Other.IsValid() || !HasSimpleOverlap(Other)) return { *this }; // Return the whole instance when there is no overlap between the two bounds.
+	// 	
+	// 	std::vector<TBounds> BoundsList;
+	// 	TBounds RemainingBounds = *this;
+	// 	
+	// 	if(Max.X > Other.Max.X){  // + X
+	// 		BoundsList.push_back(TBounds<FGlobalVector>(VectorType(Other.Max.X, RemainingBounds.Min.Y, RemainingBounds.Min.Z), RemainingBounds.Max));
+	// 		RemainingBounds.Max.X = Other.Max.X;
+	// 	}if(Min.X < Other.Min.X){ // + X
+	// 		BoundsList.push_back(TBounds<FGlobalVector>(RemainingBounds.Min, VectorType(Other.Min.X, RemainingBounds.Max.Y, RemainingBounds.Max.Z)));
+	// 		RemainingBounds.Min.X = Other.Min.X;
+	// 	}if(Max.Y > Other.Max.Y){ // + Y
+	// 		BoundsList.push_back(TBounds<FGlobalVector>(VectorType(RemainingBounds.Min.X, Other.Max.Y, RemainingBounds.Min.Z), RemainingBounds.Max));
+	// 		RemainingBounds.Max.Y = Other.Max.Y;
+	// 	}if(Min.Y < Other.Min.Y){ // - Y
+	// 		BoundsList.push_back(TBounds<FGlobalVector>(RemainingBounds.Min, VectorType(RemainingBounds.Max.X, Other.Min.Y, RemainingBounds.Max.Z)));
+	// 		RemainingBounds.Min.Y = Other.Min.Y;
+	// 	}if(Max.Z > Other.Max.Z){ // + Z
+	// 		BoundsList.push_back(TBounds<FGlobalVector>(VectorType(RemainingBounds.Min.X, RemainingBounds.Min.Y, Other.Max.Z), RemainingBounds.Max));
+	// 	}if(Min.Z < Other.Min.Z) { // - Z
+	// 		BoundsList.push_back(TBounds<FGlobalVector>(RemainingBounds.Min, VectorType(RemainingBounds.Max.X, RemainingBounds.Max.Y, Other.Min.Z)));
+	// 	}
+	// 	
+	// 	return BoundsList;
+	// }
+
 	// Gets the remaining parts of the bounds that are not overlapping with the other bounds. A boolean-cut.
 	template<typename T = VectorType>
 	auto Cut(const TBounds<FGlobalVector>& Other) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, std::vector<TBounds<FGlobalVector>>>
@@ -434,22 +445,22 @@ struct TBounds
 		std::vector<TBounds> BoundsList;
 		TBounds RemainingBounds = *this;
 		
-		if(Max.X > Other.Max.X){  // + X
-			BoundsList.push_back(TBounds<FGlobalVector>(VectorType(Other.Max.X, RemainingBounds.Min.Y, RemainingBounds.Min.Z), RemainingBounds.Max));
-			RemainingBounds.Max.X = Other.Max.X;
-		}if(Min.X < Other.Min.X){ // + X
-			BoundsList.push_back(TBounds<FGlobalVector>(RemainingBounds.Min, VectorType(Other.Min.X, RemainingBounds.Max.Y, RemainingBounds.Max.Z)));
-			RemainingBounds.Min.X = Other.Min.X;
-		}if(Max.Y > Other.Max.Y){ // + Y
-			BoundsList.push_back(TBounds<FGlobalVector>(VectorType(RemainingBounds.Min.X, Other.Max.Y, RemainingBounds.Min.Z), RemainingBounds.Max));
-			RemainingBounds.Max.Y = Other.Max.Y;
-		}if(Min.Y < Other.Min.Y){ // - Y
-			BoundsList.push_back(TBounds<FGlobalVector>(RemainingBounds.Min, VectorType(RemainingBounds.Max.X, Other.Min.Y, RemainingBounds.Max.Z)));
-			RemainingBounds.Min.Y = Other.Min.Y;
-		}if(Max.Z > Other.Max.Z){ // + Z
-			BoundsList.push_back(TBounds<FGlobalVector>(VectorType(RemainingBounds.Min.X, RemainingBounds.Min.Y, Other.Max.Z), RemainingBounds.Max));
-		}if(Min.Z < Other.Min.Z) { // - Z
-			BoundsList.push_back(TBounds<FGlobalVector>(RemainingBounds.Min, VectorType(RemainingBounds.Max.X, RemainingBounds.Max.Y, Other.Min.Z)));
+		if(Other.Max.X > Max.X){  // + X
+			BoundsList.push_back(TBounds<FGlobalVector>(VectorType(Max.X, RemainingBounds.Min.Y, RemainingBounds.Min.Z), RemainingBounds.Max));
+			RemainingBounds.Max.X = Max.X;
+		}if(Other.Min.X < Min.X){ // + X
+			BoundsList.push_back(TBounds<FGlobalVector>(RemainingBounds.Min, VectorType(Min.X, RemainingBounds.Max.Y, RemainingBounds.Max.Z)));
+			RemainingBounds.Min.X = Min.X;
+		}if(Other.Max.Y > Max.Y){ // + Y
+			BoundsList.push_back(TBounds<FGlobalVector>(VectorType(RemainingBounds.Min.X, Max.Y, RemainingBounds.Min.Z), RemainingBounds.Max));
+			RemainingBounds.Max.Y = Max.Y;
+		}if(Other.Min.Y < Min.Y){ // - Y
+			BoundsList.push_back(TBounds<FGlobalVector>(RemainingBounds.Min, VectorType(RemainingBounds.Max.X, Min.Y, RemainingBounds.Max.Z)));
+			RemainingBounds.Min.Y = Min.Y;
+		}if(Other.Max.Z > Max.Z){ // + Z
+			BoundsList.push_back(TBounds<FGlobalVector>(VectorType(RemainingBounds.Min.X, RemainingBounds.Min.Y, Max.Z), RemainingBounds.Max));
+		}if(Other.Min.Z < Min.Z) { // - Z
+			BoundsList.push_back(TBounds<FGlobalVector>(RemainingBounds.Min, VectorType(RemainingBounds.Max.X, RemainingBounds.Max.Y, Min.Z)));
 		}
 		
 		return BoundsList;
@@ -459,14 +470,14 @@ struct TBounds
 	 * 
 	 * @tparam T type of Vector which must be an FMortonVector.
 	 * @param LayerIdx Layer to get the morton-codes of.
-	 * @param PositiveDirectionsToTrack What positive directions we should keep track of. This will be reflected in the returned OctreeDirection that is paired with a morton-code. Used for updating node relations.
+	 * @param PositiveDirectionsToTrack What positive directions we should keep track of. This will be reflected in the returned NavmeshDirection that is paired with a morton-code. Used for updating node relations.
 	 * @return List of morton-code/octree-direction pairs.
 	 */
 	template<typename T = VectorType>
-	auto GetMortonCodesWithin(const uint8 LayerIdx, const OctreeDirection PositiveDirectionsToTrack) const -> std::enable_if_t<std::is_same_v<T, FMortonVector>, std::vector<std::pair<MortonCode, OctreeDirection>>>
+	auto GetMortonCodesWithin(const LayerIdxType LayerIdx, const NavmeshDirection PositiveDirectionsToTrack) const -> std::enable_if_t<std::is_same_v<T, FMortonVector>, std::vector<std::pair<MortonCodeType, NavmeshDirection>>>
 	{
 		const uint_fast16_t MortonOffset = FNavMeshStatic::MortonOffsets[LayerIdx];
-		std::vector<std::pair<MortonCode, OctreeDirection>> Nodes;
+		std::vector<std::pair<MortonCodeType, NavmeshDirection>> Nodes;
 		
 		for (uint_fast16_t MortonX = Min.X; MortonX < Max.X; MortonX+=MortonOffset) {
 			const uint8 NodePositiveX = PositiveDirectionsToTrack && (MortonX + MortonOffset == Max.X ? DIRECTION_X_POSITIVE : DIRECTION_NONE);
@@ -493,18 +504,27 @@ struct TBounds
 	 * @note Chunks are NOT automatically initialized.
 	 * 
 	 * @tparam T VectorType which must be of type FGlobalVector.
-	 * @tparam Func <ChunkKey, OctreeDirection, TBounds<FMortonVector>>
+	 * @tparam Func <ChunkKey, NavmeshDirection, TBounds<FMortonVector>>
 	 * @param Callback Called for each intersecting chunk.
 	 */
 	template<typename T = VectorType, typename Func>
 	std::enable_if_t<std::is_same_v<T, FGlobalVector>, void> ForEachChunk(Func Callback) const
 	{
-		static_assert(std::is_invocable_v<Func, const ChunkKey, const OctreeDirection, TBounds<FMortonVector>>, "'::ForEachChunk' callback must be invocable with 'const ChunkKey, const OctreeDirection, TBounds<FMortonVector>>'");
+		static_assert(std::is_invocable_v<Func, const ChunkKeyType, const NavmeshDirection, TBounds<FMortonVector>>, "'::ForEachChunk' callback must be invocable with 'const ChunkKeyType, const NavmeshDirection, TBounds<FMortonVector>>'");
 		if(!IsValid()) return;
 
 		// Get the start/end axis of the chunks from the boundaries.
 		const FGlobalVector ChunkMin = Min & FNavMeshStatic::ChunkMask;
 		const FGlobalVector ChunkMax = Max-1 & FNavMeshStatic::ChunkMask;
+
+		// Skip the loop if there is only one chunk intersecting the bounds, which is the case most of the time.
+		if(ChunkMin == ChunkMax)
+		{
+			const FGlobalVector ChunkLocation = FGlobalVector(ChunkMin.X, ChunkMin.Y, ChunkMin.Z);
+			const TBounds<FMortonVector> MortonBounds = GetIntersection(TBounds(ChunkLocation, ChunkLocation+FNavMeshStatic::ChunkSize)).ToMortonSpace(ChunkLocation);
+			Callback(ChunkLocation.ToKey(), DIRECTION_ALL_POSITIVE, MortonBounds);
+			return;
+		}
 
 		// Loop over the chunks, keeping track of every axis the chunk is the most-positive in.
 		for (int32 GlobalX = ChunkMin.X; GlobalX <= ChunkMax.X; GlobalX+=FNavMeshStatic::ChunkSize){
@@ -530,12 +550,12 @@ struct TBounds
 	 * @note Chunks with these keys are NOT automatically initialized.
 	 * 
 	 * @tparam T VectorType which must be of type FGlobalVector.
-	 * @return std::unordered_set of uint_fast64_t chunk-keys.
+	 * @return std::unordered_set of ChunkKeyType chunk-keys.
 	 */
 	template<typename T = VectorType>
-	std::enable_if_t<std::is_same_v<T, FGlobalVector>, std::unordered_set<ChunkKey>> GetIntersectingChunks() const
+	std::enable_if_t<std::is_same_v<T, FGlobalVector>, std::unordered_set<ChunkKeyType>> GetIntersectingChunks() const
 	{
-		std::unordered_set<ChunkKey> ChunkKeys;
+		std::unordered_set<ChunkKeyType> ChunkKeys;
 		if(!IsValid()) return ChunkKeys;
 
 		// Get the start/end axis of the chunks from the boundaries.
@@ -566,9 +586,9 @@ struct TBounds
 	template<typename T = VectorType>
 	FORCEINLINE auto ToMortonSpace(const FGlobalVector& ChunkLocation) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, TBounds<FMortonVector>>
 	{
-		const FMortonVector LocalMin = ( Min-ChunkLocation << FNavMeshStatic::VoxelSizeExponent).ToVector10();
-		const FMortonVector LocalMax = ((Max-ChunkLocation << FNavMeshStatic::VoxelSizeExponent) - FNavMeshStatic::SmallestNodeSize).ToVector10();
-		return TBounds<FMortonVector>(LocalMin, LocalMax, IsValid());
+		const FMortonVector LocalMin = ( Min-ChunkLocation << FNavMeshStatic::VoxelSizeExponent).ToMortonVector();
+		const FMortonVector LocalMax = ((Max-ChunkLocation << FNavMeshStatic::VoxelSizeExponent) - FNavMeshStatic::SmallestNodeSize).ToMortonVector();
+		return TBounds(LocalMin, LocalMax, IsValid());
 	}
 
 	template<typename T = VectorType>
@@ -576,7 +596,7 @@ struct TBounds
 	{
 		const FGlobalVector LocalMin = (FGlobalVector(Min) >> FNavMeshStatic::VoxelSizeExponent) + ChunkLocation;
 		const FGlobalVector LocalMax = ((FGlobalVector(Max) + FNavMeshStatic::SmallestNodeSize) >> FNavMeshStatic::VoxelSizeExponent) + ChunkLocation;
-		return TBounds<FGlobalVector>(LocalMin, LocalMax, IsValid());
+		return TBounds(LocalMin, LocalMax, IsValid());
 	}
 
 	template<typename T = VectorType>

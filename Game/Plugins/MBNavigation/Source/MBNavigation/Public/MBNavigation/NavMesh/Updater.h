@@ -11,7 +11,7 @@ DECLARE_LOG_CATEGORY_EXTERN(LogNavMeshUpdater, Log, All);
 
 typedef std::pair<std::vector<TBounds<FGlobalVector>>, TBounds<FGlobalVector>> FStageType;
 typedef std::unordered_map<std::string, FStageType> FStagedMap;
-typedef std::pair<MortonCode, OctreeDirection> FNodeUpdateType;
+typedef std::pair<MortonCodeType, NavmeshDirection> FNodeUpdateType;
 
 
 
@@ -41,19 +41,19 @@ protected:
 	virtual void Stop() override { StopTaskCounter.Increment(); }
 
 private:
-	template<typename Func> void ForEachChunkIntersection(const TBounds<FGlobalVector>& Bounds, const uint8 LayerIdx, Func Callback);
+	template<typename Func> void ForEachChunkIntersection(const TBounds<FGlobalVector>& Bounds, const LayerIdxType LayerIdx, Func Callback);
 
-	bool StartReRasterizeNode(const FChunk* Chunk, const uint_fast32_t MortonCode, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate);
-	static void RecursiveReRasterizeNode(const UWorld* World, const FChunk* Chunk, FNode& Node, const uint8 LayerIdx, const FMortonVector MortonLocation);
+	bool StartReRasterizeNode(const FChunk* Chunk, const MortonCodeType MortonCode, const LayerIdxType LayerIdx, const NavmeshDirection RelationsToUpdate);
+	static void RecursiveReRasterizeNode(const UWorld* World, const FChunk* Chunk, FNode& Node, const LayerIdxType LayerIdx, const FMortonVector MortonLocation);
 	
-	bool StartClearUnoccludedChildrenOfNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate);
-	void RecursiveClearUnoccludedChildren(const FChunk* Chunk, FNode& Node, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate);
+	bool StartClearUnoccludedChildrenOfNode(const FChunk* Chunk, const MortonCodeType NodeMortonCode, const LayerIdxType LayerIdx, const NavmeshDirection RelationsToUpdate);
+	void RecursiveClearUnoccludedChildren(const FChunk* Chunk, FNode& Node, const LayerIdxType LayerIdx, const NavmeshDirection RelationsToUpdate);
 	
-	void StartClearAllChildrenOfNode(const FChunk* Chunk, const uint_fast32_t NodeMortonCode, const uint8 LayerIdx, const OctreeDirection RelationsToUpdate);
-	static void RecursiveClearAllChildren(const FChunk* Chunk, const FNode& Node, const uint8 LayerIdx);
+	void StartClearAllChildrenOfNode(const FChunk* Chunk, const MortonCodeType NodeMortonCode, const LayerIdxType LayerIdx, const NavmeshDirection RelationsToUpdate);
+	static void RecursiveClearAllChildren(const FChunk* Chunk, const FNode& Node, const LayerIdxType LayerIdx);
 	
-	void InitializeParents(const FChunk* Chunk, const uint_fast32_t ChildMortonCode, const uint8 ChildLayerIdx);
-	void TryUnRasterizeNodes(const FChunk* Chunk,  const std::unordered_set<MortonCode>& NodeMortonCodes, const uint8 LayerIdx);
+	void InitializeParents(const FChunk* Chunk, const MortonCodeType ChildMortonCode, const LayerIdxType ChildLayerIdx);
+	void TryUnRasterizeNodes(const FChunk* Chunk,  const std::unordered_set<MortonCodeType>& MortonCodes, const LayerIdxType LayerIdx);
 	
 	void SetNegativeNeighbourRelations(const FChunk* Chunk); // todo: temp method. Remove when neighbour bug is fixed.
 	

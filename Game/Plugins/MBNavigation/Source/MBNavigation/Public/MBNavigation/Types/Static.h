@@ -1,7 +1,8 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-#include "MBNavigation/NavMesh/Settings.h"
+
+#include "Global.h"
 
 
 
@@ -35,7 +36,7 @@ struct FNavMeshStatic // todo: update for leaf nodes.
 	static inline FCollisionShape CollisionBoxes[10];
 	static void Initialize()
 	{
-		for (uint8 LayerIndex = 0; LayerIndex < MaxDepth; ++LayerIndex)
+		for (LayerIdxType LayerIndex = 0; LayerIndex < MaxDepth; ++LayerIndex)
 		{
 			CollisionBoxes[LayerIndex] = FCollisionShape::MakeBox(FVector(NodeHalveSizes[LayerIndex]));
 		}

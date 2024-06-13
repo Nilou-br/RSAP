@@ -6,7 +6,7 @@
 
 
 
-FORCEINLINE bool HasOverlap(const UWorld* World, const FChunk* Chunk, const uint_fast32_t MortonCode, const uint8 LayerIdx)
+FORCEINLINE bool HasOverlap(const UWorld* World, const FChunk* Chunk, const MortonCodeType MortonCode, const uint8 LayerIdx)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("HasOverlap");
 	
@@ -57,7 +57,7 @@ FORCEINLINE FChunk* GetNeighbouringChunk(const FNavMeshPtr& NavMeshPtr, FGlobalV
 	return &ChunkIterator->second;
 }
 
-FORCEINLINE void DrawNodeFromMorton(const UWorld* World, const FChunk* Chunk, const uint_fast32_t MortonCode, const uint8 LayerIdx, FColor Color = FColor::Black)
+FORCEINLINE void DrawNodeFromMorton(const UWorld* World, const FChunk* Chunk, const MortonCodeType MortonCode, const uint8 LayerIdx, FColor Color = FColor::Black)
 {
 	const FGlobalVector GlobalNodeLocation = FGlobalVector::FromMortonCode(MortonCode, Chunk->Location);
 	const TBounds<FGlobalVector> NodeBoundaries(GlobalNodeLocation, GlobalNodeLocation+FNavMeshStatic::NodeSizes[LayerIdx]);
