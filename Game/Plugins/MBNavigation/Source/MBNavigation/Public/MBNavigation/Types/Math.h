@@ -440,10 +440,10 @@ struct TBounds
 	auto Cut(const TBounds<FGlobalVector>& Other) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, std::vector<TBounds<FGlobalVector>>>
 	{
 		if(!IsValid()) return {};
-		if(!Other.IsValid() || !HasSimpleOverlap(Other)) return { *this }; // Return the whole instance when there is no overlap between the two bounds.
+		if(!Other.IsValid() || !HasSimpleOverlap(Other)) return { Other }; // Return the whole instance when there is no overlap between the two bounds.
 		
 		std::vector<TBounds> BoundsList;
-		TBounds RemainingBounds = *this;
+		TBounds RemainingBounds = Other;
 		
 		if(Other.Max.X > Max.X){  // + X
 			BoundsList.push_back(TBounds<FGlobalVector>(VectorType(Max.X, RemainingBounds.Min.Y, RemainingBounds.Min.Z), RemainingBounds.Max));
@@ -464,37 +464,6 @@ struct TBounds
 		}
 		
 		return BoundsList;
-	}
-	
-	/**
-	 * 
-	 * @tparam T type of Vector which must be an FMortonVector.
-	 * @param LayerIdx Layer to get the morton-codes of.
-	 * @param PositiveDirectionsToTrack What positive directions we should keep track of. This will be reflected in the returned NavmeshDirection that is paired with a morton-code. Used for updating node relations.
-	 * @return List of morton-code/octree-direction pairs.
-	 */
-	template<typename T = VectorType>
-	auto GetMortonCodesWithin(const LayerIdxType LayerIdx, const NavmeshDirection PositiveDirectionsToTrack) const -> std::enable_if_t<std::is_same_v<T, FMortonVector>, std::vector<std::pair<MortonCodeType, NavmeshDirection>>>
-	{
-		const uint_fast16_t MortonOffset = FNavMeshStatic::MortonOffsets[LayerIdx];
-		std::vector<std::pair<MortonCodeType, NavmeshDirection>> Nodes;
-		
-		for (uint_fast16_t MortonX = Min.X; MortonX < Max.X; MortonX+=MortonOffset) {
-			const uint8 NodePositiveX = PositiveDirectionsToTrack && (MortonX + MortonOffset == Max.X ? DIRECTION_X_POSITIVE : DIRECTION_NONE);
-			
-			for (uint_fast16_t MortonY = Min.Y; MortonY < Max.Y; MortonY+=MortonOffset) {
-				const uint8 NodePositiveY = PositiveDirectionsToTrack && (MortonY + MortonOffset == Max.Y ? DIRECTION_Y_POSITIVE : DIRECTION_NONE);
-				
-				for (uint_fast16_t MortonZ = Min.Z; MortonZ < Max.Z; MortonZ+=MortonOffset) {
-					const uint8 NodePositiveZ = PositiveDirectionsToTrack && (MortonZ + MortonOffset == Max.Z ? DIRECTION_Z_POSITIVE : DIRECTION_NONE);
-
-					// Relations in negative directions always need to be updated.
-					Nodes.emplace_back(FMortonVector::ToMortonCode(MortonX, MortonY, MortonZ), DIRECTION_ALL_NEGATIVE | (NodePositiveX | NodePositiveY | NodePositiveZ));
-				}
-			}
-		}
-		
-		return Nodes;
 	}
 
 	/**
@@ -521,7 +490,7 @@ struct TBounds
 		if(ChunkMin == ChunkMax)
 		{
 			const FGlobalVector ChunkLocation = FGlobalVector(ChunkMin.X, ChunkMin.Y, ChunkMin.Z);
-			const TBounds<FMortonVector> MortonBounds = GetIntersection(TBounds(ChunkLocation, ChunkLocation+FNavMeshStatic::ChunkSize)).ToMortonSpace(ChunkLocation);
+			const TBounds<FMortonVector> MortonBounds = GetIntersection(TBounds<FGlobalVector>(ChunkLocation, ChunkLocation+FNavMeshStatic::ChunkSize)).ToMortonSpace(ChunkLocation);
 			Callback(ChunkLocation.ToKey(), DIRECTION_ALL_POSITIVE, MortonBounds);
 			return;
 		}
@@ -537,7 +506,7 @@ struct TBounds
 					const uint8 ChunkPositiveZ = GlobalZ == ChunkMax.Z ? DIRECTION_Z_POSITIVE : DIRECTION_NONE;
 
 					const FGlobalVector ChunkLocation = FGlobalVector(GlobalX, GlobalY, GlobalZ);
-					const TBounds<FMortonVector> MortonBounds = GetIntersection(TBounds(ChunkLocation, ChunkLocation+FNavMeshStatic::ChunkSize)).ToMortonSpace(ChunkLocation);
+					const TBounds<FMortonVector> MortonBounds = GetIntersection(TBounds<FGlobalVector>(ChunkLocation, ChunkLocation+FNavMeshStatic::ChunkSize)).ToMortonSpace(ChunkLocation);
 					Callback(ChunkLocation.ToKey(), ChunkPositiveX | ChunkPositiveY | ChunkPositiveZ, MortonBounds);
 				}
 			}
@@ -588,7 +557,7 @@ struct TBounds
 	{
 		const FMortonVector LocalMin = ( Min-ChunkLocation << FNavMeshStatic::VoxelSizeExponent).ToMortonVector();
 		const FMortonVector LocalMax = ((Max-ChunkLocation << FNavMeshStatic::VoxelSizeExponent) - FNavMeshStatic::SmallestNodeSize).ToMortonVector();
-		return TBounds(LocalMin, LocalMax, IsValid());
+		return TBounds<FMortonVector>(LocalMin, LocalMax, IsValid());
 	}
 
 	template<typename T = VectorType>
@@ -596,7 +565,7 @@ struct TBounds
 	{
 		const FGlobalVector LocalMin = (FGlobalVector(Min) >> FNavMeshStatic::VoxelSizeExponent) + ChunkLocation;
 		const FGlobalVector LocalMax = ((FGlobalVector(Max) + FNavMeshStatic::SmallestNodeSize) >> FNavMeshStatic::VoxelSizeExponent) + ChunkLocation;
-		return TBounds(LocalMin, LocalMax, IsValid());
+		return TBounds<FGlobalVector>(LocalMin, LocalMax, IsValid());
 	}
 
 	template<typename T = VectorType>

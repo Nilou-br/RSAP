@@ -10,8 +10,7 @@
 DECLARE_LOG_CATEGORY_EXTERN(LogNavMeshUpdater, Log, All);
 
 typedef std::pair<std::vector<TBounds<FGlobalVector>>, TBounds<FGlobalVector>> FStageType;
-typedef std::unordered_map<std::string, FStageType> FStagedMap;
-typedef std::pair<MortonCodeType, NavmeshDirection> FNodeUpdateType;
+typedef ankerl::unordered_dense::map<ActorKeyType, FStageType> FStagedMap;
 
 
 

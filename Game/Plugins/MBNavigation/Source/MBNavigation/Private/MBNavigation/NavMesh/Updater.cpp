@@ -19,14 +19,12 @@ void FNavMeshUpdater::StageData(const FChangedBoundsMap& BoundsPairMap)
 void FNavMeshUpdater::StageData(const FGuid& ActorID, const TChangedBounds<FGlobalVector>& ChangedBounds)
 {
 	const uint32 ActorKey = GetTypeHash(ActorID);
+	auto Iterator = StagedDataMap.find(ActorKey);
+	if(Iterator == StagedDataMap.end()) std::tie(Iterator, std::ignore) = StagedDataMap.emplace(ActorKey, FStageType());
 	
-	const std::string ActorIDString = TCHAR_TO_UTF8(*ActorID.ToString());
-	auto Iterator = StagedDataMap.find(ActorIDString);
-	if(Iterator == StagedDataMap.end()) std::tie(Iterator, std::ignore) = StagedDataMap.emplace(ActorIDString, FStageType());
-	
-	auto& [BeforeList, After] = Iterator->second;
-	BeforeList.emplace_back(ChangedBounds.Previous); // Keep track of all the 'previous' bounds.
-	After = ChangedBounds.Current; // Keep track of only the last-known 'current' bounds.
+	auto& [PreviousBoundsList, CurrentBounds] = Iterator->second;
+	PreviousBoundsList.emplace_back(ChangedBounds.Previous); // Keep track of all the 'previous' bounds.
+	CurrentBounds = ChangedBounds.Current; // Keep track of only the last-known 'current' bounds.
 }
 
 void FNavMeshUpdater::Tick(float DeltaTime)
@@ -76,6 +74,17 @@ uint8 CalculateOptimalStartingLayer(const TChangedBounds<FGlobalVector>& BoundsP
 	return StartingLayer;
 }
 
+// Data required to update a node.
+struct FNodeUpdateType
+{
+	LayerIdxType LayerIdx;
+	uint8 Relations: 6 = DIRECTION_ALL_NEGATIVE;
+
+	FNodeUpdateType(const LayerIdxType LayerIdx, const uint8 RelationsToUpdate)
+		: LayerIdx(LayerIdx), Relations(RelationsToUpdate)
+	{}
+};
+
 /**
  * Updates the navmesh using the given list of bound-pairs which indicates the areas that needs to be updated.
  */
@@ -85,131 +94,156 @@ uint32 FUpdateTask::Run()
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("FUpdateTask ::Run");
 	const auto StartTime = std::chrono::high_resolution_clock::now();
 #endif
+	
+	// Convoluted nested map, but should improve performance when a lot of actors have moved since last update.
+	typedef ankerl::unordered_dense::map<MortonCodeType, FNodeUpdateType> FNodeUpdateMap;
+	ankerl::unordered_dense::map<ChunkKeyType, FNodeUpdateMap> ChunksToUpdate;
 
-	FlushPersistentDebugLines(World);
-
-	// Lambda that returns an FChunk* which can be a nullptr.
-	// Will be initialized if it occludes any actor, erased otherwise.
-	const auto InitOrClearChunk = [&](const ChunkKeyType ChunkKey) -> FChunk*
+	// Loops through the bounds and gets the nodes where each node is a paired with the data required to update the node.
+	const auto GetNodesToUpdateWithinBounds = [](const TBounds<FMortonVector>& Bounds, const LayerIdxType LayerIdx, const NavmeshDirection PositiveDirectionsToTrack) -> FNodeUpdateMap
 	{
-		auto Iterator = NavMeshPtr->find(ChunkKey);
-		const bool bChunkExists = Iterator != NavMeshPtr->end();
-		const FGlobalVector ChunkLocation = FGlobalVector::FromKey(ChunkKey);
+		const uint_fast16_t MortonOffset = FNavMeshStatic::MortonOffsets[LayerIdx];
+		FNodeUpdateMap ResultMap;
 		
-		if(!HasOverlap(World, ChunkLocation, 0))
-		{
-			if(bChunkExists) NavMeshPtr->erase(ChunkKey);
-			return nullptr;
+		for (uint_fast16_t MortonX = Bounds.Min.X; MortonX < Bounds.Max.X; MortonX+=MortonOffset) {
+			const uint8 NodePositiveX = PositiveDirectionsToTrack && (MortonX + MortonOffset == Bounds.Max.X ? DIRECTION_X_POSITIVE : DIRECTION_NONE);
+			
+			for (uint_fast16_t MortonY = Bounds.Min.Y; MortonY < Bounds.Max.Y; MortonY+=MortonOffset) {
+				const uint8 NodePositiveY = PositiveDirectionsToTrack && (MortonY + MortonOffset == Bounds.Max.Y ? DIRECTION_Y_POSITIVE : DIRECTION_NONE);
+				
+				for (uint_fast16_t MortonZ = Bounds.Min.Z; MortonZ < Bounds.Max.Z; MortonZ+=MortonOffset) {
+					const uint8 NodePositiveZ = PositiveDirectionsToTrack && (MortonZ + MortonOffset == Bounds.Max.Z ? DIRECTION_Z_POSITIVE : DIRECTION_NONE);
+
+					// Relations in negative directions always need to be updated.
+					ResultMap.emplace(FMortonVector::ToMortonCode(MortonX, MortonY, MortonZ), FNodeUpdateType(LayerIdx, DIRECTION_ALL_NEGATIVE | (NodePositiveX | NodePositiveY | NodePositiveZ)));
+				}
+			}
 		}
-					
-		if(!bChunkExists) std::tie(Iterator, std::ignore) = NavMeshPtr->emplace(ChunkKey, FChunk(ChunkLocation));
-		return &Iterator->second;
+		
+		return ResultMap;
 	};
 
-	// Defining a nested hashmap for filtering the "previous" nodes. This benefit performance when large amount of actors are moved at once.
-	ankerl::unordered_dense::map<ChunkKeyType, ankerl::unordered_dense::map<std::string, std::unordered_set<MortonCodeType>>> Test;
+	// Fills the ChunksToUpdate map with the nodes within the given bounds. Filters out duplicates.
+	const auto FillChunksToUpdate = [&ChunksToUpdate, &GetNodesToUpdateWithinBounds](const ChunkKeyType ChunkKey, const NavmeshDirection ChunkPositiveDirections, const TBounds<FMortonVector>& Bounds, const LayerIdxType LayerIdx)
+	{
+		const FNodeUpdateMap NodesMap = GetNodesToUpdateWithinBounds(Bounds, LayerIdx, ChunkPositiveDirections);
+		if(NodesMap.empty()) return;
+			
+		const auto ChunkIterator = ChunksToUpdate.find(ChunkKey);
+		if(ChunkIterator == ChunksToUpdate.end())
+		{
+			ChunksToUpdate.emplace(ChunkKey, NodesMap);
+			return;
+		}
+			
+		// Otherwise, update the existing map.
+		auto& NodesToUpdate = ChunkIterator->second;
+		for (const auto& [MortonCode, NewValues] : NodesMap)
+		{
+			const auto NodeIterator = NodesToUpdate.find(MortonCode);
+			if (NodeIterator == ChunkIterator->second.end())
+			{
+				NodesToUpdate.emplace(MortonCode, NewValues);
+				continue;
+			}
+			
+			// This node is already staged.
+			FNodeUpdateType& StoredValues = NodeIterator->second;
+			StoredValues.Relations |= NewValues.Relations; // Do a bitwise OR with its existing relations.
+			if (NewValues.LayerIdx < StoredValues.LayerIdx) StoredValues.LayerIdx = NewValues.LayerIdx; // And update the LayerIdx if the new value is lower.
+		}
+	};
 
 	// TEMP
-	std::set<ChunkKeyType> ChunkKeys;
+	// std::set<ChunkKeyType> ChunkKeys;
 	
-	// Loop through all stored boundaries for each actor.
+	// Loop through each actor's staged boundaries.
 	for (const auto& [PreviousBoundsList, CurrentBounds] : StagedDataMap | std::views::values)
 	{
 		// Calculate the optimal starting-layer for updating the nodes around this actor.
 		// It could be slightly less optimal if the actor was scaled through multiple stored states, but it will be negligible if this factor was small.
 		const uint8 StartingLayerIdx = CalculateOptimalStartingLayer(TChangedBounds(PreviousBoundsList.back(), CurrentBounds));
-		const TBounds<FGlobalVector> CurrentRounded = CurrentBounds.Round(StartingLayerIdx);
 
-		// Loop through all the previous-bounds and add all nodes to a new list, filtering out all the duplicates. todo: this has not been implemented yet it seems???
+		// Round the bounds to this layer.
+		const TBounds<FGlobalVector> CurrentRounded = CurrentBounds.Round(StartingLayerIdx);
+		
 		for (const auto& PreviousBounds : PreviousBoundsList)
 		{
-			// Do a boolean cut using the rounded current-bounds on the rounded previous-bounds.
-			// The nodes within the remaining parts is what should be cleared if unoccluded.
+			// Do a boolean cut using the rounded current-bounds on the rounded previous-bounds. And loop through the remaining parts.
+			// This prevents looping through nodes that will already be looped through from the current-bounds later.
 			for (auto PreviousRemainder : CurrentRounded.Cut(PreviousBounds.Round(StartingLayerIdx)))
 			{
-				const bool bClearAll = !PreviousRemainder.HasOverlap(World); // Clear all nodes at once if this whole part is not occluding any geometry.
-				PreviousRemainder.Draw(World, bClearAll ? FColor::Red : FColor::Green);
-				
-				PreviousRemainder.ForEachChunk([&](const ChunkKeyType ChunkKey, const NavmeshDirection ChunkPositiveDirections, const TBounds<FMortonVector>& Bounds)
+				PreviousRemainder.ForEachChunk([&FillChunksToUpdate, StartingLayerIdx](const ChunkKeyType ChunkKey, const NavmeshDirection ChunkPositiveDirections, const TBounds<FMortonVector>& MortonBounds)
 				{
-					const FChunk* Chunk = InitOrClearChunk(ChunkKey);
-					if(!Chunk) return;
-					
-					std::unordered_set<MortonCodeType> NodesToUnRasterize;
-					std::unordered_set<MortonCodeType> NodesToSkip;
-					
-					for (const auto [MortonCode, RelationsToUpdate] : Bounds.GetMortonCodesWithin(StartingLayerIdx, ChunkPositiveDirections))
-					{
-						bool bIsNodeOccluding = false;
-						if(bClearAll) StartClearAllChildrenOfNode(Chunk, MortonCode, StartingLayerIdx, RelationsToUpdate);
-						else bIsNodeOccluding = !StartClearUnoccludedChildrenOfNode(Chunk, MortonCode, StartingLayerIdx, RelationsToUpdate);
-
-						if(!bIsNodeOccluding)
-						{
-							if(StartingLayerIdx != 0)
-							{
-								NodesToUnRasterize.insert(FNode::GetParentMortonCode(MortonCode, StartingLayerIdx));
-								continue;
-							}
-
-							// Erase this chunk, we are on the root node that does not overlap anything.
-							NavMeshPtr->erase(ChunkKey);
-						}
-						NodesToSkip.insert(FNode::GetParentMortonCode(MortonCode, StartingLayerIdx));
-					}
-
-					for (MortonCodeType MC : NodesToSkip) NodesToUnRasterize.erase(MC);
-					if(NodesToUnRasterize.size()) TryUnRasterizeNodes(Chunk, NodesToUnRasterize, StartingLayerIdx-1);
-
-					// TEMP
-					ChunkKeys.insert(ChunkKey);
+					FillChunksToUpdate(ChunkKey, ChunkPositiveDirections, MortonBounds, StartingLayerIdx);
 				});
 			}
 		}
 		
-		// Nodes within the current-bounds should all be re-rasterized.
-		CurrentRounded.ForEachChunk([&](const ChunkKeyType ChunkKey, const NavmeshDirection ChunkPositiveDirections, const TBounds<FMortonVector>& Bounds)
+		CurrentRounded.ForEachChunk([&FillChunksToUpdate, StartingLayerIdx](const ChunkKeyType ChunkKey, const NavmeshDirection ChunkPositiveDirections, const TBounds<FMortonVector>& MortonBounds)
 		{
-			const FChunk* Chunk = InitOrClearChunk(ChunkKey);
-			if(!Chunk) return;
-			
-			// Keep track of the morton-codes of the parents that potentially have to be updated.
-			std::unordered_set<MortonCodeType> NodesToUnRasterize;
-			std::unordered_set<MortonCodeType> NodesToSkip;
-				
-			for (const auto [MortonCode, RelationsToUpdate] : Bounds.GetMortonCodesWithin(StartingLayerIdx, ChunkPositiveDirections))
-			{
-				if(!StartReRasterizeNode(Chunk, MortonCode, StartingLayerIdx, RelationsToUpdate))
-				{
-					NodesToSkip.insert(FNode::GetParentMortonCode(MortonCode, StartingLayerIdx));
-					continue;
-				}
-				
-				if(StartingLayerIdx != 0)
-				{
-					NodesToUnRasterize.insert(FNode::GetParentMortonCode(MortonCode, StartingLayerIdx));
-					continue;
-				}
-
-				// Erase this chunk, we are on the root node that does not overlap anything.
-				NavMeshPtr->erase(ChunkKey);
-			}
-
-			for (MortonCodeType MC : NodesToSkip) NodesToUnRasterize.erase(MC);
-			if(NodesToUnRasterize.size()) TryUnRasterizeNodes(Chunk, NodesToUnRasterize, StartingLayerIdx-1);
-
-			// TEMP
-			ChunkKeys.insert(ChunkKey);
+			FillChunksToUpdate(ChunkKey, ChunkPositiveDirections, MortonBounds, StartingLayerIdx);
 		});
 	}
 
-	// TEMP
-	for (auto ChunkKey : ChunkKeys)
+	// Finally loop through all the filtered chunks that needs to be updated.
+	for (auto& [ChunkKey, NodesMap] : ChunksToUpdate)
 	{
-		const auto Iterator = NavMeshPtr->find(ChunkKey);
-		if(Iterator == NavMeshPtr->end()) continue;
-		SetNegativeNeighbourRelations(&Iterator->second);
+		auto Iterator = NavMeshPtr->find(ChunkKey);
+		const bool bChunkExists = Iterator != NavMeshPtr->end();
+		const FGlobalVector ChunkLocation = FGlobalVector::FromKey(ChunkKey);
+
+		// Skip if this chunk does not occlude any geometry, and erase the chunk if it exists.
+		if(!HasOverlap(World, ChunkLocation, 0))
+		{
+			if(bChunkExists) NavMeshPtr->erase(ChunkKey);
+			continue;
+		}
+
+		// Initialize a new chunk if it does not exist yet.
+		if(!bChunkExists) std::tie(Iterator, std::ignore) = NavMeshPtr->emplace(ChunkKey, FChunk(ChunkLocation));
+		const FChunk* Chunk = &Iterator->second;
+		
+		// Keep track of the morton-codes of the parents of nodes that were not occluding anything. These should be checked manually and potentially be un-rasterized.
+		// The NodesToSkip will be used to clear nodes from NodesToUnRasterize, these are the parents that we KNOW have at-least one occluding child.
+		std::array<std::unordered_set<MortonCodeType>, 10> NodesToUnRasterize;
+		std::array<std::unordered_set<MortonCodeType>, 10> NodesToSkip;
+		
+		for (auto& [MortonCode, UpdateValues] : NodesMap)
+		{
+			if(!StartReRasterizeNode(Chunk, MortonCode, UpdateValues.LayerIdx, UpdateValues.Relations))
+			{
+				NodesToSkip[UpdateValues.LayerIdx].insert(FNode::GetParentMortonCode(MortonCode, UpdateValues.LayerIdx));
+				continue;
+			}
+			NodesToUnRasterize[UpdateValues.LayerIdx].insert(FNode::GetParentMortonCode(MortonCode, UpdateValues.LayerIdx));
+		}
+		
+		for (LayerIdxType LayerIdx = 0; LayerIdx < 10; LayerIdx++)
+		{
+			if(!NodesToUnRasterize[LayerIdx].size()) continue;
+			if(LayerIdx == 0 && NodesToSkip[LayerIdx].size())
+			{
+				// Erase this chunk, we are on the root node that does not overlap anything.
+				NavMeshPtr->erase(ChunkKey);
+				break;
+			}
+			if(!NodesToUnRasterize[LayerIdx].size()) continue;
+			
+			for (MortonCodeType MortonCode : NodesToSkip[LayerIdx]) NodesToUnRasterize[LayerIdx].erase(MortonCode);
+			TryUnRasterizeNodes(Chunk, NodesToUnRasterize[LayerIdx], LayerIdx-1);
+		}
+		
+		SetNegativeNeighbourRelations(Chunk);
 	}
+
+	// // TEMP
+	// for (auto ChunkKey : ChunkKeys)
+	// {
+	// 	const auto Iterator = NavMeshPtr->find(ChunkKey);
+	// 	if(Iterator == NavMeshPtr->end()) continue;
+	// 	SetNegativeNeighbourRelations(&Iterator->second);
+	// }
 
 #if WITH_EDITOR
 	const float DurationSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(
