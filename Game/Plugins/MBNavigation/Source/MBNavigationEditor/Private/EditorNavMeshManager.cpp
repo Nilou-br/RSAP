@@ -45,6 +45,7 @@ void UEditorNavMeshManager::Deinitialize()
 	FEditorDelegates::OnEditorCameraMoved.Remove(OnCameraMovedDelegateHandle); OnCameraMovedDelegateHandle.Reset();
 	NavMeshUpdater->OnNavMeshUpdatedDelegate.Unbind();
 	TransformObserver->OnLevelActorsInitialized.Unbind();
+	TransformObserver->OnActorBoundsChanged.Unbind();
 	
 	NavMeshPtr.reset();
 	delete NavMeshGenerator;
@@ -85,7 +86,7 @@ void UEditorNavMeshManager::Regenerate()
 	}
 	
 	NavMeshGenerator->Generate(GEditor->GetEditorSubsystem<UEditorTransformObserver>()->GetLevelActorBounds());
-	if(const UPackage* Package = Cast<UPackage>(EditorWorld->GetOuter()); Package->IsDirty() && Package->MarkPackageDirty())
+	if(const UPackage* Package = Cast<UPackage>(EditorWorld->GetOuter()); !Package->IsDirty() && Package->MarkPackageDirty())
 	{
 		UE_LOG(LogEditorNavManager, Log, TEXT("Level is marked dirty. The 'sound-navigation-mesh' will be saved when the user saves the level."))
 	}
@@ -108,9 +109,9 @@ void UEditorNavMeshManager::UpdateDebugSettings (
 
 void UEditorNavMeshManager::OnMapLoad(const FString& Filename, FCanLoadMap& OutCanLoadMap)
 {
-	NavMeshSettings = nullptr;
-	EditorWorld = nullptr;
-	NavMeshPtr->clear();
+	// NavMeshSettings = nullptr;
+	// EditorWorld = nullptr;
+	// NavMeshPtr->clear();
 }
 
 void UEditorNavMeshManager::OnLevelActorsInitialized(const FBoundsMap& BoundsMap)
@@ -163,8 +164,9 @@ void UEditorNavMeshManager::OnCameraMoved(const FVector& CameraLocation, const F
 	if(!NavMeshUpdater->IsRunning()) NavMeshDebugger->Draw(CameraLocation, CameraRotation);
 }
 
-void UEditorNavMeshManager::OnActorBoundsChanged(const FGuid& ActorID, const TChangedBounds<FGlobalVector>& ChangedBounds)
+void UEditorNavMeshManager::OnActorBoundsChanged(const ActorKeyType ActorKey, const TChangedBounds<FGlobalVector>& ChangedBounds)
 {
 	UE_LOG(LogEditorTransformSubsystem, Log, TEXT("OnActorBoundsChanged"));
-	NavMeshUpdater->StageData(ActorID, ChangedBounds);
+	ChangedBounds.Draw(EditorWorld);
+	NavMeshUpdater->StageData(ActorKey, ChangedBounds);
 }

@@ -17,6 +17,7 @@ typedef ankerl::unordered_dense::map<ChunkKeyType, FChunk> FNavMesh;
 typedef std::shared_ptr<FNavMesh> FNavMeshPtr;
 
 
+// todo: For very large objects, like terrain, do a recursive overlap check to filter out the parts that have no overlap. Should be a certain size that the chunk-size fits in perfectly.
 // todo: convert all int_t/uint_t types to int/uint without the '_t' for platform compatibility.
 
 
@@ -209,6 +210,7 @@ public:
 
 	void UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk* Chunk, const LayerIdxType LayerIdx, NavmeshDirection RelationsToUpdate);
 	bool HasOverlap(const UWorld* World, const FGlobalVector& ChunkLocation, const LayerIdxType LayerIdx) const;
+	//static bool HasGeomOverlap(const FBodyInstance* BodyInstance, const FGlobalVector& CenterLocation, const LayerIdxType LayerIdx);
 	void Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const LayerIdxType LayerIndex, const FColor Color = FColor::Black, const uint32 Thickness = 0) const;
 
 	template<typename Func>

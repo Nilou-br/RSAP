@@ -5,6 +5,7 @@
 #include "morton.h"
 #include "Static.h"
 #include "Global.h"
+#include "MBNavigation/ThirdParty/unordered_dense/unordered_dense.h"
 
 
 
@@ -312,10 +313,16 @@ struct TBounds
 							FMath::RoundToInt(Origin.Z + Extent.Z));
 
 		// Increment axis on Max if it equals the corresponding axis on Min.
-		// There needs to be at-least 1 unit of depth.
+		// There needs to be at least 1 unit of depth.
 		if(Max.X == Min.X) ++Max.X;
 		if(Max.Y == Min.Y) ++Max.Y;
 		if(Max.Z == Min.Z) ++Max.Z;
+	}
+
+	// Returns a bounds object that has no dimensions and is set to be invalid. Used within the TChangedBounds type to know it will be ignored.
+	static TBounds<VectorType> EmptyBounds()
+	{
+		return TBounds<VectorType>();
 	}
 	
 	FORCEINLINE bool Equals(const TBounds& Other) const
@@ -403,43 +410,12 @@ struct TBounds
 			FMath::Min(Max.Z, Other.Max.Z));
 		return TBounds(ClampedMin, ClampedMax, bIsValid);
 	}
-
-	// // Gets the remaining parts of the bounds that are not overlapping with the other bounds. A boolean-cut.
-	// template<typename T = VectorType>
-	// auto Cut(const TBounds<FGlobalVector>& Other) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, std::vector<TBounds<FGlobalVector>>>
-	// {
-	// 	if(!IsValid()) return {};
-	// 	if(!Other.IsValid() || !HasSimpleOverlap(Other)) return { *this }; // Return the whole instance when there is no overlap between the two bounds.
-	// 	
-	// 	std::vector<TBounds> BoundsList;
-	// 	TBounds RemainingBounds = *this;
-	// 	
-	// 	if(Max.X > Other.Max.X){  // + X
-	// 		BoundsList.push_back(TBounds<FGlobalVector>(VectorType(Other.Max.X, RemainingBounds.Min.Y, RemainingBounds.Min.Z), RemainingBounds.Max));
-	// 		RemainingBounds.Max.X = Other.Max.X;
-	// 	}if(Min.X < Other.Min.X){ // + X
-	// 		BoundsList.push_back(TBounds<FGlobalVector>(RemainingBounds.Min, VectorType(Other.Min.X, RemainingBounds.Max.Y, RemainingBounds.Max.Z)));
-	// 		RemainingBounds.Min.X = Other.Min.X;
-	// 	}if(Max.Y > Other.Max.Y){ // + Y
-	// 		BoundsList.push_back(TBounds<FGlobalVector>(VectorType(RemainingBounds.Min.X, Other.Max.Y, RemainingBounds.Min.Z), RemainingBounds.Max));
-	// 		RemainingBounds.Max.Y = Other.Max.Y;
-	// 	}if(Min.Y < Other.Min.Y){ // - Y
-	// 		BoundsList.push_back(TBounds<FGlobalVector>(RemainingBounds.Min, VectorType(RemainingBounds.Max.X, Other.Min.Y, RemainingBounds.Max.Z)));
-	// 		RemainingBounds.Min.Y = Other.Min.Y;
-	// 	}if(Max.Z > Other.Max.Z){ // + Z
-	// 		BoundsList.push_back(TBounds<FGlobalVector>(VectorType(RemainingBounds.Min.X, RemainingBounds.Min.Y, Other.Max.Z), RemainingBounds.Max));
-	// 	}if(Min.Z < Other.Min.Z) { // - Z
-	// 		BoundsList.push_back(TBounds<FGlobalVector>(RemainingBounds.Min, VectorType(RemainingBounds.Max.X, RemainingBounds.Max.Y, Other.Min.Z)));
-	// 	}
-	// 	
-	// 	return BoundsList;
-	// }
-
+	
 	// Gets the remaining parts of the bounds that are not overlapping with the other bounds. A boolean-cut.
 	template<typename T = VectorType>
 	auto Cut(const TBounds<FGlobalVector>& Other) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, std::vector<TBounds<FGlobalVector>>>
 	{
-		if(!IsValid()) return {};
+		if(!IsValid()) return { Other };
 		if(!Other.IsValid() || !HasSimpleOverlap(Other)) return { Other }; // Return the whole instance when there is no overlap between the two bounds.
 		
 		std::vector<TBounds> BoundsList;
@@ -613,7 +589,7 @@ struct TBounds
 		}
 	}
 };
-typedef TMap<FGuid, TBounds<FGlobalVector>> FBoundsMap;
+typedef ankerl::unordered_dense::map<ActorKeyType, TBounds<FGlobalVector>> FBoundsMap; // todo to ankerl with ActorKeyType
 
 /**
  * Pair of bounds for storing changes that have happened.
@@ -644,4 +620,4 @@ struct TChangedBounds
 		Current.Draw(World, FColor::Green);
 	}
 };
-typedef TMap<FGuid, TChangedBounds<FGlobalVector>> FChangedBoundsMap;
+typedef ankerl::unordered_dense::map<ActorKeyType, TChangedBounds<FGlobalVector>> FChangedBoundsMap;

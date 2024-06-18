@@ -68,5 +68,5 @@ private:
 	FDelegateHandle PreSaveWorldDelegateHandle; void PreWorldSaved(UWorld* World, FObjectPreSaveContext ObjectPreSaveContext);
 	FDelegateHandle PostSaveWorldDelegateHandle; void PostWorldSaved(UWorld* World, FObjectPostSaveContext ObjectSaveContext);
 	FDelegateHandle OnCameraMovedDelegateHandle; void OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation, ELevelViewportType LevelViewportType, int32) const;
-	FDelegateHandle OnActorBoundsChangedDelegateHandle; void OnActorBoundsChanged(const FGuid& ActorID, const TChangedBounds<FGlobalVector>& ChangedBounds);
+	FDelegateHandle OnActorBoundsChangedDelegateHandle; void OnActorBoundsChanged(const ActorKeyType ActorKey, const TChangedBounds<FGlobalVector>& ChangedBounds);
 };

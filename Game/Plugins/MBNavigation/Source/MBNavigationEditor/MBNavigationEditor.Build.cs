@@ -27,7 +27,8 @@ public class MBNavigationEditor : ModuleRules
                 "ToolMenus",
                 "MBNavigation",
                 "EditorStyle",
-                "EditorSubsystem"
+                "EditorSubsystem",
+                "Chaos"
             }
         );
     }

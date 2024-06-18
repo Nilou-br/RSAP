@@ -6,7 +6,7 @@
 
 
 
-FORCEINLINE bool HasOverlap(const UWorld* World, const FChunk* Chunk, const MortonCodeType MortonCode, const uint8 LayerIdx)
+FORCEINLINE bool HasOverlap(const UWorld* World, const FChunk* Chunk, const MortonCodeType MortonCode, const LayerIdxType LayerIdx)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("HasOverlap");
 	
@@ -24,7 +24,7 @@ FORCEINLINE bool HasOverlap(const UWorld* World, const FChunk* Chunk, const Mort
 	);
 }
 
-FORCEINLINE bool HasOverlap(const UWorld* World, const FGlobalVector Location, const uint8 LayerIdx)
+FORCEINLINE bool HasOverlap(const UWorld* World, const FGlobalVector Location, const LayerIdxType LayerIdx)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("HasOverlap");
 	
@@ -38,6 +38,21 @@ FORCEINLINE bool HasOverlap(const UWorld* World, const FGlobalVector Location, c
 		FCollisionQueryParams::DefaultQueryParam,
 		FCollisionResponseParams::DefaultResponseParam
 	);
+}
+
+FORCEINLINE static bool HasGeomOverlap(const FBodyInstance* BodyInstance, const FGlobalVector& CenterLocation, const LayerIdxType LayerIdx)
+{
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Has-Geom-Overlap");
+
+	// Sample code to get the body-instance from an actor:
+	// TArray<UPrimitiveComponent*> PrimitiveComponents;
+	// Actor->GetComponents<UPrimitiveComponent>(PrimitiveComponents);
+	// for (const UPrimitiveComponent* PrimitiveComponent : PrimitiveComponents)
+	// {
+	// 	if (!PrimitiveComponent || !PrimitiveComponent->IsCollisionEnabled()) continue;
+	// 	if(FPhysInterface_Chaos::Overlap_Geom(BodyInstance, FNavMeshStatic::CollisionBoxes[LayerIdx], FQuat::Identity, FTransform(FQuat::Identity, CenterLocation.ToVector()))) return true;
+	// }
+	return false;
 }
 
 FORCEINLINE FChunk* GetNeighbouringChunk(const FNavMeshPtr& NavMeshPtr, FGlobalVector ChunkLocation, const uint8 Direction)

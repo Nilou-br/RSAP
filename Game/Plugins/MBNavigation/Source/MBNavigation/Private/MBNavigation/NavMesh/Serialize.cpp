@@ -10,7 +10,7 @@ void SerializeNavMesh(FNavMesh& NavMesh, FGuid& ID)
 	FArchive* FileArchive = IFileManager::Get().CreateFileWriter(*FilePath);
 	if (!FileArchive)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Failed to save navmesh data to file: %s"), *FilePath);
+		UE_LOG(LogTemp, Error, TEXT("Failed to save navmesh data to file: '%s'. Please contact plugin author if this keeps occurring."), *FilePath);
 		return;
 	}
 
@@ -26,7 +26,7 @@ bool DeserializeNavMesh(FNavMesh& OutNavMesh, FGuid& OutID)
 	FArchive* FileArchive = IFileManager::Get().CreateFileReader(*FilePath);
 	if (!FileArchive)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Failed to load navmesh data from file: %s"), *FilePath);
+		UE_LOG(LogTemp, Warning, TEXT("Failed to load navmesh data from file: '%s'. Please contact plugin author if this keeps occurring."), *FilePath);
 		return false;
 	}
 
@@ -118,7 +118,7 @@ FArchive& operator<<(FArchive& Ar, FOctreeLayer& Layer)
 	}
 	else if (Ar.IsLoading())
 	{
-		Layer.clear();
+		// Layer.clear();
 		for(size_t i = 0; i < Size; ++i)
 		{
 			FNode Node;
@@ -140,8 +140,6 @@ FArchive& operator<<(FArchive& Ar, TSharedPtr<FOctree>& Octree)
 	{
 		Ar << Octree->Layers[i];
 	}
-	
-	// todo Serialize leaf nodes if any
 
 	return Ar;
 }

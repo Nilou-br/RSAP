@@ -87,7 +87,7 @@ public:
 	
 	void SetWorld(const UWorld* InWorld) { World = InWorld; }
 	void StageData(const FChangedBoundsMap& BoundsPairMap);
-	void StageData(const FGuid& ActorID, const TChangedBounds<FGlobalVector>& ChangedBounds);
+	void StageData(const ActorKeyType ActorKey, const TChangedBounds<FGlobalVector>& ChangedBounds);
 	bool IsRunning() const { return bIsRunning; }
 	
 	virtual void Tick(float DeltaTime) override;

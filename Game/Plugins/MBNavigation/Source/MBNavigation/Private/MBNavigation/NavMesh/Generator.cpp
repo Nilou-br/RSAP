@@ -14,7 +14,7 @@
 DEFINE_LOG_CATEGORY(LogNavMeshGenerator)
 
 
-void FNavMeshGenerator::Generate(const FBoundsMap& BoundsList)
+void FNavMeshGenerator::Generate(const FBoundsMap& BoundsMap)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("NavMesh Generate");
 	if (!World)
@@ -29,7 +29,7 @@ void FNavMeshGenerator::Generate(const FBoundsMap& BoundsList)
 
 	// Start generation
 	NavMeshPtr->clear();
-	GenerateChunks(BoundsList);
+	GenerateChunks(BoundsMap);
 
 #if WITH_EDITOR
 	const float DurationSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -47,12 +47,11 @@ void FNavMeshGenerator::GenerateChunks(const FBoundsMap& BoundsMap)
 {
 	// Get all the chunks.
 	std::set<ChunkKeyType> ChunkKeys;
-	for (auto Pair : BoundsMap)
+	for (auto Bounds : BoundsMap | std::views::values)
 	{
-		const std::unordered_set<ChunkKeyType> IntersectingChunks = Pair.Value.GetIntersectingChunks();
+		const std::unordered_set<ChunkKeyType> IntersectingChunks = Bounds.GetIntersectingChunks();
 		ChunkKeys.insert(IntersectingChunks.begin(), IntersectingChunks.end());
 	}
-	if(!ChunkKeys.size()) return;
 
 	for (auto ChunkKey : ChunkKeys)
 	{

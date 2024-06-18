@@ -10,21 +10,30 @@ DEFINE_LOG_CATEGORY(LogNavMeshUpdater)
 
 void FNavMeshUpdater::StageData(const FChangedBoundsMap& BoundsPairMap)
 {
-	for (const auto& Pair : BoundsPairMap)
+	for (const auto& [ActorKey, ChangedBounds] : BoundsPairMap)
 	{
-		StageData(Pair.Key, Pair.Value);
+		StageData(ActorKey, ChangedBounds);
 	}
 }
 
-void FNavMeshUpdater::StageData(const FGuid& ActorID, const TChangedBounds<FGlobalVector>& ChangedBounds)
+void FNavMeshUpdater::StageData(const ActorKeyType ActorKey, const TChangedBounds<FGlobalVector>& ChangedBounds)
 {
-	const uint32 ActorKey = GetTypeHash(ActorID);
 	auto Iterator = StagedDataMap.find(ActorKey);
 	if(Iterator == StagedDataMap.end()) std::tie(Iterator, std::ignore) = StagedDataMap.emplace(ActorKey, FStageType());
+
+	// Explanation why the actors are staged like this:
+	// If this actor is already staged, then it means that the actor has its transform updated for another frame while the updater was still running asynchronously.
+	// I keep track of all the previous bounds that the actor had during all these frames that it moved.
+	// I do this because the navmesh could become inaccurate when it is being updated around an actor whilst that actor is moving at the same time.
+	// By storing all the previous bounds, we know exactly which nodes we need to check to potentially un-rasterize.
+	
+	// As for the "current" bounds, only the actual current should be used since the actor resides within these bounds ( at the moment this method is called ).
+	// When the updater starts its next update task, and the actor moves again during this update, then it will stage new current bounds it will use use for the next update.
+	// So when this next update finishes, it will immediately start a new one with the newest "current" bounds around the actor.
 	
 	auto& [PreviousBoundsList, CurrentBounds] = Iterator->second;
-	PreviousBoundsList.emplace_back(ChangedBounds.Previous); // Keep track of all the 'previous' bounds.
-	CurrentBounds = ChangedBounds.Current; // Keep track of only the last-known 'current' bounds.
+	PreviousBoundsList.emplace_back(ChangedBounds.Previous);
+	CurrentBounds = ChangedBounds.Current;
 }
 
 void FNavMeshUpdater::Tick(float DeltaTime)
@@ -153,9 +162,6 @@ uint32 FUpdateTask::Run()
 			if (NewValues.LayerIdx < StoredValues.LayerIdx) StoredValues.LayerIdx = NewValues.LayerIdx; // And update the LayerIdx if the new value is lower.
 		}
 	};
-
-	// TEMP
-	// std::set<ChunkKeyType> ChunkKeys;
 	
 	// Loop through each actor's staged boundaries.
 	for (const auto& [PreviousBoundsList, CurrentBounds] : StagedDataMap | std::views::values)
@@ -236,14 +242,6 @@ uint32 FUpdateTask::Run()
 		
 		SetNegativeNeighbourRelations(Chunk);
 	}
-
-	// // TEMP
-	// for (auto ChunkKey : ChunkKeys)
-	// {
-	// 	const auto Iterator = NavMeshPtr->find(ChunkKey);
-	// 	if(Iterator == NavMeshPtr->end()) continue;
-	// 	SetNegativeNeighbourRelations(&Iterator->second);
-	// }
 
 #if WITH_EDITOR
 	const float DurationSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(

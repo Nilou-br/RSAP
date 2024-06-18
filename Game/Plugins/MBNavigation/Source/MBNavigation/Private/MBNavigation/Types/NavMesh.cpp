@@ -1,8 +1,8 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #include "MBNavigation/Types/NavMesh.h"
-
 #include "MBNavigation/NavMesh/Shared.h"
+// #include "Physics/Experimental/PhysInterface_Chaos.h"
 
 
 std::array<uint8, 6> FNode::GetNeighbourLayerIndexes() const
@@ -140,7 +140,7 @@ static void UpdateChildRelations(const FChunk* Chunk, const FNode* Node, const u
 
 // Updates the relations for the given Node, but only the relations specified in the given RelationsToUpdate.
 // Will also update the neighbours, including their children (against the node), to point to this node.
-void FNode::UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk* Chunk, const uint8 LayerIdx, NavmeshDirection RelationsToUpdate)
+void FNode::UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk* Chunk, const LayerIdxType LayerIdx, NavmeshDirection RelationsToUpdate)
 {
     const FMortonVector NodeLocalLocation = GetLocalLocation();
 	
@@ -228,9 +228,9 @@ void FNode::UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk* Chunk, 
 	}
 }
 
-bool FNode::HasOverlap(const UWorld* World, const FGlobalVector& ChunkLocation, const uint8 LayerIdx) const
+bool FNode::HasOverlap(const UWorld* World, const FGlobalVector& ChunkLocation, const LayerIdxType LayerIdx) const
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Node Has-Overlap");
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Node Has-World-Overlap");
 	return FPhysicsInterface::GeomOverlapBlockingTest(
 		World,
 		FNavMeshStatic::CollisionBoxes[LayerIdx],
@@ -242,7 +242,14 @@ bool FNode::HasOverlap(const UWorld* World, const FGlobalVector& ChunkLocation, 
 	);
 }
 
-void FNode::Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const uint8 LayerIndex, const FColor Color, const uint32 Thickness) const
+// bool FNode::HasGeomOverlap(const FBodyInstance* BodyInstance, const FGlobalVector& CenterLocation, const LayerIdxType LayerIdx)
+// {
+// 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Node Has-Geom-Overlap");
+// 	return true;
+// 	//return FPhysInterface_Chaos::Overlap_Geom(BodyInstance, FNavMeshStatic::CollisionBoxes[LayerIdx], FQuat::Identity, FTransform(FQuat::Identity, CenterLocation.ToVector()));
+// }
+
+void FNode::Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const LayerIdxType LayerIndex, const FColor Color, const uint32 Thickness) const
 {
 	const float NodeHalveSize = FNavMeshStatic::NodeHalveSizes[LayerIndex];
 	const FVector GlobalCenter = GetGlobalLocation(ChunkLocation).ToVector() + NodeHalveSize;
