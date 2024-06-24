@@ -41,12 +41,12 @@ FArchive& operator<<(FArchive& Ar, FGlobalVector& GlobalVector)
 {
 	if (Ar.IsSaving())
 	{
-		uint64_t Key = GlobalVector.ToKey();
+		ChunkKeyType Key = GlobalVector.ToKey();
 		Ar << Key;
 	}
 	else if(Ar.IsLoading())
 	{
-		uint64_t Key;
+		ChunkKeyType Key;
 		Ar << Key;
 		GlobalVector = FGlobalVector::FromKey(Key);
 	}
@@ -86,19 +86,25 @@ FArchive& operator<<(FArchive& Ar, FNodeRelations& Relations)
 
 FArchive& operator<<(FArchive& Ar, FNode& Node)
 {
-	MortonCodeType UnmaskedMortonCode = Node.GetUnmaskedMortonCode();
-	Ar << UnmaskedMortonCode;
 	Ar << Node.Relations;
 
 	if (Ar.IsSaving())
 	{
+		MortonCodeType MortonCode = Node.GetUnmaskedMortonCode();
 		uint32 ChunkBorder = Node.ChunkBorder;
+
+		Ar << MortonCode;
 		Ar << ChunkBorder;
 	}
 	else if (Ar.IsLoading())
 	{
+		MortonCodeType MortonCode;
 		uint32 ChunkBorder;
+
+		Ar << MortonCode;
 		Ar << ChunkBorder;
+
+		Node.SetUnmaskedMortonCode(MortonCode);
 		Node.ChunkBorder = ChunkBorder;
 	}
 
@@ -109,6 +115,7 @@ FArchive& operator<<(FArchive& Ar, FOctreeLayer& Layer)
 {
 	size_t Size = Layer.size();
 	Ar << Size;
+	
 	if(Ar.IsSaving())
 	{
 		for(FNode& Node : Layer | std::views::values)
@@ -118,29 +125,14 @@ FArchive& operator<<(FArchive& Ar, FOctreeLayer& Layer)
 	}
 	else if (Ar.IsLoading())
 	{
-		// Layer.clear();
 		for(size_t i = 0; i < Size; ++i)
 		{
 			FNode Node;
 			Ar << Node;
-			Layer.emplace(Node.GetMortonCode(), Node);
+			Layer.emplace(Node.GetMortonCode(), std::move(Node));
 		}
 	}
-	return Ar;
-}
-
-FArchive& operator<<(FArchive& Ar, TSharedPtr<FOctree>& Octree)
-{
-	if (!Octree.IsValid())
-	{
-		Octree = MakeShared<FOctree>();
-	}
 	
-	for (uint8 i = 0; i < Octree->Layers.size(); ++i)
-	{
-		Ar << Octree->Layers[i];
-	}
-
 	return Ar;
 }
 
@@ -148,8 +140,11 @@ FArchive& operator<<(FArchive& Ar, FChunk& Chunk)
 {
 	Ar << Chunk.Location;
 
-	// Only serialize the static octree.
-	Ar << Chunk.Octrees[0]; // todo: Ensure TSharedPtr<FOctree> serialization is implemented
+	// Only rasterize the static-octree.
+	for (LayerIdxType LayerIdx = 0; LayerIdx <= FNavMeshStatic::StaticDepth; ++LayerIdx)
+	{
+		Ar << *Chunk.Octrees[0]->Layers[LayerIdx];
+	}
 	
 	return Ar;
 }
@@ -170,9 +165,9 @@ FArchive& operator<<(FArchive& Ar, FNavMesh& NavMesh)
 		NavMesh.clear();
 		for(size_t i = 0; i < Size; ++i)
 		{
-			FChunk Value;
-			Ar << Value;
-			NavMesh.emplace(Value.Location.ToKey(), Value);
+			FChunk Chunk = FChunk();
+			Ar << Chunk;
+			NavMesh.emplace(Chunk.Location.ToKey(), std::move(Chunk));
 		}
 	}
 	return Ar;

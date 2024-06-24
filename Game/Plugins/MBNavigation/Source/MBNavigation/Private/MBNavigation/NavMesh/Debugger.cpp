@@ -100,8 +100,8 @@ void FNavMeshDebugger::DrawNodes(const FVector& CameraLocation, const FVector& C
 
 void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const LayerIdxType LayerIdx, const MortonCodeType& NodeMorton, const FVector& CameraLocation, const FVector& CameraForwardVector) const
 {
-	const auto NodeIterator = Chunk->Octrees[0]->Layers[LayerIdx].find(NodeMorton);
-	if(NodeIterator == Chunk->Octrees[0]->Layers[LayerIdx].end()) return;
+	const auto NodeIterator = Chunk->Octrees[0]->Layers[LayerIdx]->find(NodeMorton);
+	if(NodeIterator == Chunk->Octrees[0]->Layers[LayerIdx]->end()) return;
 	const FNode* Node = &NodeIterator->second;
 	
 	// if(!Node->IsOccluded()) return;
@@ -172,8 +172,8 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const LayerIdxTyp
 			if(ChunkIterator == NavMeshPtr->end()) continue;
 			const FChunk& NeighbourChunk = ChunkIterator->second;
 						
-			const auto NeighbourIterator = NeighbourChunk.Octrees[0]->Layers[NeighbourLookupData.LayerIndex].find(NeighbourLookupData.MortonCode);
-			if(NeighbourIterator == Chunk->Octrees[0]->Layers[NeighbourLookupData.LayerIndex].end()) continue;
+			const auto NeighbourIterator = NeighbourChunk.Octrees[0]->Layers[NeighbourLookupData.LayerIndex]->find(NeighbourLookupData.MortonCode);
+			if(NeighbourIterator == Chunk->Octrees[0]->Layers[NeighbourLookupData.LayerIndex]->end()) continue;
 			const FNode& NeighbourNode = NeighbourIterator->second;
 						
 			const FGlobalVector NeighbourGlobalCenterLocation = NeighbourNode.GetGlobalLocation(NeighbourChunk.Location) + FNavMeshStatic::NodeHalveSizes[NeighbourLookupData.LayerIndex];

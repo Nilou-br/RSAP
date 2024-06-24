@@ -5,11 +5,13 @@
 
 
 // Typedefs to avoid confusion. todo: remove _t for compatibility.
+// todo: normal uint32 and uint64 for serialization!!!
 
 typedef uint_fast32_t MortonCodeType;
 typedef uint_fast64_t ChunkKeyType;
 typedef uint8_t LayerIdxType;
 typedef uint32 ActorKeyType;
+typedef uint8 NodeType; // To indicate if the node is static or dynamic, 0 or 1 respectively.
 
 
 // Directions within the sound navmesh use 6 bits to represent '-XYZ +XYZ' values.

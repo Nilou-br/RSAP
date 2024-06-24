@@ -59,12 +59,14 @@ void FNavMeshGenerator::GenerateChunks(const FBoundsMap& BoundsMap)
 		if(!HasOverlap(World, FGlobalVector::FromKey(ChunkKey), 0)) continue;
 
 		// Initialize chunk.
-		auto [ChunkIterator, IsInserted] = NavMeshPtr->emplace(ChunkKey, FChunk(ChunkKey));
-		FChunk* Chunk = &ChunkIterator->second;
+		auto [ChunkIterator, IsInserted] = NavMeshPtr->emplace(ChunkKey, FChunk(ChunkKey, 0));
+		FChunk& Chunk = ChunkIterator->second;
+		
+		FOctreeLayer& Layer = *Chunk.Octrees[0]->Layers[0];
 
 		// Rasterize the octree starting from the root-node until static-depth is reached.
-		FNode& RootNode = Chunk->Octrees[0]->Layers[0][0];
-		RasterizeStaticNode(Chunk, RootNode, 0);
+		auto [Iterator, bInserted] = Layer.emplace(0, FNode(0, DIRECTION_ALL)); // todo: here
+		RasterizeStaticNode(Chunk, Iterator->second, 0);
 
 		// Set all the relations to the nodes that are in the negative direction from this chunk.
 		// Chunks are generated from negative to positive, so any chunks in the positive direction do not exist yet.
@@ -76,10 +78,10 @@ void FNavMeshGenerator::GenerateChunks(const FBoundsMap& BoundsMap)
  * Rasterize a static node, only if it occludes anything.
  * This method is called recursively until it either reaches the static-depth or if it does not occlude anything.
  */
-void FNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FNode& Node, const LayerIdxType LayerIdx)
+void FNavMeshGenerator::RasterizeStaticNode(FChunk& Chunk, FNode& Node, const LayerIdxType LayerIdx)
 {
 	// If overlapping any static object.
-	if (!Node.HasOverlap(World, Chunk->Location, LayerIdx)) return;
+	if (!Node.HasOverlap(World, Chunk.Location, LayerIdx)) return;
 	Node.SetOccluded(true);
 
 	// Stop recursion if end reached.
@@ -87,7 +89,7 @@ void FNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FNode& Node, const La
 	Node.SetHasChildren(true);
 
 	const LayerIdxType ChildLayerIndex = LayerIdx + 1;
-	FOctreeLayer& ChildLayer = Chunk->Octrees[0].Get()->Layers[ChildLayerIndex];
+	FOctreeLayer& ChildLayer = *Chunk.Octrees[0]->Layers[ChildLayerIndex];
 	const int_fast16_t ChildMortonOffset = FNavMeshStatic::MortonOffsets[ChildLayerIndex];
 
 	// Reserve memory for 8 child-nodes on the lower layer and initialize them.
@@ -134,13 +136,13 @@ void FNavMeshGenerator::RasterizeStaticNode(FChunk* Chunk, FNode& Node, const La
  * 
  * @param Chunk Chunk holding the nodes you want to set the relations of.
  */
-void FNavMeshGenerator::SetNegativeNeighbourRelations(const FChunk* Chunk)
+void FNavMeshGenerator::SetNegativeNeighbourRelations(const FChunk& Chunk)
 {
 	// Loop through all static nodes sorted by morton-code.
 	LayerIdxType LayerIdx = 0;
-	for (FOctreeLayer& NodesMap : Chunk->Octrees[0]->Layers)
+	for (auto& Layer : Chunk.Octrees[0]->Layers)
 	{
-		for (auto& Node : NodesMap | std::views::values)
+		for (FNode& Node : *Layer | std::views::values)
 		{
 			Node.UpdateRelations(NavMeshPtr, Chunk, LayerIdx, DIRECTION_ALL_NEGATIVE);
 		}

@@ -23,8 +23,8 @@ private:
 
 	// Generation methods
 	void GenerateChunks(const FBoundsMap& BoundsMap);
-	void RasterizeStaticNode(FChunk* Chunk, FNode &Node, const LayerIdxType LayerIdx);
-	void SetNegativeNeighbourRelations(const FChunk* Chunk);
+	void RasterizeStaticNode(FChunk& Chunk, FNode &Node, const LayerIdxType LayerIdx);
+	void SetNegativeNeighbourRelations(const FChunk& Chunk);
 
 	// Variables
 	FNavMeshPtr NavMeshPtr;

@@ -6,11 +6,11 @@
 
 
 
-FORCEINLINE bool HasOverlap(const UWorld* World, const FChunk* Chunk, const MortonCodeType MortonCode, const LayerIdxType LayerIdx)
+FORCEINLINE bool HasOverlap(const UWorld* World, const FChunk& Chunk, const MortonCodeType MortonCode, const LayerIdxType LayerIdx)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("HasOverlap");
 	
-	const FGlobalVector Location = FGlobalVector::FromMortonCode(MortonCode, Chunk->Location);
+	const FGlobalVector Location = FGlobalVector::FromMortonCode(MortonCode, Chunk.Location);
 	const FVector Extent = FVector(FNavMeshStatic::NodeHalveSizes[LayerIdx]);
 	
 	return FPhysicsInterface::GeomOverlapBlockingTest(

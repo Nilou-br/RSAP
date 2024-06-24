@@ -12,7 +12,7 @@
 struct FGlobalVector;
 struct FMortonVector;
 
-struct FChunk;
+class FChunk;
 typedef ankerl::unordered_dense::map<ChunkKeyType, FChunk> FNavMesh;
 typedef std::shared_ptr<FNavMesh> FNavMeshPtr;
 
@@ -92,11 +92,16 @@ struct FNodeLookupData
  * - MortonCode: represents its 3d location in a single value for efficiency and used as a key to find nodes.
  *				 Also allows the nodes to be coherent in memory, and be able to quickly find neighbours using bitwise-operators.
  * - Neighbours: Stores a 4 bit layer-index for locating each neighbour in the octree.
- * - DynamicIndex: Represents the octree the children of this node are stored on, 0 being the static octree. todo remove this, we only need to know d-index of neighbours/children.
  * - ChunkBorder: Bitmask for determining the border this voxel is next to.
  *   Used to efficiently calculate the next chunk.
  * - IsOccluded(): If the node is occluded.
  * - HasChildren(): If the node has children.
+ *
+ *	 todo: Morton-code and chunk-border can be removed?
+ *	 Morton-codes are the keys on the hashmap, so they're automatically associated with a node.
+ *	 Chunk-border can be calculated during pathfinding by keeping track of each local axis within a chunk. For example when moving from node in layer 0 to a neighbour in the same layer, we know we moved 512. Then if the value is either 0 or 1023, it's on a border.
+ *
+ *	 If these two members are gone, then this node class will be 
  */
 class FNode
 {
@@ -109,7 +114,6 @@ class FNode
 	// The morton-code of a node also stores two additional booleans for checking occlusion and if it has children.
 	MortonCodeType MortonCode;
 	
-	// todo 8 bits for dynamic index for each neighbour + child + parent???? 128 dynamic-objects a chunk (0 index / first bit is for the static octree)
 
 public:
 	FNodeRelations Relations;
@@ -144,14 +148,14 @@ public:
 
 	FORCEINLINE FMortonVector GetLocalLocation() const
 	{
-		uint_fast16_t TempX, TempY, TempZ;
-		libmorton::morton3D_32_decode(GetMortonCode(), TempX, TempY, TempZ);
+		uint_fast16_t OutX, OutY, OutZ;
+		libmorton::morton3D_32_decode(GetMortonCode(), OutX, OutY, OutZ);
 
 		// Left-bit-shift using the Voxel-Size-Exponent into local-space.
-		TempX <<= FNavMeshStatic::VoxelSizeExponent;
-		TempY <<= FNavMeshStatic::VoxelSizeExponent;
-		TempZ <<= FNavMeshStatic::VoxelSizeExponent;
-		return FMortonVector(TempX, TempY, TempZ);
+		// TempX <<= FNavMeshStatic::VoxelSizeExponent;
+		// TempY <<= FNavMeshStatic::VoxelSizeExponent;
+		// TempZ <<= FNavMeshStatic::VoxelSizeExponent;
+		return FMortonVector(OutX, OutY, OutZ);
 	}
 	
 	FORCEINLINE FGlobalVector GetGlobalLocation(const FGlobalVector &ChunkLocation) const
@@ -169,6 +173,12 @@ public:
 	FORCEINLINE MortonCodeType GetUnmaskedMortonCode() const
 	{
 		return MortonCode;
+	}
+	
+	// Sets the full morton-code including booleans. Only used during deserialization.
+	FORCEINLINE void SetUnmaskedMortonCode(const MortonCodeType InMortonCode)
+	{
+		MortonCode = InMortonCode;
 	}
 	
 	FORCEINLINE MortonCodeType GetParentMortonCode(const LayerIdxType LayerIndex) const
@@ -208,65 +218,73 @@ public:
 	std::array<LayerIdxType, 6> GetNeighbourLayerIndexes() const;
 	std::array<FNodeLookupData, 6> GetNeighboursLookupData(const FGlobalVector& ChunkLocation) const;
 
-	void UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk* Chunk, const LayerIdxType LayerIdx, NavmeshDirection RelationsToUpdate);
+	void UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk& Chunk, const LayerIdxType LayerIdx, NavmeshDirection RelationsToUpdate);
 	bool HasOverlap(const UWorld* World, const FGlobalVector& ChunkLocation, const LayerIdxType LayerIdx) const;
 	//static bool HasGeomOverlap(const FBodyInstance* BodyInstance, const FGlobalVector& CenterLocation, const LayerIdxType LayerIdx);
 	void Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const LayerIdxType LayerIndex, const FColor Color = FColor::Black, const uint32 Thickness = 0) const;
 
 	template<typename Func>
-	void ForEachChild(const FChunk* Chunk, const LayerIdxType LayerIdx, Func Callback) const;
+	void ForEachChild(const FChunk& Chunk, const LayerIdxType LayerIdx, Func Callback) const;
 };
 
 // typedef std::map<MortonCode, FNode> FOctreeLayer;
 typedef ankerl::unordered_dense::map<MortonCodeType, FNode> FOctreeLayer;
 
 /**
- * The octree stores all the nodes in 10 different layers, each layer having higher resolution nodes.
- * Leaf nodes are stored in a separate list.
- *
- * The origin is located at the negative most voxel's center point.
- * This makes the morton-codes align correctly since the morton codes represent the node's center point.
+ * The octree has 10 layers, layer 0 holding the root nodes.
  */
-struct FOctree // todo: reduce size?
+struct FOctree
 {
-	std::array<FOctreeLayer, 10> Layers;
+	std::array<std::unique_ptr<FOctreeLayer>, 10> Layers;
 
 	FOctree()
 	{
-		for (LayerIdxType i = 0; i < 10; i++)
+		for (LayerIdxType LayerIdx = 0; LayerIdx < 10; ++LayerIdx)
 		{
-			Layers[i] = FOctreeLayer();
+			Layers[LayerIdx] = std::make_unique<FOctreeLayer>();
 		}
 	}
 };
 
 /**
- * A Chunk stores a list of octree pointers.
- * The first octree at index 0 is the static-octree which will never change in size.
- * All the other octree's are dynamic and accessible from index 1-4096, and represent the dynamic-object's nodes.
+ * A Chunk stores two octrees.
+ * The first octree at index 0 is for static nodes. These are generated/updated in the editor, but not during gameplay. Only the relations can be updated during gameplay to point to dynamic nodes, but these changes should not be serialized.
+ * The second octree at index 1 is for dynamic nodes. These are created from dynamic objects during gameplay, and are cleared when the level is closed. These will not be serialized.
  */
-struct FChunk
+class FChunk
 {
-	FGlobalVector Location; // Located at the negative most location.
-	TArray<TSharedPtr<FOctree>> Octrees;
-	
-	void Initialize()
+	void Initialize(const NodeType RootNodeType)
 	{
-		if(Octrees.Num()) return;
-		
-		// Create the static octree, and add the root node.
-		Octrees.Add(MakeShared<FOctree>());
-		Octrees[0]->Layers[0].emplace(0, FNode(0, 0, 0, DIRECTION_ALL));
-	}
-	
-	explicit FChunk(const FGlobalVector& InLocation = FGlobalVector(0, 0, 0))
-		: Location(InLocation)
-	{
-		Initialize();
+		Octrees[0] = std::make_unique<FOctree>();
+		Octrees[1] = std::make_unique<FOctree>();
+		Octrees[RootNodeType]->Layers[0]->emplace(0, FNode(0, 0b111111));
 	}
 
-	explicit FChunk(const ChunkKeyType ChunkKey)
+	void Initialize()
+	{
+		Octrees[0] = std::make_unique<FOctree>();
+		Octrees[1] = std::make_unique<FOctree>();
+	}
+	
+public:
+	FGlobalVector Location; // Located at the negative most location.
+	std::array<std::unique_ptr<FOctree>, 2> Octrees;
+	
+	explicit FChunk(const FGlobalVector& InLocation, const NodeType RootNodeType)
+		: Location(InLocation)
+	{
+		Initialize(RootNodeType);
+	}
+
+	explicit FChunk(const ChunkKeyType ChunkKey, const NodeType RootNodeType)
 		: Location(FGlobalVector::FromKey(ChunkKey))
+	{
+		Initialize(RootNodeType);
+	}
+
+	// This empty constructor overload should only be used for deserializing the chunk. It does not create the root node.
+	explicit FChunk()
+		: Location(0)
 	{
 		Initialize();
 	}
@@ -284,10 +302,10 @@ struct FChunk
 	{
 		return TBounds(Location, Location+FNavMeshStatic::ChunkSize);
 	}
+	
 };
 
-// The Navigation-Mesh is a hashmap of Chunks, where each chunk can be found using a uint64 key.
-// The key is the location of the chunk divided by the chunk-size ( FGlobalVector::ToKey ).
+// The Navigation-Mesh is a hashmap of Chunks, the key is the location of the chunk divided by the chunk-size (::ToKey).
 typedef ankerl::unordered_dense::map<ChunkKeyType, FChunk> FNavMesh;
 typedef std::shared_ptr<FNavMesh> FNavMeshPtr;
 
@@ -295,7 +313,7 @@ typedef std::shared_ptr<FNavMesh> FNavMeshPtr;
 
 
 template <typename Func>
-void FNode::ForEachChild(const FChunk* Chunk, const LayerIdxType LayerIdx, Func Callback) const
+void FNode::ForEachChild(const FChunk& Chunk, const LayerIdxType LayerIdx, Func Callback) const
 {
 	if(!HasChildren()) return;
 		
@@ -312,7 +330,7 @@ void FNode::ForEachChild(const FChunk* Chunk, const LayerIdxType LayerIdx, Func 
 		const FMortonVector ChildMortonLocation = FMortonVector(ChildMortonX, ChildMortonY, ChildMortonZ);
 		const MortonCodeType ChildMortonCode = ChildMortonLocation.ToMortonCode();
 			
-		const auto NodeIterator = Chunk->Octrees[0]->Layers[ChildLayerIdx].find(ChildMortonCode);
+		const auto NodeIterator = Chunk.Octrees[0]->Layers[ChildLayerIdx]->find(ChildMortonCode);
 		Callback(NodeIterator->second);
 	}
 }

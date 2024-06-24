@@ -14,6 +14,5 @@ MBNAVIGATION_API FArchive& operator<<(FArchive& Ar, FGlobalVector& GlobalVector)
 MBNAVIGATION_API FArchive& operator<<(FArchive& Ar, FNodeRelations& Relations);
 MBNAVIGATION_API FArchive& operator<<(FArchive& Ar, FNode& Node);
 MBNAVIGATION_API FArchive& operator<<(FArchive& Ar, FOctreeLayer& Layer);
-MBNAVIGATION_API FArchive& operator<<(FArchive& Ar, TSharedPtr<FOctree>& Octree);
 MBNAVIGATION_API FArchive& operator<<(FArchive& Ar, FChunk& Chunk);
 MBNAVIGATION_API FArchive& operator<<(FArchive& Ar, FNavMesh& NavMesh);

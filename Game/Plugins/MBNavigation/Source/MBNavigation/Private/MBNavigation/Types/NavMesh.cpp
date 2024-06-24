@@ -131,7 +131,7 @@ static void UpdateChildRelations(const FChunk* Chunk, const FNode* Node, const u
 	// Update each child's relation in this direction to the LayerIdxToSet. Recursively do the same for their children in this direction.
 	for (auto ChildMortonCode : ChildMortonCodes)
 	{
-		const auto NodeIterator = Chunk->Octrees[0]->Layers[ChildLayerIndex].find(ChildMortonCode);
+		const auto NodeIterator = Chunk->Octrees[0]->Layers[ChildLayerIndex]->find(ChildMortonCode);
 		FNode* ChildNode = &NodeIterator->second;
 		ChildNode->Relations.SetFromDirection(LayerIdxToSet, Direction);
 		UpdateChildRelations(Chunk, ChildNode, ChildLayerIndex, LayerIdxToSet, Direction);
@@ -140,7 +140,7 @@ static void UpdateChildRelations(const FChunk* Chunk, const FNode* Node, const u
 
 // Updates the relations for the given Node, but only the relations specified in the given RelationsToUpdate.
 // Will also update the neighbours, including their children (against the node), to point to this node.
-void FNode::UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk* Chunk, const LayerIdxType LayerIdx, NavmeshDirection RelationsToUpdate)
+void FNode::UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk& Chunk, const LayerIdxType LayerIdx, NavmeshDirection RelationsToUpdate)
 {
     const FMortonVector NodeLocalLocation = GetLocalLocation();
 	
@@ -152,7 +152,7 @@ void FNode::UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk* Chunk, 
 		if (!DirectionToUpdate) continue;
 
 		// Get the chunk the neighbour is in, which is a different chunk if the current direction goes outside of the chunk.
-		const FChunk* NeighbourChunk = ChunkBorder & DirectionToUpdate ? GetNeighbouringChunk(NavMeshPtr, Chunk->Location, Direction) : Chunk;
+		const FChunk* NeighbourChunk = ChunkBorder & DirectionToUpdate ? GetNeighbouringChunk(NavMeshPtr, Chunk.Location, Direction) : &Chunk;
 		if(!NeighbourChunk)
 		{
 			// The neighbouring-chunk does not exist, so we can remove this direction from the RelationsToUpdate to prevent this find from being repeated.
@@ -175,8 +175,8 @@ void FNode::UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk* Chunk, 
 		// Find the neighbour by checking each layer one by one upwards in the octree, starting from the given node's layer-idx, until we find the neighbour.
 		for (int NeighbourLayerIdx = LayerIdx; NeighbourLayerIdx >= 0; --NeighbourLayerIdx)
 		{
-			const auto NodeIterator = NeighbourChunk->Octrees[0]->Layers[NeighbourLayerIdx].find(NeighbourMortonCode);
-			if(NodeIterator == NeighbourChunk->Octrees[0]->Layers[NeighbourLayerIdx].end())
+			const auto NodeIterator = NeighbourChunk->Octrees[0]->Layers[NeighbourLayerIdx]->find(NeighbourMortonCode);
+			if(NodeIterator == NeighbourChunk->Octrees[0]->Layers[NeighbourLayerIdx]->end())
 			{
 				// There is no neighbour on this layer, so try again using the parent of this uninitialized neighbour.
 				NeighbourMortonCode = FNode::GetParentMortonCode(NeighbourMortonCode, NeighbourLayerIdx);

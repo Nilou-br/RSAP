@@ -42,19 +42,19 @@ protected:
 private:
 	template<typename Func> void ForEachChunkIntersection(const TBounds<FGlobalVector>& Bounds, const LayerIdxType LayerIdx, Func Callback);
 
-	bool StartReRasterizeNode(const FChunk* Chunk, const MortonCodeType MortonCode, const LayerIdxType LayerIdx, const NavmeshDirection RelationsToUpdate);
-	static void RecursiveReRasterizeNode(const UWorld* World, const FChunk* Chunk, FNode& Node, const LayerIdxType LayerIdx, const FMortonVector MortonLocation);
+	bool StartReRasterizeNode(const FChunk& Chunk, const MortonCodeType MortonCode, const LayerIdxType LayerIdx, const NavmeshDirection RelationsToUpdate);
+	static void RecursiveReRasterizeNode(const UWorld* World, const FChunk& Chunk, FNode& Node, const LayerIdxType LayerIdx, const FMortonVector MortonLocation);
 	
-	bool StartClearUnoccludedChildrenOfNode(const FChunk* Chunk, const MortonCodeType NodeMortonCode, const LayerIdxType LayerIdx, const NavmeshDirection RelationsToUpdate);
-	void RecursiveClearUnoccludedChildren(const FChunk* Chunk, FNode& Node, const LayerIdxType LayerIdx, const NavmeshDirection RelationsToUpdate);
+	bool StartClearUnoccludedChildrenOfNode(const FChunk& Chunk, const MortonCodeType NodeMortonCode, const LayerIdxType LayerIdx, const NavmeshDirection RelationsToUpdate);
+	void RecursiveClearUnoccludedChildren(const FChunk& Chunk, const FNode& Node, const LayerIdxType LayerIdx, const NavmeshDirection RelationsToUpdate);
 	
-	void StartClearAllChildrenOfNode(const FChunk* Chunk, const MortonCodeType NodeMortonCode, const LayerIdxType LayerIdx, const NavmeshDirection RelationsToUpdate);
-	static void RecursiveClearAllChildren(const FChunk* Chunk, const FNode& Node, const LayerIdxType LayerIdx);
+	void StartClearAllChildrenOfNode(const FChunk& Chunk, const MortonCodeType NodeMortonCode, const LayerIdxType LayerIdx, const NavmeshDirection RelationsToUpdate);
+	static void RecursiveClearAllChildren(const FChunk& Chunk, const FNode& Node, const LayerIdxType LayerIdx);
 	
-	void InitializeParents(const FChunk* Chunk, const MortonCodeType ChildMortonCode, const LayerIdxType ChildLayerIdx);
-	void TryUnRasterizeNodes(const FChunk* Chunk,  const std::unordered_set<MortonCodeType>& MortonCodes, const LayerIdxType LayerIdx);
+	void InitializeParents(const FChunk& Chunk, const MortonCodeType ChildMortonCode, const LayerIdxType ChildLayerIdx);
+	void TryUnRasterizeNodes(const FChunk& Chunk,  const std::unordered_set<MortonCodeType>& MortonCodes, const LayerIdxType LayerIdx);
 	
-	void SetNegativeNeighbourRelations(const FChunk* Chunk); // todo: temp method. Remove when neighbour bug is fixed.
+	void SetNegativeNeighbourRelations(const FChunk& Chunk); // todo: temp method. Remove when neighbour bug is fixed.
 	
 	TSharedPtr<TPromise<void>> Promise;
 	FRunnableThread* Thread;
