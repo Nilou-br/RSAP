@@ -64,16 +64,16 @@ void FNavMeshUpdater::Update()
  * Calculates the optimal starting layer used for rounding the bounds.
  * This gives us a layer-index where the node-size for that layer fits at-least once inside the largest side of both bounds.
  */
-uint8 CalculateOptimalStartingLayer(const TChangedBounds<FGlobalVector>& BoundsPair)
+LayerIdxType CalculateOptimalStartingLayer(const TChangedBounds<FGlobalVector>& BoundsPair)
 {
-	uint8 StartingLayer = FNavMeshStatic::StaticDepth;
+	LayerIdxType StartingLayer = FNavMeshStatic::StaticDepth;
 
 	// Get the largest side of the bounds-pair. One of the bounds could be invalid when undo/redoing to a state where the actor does not exist.
 	const int32 MaxSide = BoundsPair.Current.IsValid()
 		? BoundsPair.Current.GetLengths().GetLargestAxis() : BoundsPair.Previous.GetLengths().GetLargestAxis();
 
 	// Get the first layer where the node-size fits at-least 3 times in any side of the bounds of the object.
-	for (uint8 LayerIndex = 0; LayerIndex<FNavMeshStatic::StaticDepth; ++LayerIndex)
+	for (LayerIdxType LayerIndex = 0; LayerIndex<FNavMeshStatic::StaticDepth; ++LayerIndex)
 	{
 		if(MaxSide / FNavMeshStatic::NodeSizes[LayerIndex] <= 1) continue;
 		StartingLayer = LayerIndex;
@@ -87,9 +87,9 @@ uint8 CalculateOptimalStartingLayer(const TChangedBounds<FGlobalVector>& BoundsP
 struct FNodeUpdateType
 {
 	LayerIdxType LayerIdx;
-	uint8 Relations: 6 = DIRECTION_ALL_NEGATIVE;
+	NavmeshDirection Relations: 6 = DIRECTION_ALL_NEGATIVE;
 
-	FNodeUpdateType(const LayerIdxType LayerIdx, const uint8 RelationsToUpdate)
+	FNodeUpdateType(const LayerIdxType LayerIdx, const NavmeshDirection RelationsToUpdate)
 		: LayerIdx(LayerIdx), Relations(RelationsToUpdate)
 	{}
 };
@@ -115,13 +115,13 @@ uint32 FUpdateTask::Run()
 		FNodeUpdateMap ResultMap;
 		
 		for (uint_fast16_t MortonX = Bounds.Min.X; MortonX < Bounds.Max.X; MortonX+=MortonOffset) {
-			const uint8 NodePositiveX = PositiveDirectionsToTrack && (MortonX + MortonOffset == Bounds.Max.X ? DIRECTION_X_POSITIVE : DIRECTION_NONE);
+			const NavmeshDirection NodePositiveX = PositiveDirectionsToTrack && (MortonX + MortonOffset == Bounds.Max.X ? DIRECTION_X_POSITIVE : DIRECTION_NONE);
 			
 			for (uint_fast16_t MortonY = Bounds.Min.Y; MortonY < Bounds.Max.Y; MortonY+=MortonOffset) {
-				const uint8 NodePositiveY = PositiveDirectionsToTrack && (MortonY + MortonOffset == Bounds.Max.Y ? DIRECTION_Y_POSITIVE : DIRECTION_NONE);
+				const NavmeshDirection NodePositiveY = PositiveDirectionsToTrack && (MortonY + MortonOffset == Bounds.Max.Y ? DIRECTION_Y_POSITIVE : DIRECTION_NONE);
 				
 				for (uint_fast16_t MortonZ = Bounds.Min.Z; MortonZ < Bounds.Max.Z; MortonZ+=MortonOffset) {
-					const uint8 NodePositiveZ = PositiveDirectionsToTrack && (MortonZ + MortonOffset == Bounds.Max.Z ? DIRECTION_Z_POSITIVE : DIRECTION_NONE);
+					const NavmeshDirection NodePositiveZ = PositiveDirectionsToTrack && (MortonZ + MortonOffset == Bounds.Max.Z ? DIRECTION_Z_POSITIVE : DIRECTION_NONE);
 
 					// Relations in negative directions always need to be updated.
 					ResultMap.emplace(FMortonVector::ToMortonCode(MortonX, MortonY, MortonZ), FNodeUpdateType(LayerIdx, DIRECTION_ALL_NEGATIVE | (NodePositiveX | NodePositiveY | NodePositiveZ)));
@@ -168,7 +168,7 @@ uint32 FUpdateTask::Run()
 	{
 		// Calculate the optimal starting-layer for updating the nodes around this actor.
 		// It could be slightly less optimal if the actor was scaled through multiple stored states, but it will be negligible if this factor was small.
-		const uint8 StartingLayerIdx = CalculateOptimalStartingLayer(TChangedBounds(PreviousBoundsList.back(), CurrentBounds));
+		const LayerIdxType StartingLayerIdx = CalculateOptimalStartingLayer(TChangedBounds(PreviousBoundsList.back(), CurrentBounds));
 
 		// Round the bounds to this layer.
 		const TBounds<FGlobalVector> CurrentRounded = CurrentBounds.Round(StartingLayerIdx);
@@ -251,87 +251,19 @@ uint32 FUpdateTask::Run()
 	return 0;
 }
 
-// /**
-//  * Runs a callback for-each chunk that intersect with the given bounds.
-//  * 
-//  * Callback takes:
-//  * - const FChunk&
-//  * - const std::vector<std::pair<MortonCode, NavmeshDirection>>
-//  * 
-//  * @note Chunks that do not exist are initialized.
-//  */
-// template<typename Func>
-// void FUpdateTask::ForEachChunkIntersection(const TBounds<FGlobalVector>& Bounds, const uint8 LayerIdx, Func Callback)
-// {
-// 	static_assert(std::is_invocable_v<Func, const FChunk&, const std::vector<std::pair<MortonCodeType, NavmeshDirection>>>, "'::ForEachChunkIntersection' callback has wrong arguments.");
-// 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("ForEachChunkIntersection");
-// 	
-// 	if(!Bounds.IsValid()) return;
-// 	const uint_fast16_t MortonOffset = FNavMeshStatic::MortonOffsets[LayerIdx];
-//
-// 	// Get the total-boundaries of all the chunks intersecting with the bounds.
-// 	const FGlobalVector ChunkMin = Bounds.Min & FNavMeshStatic::ChunkMask;
-// 	const FGlobalVector ChunkMax = Bounds.Max-1 & FNavMeshStatic::ChunkMask;
-//
-// 	// For-each chunk intersecting the bounds.
-// 	for (int32 GlobalX = ChunkMin.X; GlobalX <= ChunkMax.X; GlobalX+=FNavMeshStatic::ChunkSize){
-// 		const uint8 ChunkPositiveX = GlobalX == ChunkMax.X ? DIRECTION_X_POSITIVE : DIRECTION_NONE;
-// 		
-// 		for (int32 GlobalY = ChunkMin.Y; GlobalY <= ChunkMax.Y; GlobalY+=FNavMeshStatic::ChunkSize){
-// 			const uint8 ChunkPositiveY = GlobalY == ChunkMax.Y ? DIRECTION_Y_POSITIVE : DIRECTION_NONE;
-// 			
-// 			for (int32 GlobalZ = ChunkMin.Z; GlobalZ <= ChunkMax.Z; GlobalZ+=FNavMeshStatic::ChunkSize){
-// 				const uint8 ChunkPositiveZ = GlobalZ == ChunkMax.Z ? DIRECTION_Z_POSITIVE : DIRECTION_NONE;
-//
-// 				// Get the intersection of the bounds with this chunk. What remains is the part of the bounds within this chunk, and convert that to morton-space.
-// 				const FGlobalVector ChunkLocation = FGlobalVector(GlobalX, GlobalY, GlobalZ);
-// 				const TBounds<FGlobalVector> IntersectedBounds = Bounds.GetIntersection(TBounds(ChunkLocation, ChunkLocation+FNavMeshStatic::ChunkSize));
-//
-// 				// Get this chunk, initialize it if it does not exists yet.
-// 				const uint64_t ChunkKey = ChunkLocation.ToKey();
-// 				auto ChunkIterator = NavMeshPtr->find(ChunkKey);
-// 				if(ChunkIterator == NavMeshPtr->end()) std::tie(ChunkIterator, std::ignore) = NavMeshPtr->emplace(ChunkKey, FChunk(ChunkLocation, 0));
-//
-// 				// Get the update-pairs for-each node within the intersected-bounds.
-// 				const TBounds<FMortonVector> MortonBounds = IntersectedBounds.ToMortonSpace(ChunkLocation);
-// 				std::vector<std::pair<MortonCodeType, NavmeshDirection>> UpdatePairs;
-//
-// 				// Get each node's morton-code within the MortonBounds, and check if that node is the most positive in any direction.
-// 				for (uint_fast16_t MortonX = MortonBounds.Min.X; MortonX < MortonBounds.Max.X; MortonX+=MortonOffset) {
-// 					const uint8 NodePositiveX = ChunkPositiveX && (MortonX + MortonOffset == MortonBounds.Max.X ? DIRECTION_X_POSITIVE : DIRECTION_NONE); // First check if this chunk is the most positive, then the same for the node.
-// 			
-// 					for (uint_fast16_t MortonY = MortonBounds.Min.Y; MortonY < MortonBounds.Max.Y; MortonY+=MortonOffset) {
-// 						const uint8 NodePositiveY = ChunkPositiveY && (MortonY + MortonOffset == MortonBounds.Max.Y ? DIRECTION_Y_POSITIVE : DIRECTION_NONE);
-// 				
-// 						for (uint_fast16_t MortonZ = MortonBounds.Min.Z; MortonZ < MortonBounds.Max.Z; MortonZ+=MortonOffset) {
-// 							const uint8 NodePositiveZ = ChunkPositiveZ && (MortonZ + MortonOffset == MortonBounds.Max.Z ? DIRECTION_Z_POSITIVE : DIRECTION_NONE);
-//
-// 							// Emplace the morton-code paired with the relations of this node that should be updated. Relations in negative directions should always be updated.
-// 							UpdatePairs.emplace_back(FMortonVector::ToMortonCode(MortonX, MortonY, MortonZ), DIRECTION_ALL_NEGATIVE | (NodePositiveX | NodePositiveY | NodePositiveZ));
-// 						}
-// 					}
-// 				}
-//
-// 				// Run the callback.
-// 				Callback(&ChunkIterator->second, UpdatePairs);
-// 			}
-// 		}
-// 	}
-// }
-
 /**
  * Recursively re-rasterizes the octree from the Node with the given MortonCode in given LayerIdx.
  * Updates the properties on the affected Nodes accordingly.
  * @return False if the starting Node is occluded. True otherwise.
  */
-bool FUpdateTask::StartReRasterizeNode(const FChunk& Chunk, const MortonCodeType MortonCode, const uint8 LayerIdx, const NavmeshDirection RelationsToUpdate)
+bool FUpdateTask::StartReRasterizeNode(const FChunk& Chunk, const MortonCodeType MortonCode, const LayerIdxType LayerIdx, const NavmeshDirection RelationsToUpdate)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("StartReRasterizeNode");
 	auto NodeIterator = Chunk.Octrees[0]->Layers[LayerIdx]->find(MortonCode);
 	const bool bFoundNode = NodeIterator != Chunk.Octrees[0]->Layers[LayerIdx]->end();
 
 	const bool bHasOverlap = bFoundNode
-		? NodeIterator->second.HasOverlap(World, Chunk.Location, LayerIdx)
+		? NodeIterator->second.HasOverlap(World, Chunk.Location, MortonCode, LayerIdx)
 		: HasOverlap(World, Chunk, MortonCode, LayerIdx);
 
 	if(!bHasOverlap)
@@ -339,11 +271,11 @@ bool FUpdateTask::StartReRasterizeNode(const FChunk& Chunk, const MortonCodeType
 		// There is no overlap, so we can update the Node if it exists, and return true to indicate we should check the parent.
 		if(bFoundNode)
 		{
-			FNode& Node =  NodeIterator->second;
+			FNode& Node = NodeIterator->second;
 			if(Node.HasChildren())
 			{
 				//Node.UpdateRelations(NavMeshPtr, Chunk, LayerIdx, RelationsToUpdate); // For now just set all neighbours to point to this node instead of the children which are getting uninitialized.
-				RecursiveClearAllChildren(Chunk, Node, LayerIdx);
+				RecursiveClearAllChildren(Chunk, *NodeIterator, LayerIdx);
 				Node.SetHasChildren(false);
 			}
 			Node.SetOccluded(false);
@@ -364,16 +296,19 @@ bool FUpdateTask::StartReRasterizeNode(const FChunk& Chunk, const MortonCodeType
 	Node.SetOccluded(true);
 	//Node.UpdateRelations(NavMeshPtr, Chunk, LayerIdx, RelationsToUpdate);
 	
-	RecursiveReRasterizeNode(World, Chunk, Node, LayerIdx, NodeIterator->second.GetMortonLocation());
+	RecursiveReRasterizeNode(World, Chunk, *NodeIterator, LayerIdx, Node.GetMortonLocation(MortonCode));
 	return false;
 }
 
 // Recursive re-rasterization of nodes.
-void FUpdateTask::RecursiveReRasterizeNode(const UWorld* World, const FChunk& Chunk, FNode& Node, const uint8 LayerIdx, const FMortonVector MortonLocation)
+void FUpdateTask::RecursiveReRasterizeNode(const UWorld* World, const FChunk& Chunk, FNodePair& NodePair, const LayerIdxType LayerIdx, const FMortonVector MortonLocation)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("RecursiveReRasterizeNode");
 	if(LayerIdx >= FNavMeshStatic::StaticDepth) return;
-	const uint8 ChildLayerIdx = LayerIdx+1;
+
+	FNode& Node = NodePair.second;
+	const MortonCodeType MortonCode = NodePair.first;
+	const LayerIdxType ChildLayerIdx = LayerIdx+1;
 	
 	if(!Node.HasChildren())
 	{
@@ -389,7 +324,7 @@ void FUpdateTask::RecursiveReRasterizeNode(const UWorld* World, const FChunk& Ch
 			const uint_fast16_t ChildMortonZ = MortonLocation.Z + ((i & 4) ? ChildMortonOffset : 0);
 			const FMortonVector ChildMortonLocation(ChildMortonX, ChildMortonY, ChildMortonZ);
 			
-			FNode NewNode(ChildMortonLocation);
+			FNode NewNode = FNode();
 			if(Node.ChunkBorder)
 			{
 				NewNode.ChunkBorder |= (i & 1) ? DIRECTION_X_POSITIVE : DIRECTION_X_NEGATIVE;
@@ -398,32 +333,32 @@ void FUpdateTask::RecursiveReRasterizeNode(const UWorld* World, const FChunk& Ch
 				NewNode.ChunkBorder &= Node.ChunkBorder;
 			}
 			
-			const auto [NodeIterator, IsInserted] = ChildLayer.emplace(NewNode.GetMortonCode(), NewNode);
-			if(!NewNode.HasOverlap(World, Chunk.Location, ChildLayerIdx)) continue;
+			const auto [ChildNodeIterator, IsInserted] = ChildLayer.emplace(ChildMortonLocation.ToMortonCode(), NewNode);
+			if(!ChildNodeIterator->second.HasOverlap(World, Chunk.Location, ChildNodeIterator->first, ChildLayerIdx)) continue;
 			
-			FNode& ChildNode = NodeIterator->second;
-			ChildNode.SetOccluded(true);
-			RecursiveReRasterizeNode(World, Chunk, ChildNode, ChildLayerIdx, ChildMortonLocation);
+			ChildNodeIterator->second.SetOccluded(true);
+			RecursiveReRasterizeNode(World, Chunk, *ChildNodeIterator, ChildLayerIdx, ChildMortonLocation);
 		}
 		return;
 	}
 
 	// Re-rasterize existing children.
-	Node.ForEachChild(Chunk, LayerIdx, [&](FNode& ChildNode)
+	Node.ForEachChild(Chunk, MortonCode, LayerIdx, [&](FNodePair& ChildNodePair)
 	{
-		if(!ChildNode.HasOverlap(World, Chunk.Location, ChildLayerIdx))
+		FNode& ChildNode = ChildNodePair.second;
+		if(!ChildNode.HasOverlap(World, Chunk.Location, ChildNodePair.first, ChildLayerIdx))
 		{
 			ChildNode.SetOccluded(false);
 			if(ChildNode.HasChildren())
 			{
-				RecursiveClearAllChildren(Chunk, ChildNode, ChildLayerIdx);
+				RecursiveClearAllChildren(Chunk, ChildNodePair, ChildLayerIdx);
 				ChildNode.SetHasChildren(false);
 			}
 		}
 		else
 		{
 			ChildNode.SetOccluded(true);
-			RecursiveReRasterizeNode(World, Chunk, ChildNode, ChildLayerIdx, ChildNode.GetMortonLocation());
+			RecursiveReRasterizeNode(World, Chunk, ChildNodePair, ChildLayerIdx, FMortonVector::FromMortonCode(ChildNodePair.first));
 		}
 	});
 }
@@ -433,30 +368,30 @@ void FUpdateTask::RecursiveReRasterizeNode(const UWorld* World, const FChunk& Ch
  * Updates the properties on the affected Nodes accordingly.
  * @return False if the starting Node is occluded. True otherwise.
  */
-bool FUpdateTask::StartClearUnoccludedChildrenOfNode(const FChunk& Chunk, const MortonCodeType NodeMortonCode, const uint8 LayerIdx, const NavmeshDirection RelationsToUpdate)
+bool FUpdateTask::StartClearUnoccludedChildrenOfNode(const FChunk& Chunk, const MortonCodeType MortonCode, const LayerIdxType LayerIdx, const NavmeshDirection RelationsToUpdate)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("StartClearUnoccludedChildrenOfNode");
 	// return True if the Node does not exist.
-	const auto NodeIterator = Chunk.Octrees[0]->Layers[LayerIdx]->find(NodeMortonCode);
+	const auto NodeIterator = Chunk.Octrees[0]->Layers[LayerIdx]->find(MortonCode);
 	if(NodeIterator == Chunk.Octrees[0]->Layers[LayerIdx]->end()) return true;
 	FNode& Node = NodeIterator->second;
 	
 	if(!Node.IsOccluded()) return true;
 	if(Node.HasChildren())
 	{
-		if(!Node.HasOverlap(World, Chunk.Location, LayerIdx))
+		if(!Node.HasOverlap(World, Chunk.Location, MortonCode, LayerIdx))
 		{
-			RecursiveClearAllChildren(Chunk, Node, LayerIdx);
+			RecursiveClearAllChildren(Chunk, *NodeIterator, LayerIdx);
 			Node.SetOccluded(false);
 			Node.SetHasChildren(false);
 			return true;
 		}
-		RecursiveClearUnoccludedChildren(Chunk, Node, LayerIdx, RelationsToUpdate);
+		RecursiveClearUnoccludedChildren(Chunk, *NodeIterator, LayerIdx, RelationsToUpdate);
 		return false;
 	}
 
 	// This is reached when the LayerIdx equals the static-depth.
-	if(!Node.HasOverlap(World, Chunk.Location, LayerIdx))
+	if(!Node.HasOverlap(World, Chunk.Location, MortonCode, LayerIdx))
 	{
 		Node.SetOccluded(false);
 		return true;
@@ -466,16 +401,20 @@ bool FUpdateTask::StartClearUnoccludedChildrenOfNode(const FChunk& Chunk, const 
 }
 
 // Recursively clears unoccluded children of the given Node.
-void FUpdateTask::RecursiveClearUnoccludedChildren(const FChunk& Chunk, const FNode& Node, const uint8 LayerIdx, const NavmeshDirection RelationsToUpdate)
+void FUpdateTask::RecursiveClearUnoccludedChildren(const FChunk& Chunk, const FNodePair& NodePair, const LayerIdxType LayerIdx, const NavmeshDirection RelationsToUpdate)
 {
+	const FNode& Node = NodePair.second;
+	const MortonCodeType MortonCode = NodePair.first;
+	
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("RecursiveClearUnoccludedChildren");
-	Node.ForEachChild(Chunk, LayerIdx, [&](FNode& ChildNode)
+	Node.ForEachChild(Chunk, MortonCode, LayerIdx, [&](FNodePair& ChildNodePair)
 	{
-		const uint8 ChildLayerIdx = LayerIdx+1;
+		const LayerIdxType ChildLayerIdx = LayerIdx+1;
+		FNode& ChildNode = ChildNodePair.second;
 		
-		if(ChildNode.HasOverlap(World, Chunk.Location, ChildLayerIdx))
+		if(ChildNode.HasOverlap(World, Chunk.Location, MortonCode, ChildLayerIdx))
 		{
-			RecursiveClearUnoccludedChildren(Chunk, ChildNode, ChildLayerIdx, RelationsToUpdate);
+			RecursiveClearUnoccludedChildren(Chunk, ChildNodePair, ChildLayerIdx, RelationsToUpdate);
 			return;
 		}
 		ChildNode.SetOccluded(false);
@@ -483,7 +422,7 @@ void FUpdateTask::RecursiveClearUnoccludedChildren(const FChunk& Chunk, const FN
 		if(ChildNode.HasChildren())
 		{
 			//Node.UpdateRelations(NavMeshPtr, Chunk, LayerIdx, RelationsToUpdate);
-			RecursiveClearAllChildren(Chunk, ChildNode, ChildLayerIdx);
+			RecursiveClearAllChildren(Chunk, ChildNodePair, ChildLayerIdx);
 			ChildNode.SetHasChildren(false);
 		}
 	});
@@ -493,7 +432,7 @@ void FUpdateTask::RecursiveClearUnoccludedChildren(const FChunk& Chunk, const FN
  * Clears all the children of the Node with the given MortonCode in given LayerIdx.
  * Updates the properties on the starting Node accordingly.
  */
-void FUpdateTask::StartClearAllChildrenOfNode(const FChunk& Chunk, const MortonCodeType NodeMortonCode, const uint8 LayerIdx, const NavmeshDirection RelationsToUpdate)
+void FUpdateTask::StartClearAllChildrenOfNode(const FChunk& Chunk, const MortonCodeType NodeMortonCode, const LayerIdxType LayerIdx, const NavmeshDirection RelationsToUpdate)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("StartClearAllChildrenOfNode");
 	const auto NodeIterator = Chunk.Octrees[0]->Layers[LayerIdx]->find(NodeMortonCode);
@@ -504,53 +443,59 @@ void FUpdateTask::StartClearAllChildrenOfNode(const FChunk& Chunk, const MortonC
 	//Node.UpdateRelations(NavMeshPtr, Chunk, LayerIdx, RelationsToUpdate);
 	
 	if(!Node.HasChildren()) return;
-	RecursiveClearAllChildren(Chunk, Node, LayerIdx);
+	RecursiveClearAllChildren(Chunk, *NodeIterator, LayerIdx);
 	Node.SetHasChildren(false);
 }
 
 // Recursively clears all children of the given Node.
-void FUpdateTask::RecursiveClearAllChildren(const FChunk& Chunk, const FNode& Node, const uint8 LayerIdx)
+void FUpdateTask::RecursiveClearAllChildren(const FChunk& Chunk, const FNodePair& NodePair, const LayerIdxType LayerIdx)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("RecursiveClearAllChildren");
-	Node.ForEachChild(Chunk, LayerIdx, [&](const FNode& ChildNode)
+
+	const FNode& Node = NodePair.second;
+	const MortonCodeType MortonCode = NodePair.first;
+	
+	Node.ForEachChild(Chunk, MortonCode, LayerIdx, [&](const FNodePair& ChildNodePair)
 	{
-		const uint8 ChildLayerIdx = LayerIdx+1;
-		if(ChildNode.HasChildren()) RecursiveClearAllChildren(Chunk, ChildNode, ChildLayerIdx);
-		Chunk.Octrees[0]->Layers[ChildLayerIdx]->erase(ChildNode.GetMortonCode());
+		const LayerIdxType ChildLayerIdx = LayerIdx+1;
+		if(ChildNodePair.second.HasChildren()) RecursiveClearAllChildren(Chunk, ChildNodePair, ChildLayerIdx);
+		Chunk.Octrees[0]->Layers[ChildLayerIdx]->erase(ChildNodePair.first);
 	});
 }
 
 // Initializes the missing parents of the node with the given morton-code, which will in-turn initialize the node.
-void FUpdateTask::InitializeParents(const FChunk& Chunk, const MortonCodeType ChildMortonCode, const uint8 ChildLayerIdx)
+void FUpdateTask::InitializeParents(const FChunk& Chunk, const MortonCodeType ChildMortonCode, const LayerIdxType ChildLayerIdx)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("InitializeParents");
-	const auto CreateChildren = [&Chunk, ChildLayerIdx](FNode& Node) // todo: Move to FNode ??
+	const auto CreateChildren = [&](FNodePair& NodePair) // todo: Move to FNode ??
 	{
-		Node.SetHasChildren(true);
-		const FMortonVector MortonLocation = Node.GetMortonLocation();
+		FNode& ParentNode = NodePair.second;
+		const FMortonVector ParentMortonLocation = FMortonVector::FromMortonCode(NodePair.first);
+		ParentNode.SetHasChildren(true);
+		
 		FOctreeLayer& ChildLayer = *Chunk.Octrees[0]->Layers[ChildLayerIdx];
 		const uint_fast16_t ChildMortonOffset = FNavMeshStatic::MortonOffsets[ChildLayerIdx];
 		
-		for (uint8 i = 0; i < 8; ++i)
+		for (uint8 ChildIdx = 0; ChildIdx < 8; ++ChildIdx)
 		{
-			const uint_fast16_t ChildMortonX = MortonLocation.X + ((i & 1) ? ChildMortonOffset : 0);
-			const uint_fast16_t ChildMortonY = MortonLocation.Y + ((i & 2) ? ChildMortonOffset : 0);
-			const uint_fast16_t ChildMortonZ = MortonLocation.Z + ((i & 4) ? ChildMortonOffset : 0);
+			const uint_fast16_t ChildMortonX = ParentMortonLocation.X + (ChildIdx & 1 ? ChildMortonOffset : 0);
+			const uint_fast16_t ChildMortonY = ParentMortonLocation.Y + (ChildIdx & 2 ? ChildMortonOffset : 0);
+			const uint_fast16_t ChildMortonZ = ParentMortonLocation.Z + (ChildIdx & 4 ? ChildMortonOffset : 0);
 				
-			FNode NewNode(ChildMortonX, ChildMortonY, ChildMortonZ);
-			if (Node.ChunkBorder)
+			FNode NewNode = FNode();
+			if (ParentNode.ChunkBorder)
 			{
-				NewNode.ChunkBorder |= (i & 1) ? DIRECTION_X_POSITIVE : DIRECTION_X_NEGATIVE;
-				NewNode.ChunkBorder |= (i & 2) ? DIRECTION_Y_POSITIVE : DIRECTION_Y_NEGATIVE;
-				NewNode.ChunkBorder |= (i & 4) ? DIRECTION_Z_POSITIVE : DIRECTION_Z_NEGATIVE;
-				NewNode.ChunkBorder &= Node.ChunkBorder;
+				NewNode.ChunkBorder |= ChildIdx & 1 ? DIRECTION_X_POSITIVE : DIRECTION_X_NEGATIVE;
+				NewNode.ChunkBorder |= ChildIdx & 2 ? DIRECTION_Y_POSITIVE : DIRECTION_Y_NEGATIVE;
+				NewNode.ChunkBorder |= ChildIdx & 4 ? DIRECTION_Z_POSITIVE : DIRECTION_Z_NEGATIVE;
+				NewNode.ChunkBorder &= ParentNode.ChunkBorder;
 			}
-			ChildLayer.emplace(NewNode.GetMortonCode(), NewNode);
+			ChildLayer.emplace(FMortonVector::ToMortonCode(ChildMortonX, ChildMortonY, ChildMortonZ), NewNode);
 		}
 	};
 	
 	const MortonCodeType ParentMortonCode = FNode::GetParentMortonCode(ChildMortonCode, ChildLayerIdx);
-	const uint8 ParentLayerIdx = ChildLayerIdx-1;
+	const LayerIdxType ParentLayerIdx = ChildLayerIdx-1;
 
 	// If parent exists, update it, create its children if they don't exist, and stop the recursion.
 	if(const auto NodeIterator = Chunk.Octrees[0]->Layers[ParentLayerIdx]->find(ParentMortonCode); NodeIterator != Chunk.Octrees[0]->Layers[ParentLayerIdx]->end())
@@ -561,8 +506,9 @@ void FUpdateTask::InitializeParents(const FChunk& Chunk, const MortonCodeType Ch
 		
 		if(!ParentNode.HasChildren())
 		{
-			CreateChildren(ParentNode);
-			ParentNode.ForEachChild(Chunk, ParentLayerIdx, [&](FNode& ChildNode)
+			// todo: special method for doing both init and update-relations in once. Works because init is being done from negative to positive just like setting relations.
+			CreateChildren(*NodeIterator);
+			ParentNode.ForEachChild(Chunk, ParentMortonCode, ParentLayerIdx, [&](FNodePair& ChildNodePair)
 			{
 				//ChildNode.UpdateRelations(NavMeshPtr, Chunk, ChildLayerIdx, DIRECTION_ALL);
 			});
@@ -575,12 +521,12 @@ void FUpdateTask::InitializeParents(const FChunk& Chunk, const MortonCodeType Ch
 	InitializeParents(Chunk, ParentMortonCode, ParentLayerIdx);
 
 	// The parent is guaranteed to exist now.
-	FNode& ParentNode = Chunk.Octrees[0]->Layers[ParentLayerIdx]->find(ParentMortonCode)->second;
-	ParentNode.SetOccluded(true);
-	//ParentNode.UpdateRelations(NavMeshPtr, Chunk, ParentLayerIdx, DIRECTION_ALL);
+	FNodePair& ParentNodePair = *Chunk.Octrees[0]->Layers[ParentLayerIdx]->find(ParentMortonCode);
+	ParentNodePair.second.SetOccluded(true);
+	//ParentNodePair.second.UpdateRelations(NavMeshPtr, Chunk, ParentLayerIdx, DIRECTION_ALL);
 	
-	CreateChildren(ParentNode);
-	ParentNode.ForEachChild(Chunk, ParentLayerIdx, [&](FNode& ChildNode)
+	CreateChildren(ParentNodePair);
+	ParentNodePair.second.ForEachChild(Chunk, ParentNodePair.first, ParentLayerIdx, [&](FNodePair& ChildNodePair)
 	{
 		//ChildNode.UpdateRelations(NavMeshPtr, Chunk, ChildLayerIdx, DIRECTION_ALL);
 	});
@@ -594,7 +540,7 @@ void FUpdateTask::InitializeParents(const FChunk& Chunk, const MortonCodeType Ch
  * @param MortonCodes Morton-codes of the nodes to check and clear if all its children are unoccluded.
  * @param LayerIdx Layer the nodes are in.
  */
-void FUpdateTask::TryUnRasterizeNodes(const FChunk& Chunk, const std::unordered_set<MortonCodeType>& MortonCodes, const uint8 LayerIdx)
+void FUpdateTask::TryUnRasterizeNodes(const FChunk& Chunk, const std::unordered_set<MortonCodeType>& MortonCodes, const LayerIdxType LayerIdx)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("TryUnRasterizeNodes");
 	std::unordered_set<MortonCodeType> ParentMortonCodes;
@@ -607,10 +553,10 @@ void FUpdateTask::TryUnRasterizeNodes(const FChunk& Chunk, const std::unordered_
 			// Check if all children are unoccluded.
 			TArray<MortonCodeType> ChildMortonCodes;
 			bool bDeleteChildren = true;
-			Node.ForEachChild(Chunk, LayerIdx, [&](const FNode& ChildNode) -> void
+			Node.ForEachChild(Chunk, MortonCode, LayerIdx, [&](const FNodePair& ChildNodePair) -> void
 			{
-				ChildMortonCodes.Add(ChildNode.GetMortonCode());
-				if(bDeleteChildren && ChildNode.IsOccluded()) bDeleteChildren = false;
+				ChildMortonCodes.Add(ChildNodePair.first);
+				if(bDeleteChildren && ChildNodePair.second.IsOccluded()) bDeleteChildren = false;
 			});
 			if(!bDeleteChildren) continue; // This parent has at-least one child that is occluding something, so don't un-rasterize.
 
@@ -642,12 +588,12 @@ void FUpdateTask::SetNegativeNeighbourRelations(const FChunk& Chunk)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("SetNegativeNeighbourRelations");
 	// Loop through all static nodes sorted by morton-code.
-	uint8 LayerIndex = 0;
+	LayerIdxType LayerIndex = 0;
 	for (auto& Layer : Chunk.Octrees[0]->Layers)
 	{
-		for (FNode& Node : *Layer | std::views::values)
+		for (auto& [MortonCode, Node] : *Layer)
 		{
-			Node.UpdateRelations(NavMeshPtr, Chunk, LayerIndex, DIRECTION_ALL_NEGATIVE);
+			Node.UpdateRelations(NavMeshPtr, Chunk, MortonCode, LayerIndex, DIRECTION_ALL_NEGATIVE);
 		}
 		LayerIndex++;
 	}

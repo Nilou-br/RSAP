@@ -106,13 +106,6 @@ struct FMortonVector
 	explicit FMortonVector(const uint_fast16_t InX, const uint_fast16_t InY, const uint_fast16_t InZ)
 		: X(InX), Y(InY), Z(InZ) {}
 
-	explicit FMortonVector(const MortonCodeType MortonCode)
-	{
-		uint_fast16_t TempX, TempY ,TempZ;
-		libmorton::morton3D_32_decode(MortonCode, TempX, TempY, TempZ);
-		X=TempZ; Y=TempY; Z=TempZ;
-	}
-
 	FMortonVector()
 		:X(0), Y(0), Z(0)
 	{}

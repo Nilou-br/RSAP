@@ -14,7 +14,7 @@ typedef uint32 ActorKeyType;
 typedef uint8 NodeType; // To indicate if the node is static or dynamic, 0 or 1 respectively.
 
 
-// Directions within the sound navmesh use 6 bits to represent '-XYZ +XYZ' values.
+// Directions within my navmesh use 6 bits to represent '-XYZ +XYZ' values.
 // For example, 0b001100 is negative on the Z, and positive on the X.
 typedef uint8 NavmeshDirection;
 

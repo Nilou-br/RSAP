@@ -90,21 +90,13 @@ FArchive& operator<<(FArchive& Ar, FNode& Node)
 
 	if (Ar.IsSaving())
 	{
-		MortonCodeType MortonCode = Node.GetUnmaskedMortonCode();
 		uint32 ChunkBorder = Node.ChunkBorder;
-
-		Ar << MortonCode;
 		Ar << ChunkBorder;
 	}
 	else if (Ar.IsLoading())
 	{
-		MortonCodeType MortonCode;
 		uint32 ChunkBorder;
-
-		Ar << MortonCode;
 		Ar << ChunkBorder;
-
-		Node.SetUnmaskedMortonCode(MortonCode);
 		Node.ChunkBorder = ChunkBorder;
 	}
 
@@ -118,8 +110,9 @@ FArchive& operator<<(FArchive& Ar, FOctreeLayer& Layer)
 	
 	if(Ar.IsSaving())
 	{
-		for(FNode& Node : Layer | std::views::values)
+		for(auto& [MortonCode, Node] : Layer)
 		{
+			Ar << MortonCode;
 			Ar << Node;
 		}
 	}
@@ -127,9 +120,13 @@ FArchive& operator<<(FArchive& Ar, FOctreeLayer& Layer)
 	{
 		for(size_t i = 0; i < Size; ++i)
 		{
+			MortonCodeType MortonCode;
 			FNode Node;
+
+			Ar << MortonCode;
 			Ar << Node;
-			Layer.emplace(Node.GetMortonCode(), std::move(Node));
+
+			Layer.emplace(MortonCode, std::move(Node));
 		}
 	}
 	

@@ -98,17 +98,17 @@ void FNavMeshDebugger::DrawNodes(const FVector& CameraLocation, const FVector& C
 	}
 }
 
-void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const LayerIdxType LayerIdx, const MortonCodeType& NodeMorton, const FVector& CameraLocation, const FVector& CameraForwardVector) const
+void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const MortonCodeType MortonCode, const LayerIdxType LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector) const
 {
-	const auto NodeIterator = Chunk->Octrees[0]->Layers[LayerIdx]->find(NodeMorton);
+	const auto NodeIterator = Chunk->Octrees[0]->Layers[LayerIdx]->find(MortonCode);
 	if(NodeIterator == Chunk->Octrees[0]->Layers[LayerIdx]->end()) return;
-	const FNode* Node = &NodeIterator->second;
+	const FNode& Node = NodeIterator->second;
 	
 	// if(!Node->IsOccluded()) return;
-	const FVector NodeGlobalCenterLocation = (Node->GetGlobalLocation(Chunk->Location) + FNavMeshStatic::NodeHalveSizes[LayerIdx]).ToVector();
+	const FVector NodeGlobalCenterLocation = (Node.GetGlobalLocation(Chunk->Location, MortonCode) + FNavMeshStatic::NodeHalveSizes[LayerIdx]).ToVector();
 
 	// Return if distance between camera and node is larger than the calculated distance for this specific node's layer.
-	if(FVector::Dist(CameraLocation, NodeGlobalCenterLocation) > (FNavMeshStatic::NodeSizes[LayerIdx] << 2)+200 - 16*LayerIdx) return;
+	if(FVector::Dist(CameraLocation, NodeGlobalCenterLocation) > (FNavMeshStatic::NodeSizes[LayerIdx] << 2)+300 - 24*LayerIdx) return;
 	
 	if(FNavMeshDebugSettings::bDisplayNodes)
 	{
@@ -121,12 +121,12 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const LayerIdxTyp
 
 	if(FNavMeshDebugSettings::bDisplayNodeBorder && World->IsPlayInEditor())
 	{
-		const FString BitString = To6BitBinaryString(Node->ChunkBorder);
+		const FString BitString = To6BitBinaryString(Node.ChunkBorder);
 		DrawDebugString(World, NodeGlobalCenterLocation, BitString, nullptr, FColor::Red, -1, false, 1);
 		
-		const std::array<uint8, 6> NeighbourLayerIndexes = Node->GetNeighbourLayerIndexes();
+		const std::array<uint8, 6> NeighbourLayerIndexes = Node.GetNeighbourLayerIndexes();
 		int NeighbourIndex = 0;
-		for (int Direction = 0b100000; Direction >= 0b000001; Direction>>=1, ++NeighbourIndex)
+		for (NavmeshDirection Direction = 0b100000; Direction >= 0b000001; Direction>>=1, ++NeighbourIndex)
 		{
 			FGlobalVector CenterOffset;
 						
@@ -161,7 +161,7 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const LayerIdxTyp
 
 	if(FNavMeshDebugSettings::bDisplayRelations)
 	{
-		const std::array<FNodeLookupData, 6> NeighboursLookupData = Node->GetNeighboursLookupData(Chunk->Location);
+		const std::array<FNodeLookupData, 6> NeighboursLookupData = Node.GetNeighboursLookupData(Chunk->Location, MortonCode);
 		for (const auto NeighbourLookupData : NeighboursLookupData)
 		{
 			if(NeighbourLookupData.LayerIndex == LAYER_INDEX_INVALID) continue;
@@ -176,7 +176,7 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const LayerIdxTyp
 			if(NeighbourIterator == Chunk->Octrees[0]->Layers[NeighbourLookupData.LayerIndex]->end()) continue;
 			const FNode& NeighbourNode = NeighbourIterator->second;
 						
-			const FGlobalVector NeighbourGlobalCenterLocation = NeighbourNode.GetGlobalLocation(NeighbourChunk.Location) + FNavMeshStatic::NodeHalveSizes[NeighbourLookupData.LayerIndex];
+			const FGlobalVector NeighbourGlobalCenterLocation = NeighbourNode.GetGlobalLocation(NeighbourChunk.Location, MortonCode) + FNavMeshStatic::NodeHalveSizes[NeighbourLookupData.LayerIndex];
 			DrawDebugLine(World, NodeGlobalCenterLocation, NeighbourGlobalCenterLocation.ToVector(), AdjustBrightness(LayerColors[LayerIdx], 0.8), true, -1, 11, 1);
 		}
 	}
@@ -185,20 +185,20 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const LayerIdxTyp
 	{
 		if(FVector::Dist(CameraLocation, NodeGlobalCenterLocation) < 50)
 		{
-			DrawDebugString(World, NodeGlobalCenterLocation, FString::Printf(TEXT("%i"), Node->GetMortonCode()), nullptr, LayerColors[LayerIdx], -1, false, 1);
+			DrawDebugString(World, NodeGlobalCenterLocation, FString::Printf(TEXT("%i"), MortonCode), nullptr, LayerColors[LayerIdx], -1, false, 1);
 		}
 	}
 
 	// Continue drawing the children if the node has any.
-	if(LayerIdx == FNavMeshStatic::StaticDepth || !Node->HasChildren()) return;
-	const FMortonVector NodeLocalLocation = Node->GetLocalLocation();
+	if(!Node.HasChildren()) return;
+	const FMortonVector NodeMortonLocation = FMortonVector::FromMortonCode(MortonCode);
 	const LayerIdxType ChildLayerIndex = LayerIdx+1;
 	const int_fast16_t ChildMortonOffset = FNavMeshStatic::MortonOffsets[ChildLayerIndex];
-	for (uint8 i = 0; i < 8; ++i)
-	{
-		const uint_fast16_t ChildX = NodeLocalLocation.X + ((i & 1) ? ChildMortonOffset : 0);
-		const uint_fast16_t ChildY = NodeLocalLocation.Y + ((i & 2) ? ChildMortonOffset : 0);
-		const uint_fast16_t ChildZ = NodeLocalLocation.Z + ((i & 4) ? ChildMortonOffset : 0);
-		RecursiveDrawNodes(Chunk, ChildLayerIndex, FMortonVector::ToMortonCode(ChildX, ChildY, ChildZ), CameraLocation, CameraForwardVector);
+	for (uint8 ChildIdx = 0; ChildIdx < 8; ++ChildIdx)
+	{ // todo: GetChildLocation / GetChildMorton
+		const uint_fast16_t ChildX = NodeMortonLocation.X + (ChildIdx & 1 ? ChildMortonOffset : 0);
+		const uint_fast16_t ChildY = NodeMortonLocation.Y + (ChildIdx & 2 ? ChildMortonOffset : 0);
+		const uint_fast16_t ChildZ = NodeMortonLocation.Z + (ChildIdx & 4 ? ChildMortonOffset : 0);
+		RecursiveDrawNodes(Chunk, FMortonVector::ToMortonCode(ChildX, ChildY, ChildZ), ChildLayerIndex, CameraLocation, CameraForwardVector);
 	}
 }

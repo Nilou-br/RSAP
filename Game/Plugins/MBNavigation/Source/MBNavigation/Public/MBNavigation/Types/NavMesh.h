@@ -89,145 +89,79 @@ struct FNodeLookupData
 /**
  *   Octree node used in the navigation-mesh for pathfinding.
  *
- * - MortonCode: represents its 3d location in a single value for efficiency and used as a key to find nodes.
- *				 Also allows the nodes to be coherent in memory, and be able to quickly find neighbours using bitwise-operators.
- * - Neighbours: Stores a 4 bit layer-index for locating each neighbour in the octree.
- * - ChunkBorder: Bitmask for determining the border this voxel is next to.
- *   Used to efficiently calculate the next chunk.
- * - IsOccluded(): If the node is occluded.
- * - HasChildren(): If the node has children.
- *
- *	 todo: Morton-code and chunk-border can be removed?
- *	 Morton-codes are the keys on the hashmap, so they're automatically associated with a node.
- *	 Chunk-border can be calculated during pathfinding by keeping track of each local axis within a chunk. For example when moving from node in layer 0 to a neighbour in the same layer, we know we moved 512. Then if the value is either 0 or 1023, it's on a border.
- *
- *	 If these two members are gone, then this node class will be 
+ * - MortonCode: represents its 3d location in a single value, used as a key to find nodes.
+ *				 Also makes the nodes locally coherent in memory for cache efficiency.
+ *				 The morton-code is not stored on this class. This is because these are already associated with nodes as key-value pairs on the hashmap.
+ * - Relations: Every face of the node has a 4 bit layer-index for locating its neighbour.
+ * - ChunkBorder: Bitmask for determining the chunk-borders this node is against. Used to efficiently calculate the next chunk to get when pathfinding.
+ * - SoundPresetId: Identifier to a preset of attenuation settings for the actor this node is occluding.
+ * - ChildNodeTypes: bitmask indicating the node type for each child this node has.
  */
-class FNode
+struct FNode
 {
-	static constexpr MortonCodeType MortonMask = (1u << 30) - 1;
-	static constexpr MortonCodeType IsOccludedMask = 1u << 31;
-	static constexpr MortonCodeType HasChildrenMask = 1u << 30;
 	static constexpr int LayerShiftAmount[10] = {30, 30, 27, 24, 21, 18, 15, 12, 9, 6}; // todo change to make 30, 27, 24 etc...
 	static constexpr int ParentShiftAmount[10] = {30, 27, 24, 21, 18, 15, 12, 9, 6, 3};
-
-	// The morton-code of a node also stores two additional booleans for checking occlusion and if it has children.
-	MortonCodeType MortonCode;
 	
-
-public:
 	FNodeRelations Relations;
 	NavmeshDirection ChunkBorder: 6;
-	
-	FNode():
-		MortonCode(0), ChunkBorder(0)
-	{}
+	uint32 SoundPresetID: 24 = 0;
+	uint8 bIsOccluding: 1 = 0;
+	uint8 bHasChildren: 1 = 0;
+	uint8 ChildNodeTypes: 8 = 0b00000000;
 
-	FNode(const uint_fast16_t MortonX, const uint_fast16_t MortonY, const uint_fast16_t MortonZ, const NavmeshDirection InChunkBorder = 0b000000):
+	explicit FNode(const NavmeshDirection InChunkBorder = 0b000000):
 		ChunkBorder(InChunkBorder)
 	{
-		MortonCode = libmorton::morton3D_32_encode(MortonX, MortonY, MortonZ);
+		//MortonCode = libmorton::morton3D_32_encode(X, Y, Z);
 	}
 
-	explicit FNode(const FMortonVector MortonLocation, const NavmeshDirection InChunkBorder = 0b000000):
-		ChunkBorder(InChunkBorder)
+	static FORCEINLINE FMortonVector GetMortonLocation(const MortonCodeType MortonCode)
 	{
-		MortonCode = libmorton::morton3D_32_encode(MortonLocation.X, MortonLocation.Y, MortonLocation.Z);
-	}
-
-	explicit FNode(const MortonCodeType InMortonCode, const NavmeshDirection InChunkBorder = 0b000000):
-		MortonCode(InMortonCode), ChunkBorder(InChunkBorder)
-	{}
-
-	FORCEINLINE FMortonVector GetMortonLocation() const
-	{
-		uint_fast16_t TempX, TempY, TempZ;
-		libmorton::morton3D_32_decode(GetMortonCode(), TempX, TempY, TempZ);
-		return FMortonVector(TempX, TempY, TempZ);
-	}
-
-	FORCEINLINE FMortonVector GetLocalLocation() const
-	{
-		uint_fast16_t OutX, OutY, OutZ;
-		libmorton::morton3D_32_decode(GetMortonCode(), OutX, OutY, OutZ);
-
-		// Left-bit-shift using the Voxel-Size-Exponent into local-space.
-		// TempX <<= FNavMeshStatic::VoxelSizeExponent;
-		// TempY <<= FNavMeshStatic::VoxelSizeExponent;
-		// TempZ <<= FNavMeshStatic::VoxelSizeExponent;
-		return FMortonVector(OutX, OutY, OutZ);
+		uint_fast16_t X, Y, Z;
+		libmorton::morton3D_32_decode(MortonCode, X, Y, Z);
+		return FMortonVector(X, Y, Z);
 	}
 	
-	FORCEINLINE FGlobalVector GetGlobalLocation(const FGlobalVector &ChunkLocation) const
+	static FORCEINLINE FGlobalVector GetGlobalLocation(const FGlobalVector& ChunkLocation, const MortonCodeType MortonCode)
 	{
-		return ChunkLocation + GetLocalLocation();
-	}
-
-	// Returns the morton-code of the node, where the additional booleans stored on the morton-code are masked away. Used to find nodes, or get their location within a chunk.
-	FORCEINLINE MortonCodeType GetMortonCode() const
-	{
-		return MortonCode & MortonMask;
-	}
-
-	// Returns the unmasked morton-code of the node. This includes the additional booleans, and should only be used for serializing the node.
-	FORCEINLINE MortonCodeType GetUnmaskedMortonCode() const
-	{
-		return MortonCode;
+		return ChunkLocation + GetMortonLocation(MortonCode);
 	}
 	
-	// Sets the full morton-code including booleans. Only used during deserialization.
-	FORCEINLINE void SetUnmaskedMortonCode(const MortonCodeType InMortonCode)
-	{
-		MortonCode = InMortonCode;
-	}
-	
-	FORCEINLINE MortonCodeType GetParentMortonCode(const LayerIdxType LayerIndex) const
-	{
-		const MortonCodeType ParentMask = ~((1 << ParentShiftAmount[LayerIndex-1]) - 1); // todo: these masks can be made constexpr as well.
-		return GetMortonCode() & ParentMask;
-	}
-	
-	FORCEINLINE static MortonCodeType GetParentMortonCode(const MortonCodeType NodeMortonCode, const LayerIdxType NodeLayerIdx)
+	FORCEINLINE static MortonCodeType GetParentMortonCode(const MortonCodeType MortonCode, const LayerIdxType NodeLayerIdx)
 	{
 		const MortonCodeType ParentMask = ~((1 << ParentShiftAmount[NodeLayerIdx-1]) - 1); // todo: these masks can be made constexpr as well.
-		return NodeMortonCode & ParentMask;
+		return MortonCode & ParentMask;
 	}
 
-	FORCEINLINE void SetHasChildren(const bool Value)
-	{
-		if (Value) MortonCode |= HasChildrenMask;
-		else MortonCode &= ~HasChildrenMask;
+	FORCEINLINE void SetOccluded(const bool Value) {
+		bIsOccluding = Value;
 	}
 
-	FORCEINLINE void SetOccluded(const bool Value)
-	{
-		if (Value) MortonCode |= IsOccludedMask;
-		else MortonCode &= ~IsOccludedMask;
-	}
-	
-	FORCEINLINE bool HasChildren() const
-	{
-		return MortonCode & HasChildrenMask;
+	FORCEINLINE bool IsOccluded() const {
+		return bIsOccluding;
 	}
 
-	FORCEINLINE bool IsOccluded() const
-	{
-		return MortonCode & IsOccludedMask;
+	FORCEINLINE void SetHasChildren(const bool Value) {
+		bHasChildren = Value;
+	}
+
+	FORCEINLINE bool HasChildren() const {
+		return bHasChildren;
 	}
 
 	std::array<LayerIdxType, 6> GetNeighbourLayerIndexes() const;
-	std::array<FNodeLookupData, 6> GetNeighboursLookupData(const FGlobalVector& ChunkLocation) const;
+	std::array<FNodeLookupData, 6> GetNeighboursLookupData(const FGlobalVector& ChunkLocation, const MortonCodeType MortonCode) const;
 
-	void UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk& Chunk, const LayerIdxType LayerIdx, NavmeshDirection RelationsToUpdate);
-	bool HasOverlap(const UWorld* World, const FGlobalVector& ChunkLocation, const LayerIdxType LayerIdx) const;
+	void UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk& Chunk, const MortonCodeType MortonCode,  const LayerIdxType LayerIdx, NavmeshDirection RelationsToUpdate);
+	bool HasOverlap(const UWorld* World, const FGlobalVector& ChunkLocation, const MortonCodeType MortonCode, const LayerIdxType LayerIdx) const;
 	//static bool HasGeomOverlap(const FBodyInstance* BodyInstance, const FGlobalVector& CenterLocation, const LayerIdxType LayerIdx);
-	void Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const LayerIdxType LayerIndex, const FColor Color = FColor::Black, const uint32 Thickness = 0) const;
+	void Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const MortonCodeType MortonCode, const LayerIdxType LayerIndex, const FColor Color = FColor::Black, const uint32 Thickness = 0) const;
 
 	template<typename Func>
-	void ForEachChild(const FChunk& Chunk, const LayerIdxType LayerIdx, Func Callback) const;
+	void ForEachChild(const FChunk& Chunk, const MortonCodeType MortonCode, const LayerIdxType LayerIdx, Func Callback) const;
 };
 
-// typedef std::map<MortonCode, FNode> FOctreeLayer;
+typedef std::pair<MortonCodeType, FNode> FNodePair; // Morton-code / node association pair.
 typedef ankerl::unordered_dense::map<MortonCodeType, FNode> FOctreeLayer;
 
 /**
@@ -257,7 +191,7 @@ class FChunk
 	{
 		Octrees[0] = std::make_unique<FOctree>();
 		Octrees[1] = std::make_unique<FOctree>();
-		Octrees[RootNodeType]->Layers[0]->emplace(0, FNode(0, 0b111111));
+		Octrees[RootNodeType]->Layers[0]->emplace(0, FNode(0b111111));
 	}
 
 	void Initialize()
@@ -311,26 +245,27 @@ typedef std::shared_ptr<FNavMesh> FNavMeshPtr;
 
 
 
-
+// Runs the given callback for each child of this node.
+// The callback is invocable with an FNodePair.
 template <typename Func>
-void FNode::ForEachChild(const FChunk& Chunk, const LayerIdxType LayerIdx, Func Callback) const
+void FNode::ForEachChild(const FChunk& Chunk, const MortonCodeType MortonCode, const LayerIdxType LayerIdx, Func Callback) const
 {
 	if(!HasChildren()) return;
 		
 	const LayerIdxType ChildLayerIdx = LayerIdx+1;
 	const int_fast16_t ChildOffset = FNavMeshStatic::MortonOffsets[ChildLayerIdx];
-	const FMortonVector NodeMortonLocation = GetMortonLocation();
+	const FMortonVector NodeMortonLocation = FMortonVector::FromMortonCode(MortonCode);
 		
-	for (uint8 i = 0; i < 8; ++i)
+	for (uint8 ChildIdx = 0; ChildIdx < 8; ++ChildIdx)
 	{
-		const uint_fast16_t ChildMortonX = NodeMortonLocation.X + ((i & 1) ? ChildOffset : 0);
-		const uint_fast16_t ChildMortonY = NodeMortonLocation.Y + ((i & 2) ? ChildOffset : 0);
-		const uint_fast16_t ChildMortonZ = NodeMortonLocation.Z + ((i & 4) ? ChildOffset : 0);
+		const uint_fast16_t ChildMortonX = NodeMortonLocation.X + (ChildIdx & 1 ? ChildOffset : 0);
+		const uint_fast16_t ChildMortonY = NodeMortonLocation.Y + (ChildIdx & 2 ? ChildOffset : 0);
+		const uint_fast16_t ChildMortonZ = NodeMortonLocation.Z + (ChildIdx & 4 ? ChildOffset : 0);
 
 		const FMortonVector ChildMortonLocation = FMortonVector(ChildMortonX, ChildMortonY, ChildMortonZ);
 		const MortonCodeType ChildMortonCode = ChildMortonLocation.ToMortonCode();
 			
 		const auto NodeIterator = Chunk.Octrees[0]->Layers[ChildLayerIdx]->find(ChildMortonCode);
-		Callback(NodeIterator->second);
+		Callback(*NodeIterator);
 	}
 }
