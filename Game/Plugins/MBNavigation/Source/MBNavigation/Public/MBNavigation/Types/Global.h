@@ -9,9 +9,9 @@
 
 typedef uint_fast32_t MortonCodeType;
 typedef uint_fast64_t ChunkKeyType;
-typedef uint8_t LayerIdxType;
+typedef uint8 LayerIdxType;
 typedef uint32 ActorKeyType;
-typedef uint8 NodeType; // To indicate if the node is static or dynamic, 0 or 1 respectively.
+typedef uint8 NodeType; // To indicate if the node is static or dynamic, 0 or 1 respectively. Make this value 2 bits on any class/struct.
 
 
 // Directions within my navmesh use 6 bits to represent '-XYZ +XYZ' values.

@@ -53,56 +53,6 @@ FArchive& operator<<(FArchive& Ar, FGlobalVector& GlobalVector)
 	return Ar;
 }
 
-FArchive& operator<<(FArchive& Ar, FNodeRelations& Relations)
-{
-	if (Ar.IsSaving())
-	{
-		// Pack the 6 neighbour indices into a single uint32
-		uint32 PackedRelations =
-			(static_cast<uint32>(Relations.X_Negative) << 28) |
-			(static_cast<uint32>(Relations.X_Negative) << 24) |
-			(static_cast<uint32>(Relations.X_Negative) << 20) |
-			(static_cast<uint32>(Relations.X_Negative) << 16) |
-			(static_cast<uint32>(Relations.X_Negative) << 12) |
-			(static_cast<uint32>(Relations.X_Negative) << 8);
-		Ar << PackedRelations;
-	}
-	else if (Ar.IsLoading())
-	{
-		uint32 PackedRelations;
-		Ar << PackedRelations;
-
-		// Unpack the neighbour indices from the PackedNeighbours
-		Relations.X_Negative = (PackedRelations >> 28) & 0xF;
-		Relations.Y_Negative = (PackedRelations >> 24) & 0xF;
-		Relations.Z_Negative = (PackedRelations >> 20) & 0xF;
-		Relations.X_Positive = (PackedRelations >> 16) & 0xF;
-		Relations.Y_Positive = (PackedRelations >> 12) & 0xF;
-		Relations.Z_Positive = (PackedRelations >> 8) & 0xF;
-	}
-
-	return Ar;
-}
-
-FArchive& operator<<(FArchive& Ar, FNode& Node)
-{
-	Ar << Node.Relations;
-
-	if (Ar.IsSaving())
-	{
-		uint32 ChunkBorder = Node.ChunkBorder;
-		Ar << ChunkBorder;
-	}
-	else if (Ar.IsLoading())
-	{
-		uint32 ChunkBorder;
-		Ar << ChunkBorder;
-		Node.ChunkBorder = ChunkBorder;
-	}
-
-	return Ar;
-}
-
 FArchive& operator<<(FArchive& Ar, FOctreeLayer& Layer)
 {
 	size_t Size = Layer.size();
@@ -112,8 +62,10 @@ FArchive& operator<<(FArchive& Ar, FOctreeLayer& Layer)
 	{
 		for(auto& [MortonCode, Node] : Layer)
 		{
+			uint64 PackedData = Node.Pack();
+			
 			Ar << MortonCode;
-			Ar << Node;
+			Ar << PackedData;
 		}
 	}
 	else if (Ar.IsLoading())
@@ -121,12 +73,12 @@ FArchive& operator<<(FArchive& Ar, FOctreeLayer& Layer)
 		for(size_t i = 0; i < Size; ++i)
 		{
 			MortonCodeType MortonCode;
-			FNode Node;
-
+			uint64 PackedData;
+			
 			Ar << MortonCode;
-			Ar << Node;
-
-			Layer.emplace(MortonCode, std::move(Node));
+			Ar << PackedData;
+			
+			Layer.emplace(MortonCode, FNode(PackedData));
 		}
 	}
 	
@@ -137,7 +89,7 @@ FArchive& operator<<(FArchive& Ar, FChunk& Chunk)
 {
 	Ar << Chunk.Location;
 
-	// Only rasterize the static-octree.
+	// Only serialize the static-octree.
 	for (LayerIdxType LayerIdx = 0; LayerIdx <= FNavMeshStatic::StaticDepth; ++LayerIdx)
 	{
 		Ar << *Chunk.Octrees[0]->Layers[LayerIdx];

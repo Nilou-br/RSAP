@@ -587,14 +587,15 @@ void FUpdateTask::TryUnRasterizeNodes(const FChunk& Chunk, const std::unordered_
 void FUpdateTask::SetNegativeNeighbourRelations(const FChunk& Chunk)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("SetNegativeNeighbourRelations");
+	
 	// Loop through all static nodes sorted by morton-code.
-	LayerIdxType LayerIndex = 0;
+	LayerIdxType LayerIdx = 0; 
 	for (auto& Layer : Chunk.Octrees[0]->Layers)
 	{
 		for (auto& [MortonCode, Node] : *Layer)
 		{
-			Node.UpdateRelations(NavMeshPtr, Chunk, MortonCode, LayerIndex, DIRECTION_ALL_NEGATIVE);
+			Node.UpdateRelations(NavMeshPtr, Chunk, MortonCode, LayerIdx, DIRECTION_ALL_NEGATIVE);
 		}
-		LayerIndex++;
+		LayerIdx++;
 	}
 }

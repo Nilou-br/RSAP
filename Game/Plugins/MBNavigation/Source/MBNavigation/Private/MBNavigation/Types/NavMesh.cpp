@@ -5,20 +5,31 @@
 // #include "Physics/Experimental/PhysInterface_Chaos.h"
 
 
+FNode::FNode(const uint8 ChildIdx, const NavmeshDirection ParentChunkBorder)
+{
+	if (ParentChunkBorder)
+	{
+		ChunkBorder |= ChildIdx & 1 ? DIRECTION_X_POSITIVE : DIRECTION_X_NEGATIVE;
+		ChunkBorder |= ChildIdx & 2 ? DIRECTION_Y_POSITIVE : DIRECTION_Y_NEGATIVE;
+		ChunkBorder |= ChildIdx & 4 ? DIRECTION_Z_POSITIVE : DIRECTION_Z_NEGATIVE;
+		ChunkBorder &= ParentChunkBorder; // Can only be against the same border(s) as the parent.
+	}
+}
+
 std::array<uint8, 6> FNode::GetNeighbourLayerIndexes() const
 {
     std::array<uint8, 6> NeighbourLayerIndexes;
 
-    int Index = 0;
-    for (int Direction = 0b100000; Direction >= 0b000001; Direction>>=1, ++Index)
+    LayerIdxType LayerIdx = 0;
+    for (NavmeshDirection Direction = 0b100000; Direction >= 0b000001; Direction>>=1, ++LayerIdx)
     {
         switch (Direction) {
-            case DIRECTION_X_NEGATIVE: NeighbourLayerIndexes[Index] = Relations.X_Negative; break;
-            case DIRECTION_Y_NEGATIVE: NeighbourLayerIndexes[Index] = Relations.X_Positive; break;
-            case DIRECTION_Z_NEGATIVE: NeighbourLayerIndexes[Index] = Relations.Y_Negative; break;
-            case DIRECTION_X_POSITIVE: NeighbourLayerIndexes[Index] = Relations.Y_Positive; break;
-            case DIRECTION_Y_POSITIVE: NeighbourLayerIndexes[Index] = Relations.Z_Negative; break;
-            case DIRECTION_Z_POSITIVE: NeighbourLayerIndexes[Index] = Relations.Z_Positive; break;
+            case DIRECTION_X_NEGATIVE: NeighbourLayerIndexes[LayerIdx] = Relations.X_Negative_Layer; break;
+            case DIRECTION_Y_NEGATIVE: NeighbourLayerIndexes[LayerIdx] = Relations.X_Positive_Layer; break;
+            case DIRECTION_Z_NEGATIVE: NeighbourLayerIndexes[LayerIdx] = Relations.Y_Negative_Layer; break;
+            case DIRECTION_X_POSITIVE: NeighbourLayerIndexes[LayerIdx] = Relations.Y_Positive_Layer; break;
+            case DIRECTION_Y_POSITIVE: NeighbourLayerIndexes[LayerIdx] = Relations.Z_Negative_Layer; break;
+            case DIRECTION_Z_POSITIVE: NeighbourLayerIndexes[LayerIdx] = Relations.Z_Positive_Layer; break;
             default:break;
         }
     }
@@ -172,51 +183,51 @@ void FNode::UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk& Chunk, 
 		}
 		
 		// Find the neighbour by checking each layer one by one upwards in the octree, starting from the given node's layer-idx, until we find the neighbour.
-		for (LayerIdxType NeighbourLayerIdx = LayerIdx; NeighbourLayerIdx < LAYER_INDEX_INVALID; --NeighbourLayerIdx)
+		for (int NeighbourLayerIdx = LayerIdx; NeighbourLayerIdx >= 0; --NeighbourLayerIdx)
 		{
-			const auto NodeIterator = NeighbourChunk->Octrees[0]->Layers[NeighbourLayerIdx]->find(NeighbourMortonCode);
-			if(NodeIterator == NeighbourChunk->Octrees[0]->Layers[NeighbourLayerIdx]->end())
+			const auto NeighbourNodeIterator = NeighbourChunk->Octrees[0]->Layers[NeighbourLayerIdx]->find(NeighbourMortonCode);
+			if(NeighbourNodeIterator == NeighbourChunk->Octrees[0]->Layers[NeighbourLayerIdx]->end())
 			{
 				// There is no neighbour on this layer, so try again using the parent of this uninitialized neighbour.
 				NeighbourMortonCode = GetParentMortonCode(NeighbourMortonCode, NeighbourLayerIdx);
 				continue;
 			}
 			
-			FNode& NeighbourNode = NodeIterator->second;
+			FNode& NeighbourNode = NeighbourNodeIterator->second;
 			
 			// Set the FoundNeighbourLayerIndex on the Node.Neighbours for this direction,
 			// and the Node's layer-index to the NeighbourNode's relation for opposite direction ( where we are looking from ).
 			switch (Direction)
 			{
 				case DIRECTION_X_NEGATIVE:
-					Relations.X_Negative = NeighbourLayerIdx;
-					NeighbourNode.Relations.X_Positive = NeighbourLayerIdx;
-					UpdateChildRelations(NeighbourChunk, *NodeIterator, NeighbourLayerIdx, LayerIdx, DIRECTION_X_POSITIVE);
+					Relations.X_Negative_Layer = NeighbourLayerIdx;
+					NeighbourNode.Relations.X_Positive_Layer = NeighbourLayerIdx;
+					UpdateChildRelations(NeighbourChunk, *NeighbourNodeIterator, NeighbourLayerIdx, LayerIdx, DIRECTION_X_POSITIVE);
 					break;
 				case DIRECTION_Y_NEGATIVE:
-					Relations.Y_Negative = NeighbourLayerIdx;
-					NeighbourNode.Relations.Y_Positive = NeighbourLayerIdx;
-					UpdateChildRelations(NeighbourChunk, *NodeIterator, NeighbourLayerIdx, LayerIdx, DIRECTION_Y_POSITIVE);
+					Relations.Y_Negative_Layer = NeighbourLayerIdx;
+					NeighbourNode.Relations.Y_Positive_Layer = NeighbourLayerIdx;
+					UpdateChildRelations(NeighbourChunk, *NeighbourNodeIterator, NeighbourLayerIdx, LayerIdx, DIRECTION_Y_POSITIVE);
 					break;
 				case DIRECTION_Z_NEGATIVE:
-					Relations.Z_Negative = NeighbourLayerIdx;
-					NeighbourNode.Relations.Z_Positive = NeighbourLayerIdx;
-					UpdateChildRelations(NeighbourChunk, *NodeIterator, NeighbourLayerIdx, LayerIdx, DIRECTION_Z_POSITIVE);
+					Relations.Z_Negative_Layer = NeighbourLayerIdx;
+					NeighbourNode.Relations.Z_Positive_Layer = NeighbourLayerIdx;
+					UpdateChildRelations(NeighbourChunk, *NeighbourNodeIterator, NeighbourLayerIdx, LayerIdx, DIRECTION_Z_POSITIVE);
 					break;
 				case DIRECTION_X_POSITIVE:
-					Relations.X_Positive = NeighbourLayerIdx;
-					NeighbourNode.Relations.X_Negative = NeighbourLayerIdx;
-					UpdateChildRelations(NeighbourChunk, *NodeIterator, NeighbourLayerIdx, LayerIdx, DIRECTION_X_NEGATIVE);
+					Relations.X_Positive_Layer = NeighbourLayerIdx;
+					NeighbourNode.Relations.X_Negative_Layer = NeighbourLayerIdx;
+					UpdateChildRelations(NeighbourChunk, *NeighbourNodeIterator, NeighbourLayerIdx, LayerIdx, DIRECTION_X_NEGATIVE);
 					break;
 				case DIRECTION_Y_POSITIVE:
-					Relations.Y_Positive = NeighbourLayerIdx;
-					NeighbourNode.Relations.Y_Negative = NeighbourLayerIdx;
-					UpdateChildRelations(NeighbourChunk, *NodeIterator, NeighbourLayerIdx, LayerIdx, DIRECTION_Y_NEGATIVE);
+					Relations.Y_Positive_Layer = NeighbourLayerIdx;
+					NeighbourNode.Relations.Y_Negative_Layer = NeighbourLayerIdx;
+					UpdateChildRelations(NeighbourChunk, *NeighbourNodeIterator, NeighbourLayerIdx, LayerIdx, DIRECTION_Y_NEGATIVE);
 					break;
 				case DIRECTION_Z_POSITIVE:
-					Relations.Z_Positive = NeighbourLayerIdx;
-					NeighbourNode.Relations.Z_Negative = NeighbourLayerIdx;
-					UpdateChildRelations(NeighbourChunk, *NodeIterator, NeighbourLayerIdx, LayerIdx, DIRECTION_Z_NEGATIVE);
+					Relations.Z_Positive_Layer = NeighbourLayerIdx;
+					NeighbourNode.Relations.Z_Negative_Layer = NeighbourLayerIdx;
+					UpdateChildRelations(NeighbourChunk, *NeighbourNodeIterator, NeighbourLayerIdx, LayerIdx, DIRECTION_Z_NEGATIVE);
 					break;
 				default: break;
 			}
