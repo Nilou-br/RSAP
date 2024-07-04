@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include "morton.h"
 #include "unordered_dense.h"
 #include "MBNavigation/Types/Math.h"
 #include "MBNavigation/Types/Static.h"
@@ -138,11 +137,8 @@ struct FNodeLookupData
  * - SoundPresetId: Identifier to a preset of attenuation settings for the actor this node is occluding.
  * - ChildNodeTypes: bitmask indicating the node type for each child this node has.
  */
-struct FNode // todo: 12 bits for some reason?
+struct FNode // todo: 12 bytes for some reason?
 {
-	static constexpr int LayerShiftAmount[10] = {30, 30, 27, 24, 21, 18, 15, 12, 9, 6}; // todo change to make 30, 27, 24 etc...
-	static constexpr int ParentShiftAmount[10] = {30, 27, 24, 21, 18, 15, 12, 9, 6, 3};
-	
 	FNodeRelations Relations;
 	NavmeshDirection ChunkBorder: 6 = 0b000000;
 	uint32 SoundPresetID: 16 = 0;
@@ -165,12 +161,6 @@ struct FNode // todo: 12 bits for some reason?
 		return ChunkLocation + GetMortonLocation(MortonCode);
 	}
 	
-	FORCEINLINE static MortonCodeType GetParentMortonCode(const MortonCodeType MortonCode, const LayerIdxType NodeLayerIdx)
-	{
-		const MortonCodeType ParentMask = ~((1 << ParentShiftAmount[NodeLayerIdx-1]) - 1); // todo: these masks can be made constexpr as well.
-		return MortonCode & ParentMask;
-	}
-
 	FORCEINLINE void SetOccluded(const bool Value) {
 		bIsOccluding = Value;
 	}
@@ -298,7 +288,8 @@ public:
 	{
 		return TBounds(Location, Location+FNavMeshStatic::ChunkSize);
 	}
-	
+
+	FORCEINLINE ChunkKeyType GetNeighbour(const NavmeshDirection Direction) const;
 };
 
 // The Navigation-Mesh is a hashmap of Chunks, the key is the location of the chunk divided by the chunk-size (::ToKey).

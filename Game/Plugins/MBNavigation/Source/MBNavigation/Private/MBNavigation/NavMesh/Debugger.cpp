@@ -161,8 +161,7 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const MortonCodeT
 
 	if(FNavMeshDebugSettings::bDisplayRelations)
 	{
-		const std::array<FNodeLookupData, 6> NeighboursLookupData = Node.GetNeighboursLookupData(Chunk->Location, MortonCode);
-		for (const auto NeighbourLookupData : NeighboursLookupData)
+		for (const auto NeighbourLookupData : Node.GetNeighboursLookupData(Chunk->Location, MortonCode))
 		{
 			if(NeighbourLookupData.LayerIndex == LAYER_INDEX_INVALID) continue;
 			// if(LayerIndex != FNavMeshStatic::StaticDepth) continue;

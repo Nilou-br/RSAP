@@ -2,12 +2,154 @@
 
 #pragma once
 
-#include "morton.h"
 #include "Static.h"
 #include "Global.h"
+#include "morton.h"
 #include "MBNavigation/ThirdParty/unordered_dense/unordered_dense.h"
 
 
+
+struct FMortonUtils
+{
+	static inline constexpr MortonCodeType Mask_X = 0b01001001001001001001001001001001;
+	static inline constexpr MortonCodeType Mask_Y = 0b10010010010010010010010010010010;
+	static inline constexpr MortonCodeType Mask_Z = 0b00100100100100100100100100100100;
+	
+	static inline constexpr MortonCodeType Mask_XY = Mask_X | Mask_Y;
+	static inline constexpr MortonCodeType Mask_XZ = Mask_X | Mask_Z;
+	static inline constexpr MortonCodeType Mask_YZ = Mask_Y | Mask_Z;
+
+	
+	// Accessed using layer-index of the node you would like to get the parent of.
+	static inline constexpr MortonCodeType ParentMasks[10] = {
+		0xC0000000, // ~((1 << 30) - 1)
+		0xF8000000, // ~((1 << 27) - 1)
+		0xFF000000, // ~((1 << 24) - 1)
+		0xFFC00000, // ~((1 << 21) - 1)
+		0xFFF00000, // ~((1 << 18) - 1)
+		0xFFF80000, // ~((1 << 15) - 1)
+		0xFFFC0000, // ~((1 << 12) - 1)
+		0xFFFF0000, // ~((1 << 9)  - 1)
+		0xFFFFC000, // ~((1 << 6)  - 1)
+		0xFFFFF800  // ~((1 << 3)  - 1)
+	};
+	
+	// The offsets are: 1024, 512, 256, 128, 64, 32, 16, 8, 4, 2.
+	static inline constexpr MortonCodeType LayerOffsets[10] = {
+		// These layer-offsets are used to offset a single axis on the morton code by the node-size of a layer.
+		// This only works with 'powers of 2' due to the nature of morton-codes. But is perfect in my case.
+	
+		// Every axis can use the same offset. This is because the offsets start at the first bit of an interleaved 'zyx' part ( the bit for 'x' ).
+		// Explanation: when masking any two axis on the morton-code, and adding any offset to this result, then the first bit to the left of the offset that is '0' will be set to '1'.
+		// The axis you are trying to add the offset to is the only one that remains unmasked, so its the only one that can have any bits set to '0'.
+		
+		1 << 30, 1 << 27, 1 << 24, 1 << 21, 1 << 18,
+		1 << 15, 1 << 12, 1 << 9,  1 << 6,  1 << 3
+	};
+	
+	
+	// Get the parent's morton-code. The layer-index is the index of the layer the parent is in.
+	FORCEINLINE static MortonCodeType GetParent(const MortonCodeType MortonCode, const LayerIdxType LayerIdx)
+	{
+		return MortonCode & ParentMasks[LayerIdx-1];
+	}
+
+	FORCEINLINE static MortonCodeType GetChild(const MortonCodeType ParentMortonCode, const LayerIdxType ChildLayerIdx, const uint8 ChildIdx)
+	{
+		switch (ChildIdx)
+		{
+			case 0: return ParentMortonCode;																// No offset.
+			case 1: return AddX(ParentMortonCode, ChildLayerIdx);											// X
+			case 2: return AddY(ParentMortonCode, ChildLayerIdx);											// Y
+			case 3: return AddX(ParentMortonCode, ChildLayerIdx) | AddY(ParentMortonCode, ChildLayerIdx);	// X+Y
+			case 4: return AddZ(ParentMortonCode, ChildLayerIdx);											// Z
+			case 5: return AddX(ParentMortonCode, ChildLayerIdx) | AddZ(ParentMortonCode, ChildLayerIdx);	// X+Z
+			case 6: return AddY(ParentMortonCode, ChildLayerIdx) | AddZ(ParentMortonCode, ChildLayerIdx);	// Y+Z
+			case 7: return Add(ParentMortonCode, ChildLayerIdx);											// X+Y+Z
+			default: return ParentMortonCode;
+		}
+	}
+
+	// Moves the morton-code in the given direction. The amount it moves is determined by the layer-index, which translates to the node-size for that layer.
+	FORCEINLINE static MortonCodeType Move(const MortonCodeType MortonCode, const LayerIdxType LayerIdx, const NavmeshDirection Direction)
+	{
+		switch (Direction) {
+			case DIRECTION_X_NEGATIVE: return SubtractX(MortonCode, LayerIdx);
+			case DIRECTION_Y_NEGATIVE: return SubtractY(MortonCode, LayerIdx);
+			case DIRECTION_Z_NEGATIVE: return SubtractZ(MortonCode, LayerIdx);
+			case DIRECTION_X_POSITIVE: return AddX(MortonCode, LayerIdx);
+			case DIRECTION_Y_POSITIVE: return AddY(MortonCode, LayerIdx);
+			case DIRECTION_Z_POSITIVE: return AddZ(MortonCode, LayerIdx);
+			default: return MortonCode;
+		}
+	}
+
+	// Combination of FMortonUtils::Move and FMortonUtils::GetParent. Used to get the neighbour of a node in the given direction, which could also be in an upper layer.
+	FORCEINLINE static MortonCodeType MoveAndMask(const MortonCodeType MortonCode, const LayerIdxType LayerIdx, const NavmeshDirection Direction)
+	{
+		return GetParent(Move(MortonCode, LayerIdx, Direction), LayerIdx);
+	}
+
+	// Adds the node-size of the layer-index to the X-axis.
+	FORCEINLINE static MortonCodeType AddX(const MortonCodeType MortonCode, const LayerIdxType LayerIdx)
+	{
+		const MortonCodeType SumX = (MortonCode | Mask_YZ) + LayerOffsets[LayerIdx];
+		return SumX & Mask_X | MortonCode & Mask_YZ;
+	}
+
+	// Subtracts the node-size of the layer-index from the X-axis.
+	FORCEINLINE static MortonCodeType SubtractX(const MortonCodeType MortonCode, const LayerIdxType LayerIdx)
+	{
+		const MortonCodeType DiffX = (MortonCode & Mask_X) - LayerOffsets[LayerIdx];
+		return DiffX & Mask_X | MortonCode & Mask_YZ;
+	}
+
+	// Adds the node-size of the layer-index to the Y-axis.
+	FORCEINLINE static MortonCodeType AddY(const MortonCodeType MortonCode, const LayerIdxType LayerIdx)
+	{
+		const MortonCodeType SumY = (MortonCode | Mask_XZ) + LayerOffsets[LayerIdx];
+		return SumY & Mask_Y | MortonCode & Mask_XZ;
+	}
+
+	// Subtracts the node-size of the layer-index from the Y-axis.
+	FORCEINLINE static MortonCodeType SubtractY(const MortonCodeType MortonCode, const LayerIdxType LayerIdx)
+	{
+		const MortonCodeType DiffY = (MortonCode & Mask_Y) - LayerOffsets[LayerIdx];
+		return DiffY & Mask_Y | MortonCode & Mask_XZ;
+	}
+
+	// Adds the node-size of the layer-index to the Z-axis.
+	FORCEINLINE static MortonCodeType AddZ(const MortonCodeType MortonCode, const LayerIdxType LayerIdx)
+	{
+		const MortonCodeType SumZ = (MortonCode | Mask_XY) + LayerOffsets[LayerIdx];
+		return SumZ & Mask_Z | MortonCode & Mask_XY;
+	}
+
+	// Subtracts the node-size of the layer-index from the Z-axis.
+	FORCEINLINE static MortonCodeType SubtractZ(const MortonCodeType MortonCode, const LayerIdxType LayerIdx)
+	{
+		const MortonCodeType DiffZ = (MortonCode & Mask_Z) - LayerOffsets[LayerIdx];
+		return DiffZ & Mask_Z | MortonCode & Mask_XY;
+	}
+
+	// Adds the node-size of the layer-index to all axis.
+	FORCEINLINE static MortonCodeType Add(const MortonCodeType MortonCode, const LayerIdxType LayerIdx)
+	{
+		const MortonCodeType SumX = (MortonCode | Mask_YZ) + LayerOffsets[LayerIdx];
+		const MortonCodeType SumY = (MortonCode | Mask_XZ) + LayerOffsets[LayerIdx];
+		const MortonCodeType SumZ = (MortonCode | Mask_XY) + LayerOffsets[LayerIdx];
+		return SumX & Mask_X | SumY & Mask_Y | SumZ & Mask_Z;
+	}
+
+	// Subtracts the node-size of the layer-index from all axis.
+	FORCEINLINE static MortonCodeType Subtract(const MortonCodeType MortonCode, const LayerIdxType LayerIdx)
+	{
+		const MortonCodeType DiffX = (MortonCode & Mask_X) - LayerOffsets[LayerIdx];
+		const MortonCodeType DiffY = (MortonCode & Mask_Y) - LayerOffsets[LayerIdx];
+		const MortonCodeType DiffZ = (MortonCode & Mask_Z) - LayerOffsets[LayerIdx];
+		return DiffX & Mask_X | DiffY & Mask_Y | DiffZ & Mask_Z;
+	}
+};
 
 /**
  * Used for local-locations within a chunk, and can be converted to morton-codes directly.
@@ -274,7 +416,7 @@ struct FGlobalVector
 };
 
 /**
- * Lightweight AABB in 3d space.
+ * Lightweight AABB.
  */
 template<typename VectorType>
 struct TBounds
@@ -350,15 +492,15 @@ struct TBounds
 	}
 
 	template<typename T = VectorType>
-	FORCEINLINE auto operator&(const int32 MortonMask) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, TBounds<FGlobalVector>>
+	FORCEINLINE auto operator&(const int32 Mask) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, TBounds<FGlobalVector>>
 	{
-		return TBounds<FGlobalVector>(Min & MortonMask, Max & MortonMask, bIsValid);
+		return TBounds<FGlobalVector>(Min & Mask, Max & Mask, bIsValid);
 	}
 
 	template<typename T = VectorType>
-	FORCEINLINE auto operator&(const uint16 MortonMask) const -> std::enable_if_t<std::is_same_v<T, FMortonVector>, TBounds<FMortonVector>>
+	FORCEINLINE auto operator&(const uint16 Mask) const -> std::enable_if_t<std::is_same_v<T, FMortonVector>, TBounds<FMortonVector>>
 	{
-		return TBounds<FMortonVector>(Min & MortonMask, Max & MortonMask, bIsValid);
+		return TBounds<FMortonVector>(Min & Mask, Max & Mask, bIsValid);
 	}
 
 	FORCEINLINE bool operator!() const
@@ -367,26 +509,46 @@ struct TBounds
 				Min.X == 0 && Min.Y == 0 && Min.Z == 0;
 	}
 
-	// Rounds the given bounds to the node-size of the given layer-index. Min will be rounded down, Max will be rounded up.
+	// Rounds the bounds to the layer's node-size in global-space. Min will be rounded down, Max will be rounded up.
 	template<typename T = VectorType>
-	FORCEINLINE auto Round(const LayerIdxType LayerIdx) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, TBounds<FGlobalVector>>
+	FORCEINLINE auto RoundToLayer(const LayerIdxType LayerIdx) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, TBounds<FGlobalVector>>
 	{
-		const int32 NodeMask = ~(((1 << (10 - LayerIdx)) >> FNavMeshStatic::VoxelSizeExponent) - 1);
-		TBounds<FGlobalVector> Rounded = *this & NodeMask;
+		// Apply the Voxel-Size-Exponent to these masks since this VectorType exist in global space.
+		static constexpr uint16 LayerMasks[10] = {
+			static_cast<uint16>(~((1 << 10 >> FNavMeshStatic::VoxelSizeExponent) - 1)), static_cast<uint16>(~((1 << 9 >> FNavMeshStatic::VoxelSizeExponent) - 1)),
+			static_cast<uint16>(~((1 << 8  >> FNavMeshStatic::VoxelSizeExponent) - 1)), static_cast<uint16>(~((1 << 7 >> FNavMeshStatic::VoxelSizeExponent) - 1)),
+			static_cast<uint16>(~((1 << 6  >> FNavMeshStatic::VoxelSizeExponent) - 1)), static_cast<uint16>(~((1 << 5 >> FNavMeshStatic::VoxelSizeExponent) - 1)),
+			static_cast<uint16>(~((1 << 4  >> FNavMeshStatic::VoxelSizeExponent) - 1)), static_cast<uint16>(~((1 << 3 >> FNavMeshStatic::VoxelSizeExponent) - 1)),
+			static_cast<uint16>(~((1 << 2  >> FNavMeshStatic::VoxelSizeExponent) - 1)), static_cast<uint16>(~((1 << 1 >> FNavMeshStatic::VoxelSizeExponent) - 1))
+		};
+		
+		TBounds<FGlobalVector> Rounded = *this & LayerMasks[LayerIdx];
 
-		// Round the Max bounds up, but only if it is smaller than the un-rounded bounds ( its possible for the un-rounded value to already equal the rounded-up ).
+		// Round the Max bounds up, but only if it is smaller than the un-rounded bounds.
+		// Its possible for the un-rounded value to already equal the rounded to value, but we still want to round it a whole node-size upwards ( otherwise the Min axis would equal the Max and there is no width, thus no volume ).
 		if(Rounded.Max.X < Max.X) Rounded.Max.X += FNavMeshStatic::NodeSizes[LayerIdx];
 		if(Rounded.Max.Y < Max.Y) Rounded.Max.Y += FNavMeshStatic::NodeSizes[LayerIdx];
 		if(Rounded.Max.Z < Max.Z) Rounded.Max.Z += FNavMeshStatic::NodeSizes[LayerIdx];
 		return Rounded;
 	}
 
-	// Rounds the given bounds to the node-size in morton-space of the given layer-index. Min will be rounded down, Max will be rounded up.
+	// Rounds the bounds to the layer's node-size in morton-space. Min will be rounded down, Max will be rounded up.
 	template<typename T = VectorType>
-	FORCEINLINE auto Round(const LayerIdxType LayerIdx) const -> std::enable_if_t<std::is_same_v<T, FMortonVector>, TBounds<FMortonVector>>
+	FORCEINLINE auto RoundToLayer(const LayerIdxType LayerIdx) const -> std::enable_if_t<std::is_same_v<T, FMortonVector>, TBounds<FMortonVector>>
 	{
-		TBounds<FMortonVector> Rounded = *this & FNavMeshStatic::MortonMasks[LayerIdx];
-		Rounded.Max = Rounded.Max + FNavMeshStatic::MortonOffsets[LayerIdx] - 1; // Round the max up.
+		static constexpr uint16 LayerMasks[10] = {
+			static_cast<uint16>(~((1<<10)-1)), static_cast<uint16>(~((1<<9)-1)),
+			static_cast<uint16>(~((1<<8)-1)),  static_cast<uint16>(~((1<<7)-1)),
+			static_cast<uint16>(~((1<<6)-1)),  static_cast<uint16>(~((1<<5)-1)),
+			static_cast<uint16>(~((1<<4)-1)),  static_cast<uint16>(~((1<<3)-1)),
+			static_cast<uint16>(~((1<<2)-1)),  static_cast<uint16>(~((1<<1)-1))
+		};
+		
+		TBounds<FMortonVector> Rounded = *this & LayerMasks[LayerIdx];
+
+		// Round the max up.
+		// The '-1' is to adjust to nodes in morton-space. Because the origin of a node is at its negative most corner. So if Min/Max are equal, then they hold the same node. Min/Max just determine the 'first' and 'last' node in the bounds.
+		Rounded.Max = Rounded.Max + FNavMeshStatic::MortonOffsets[LayerIdx] - 1;
 		return Rounded;
 	}
 

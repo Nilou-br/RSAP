@@ -171,13 +171,13 @@ uint32 FUpdateTask::Run()
 		const LayerIdxType StartingLayerIdx = CalculateOptimalStartingLayer(TChangedBounds(PreviousBoundsList.back(), CurrentBounds));
 
 		// Round the bounds to this layer.
-		const TBounds<FGlobalVector> CurrentRounded = CurrentBounds.Round(StartingLayerIdx);
+		const TBounds<FGlobalVector> CurrentRounded = CurrentBounds.RoundToLayer(StartingLayerIdx);
 		
 		for (const auto& PreviousBounds : PreviousBoundsList)
 		{
 			// Do a boolean cut using the rounded current-bounds on the rounded previous-bounds. And loop through the remaining parts.
 			// This prevents looping through nodes that will already be looped through from the current-bounds later.
-			for (auto PreviousRemainder : CurrentRounded.Cut(PreviousBounds.Round(StartingLayerIdx)))
+			for (auto PreviousRemainder : CurrentRounded.Cut(PreviousBounds.RoundToLayer(StartingLayerIdx)))
 			{
 				PreviousRemainder.ForEachChunk([&FillChunksToUpdate, StartingLayerIdx](const ChunkKeyType ChunkKey, const NavmeshDirection ChunkPositiveDirections, const TBounds<FMortonVector>& MortonBounds)
 				{
@@ -219,10 +219,10 @@ uint32 FUpdateTask::Run()
 		{
 			if(!StartReRasterizeNode(Chunk, MortonCode, UpdateValues.LayerIdx, UpdateValues.Relations))
 			{
-				NodesToSkip[UpdateValues.LayerIdx].insert(FNode::GetParentMortonCode(MortonCode, UpdateValues.LayerIdx));
+				NodesToSkip[UpdateValues.LayerIdx].insert(FMortonUtils::GetParent(MortonCode, UpdateValues.LayerIdx));
 				continue;
 			}
-			NodesToUnRasterize[UpdateValues.LayerIdx].insert(FNode::GetParentMortonCode(MortonCode, UpdateValues.LayerIdx));
+			NodesToUnRasterize[UpdateValues.LayerIdx].insert(FMortonUtils::GetParent(MortonCode, UpdateValues.LayerIdx));
 		}
 		
 		for (LayerIdxType LayerIdx = 0; LayerIdx < 10; LayerIdx++)
@@ -494,7 +494,7 @@ void FUpdateTask::InitializeParents(const FChunk& Chunk, const MortonCodeType Ch
 		}
 	};
 	
-	const MortonCodeType ParentMortonCode = FNode::GetParentMortonCode(ChildMortonCode, ChildLayerIdx);
+	const MortonCodeType ParentMortonCode = FMortonUtils::GetParent(ChildMortonCode, ChildLayerIdx);
 	const LayerIdxType ParentLayerIdx = ChildLayerIdx-1;
 
 	// If parent exists, update it, create its children if they don't exist, and stop the recursion.
@@ -568,7 +568,7 @@ void FUpdateTask::TryUnRasterizeNodes(const FChunk& Chunk, const std::unordered_
 		}
 
 		// Do the same for the parent of this node.
-		ParentMortonCodes.insert(FNode::GetParentMortonCode(MortonCode, LayerIdx));
+		ParentMortonCodes.insert(FMortonUtils::GetParent(MortonCode, LayerIdx));
 	}
 	if(ParentMortonCodes.empty()) return;
 

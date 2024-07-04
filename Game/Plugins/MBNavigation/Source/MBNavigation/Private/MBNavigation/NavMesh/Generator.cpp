@@ -96,16 +96,12 @@ void FNavMeshGenerator::RasterizeStaticNode(FChunk& Chunk, FNodePair& NodePair, 
 
 	// Initialize the children of this node.
 	ChildLayer.reserve(ChildLayer.size() + 8);
-	const FMortonVector NodeLocation = FMortonVector::FromMortonCode(MortonCode);
 	for (uint8 ChildIdx = 0; ChildIdx < 8; ++ChildIdx)
 	{
-		// Add the offset depending on the child's index (location within the parent). // todo: check performance vs switch case with 8 cases for each child-index.
-		const uint_fast16_t ChildMortonX = NodeLocation.X + (ChildIdx & 1 ? FNavMeshStatic::MortonOffsets[ChildLayerIdx] : 0);
-		const uint_fast16_t ChildMortonY = NodeLocation.Y + (ChildIdx & 2 ? FNavMeshStatic::MortonOffsets[ChildLayerIdx] : 0);
-		const uint_fast16_t ChildMortonZ = NodeLocation.Z + (ChildIdx & 4 ? FNavMeshStatic::MortonOffsets[ChildLayerIdx] : 0);
+		const MortonCodeType ChildMortonCode = FMortonUtils::GetChild(MortonCode, ChildLayerIdx, ChildIdx);
 
 		// Add this new child-node to the child-layer.
-		const auto ChildNodeIterator = Chunk.Octrees[0]->Layers[ChildLayerIdx]->emplace(FMortonVector::ToMortonCode(ChildMortonX, ChildMortonY, ChildMortonZ), FNode(ChildIdx, Node.ChunkBorder)).first;
+		const auto ChildNodeIterator = Chunk.Octrees[0]->Layers[ChildLayerIdx]->emplace(ChildMortonCode, FNode(ChildIdx, Node.ChunkBorder)).first;
 
 		// Recursively rasterize this child-node.
 		RasterizeStaticNode(Chunk, *ChildNodeIterator, ChildLayerIdx);
