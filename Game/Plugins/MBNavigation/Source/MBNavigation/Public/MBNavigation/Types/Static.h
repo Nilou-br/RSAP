@@ -12,7 +12,7 @@
 struct FNavMeshStatic
 {
 	static inline constexpr uint8 MaxDepth = 10;
-	static inline constexpr uint8 StaticDepth = 1;
+	static inline constexpr uint8 StaticDepth = 5;
 	static inline constexpr uint8 VoxelSizeExponent = 0;
 	static inline constexpr int32 ChunkSize = 1024;
 	static inline constexpr uint8 ChunkKeyShift = 10 + VoxelSizeExponent;

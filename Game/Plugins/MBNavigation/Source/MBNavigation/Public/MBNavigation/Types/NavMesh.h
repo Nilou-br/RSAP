@@ -115,18 +115,6 @@ struct FNodeRelations
 };
 
 /**
- * Data necessary for finding any node.
- */
-struct FNodeLookupData
-{
-	MortonCodeType MortonCode;
-	LayerIdxType LayerIndex;
-	ChunkKeyType ChunkKey;
-
-	FNodeLookupData(): MortonCode(0), LayerIndex(LAYER_INDEX_INVALID), ChunkKey(0){}
-};
-
-/**
  *   Octree node used in the navigation-mesh for pathfinding.
  *
  * - MortonCode: represents its 3d location in a single value, used as a key to find nodes.
@@ -177,10 +165,9 @@ struct FNode // todo: 12 bytes for some reason?
 		return bHasChildren;
 	}
 
-	std::array<LayerIdxType, 6> GetNeighbourLayerIndexes() const;
-	std::array<FNodeLookupData, 6> GetNeighboursLookupData(const FGlobalVector& ChunkLocation, const MortonCodeType MortonCode) const;
+	std::array<LayerIdxType, 6> GetRelations() const;
 
-	void UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk& Chunk, const MortonCodeType MortonCode,  const LayerIdxType LayerIdx, NavmeshDirection RelationsToUpdate);
+	void UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk& Chunk, const MortonCodeType MortonCode,  const LayerIdxType LayerIdx, const NavmeshDirection RelationsToUpdate);
 	bool HasOverlap(const UWorld* World, const FGlobalVector& ChunkLocation, const MortonCodeType MortonCode, const LayerIdxType LayerIdx) const;
 	//static bool HasGeomOverlap(const FBodyInstance* BodyInstance, const FGlobalVector& CenterLocation, const LayerIdxType LayerIdx);
 	void Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const MortonCodeType MortonCode, const LayerIdxType LayerIndex, const FColor Color = FColor::Black, const uint32 Thickness = 0) const;
@@ -289,7 +276,25 @@ public:
 		return TBounds(Location, Location+FNavMeshStatic::ChunkSize);
 	}
 
-	FORCEINLINE ChunkKeyType GetNeighbour(const NavmeshDirection Direction) const;
+	FORCEINLINE FGlobalVector GetNeighbourLocation(const NavmeshDirection Direction) const
+	{
+		FGlobalVector NeighbourLocation = Location;
+		switch (Direction) {
+			case DIRECTION_X_NEGATIVE: NeighbourLocation.X -= FNavMeshStatic::ChunkSize; break;
+			case DIRECTION_Y_NEGATIVE: NeighbourLocation.Y -= FNavMeshStatic::ChunkSize; break;
+			case DIRECTION_Z_NEGATIVE: NeighbourLocation.Z -= FNavMeshStatic::ChunkSize; break;
+			case DIRECTION_X_POSITIVE: NeighbourLocation.X += FNavMeshStatic::ChunkSize; break;
+			case DIRECTION_Y_POSITIVE: NeighbourLocation.Y += FNavMeshStatic::ChunkSize; break;
+			case DIRECTION_Z_POSITIVE: NeighbourLocation.Z += FNavMeshStatic::ChunkSize; break;
+			default: break;
+		}
+		return NeighbourLocation;
+	}
+	
+	FORCEINLINE ChunkKeyType GetNeighbour(const NavmeshDirection Direction) const
+	{
+		return GetNeighbourLocation(Direction).ToKey();
+	}
 };
 
 // The Navigation-Mesh is a hashmap of Chunks, the key is the location of the chunk divided by the chunk-size (::ToKey).

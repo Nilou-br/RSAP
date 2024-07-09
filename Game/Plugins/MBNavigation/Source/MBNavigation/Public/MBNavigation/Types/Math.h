@@ -11,8 +11,8 @@
 
 struct FMortonUtils
 {
-	static inline constexpr MortonCodeType Mask_X = 0b01001001001001001001001001001001;
-	static inline constexpr MortonCodeType Mask_Y = 0b10010010010010010010010010010010;
+	static inline constexpr MortonCodeType Mask_X = 0b00001001001001001001001001001001;
+	static inline constexpr MortonCodeType Mask_Y = 0b00010010010010010010010010010010;
 	static inline constexpr MortonCodeType Mask_Z = 0b00100100100100100100100100100100;
 	
 	static inline constexpr MortonCodeType Mask_XY = Mask_X | Mask_Y;
@@ -21,23 +21,24 @@ struct FMortonUtils
 
 	
 	// Accessed using layer-index of the node you would like to get the parent of.
-	static inline constexpr MortonCodeType ParentMasks[10] = {
-		0xC0000000, // ~((1 << 30) - 1)
-		0xF8000000, // ~((1 << 27) - 1)
-		0xFF000000, // ~((1 << 24) - 1)
-		0xFFC00000, // ~((1 << 21) - 1)
-		0xFFF00000, // ~((1 << 18) - 1)
-		0xFFF80000, // ~((1 << 15) - 1)
-		0xFFFC0000, // ~((1 << 12) - 1)
-		0xFFFF0000, // ~((1 << 9)  - 1)
-		0xFFFFC000, // ~((1 << 6)  - 1)
-		0xFFFFF800  // ~((1 << 3)  - 1)
+	static inline constexpr MortonCodeType LayerMasks[10] = {
+		static_cast<MortonCodeType>(~((1 << 30) - 1)),
+		static_cast<MortonCodeType>(~((1 << 27) - 1)),
+		static_cast<MortonCodeType>(~((1 << 24) - 1)),
+		static_cast<MortonCodeType>(~((1 << 21) - 1)),
+		static_cast<MortonCodeType>(~((1 << 18) - 1)),
+		static_cast<MortonCodeType>(~((1 << 15) - 1)),
+		static_cast<MortonCodeType>(~((1 << 12) - 1)),
+		static_cast<MortonCodeType>(~((1 << 9)  - 1)),
+		static_cast<MortonCodeType>(~((1 << 6)  - 1)),
+		static_cast<MortonCodeType>(~((1 << 3)  - 1))
 	};
 	
 	// The offsets are: 1024, 512, 256, 128, 64, 32, 16, 8, 4, 2.
 	static inline constexpr MortonCodeType LayerOffsets[10] = {
-		// These layer-offsets are used to offset a single axis on the morton code by the node-size of a layer.
-		// This only works with 'powers of 2' due to the nature of morton-codes. But is perfect in my case.
+		
+		// These are used to offset a single axis on the morton code by a specific node-size.
+		// This only works with 'powers of 2' due to the nature of morton-codes, which is how my navmesh is build.
 	
 		// Every axis can use the same offset. This is because the offsets start at the first bit of an interleaved 'zyx' part ( the bit for 'x' ).
 		// Explanation: when masking any two axis on the morton-code, and adding any offset to this result, then the first bit to the left of the offset that is '0' will be set to '1'.
@@ -51,7 +52,7 @@ struct FMortonUtils
 	// Get the parent's morton-code. The layer-index is the index of the layer the parent is in.
 	FORCEINLINE static MortonCodeType GetParent(const MortonCodeType MortonCode, const LayerIdxType LayerIdx)
 	{
-		return MortonCode & ParentMasks[LayerIdx-1];
+		return MortonCode & LayerMasks[LayerIdx-1];
 	}
 
 	FORCEINLINE static MortonCodeType GetChild(const MortonCodeType ParentMortonCode, const LayerIdxType ChildLayerIdx, const uint8 ChildIdx)
@@ -84,10 +85,10 @@ struct FMortonUtils
 		}
 	}
 
-	// Combination of FMortonUtils::Move and FMortonUtils::GetParent. Used to get the neighbour of a node in the given direction, which could also be in an upper layer.
+	// Moves the morton-code in the direction, and also masks away the layers below the layer-index. Used to get the neighbour of a node in the given direction, which could also be in an upper layer.
 	FORCEINLINE static MortonCodeType MoveAndMask(const MortonCodeType MortonCode, const LayerIdxType LayerIdx, const NavmeshDirection Direction)
 	{
-		return GetParent(Move(MortonCode, LayerIdx, Direction), LayerIdx);
+		return Move(MortonCode, LayerIdx, Direction) & LayerMasks[LayerIdx];
 	}
 
 	// Adds the node-size of the layer-index to the X-axis.

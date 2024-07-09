@@ -1,7 +1,6 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #include "MBNavigation/Types/NavMesh.h"
-#include "MBNavigation/NavMesh/Shared.h"
 // #include "Physics/Experimental/PhysInterface_Chaos.h"
 
 
@@ -16,61 +15,16 @@ FNode::FNode(const uint8 ChildIdx, const NavmeshDirection ParentChunkBorder)
 	}
 }
 
-std::array<uint8, 6> FNode::GetNeighbourLayerIndexes() const
+std::array<LayerIdxType, 6> FNode::GetRelations() const
 {
-    std::array<uint8, 6> NeighbourLayerIndexes;
-
-    LayerIdxType LayerIdx = 0;
-    for (NavmeshDirection Direction = 0b100000; Direction >= 0b000001; Direction>>=1, ++LayerIdx)
-    {
-        switch (Direction) {
-            case DIRECTION_X_NEGATIVE: NeighbourLayerIndexes[LayerIdx] = Relations.X_Negative_Layer; break;
-            case DIRECTION_Y_NEGATIVE: NeighbourLayerIndexes[LayerIdx] = Relations.X_Positive_Layer; break;
-            case DIRECTION_Z_NEGATIVE: NeighbourLayerIndexes[LayerIdx] = Relations.Y_Negative_Layer; break;
-            case DIRECTION_X_POSITIVE: NeighbourLayerIndexes[LayerIdx] = Relations.Y_Positive_Layer; break;
-            case DIRECTION_Y_POSITIVE: NeighbourLayerIndexes[LayerIdx] = Relations.Z_Negative_Layer; break;
-            case DIRECTION_Z_POSITIVE: NeighbourLayerIndexes[LayerIdx] = Relations.Z_Positive_Layer; break;
-            default:break;
-        }
-    }
-
-    return NeighbourLayerIndexes;
-}
-
-std::array<FNodeLookupData, 6> FNode::GetNeighboursLookupData(const FGlobalVector& ChunkLocation, const MortonCodeType MortonCode) const
-{
-    std::array<FNodeLookupData, 6> NeighboursLookupData;
-    uint8 DirectionIdx = 0;
-	
-    for (const NavmeshDirection Direction : FNavMeshStatic::Directions)
-    {
-        const LayerIdxType RelationLayerIdx = Relations.GetFromDirection(Direction);
-        if (RelationLayerIdx == LAYER_INDEX_INVALID) {
-            NeighboursLookupData[DirectionIdx] = FNodeLookupData();
-            continue;
-        }
-
-        // Calculate ChunkOffset if the direction goes into a different chunk.
-        FGlobalVector ChunkOffset(0, 0, 0);
-        if (ChunkBorder & Direction) {
-            switch (Direction) {
-                case DIRECTION_X_NEGATIVE: ChunkOffset.X = -FNavMeshStatic::ChunkSize; break;
-                case DIRECTION_Y_NEGATIVE: ChunkOffset.Y = -FNavMeshStatic::ChunkSize; break;
-                case DIRECTION_Z_NEGATIVE: ChunkOffset.Z = -FNavMeshStatic::ChunkSize; break;
-                case DIRECTION_X_POSITIVE: ChunkOffset.X =  FNavMeshStatic::ChunkSize; break;
-                case DIRECTION_Y_POSITIVE: ChunkOffset.Y =  FNavMeshStatic::ChunkSize; break;
-                case DIRECTION_Z_POSITIVE: ChunkOffset.Z =  FNavMeshStatic::ChunkSize; break;
-                default: break;
-            }
-        }
-
-        NeighboursLookupData[DirectionIdx].ChunkKey = (ChunkLocation + ChunkOffset).ToKey();
-        NeighboursLookupData[DirectionIdx].LayerIndex = RelationLayerIdx;
-        NeighboursLookupData[DirectionIdx].MortonCode = FMortonUtils::MoveAndMask(MortonCode, RelationLayerIdx, Direction);
-    	++DirectionIdx;
-    }
-
-    return NeighboursLookupData;
+	return {
+		Relations.X_Negative_Layer,
+		Relations.Y_Negative_Layer,
+		Relations.Z_Negative_Layer,
+		Relations.X_Positive_Layer,
+		Relations.Y_Positive_Layer,
+		Relations.Z_Positive_Layer
+	};
 }
 
 // For the given node, set its children's relation in the Direction to the given LayerIdxToSet. Only the children against the same border in this direction will be updated.
@@ -136,89 +90,90 @@ static void UpdateChildRelations(const FChunk* Chunk, const FNodePair& NodePair,
 
 // Updates the relations for the given Node, but only the relations specified in the given RelationsToUpdate.
 // Will also update the neighbours, including their children (against the node), to point to this node.
-void FNode::UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk& Chunk, const MortonCodeType MortonCode, const LayerIdxType LayerIdx, NavmeshDirection RelationsToUpdate)
+void FNode::UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk& Chunk, const MortonCodeType MortonCode, const LayerIdxType LayerIdx, const NavmeshDirection RelationsToUpdate)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("UpdateRelations");
-
-	FMortonVector NodeLocation = FMortonVector::FromMortonCode(MortonCode);
 	
 	// Iterate over each direction, from -X to +Z.
     for (const NavmeshDirection Direction : FNavMeshStatic::Directions)
 	{
 		// Return if the current direction does not need to be updated.
-		const NavmeshDirection DirectionToUpdate = RelationsToUpdate & Direction;
-		if (!DirectionToUpdate) continue;
+		if (!RelationsToUpdate & Direction) continue;
 
-		// Get the chunk the neighbour is in, which is a different chunk if the current direction goes outside of the chunk.
+    	// Get the chunk the neighbour is in, which is a different chunk if the current direction goes outside of the chunk.
     	const FChunk* NeighbourChunk = &Chunk;
-		if(ChunkBorder & DirectionToUpdate)
-		{
-			const auto Iterator = NavMeshPtr->find(Chunk.GetNeighbour(Direction));
-			if (Iterator == NavMeshPtr->end())
-			{
-				RelationsToUpdate &= ~DirectionToUpdate; // Sets only the bit for the current direction-to-update to 0. // todo: check if this is needed??
-				continue; // todo: set relation of node to invalid??
-			}
-			NeighbourChunk = &Iterator->second;
-		}
+    	if(ChunkBorder & Direction)
+    	{
+    		const auto Iterator = NavMeshPtr->find(Chunk.GetNeighbour(Direction));
+    		if (Iterator == NavMeshPtr->end())
+    		{
+    			Relations.SetFromDirection(LAYER_INDEX_INVALID, Direction);
+    			// todo: set children of this node to LAYER_INDEX_INVALID.
+    			continue; // Chunk does not exist.
+    		}
+    		NeighbourChunk = &Iterator->second;
+    	}
+	
+    	// Get the morton-code of the neighbour in this direction, in the same layer.
+    	MortonCodeType NeighbourMortonCode = FMortonUtils::Move(MortonCode, LayerIdx, Direction);
+    	FNodePair* NeighbourNodePair;
+    	LayerIdxType NeighbourLayerIdx = LayerIdx;
 
-		// Get the morton-code of the neighbour in this direction, in the same layer.
-		MortonCodeType NeighbourMortonCode = FMortonUtils::Move(MortonCode, LayerIdx, Direction);
-    	FMortonVector NeighbourLocation = FMortonVector::FromMortonCode(NeighbourMortonCode);
-		
-		// Find the neighbour by checking each layer one by one upwards in the octree, starting from this node's layer.
-		for (int NeighbourLayerIdx = LayerIdx; NeighbourLayerIdx >= 0; --NeighbourLayerIdx) // todo
+    	// Will find the neighbour by checking each layer one by one upwards, starting from the same layer as this node. Will guarantee a neighbour being found.
+		while (true)
 		{
 			const auto NeighbourIterator = NeighbourChunk->Octrees[0]->Layers[NeighbourLayerIdx]->find(NeighbourMortonCode);
-			if(NeighbourIterator == NeighbourChunk->Octrees[0]->Layers[NeighbourLayerIdx]->end())
+			if(NeighbourIterator != NeighbourChunk->Octrees[0]->Layers[NeighbourLayerIdx]->end())
 			{
-				// There is no neighbour on this layer, so try again using the parent of this uninitialized neighbour.
-				NeighbourMortonCode = FMortonUtils::GetParent(NeighbourMortonCode, NeighbourLayerIdx);
-				continue;
+				NeighbourNodePair = &*NeighbourIterator;
+				break;
 			}
-			
-			FNode& NeighbourNode = NeighbourIterator->second;
-			
-			// Set the FoundNeighbourLayerIndex on the Node.Neighbours for this direction,
-			// and the Node's layer-index to the NeighbourNode's relation for opposite direction ( where we are looking from ).
-			switch (Direction)
-			{
-				case DIRECTION_X_NEGATIVE:
-					Relations.X_Negative_Layer = NeighbourLayerIdx;
-					NeighbourNode.Relations.X_Positive_Layer = NeighbourLayerIdx;
-					//UpdateChildRelations(NeighbourChunk, *NeighbourIterator, NeighbourLayerIdx, LayerIdx, DIRECTION_X_POSITIVE);
-					break;
-				case DIRECTION_Y_NEGATIVE:
-					Relations.Y_Negative_Layer = NeighbourLayerIdx;
-					NeighbourNode.Relations.Y_Positive_Layer = NeighbourLayerIdx;
-					//UpdateChildRelations(NeighbourChunk, *NeighbourIterator, NeighbourLayerIdx, LayerIdx, DIRECTION_Y_POSITIVE);
-					break;
-				case DIRECTION_Z_NEGATIVE:
-					Relations.Z_Negative_Layer = NeighbourLayerIdx;
-					NeighbourNode.Relations.Z_Positive_Layer = NeighbourLayerIdx;
-					//UpdateChildRelations(NeighbourChunk, *NeighbourIterator, NeighbourLayerIdx, LayerIdx, DIRECTION_Z_POSITIVE);
-					break;
-				case DIRECTION_X_POSITIVE:
-					Relations.X_Positive_Layer = NeighbourLayerIdx;
-					NeighbourNode.Relations.X_Negative_Layer = NeighbourLayerIdx;
-					//UpdateChildRelations(NeighbourChunk, *NeighbourIterator, NeighbourLayerIdx, LayerIdx, DIRECTION_X_NEGATIVE);
-					break;
-				case DIRECTION_Y_POSITIVE:
-					Relations.Y_Positive_Layer = NeighbourLayerIdx;
-					NeighbourNode.Relations.Y_Negative_Layer = NeighbourLayerIdx;
-					//UpdateChildRelations(NeighbourChunk, *NeighbourIterator, NeighbourLayerIdx, LayerIdx, DIRECTION_Y_NEGATIVE);
-					break;
-				case DIRECTION_Z_POSITIVE:
-					Relations.Z_Positive_Layer = NeighbourLayerIdx;
-					NeighbourNode.Relations.Z_Negative_Layer = NeighbourLayerIdx;
-					//UpdateChildRelations(NeighbourChunk, *NeighbourIterator, NeighbourLayerIdx, LayerIdx, DIRECTION_Z_NEGATIVE);
-					break;
-				default: break;
-			}
-			
-			// Relation is now updated.
-			break;
+
+			// Neighbour does not exist, so get the parent and try again.
+			NeighbourMortonCode = FMortonUtils::GetParent(NeighbourMortonCode, NeighbourLayerIdx);
+			--NeighbourLayerIdx;
 		}
+
+    	FNode& Neighbour = NeighbourNodePair->second;
+    	
+		// Set the NeighbourLayerIdx on the relation for this direction.
+		// We set the same layer-idx on the neighbour-node because a relation cannot be in a deeper layer, only the same or above as a node.
+		switch (Direction)
+		{
+			case DIRECTION_X_NEGATIVE:
+				Relations.X_Negative_Layer = NeighbourLayerIdx;
+				Neighbour.Relations.X_Positive_Layer = NeighbourLayerIdx;
+				//UpdateChildRelations(NeighbourChunk, *NeighbourNodePair, NeighbourLayerIdx, LayerIdx, DIRECTION_X_POSITIVE);
+				break;
+			case DIRECTION_Y_NEGATIVE:
+				Relations.Y_Negative_Layer = NeighbourLayerIdx;
+				Neighbour.Relations.Y_Positive_Layer = NeighbourLayerIdx;
+				//UpdateChildRelations(NeighbourChunk, *NeighbourNodePair, NeighbourLayerIdx, LayerIdx, DIRECTION_Y_POSITIVE);
+				break;
+			case DIRECTION_Z_NEGATIVE:
+				Relations.Z_Negative_Layer = NeighbourLayerIdx;
+				Neighbour.Relations.Z_Positive_Layer = NeighbourLayerIdx;
+				//UpdateChildRelations(NeighbourChunk, *NeighbourNodePair, NeighbourLayerIdx, LayerIdx, DIRECTION_Z_POSITIVE);
+				break;
+			case DIRECTION_X_POSITIVE:
+				Relations.X_Positive_Layer = NeighbourLayerIdx;
+				Neighbour.Relations.X_Negative_Layer = NeighbourLayerIdx;
+				//UpdateChildRelations(NeighbourChunk, *NeighbourNodePair, NeighbourLayerIdx, LayerIdx, DIRECTION_X_NEGATIVE);
+				break;
+			case DIRECTION_Y_POSITIVE:
+				Relations.Y_Positive_Layer = NeighbourLayerIdx;
+				Neighbour.Relations.Y_Negative_Layer = NeighbourLayerIdx;
+				//UpdateChildRelations(NeighbourChunk, *NeighbourNodePair, NeighbourLayerIdx, LayerIdx, DIRECTION_Y_NEGATIVE);
+				break;
+			case DIRECTION_Z_POSITIVE:
+				Relations.Z_Positive_Layer = NeighbourLayerIdx;
+				Neighbour.Relations.Z_Negative_Layer = NeighbourLayerIdx;
+				//UpdateChildRelations(NeighbourChunk, *NeighbourNodePair, NeighbourLayerIdx, LayerIdx, DIRECTION_Z_NEGATIVE);
+				break;
+			default: break;
+		}
+		
+		// Relation is now updated.
 	}
 }
 
@@ -249,19 +204,4 @@ void FNode::Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const 
 	const FVector GlobalCenter = GetGlobalLocation(ChunkLocation, MortonCode).ToVector() + NodeHalveSize;
 	const FVector Extent(NodeHalveSize);
 	DrawDebugBox(World, GlobalCenter, Extent, Color, true, -1, 0, Thickness);
-}
-
-ChunkKeyType FChunk::GetNeighbour(const NavmeshDirection Direction) const
-{
-	FGlobalVector NeighbourLocation = Location;
-	switch (Direction) {
-		case DIRECTION_X_NEGATIVE: NeighbourLocation.X -= FNavMeshStatic::ChunkSize; break;
-		case DIRECTION_Y_NEGATIVE: NeighbourLocation.Y -= FNavMeshStatic::ChunkSize; break;
-		case DIRECTION_Z_NEGATIVE: NeighbourLocation.Z -= FNavMeshStatic::ChunkSize; break;
-		case DIRECTION_X_POSITIVE: NeighbourLocation.X += FNavMeshStatic::ChunkSize; break;
-		case DIRECTION_Y_POSITIVE: NeighbourLocation.Y += FNavMeshStatic::ChunkSize; break;
-		case DIRECTION_Z_POSITIVE: NeighbourLocation.Z += FNavMeshStatic::ChunkSize; break;
-		default: break;
-	}
-	return NeighbourLocation.ToKey();
 }

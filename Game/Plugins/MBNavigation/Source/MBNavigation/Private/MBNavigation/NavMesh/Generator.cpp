@@ -133,6 +133,6 @@ void FNavMeshGenerator::SetNegativeNeighbourRelations(const FChunk& Chunk)
 		{
 			Node.UpdateRelations(NavMeshPtr, Chunk, MortonCode, LayerIdx, DIRECTION_ALL_NEGATIVE);
 		}
-		LayerIdx++;
+		++LayerIdx;
 	}
 }
