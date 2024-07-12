@@ -1,9 +1,7 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-
-#include "Global.h"
-
+#include "MBNavigation/NavMesh/Definitions.h"
 
 
 /**
@@ -17,11 +15,11 @@ struct FNavMeshStatic
 	static inline constexpr int32 ChunkSize = 1024;
 	static inline constexpr uint8 ChunkKeyShift = 10 + VoxelSizeExponent;
 	static inline constexpr uint32 ChunkMask = ~((1<<ChunkKeyShift)-1);
-	static inline constexpr uint_fast16_t MortonOffsets[10] = {1024, 512, 256, 128, 64, 32, 16, 8, 4, 2};
-	static inline constexpr uint8 SmallestNodeSize = 1;
+	static inline constexpr uint16 MortonOffsets[10] = {1024, 512, 256, 128, 64, 32, 16, 8, 4, 2};
+	static inline constexpr uint8 SmallestNodeSize = 1; // todo: set to 2.
 	static inline constexpr int32 NodeSizes[10] = {1024, 512, 256, 128, 64, 32, 16, 8, 4, 2};
 	static inline constexpr float NodeHalveSizes[10] = {512.f, 256.f, 128.f, 64.f, 32.f, 16.f, 8.f, 4.f, 2.f, 1.f};
-	static inline constexpr NavmeshDirection Directions[6] = {0b100000, 0b010000, 0b001000, 0b000100, 0b000010, 0b000001};
+	static inline constexpr DirectionType Directions[6] = {0b100000, 0b010000, 0b001000, 0b000100, 0b000010, 0b000001};
 	static inline FCollisionShape CollisionBoxes[10];
 	
 	static void Initialize()

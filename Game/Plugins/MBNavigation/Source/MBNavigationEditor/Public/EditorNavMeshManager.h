@@ -4,8 +4,8 @@
 
 #include "EditorTransformObserver.h"
 #include "MBNavigation/MBNavigation.h"
-#include "MBNavigation/Types/Math.h"
-#include "MBNavigation/Types/NavMesh.h"
+#include "MBNavigation/NavMesh/Types/Chunk.h"
+#include "MBNavigation/NavMesh/Definitions.h"
 #include "EditorNavMeshManager.generated.h"
 
 class FNavMeshGenerator;

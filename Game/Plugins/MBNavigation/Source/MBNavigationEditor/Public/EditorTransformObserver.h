@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "MBNavigation/Types/Math.h"
+#include "MBNavigation/NavMesh/Math/Bounds.h"
 #include "MBNavigation/ThirdParty/unordered_dense/unordered_dense.h"
 #include "EditorTransformObserver.generated.h"
 

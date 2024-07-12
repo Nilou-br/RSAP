@@ -5,11 +5,12 @@
 #include "Engine/Level.h"
 #include "Engine/World.h"
 #include "MBNavigation/MBNavigation.h"
-#include "MBNavigation/NavMesh/Debugger.h"
-#include "MBNavigation/NavMesh/Generator.h"
 #include "MBNavigation/NavMesh/Settings.h"
-#include "MBNavigation/NavMesh/Updater.h"
-#include "MBNavigation/NavMesh/Serialize.h"
+#include "MBNavigation/NavMesh/Tasks/Debugger.h"
+#include "MBNavigation/NavMesh/Tasks/Generator.h"
+#include "MBNavigation/NavMesh/Tasks/Updater.h"
+#include "MBNavigation/NavMesh/Types/Chunk.h"
+#include "MBNavigation/NavMesh/Types/Serialize.h"
 #include "UObject/ObjectSaveContext.h"
 
 DEFINE_LOG_CATEGORY(LogEditorNavManager)

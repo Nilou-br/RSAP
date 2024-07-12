@@ -1,420 +1,10 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-
-#include "Static.h"
-#include "Global.h"
-#include "morton.h"
+#include "Vectors.h"
 #include "MBNavigation/ThirdParty/unordered_dense/unordered_dense.h"
 
 
-
-struct FMortonUtils
-{
-	static inline constexpr MortonCodeType Mask_X = 0b00001001001001001001001001001001;
-	static inline constexpr MortonCodeType Mask_Y = 0b00010010010010010010010010010010;
-	static inline constexpr MortonCodeType Mask_Z = 0b00100100100100100100100100100100;
-	
-	static inline constexpr MortonCodeType Mask_XY = Mask_X | Mask_Y;
-	static inline constexpr MortonCodeType Mask_XZ = Mask_X | Mask_Z;
-	static inline constexpr MortonCodeType Mask_YZ = Mask_Y | Mask_Z;
-
-	
-	// Accessed using layer-index of the node you would like to get the parent of.
-	static inline constexpr MortonCodeType LayerMasks[10] = {
-		static_cast<MortonCodeType>(~((1 << 30) - 1)),
-		static_cast<MortonCodeType>(~((1 << 27) - 1)),
-		static_cast<MortonCodeType>(~((1 << 24) - 1)),
-		static_cast<MortonCodeType>(~((1 << 21) - 1)),
-		static_cast<MortonCodeType>(~((1 << 18) - 1)),
-		static_cast<MortonCodeType>(~((1 << 15) - 1)),
-		static_cast<MortonCodeType>(~((1 << 12) - 1)),
-		static_cast<MortonCodeType>(~((1 << 9)  - 1)),
-		static_cast<MortonCodeType>(~((1 << 6)  - 1)),
-		static_cast<MortonCodeType>(~((1 << 3)  - 1))
-	};
-	
-	// The offsets are: 1024, 512, 256, 128, 64, 32, 16, 8, 4, 2.
-	static inline constexpr MortonCodeType LayerOffsets[10] = {
-		
-		// These are used to offset a single axis on the morton code by a specific node-size.
-		// This only works with 'powers of 2' due to the nature of morton-codes, which is how my navmesh is build.
-	
-		// Every axis can use the same offset. This is because the offsets start at the first bit of an interleaved 'zyx' part ( the bit for 'x' ).
-		// Explanation: when masking any two axis on the morton-code, and adding any offset to this result, then the first bit to the left of the offset that is '0' will be set to '1'.
-		// The axis you are trying to add the offset to is the only one that remains unmasked, so its the only one that can have any bits set to '0'.
-		
-		1 << 30, 1 << 27, 1 << 24, 1 << 21, 1 << 18,
-		1 << 15, 1 << 12, 1 << 9,  1 << 6,  1 << 3
-	};
-	
-	
-	// Get the parent's morton-code. The layer-index is the index of the layer the parent is in.
-	FORCEINLINE static MortonCodeType GetParent(const MortonCodeType MortonCode, const LayerIdxType LayerIdx)
-	{
-		return MortonCode & LayerMasks[LayerIdx-1];
-	}
-
-	FORCEINLINE static MortonCodeType GetChild(const MortonCodeType ParentMortonCode, const LayerIdxType ChildLayerIdx, const uint8 ChildIdx)
-	{
-		switch (ChildIdx)
-		{
-			case 0: return ParentMortonCode;																// No offset.
-			case 1: return AddX(ParentMortonCode, ChildLayerIdx);											// X
-			case 2: return AddY(ParentMortonCode, ChildLayerIdx);											// Y
-			case 3: return AddX(ParentMortonCode, ChildLayerIdx) | AddY(ParentMortonCode, ChildLayerIdx);	// X+Y
-			case 4: return AddZ(ParentMortonCode, ChildLayerIdx);											// Z
-			case 5: return AddX(ParentMortonCode, ChildLayerIdx) | AddZ(ParentMortonCode, ChildLayerIdx);	// X+Z
-			case 6: return AddY(ParentMortonCode, ChildLayerIdx) | AddZ(ParentMortonCode, ChildLayerIdx);	// Y+Z
-			case 7: return Add(ParentMortonCode, ChildLayerIdx);											// X+Y+Z
-			default: return ParentMortonCode;
-		}
-	}
-
-	// Moves the morton-code in the given direction. The amount it moves is determined by the layer-index, which translates to the node-size for that layer.
-	FORCEINLINE static MortonCodeType Move(const MortonCodeType MortonCode, const LayerIdxType LayerIdx, const NavmeshDirection Direction)
-	{
-		switch (Direction) {
-			case DIRECTION_X_NEGATIVE: return SubtractX(MortonCode, LayerIdx);
-			case DIRECTION_Y_NEGATIVE: return SubtractY(MortonCode, LayerIdx);
-			case DIRECTION_Z_NEGATIVE: return SubtractZ(MortonCode, LayerIdx);
-			case DIRECTION_X_POSITIVE: return AddX(MortonCode, LayerIdx);
-			case DIRECTION_Y_POSITIVE: return AddY(MortonCode, LayerIdx);
-			case DIRECTION_Z_POSITIVE: return AddZ(MortonCode, LayerIdx);
-			default: return MortonCode;
-		}
-	}
-
-	// Moves the morton-code in the direction, and also masks away the layers below the layer-index. Used to get the neighbour of a node in the given direction, which could also be in an upper layer.
-	FORCEINLINE static MortonCodeType MoveAndMask(const MortonCodeType MortonCode, const LayerIdxType LayerIdx, const NavmeshDirection Direction)
-	{
-		return Move(MortonCode, LayerIdx, Direction) & LayerMasks[LayerIdx];
-	}
-
-	// Adds the node-size of the layer-index to the X-axis.
-	FORCEINLINE static MortonCodeType AddX(const MortonCodeType MortonCode, const LayerIdxType LayerIdx)
-	{
-		const MortonCodeType SumX = (MortonCode | Mask_YZ) + LayerOffsets[LayerIdx];
-		return SumX & Mask_X | MortonCode & Mask_YZ;
-	}
-
-	// Subtracts the node-size of the layer-index from the X-axis.
-	FORCEINLINE static MortonCodeType SubtractX(const MortonCodeType MortonCode, const LayerIdxType LayerIdx)
-	{
-		const MortonCodeType DiffX = (MortonCode & Mask_X) - LayerOffsets[LayerIdx];
-		return DiffX & Mask_X | MortonCode & Mask_YZ;
-	}
-
-	// Adds the node-size of the layer-index to the Y-axis.
-	FORCEINLINE static MortonCodeType AddY(const MortonCodeType MortonCode, const LayerIdxType LayerIdx)
-	{
-		const MortonCodeType SumY = (MortonCode | Mask_XZ) + LayerOffsets[LayerIdx];
-		return SumY & Mask_Y | MortonCode & Mask_XZ;
-	}
-
-	// Subtracts the node-size of the layer-index from the Y-axis.
-	FORCEINLINE static MortonCodeType SubtractY(const MortonCodeType MortonCode, const LayerIdxType LayerIdx)
-	{
-		const MortonCodeType DiffY = (MortonCode & Mask_Y) - LayerOffsets[LayerIdx];
-		return DiffY & Mask_Y | MortonCode & Mask_XZ;
-	}
-
-	// Adds the node-size of the layer-index to the Z-axis.
-	FORCEINLINE static MortonCodeType AddZ(const MortonCodeType MortonCode, const LayerIdxType LayerIdx)
-	{
-		const MortonCodeType SumZ = (MortonCode | Mask_XY) + LayerOffsets[LayerIdx];
-		return SumZ & Mask_Z | MortonCode & Mask_XY;
-	}
-
-	// Subtracts the node-size of the layer-index from the Z-axis.
-	FORCEINLINE static MortonCodeType SubtractZ(const MortonCodeType MortonCode, const LayerIdxType LayerIdx)
-	{
-		const MortonCodeType DiffZ = (MortonCode & Mask_Z) - LayerOffsets[LayerIdx];
-		return DiffZ & Mask_Z | MortonCode & Mask_XY;
-	}
-
-	// Adds the node-size of the layer-index to all axis.
-	FORCEINLINE static MortonCodeType Add(const MortonCodeType MortonCode, const LayerIdxType LayerIdx)
-	{
-		const MortonCodeType SumX = (MortonCode | Mask_YZ) + LayerOffsets[LayerIdx];
-		const MortonCodeType SumY = (MortonCode | Mask_XZ) + LayerOffsets[LayerIdx];
-		const MortonCodeType SumZ = (MortonCode | Mask_XY) + LayerOffsets[LayerIdx];
-		return SumX & Mask_X | SumY & Mask_Y | SumZ & Mask_Z;
-	}
-
-	// Subtracts the node-size of the layer-index from all axis.
-	FORCEINLINE static MortonCodeType Subtract(const MortonCodeType MortonCode, const LayerIdxType LayerIdx)
-	{
-		const MortonCodeType DiffX = (MortonCode & Mask_X) - LayerOffsets[LayerIdx];
-		const MortonCodeType DiffY = (MortonCode & Mask_Y) - LayerOffsets[LayerIdx];
-		const MortonCodeType DiffZ = (MortonCode & Mask_Z) - LayerOffsets[LayerIdx];
-		return DiffX & Mask_X | DiffY & Mask_Y | DiffZ & Mask_Z;
-	}
-};
-
-/**
- * Used for local-locations within a chunk, and can be converted to morton-codes directly.
- * Each axis has 10 bit allocated, which fits inside a 32-bit morton-code used for the nodes in the octree.
- */
-struct FMortonVector
-{
-	uint_fast16_t X: 10;
-	uint_fast16_t Y: 10;
-	uint_fast16_t Z: 10;
-
-	// Converts the coordinates on this vector to a 1-dimensional 32-bit Morton-Code.
-	FORCEINLINE MortonCodeType ToMortonCode() const
-	{
-		return libmorton::morton3D_32_encode(X, Y, Z);
-	}
-
-	static FORCEINLINE MortonCodeType ToMortonCode(const uint_fast16_t X, const uint_fast16_t Y, const uint_fast16_t Z)
-	{
-		return libmorton::morton3D_32_encode(X, Y, Z);
-	}
-	
-	FORCEINLINE static FMortonVector FromMortonCode(const MortonCodeType MortonCode)
-	{
-		uint_fast16_t OutX;
-		uint_fast16_t OutY;
-		uint_fast16_t OutZ;
-		libmorton::morton3D_32_decode(MortonCode, OutX, OutY, OutZ);
-		return FMortonVector(OutX, OutY, OutZ);
-	}
-
-	FORCEINLINE FMortonVector operator+(const uint_fast16_t Value) const
-	{
-		return FMortonVector(X + Value, Y + Value, Z + Value);
-	}
-
-	FORCEINLINE FMortonVector operator+(const FMortonVector& Other) const
-	{
-		return FMortonVector(X + Other.X, Y + Other.Y, Z + Other.Z);
-	}
-
-	FORCEINLINE FMortonVector operator-(const uint_fast16_t Value) const
-	{
-		return FMortonVector(X - Value, Y - Value, Z - Value);
-	}
-
-	FORCEINLINE FMortonVector operator-(const FMortonVector& Other) const
-	{
-		return FMortonVector(X - Other.X, Y - Other.Y, Z - Other.Z);
-	}
-
-	FORCEINLINE FMortonVector operator<<(const uint8 Value) const
-	{
-		return FMortonVector(X << Value, Y << Value, Z << Value);
-	}
-
-	FORCEINLINE FMortonVector operator*(const uint8 Value) const
-	{
-		return FMortonVector(X * Value, Y * Value, Z * Value);
-	}
-
-	FORCEINLINE FMortonVector operator>>(const uint8 Value) const
-	{
-		return FMortonVector(X >> Value, Y >> Value, Z >> Value);
-	}
-
-	FORCEINLINE FMortonVector operator&(const uint16 Mask) const
-	{
-		return FMortonVector(X & Mask, Y & Mask, Z & Mask);
-	}
-
-	FORCEINLINE bool operator==(const FMortonVector& Other) const {
-		return X == Other.X && Y == Other.Y && Z == Other.Z;
-	}
-
-	// todo: move to somewhere else?
-	FORCEINLINE FVector GetCenterVector(const uint8 LayerIndex) const
-	{
-		return ToVector() + FVector(FNavMeshStatic::MortonOffsets[LayerIndex])/2;
-	}
-
-	// todo: move to somewhere else?
-	static FORCEINLINE FVector GetExtentsVector(const uint8 LayerIndex)
-	{
-		return FVector(FNavMeshStatic::MortonOffsets[LayerIndex])/2;
-	}
-
-	FORCEINLINE FVector ToVector() const
-	{
-		return FVector(X, Y, Z);
-	}
-
-	explicit FMortonVector(const uint16 InX, const uint16 InY, const uint16 InZ)
-		: X(InX), Y(InY), Z(InZ) {}
-
-	explicit FMortonVector(const uint_fast16_t InX, const uint_fast16_t InY, const uint_fast16_t InZ)
-		: X(InX), Y(InY), Z(InZ) {}
-
-	FMortonVector()
-		:X(0), Y(0), Z(0)
-	{}
-};
-
-/**
- * Custom vector type optimized to work with my navmesh.
- * Used for global locations within the world.
- */
-struct FGlobalVector
-{
-	int_fast32_t X;
-	int_fast32_t Y;
-	int_fast32_t Z;
-	
-	// Creates key from the coordinates that is usable for hashmaps.
-	// The FGlobalVector can have max 31 bits per axis to support this method.
-	FORCEINLINE uint64_t ToKey() const {
-		auto Encode = [](const int_fast32_t Val) -> uint64_t {
-			uint64_t Result = (Val >> FNavMeshStatic::ChunkKeyShift) & 0xFFFFF;
-			Result |= ((Val < 0) ? 1ULL : 0ULL) << 20;
-			return Result;
-		};
-		return (Encode(X) << 42) | (Encode(Y) << 21) | Encode(Z);
-	}
-
-	// Creates an FGlobalVector from a generated Key.
-	static FORCEINLINE FGlobalVector FromKey(const uint64_t Key) {
-		auto Decode = [](const uint64_t Val) -> int_fast32_t {
-			int_fast32_t Result = Val & 0xFFFFF;
-			if (Val & (1 << 20)) {
-				Result |= 0xFFF00000;
-			}
-			return Result << FNavMeshStatic::ChunkKeyShift;
-		};
-
-		FGlobalVector Vector32;
-		Vector32.X = Decode((Key >> 42) & 0x1FFFFF);
-		Vector32.Y = Decode((Key >> 21) & 0x1FFFFF);
-		Vector32.Z = Decode(Key & 0x1FFFFF);
-		return Vector32;
-	}
-
-	FORCEINLINE FGlobalVector ComponentMin(const FGlobalVector& Other) const
-	{
-		return FGlobalVector(FMath::Min(X, Other.X), FMath::Min(Y, Other.Y), FMath::Min(Z, Other.Z));
-	}
-
-	FORCEINLINE FGlobalVector ComponentMax(const FGlobalVector& Other) const
-	{
-		return FGlobalVector(FMath::Max(X, Other.X), FMath::Max(Y, Other.Y), FMath::Max(Z, Other.Z));
-	}
-
-	FORCEINLINE FGlobalVector operator+(const int_fast32_t Value) const
-	{
-		return FGlobalVector(X + Value, Y + Value, Z + Value);
-	}
-
-	FORCEINLINE FGlobalVector operator-(const int_fast32_t Value) const
-	{
-		return FGlobalVector(X - Value, Y - Value, Z - Value);
-	}
-
-	FORCEINLINE FGlobalVector operator+(const FMortonVector& MortonVector) const
-	{
-		return FGlobalVector(X + MortonVector.X, Y + MortonVector.Y, Z + MortonVector.Z);
-	}
-
-	FORCEINLINE FGlobalVector operator-(const FMortonVector& MortonVector) const
-	{
-		return FGlobalVector(X - MortonVector.X, Y - MortonVector.Y, Z - MortonVector.Z);
-	}
-
-	FORCEINLINE FGlobalVector operator+(const FGlobalVector& Other) const
-	{
-		return FGlobalVector(X + Other.X, Y + Other.Y, Z + Other.Z);
-	}
-
-	FORCEINLINE FGlobalVector operator-(const FGlobalVector& Other) const
-	{
-		return FGlobalVector(X - Other.X, Y - Other.Y, Z - Other.Z);
-	}
-
-	FORCEINLINE FGlobalVector operator*(const FGlobalVector& Other) const
-	{
-		return FGlobalVector(X * Other.X, Y * Other.Y, Z * Other.Z);
-	}
-
-	FORCEINLINE FGlobalVector operator<<(const uint8 Value) const
-	{
-		return FGlobalVector(X << Value, Y << Value, Z << Value);
-	}
-
-	FORCEINLINE FGlobalVector operator>>(const uint8 Value) const
-	{
-		return FGlobalVector(X >> Value, Y >> Value, Z >> Value);
-	}
-
-	FORCEINLINE FGlobalVector operator&(const uint32 Mask) const
-	{
-		return FGlobalVector(X & Mask, Y & Mask, Z & Mask);
-	}
-
-	FORCEINLINE FGlobalVector operator&(const int32 Mask) const
-	{
-		return FGlobalVector(X & Mask | X & INT_MIN, Y & Mask | Y & INT_MIN, Z & Mask | Z & INT_MIN);
-	}
-
-	FORCEINLINE bool operator==(const FGlobalVector& Other) const {
-		return X == Other.X && Y == Other.Y && Z == Other.Z;
-	}
-
-	FORCEINLINE FString ToString() const
-	{
-		return FString::Printf(TEXT("X:'%i', Y:'%i', Z:'%i"), X, Y, Z);
-	}
-
-	FORCEINLINE FVector ToVector() const
-	{
-		return FVector(X, Y, Z);
-	}
-
-	static FGlobalVector FromMortonCode(const MortonCodeType MortonCode, const FGlobalVector& ChunkLocation)
-	{
-		return ChunkLocation + (FGlobalVector(FMortonVector::FromMortonCode(MortonCode)) << FNavMeshStatic::VoxelSizeExponent);
-	}
-	
-	// Make sure every axis value fits in 10 bits, unsigned.
-	FORCEINLINE FMortonVector ToMortonVector() const
-	{
-		return FMortonVector(static_cast<uint_fast16_t>(X), static_cast<uint_fast16_t>(Y), static_cast<uint_fast16_t>(Z));
-	}
-	
-	static FORCEINLINE FGlobalVector FromVector(const FVector& InVector)
-	{
-		return FGlobalVector(InVector.X, InVector.Y, InVector.Z);
-	}
-
-	FORCEINLINE int32 GetLargestAxis() const
-	{
-		return FMath::Max(FMath::Max(X,Y), Z);
-	}
-
-	explicit FGlobalVector(const FVector &InVector)
-	{
-		X = static_cast<int_fast32_t>(std::round(InVector.X));
-		Y = static_cast<int_fast32_t>(std::round(InVector.Y));
-		Z = static_cast<int_fast32_t>(std::round(InVector.Z));
-	}
-
-	explicit FGlobalVector(const FMortonVector &InVector)
-	{
-		X = static_cast<int_fast32_t>(InVector.X);
-		Y = static_cast<int_fast32_t>(InVector.Y);
-		Z = static_cast<int_fast32_t>(InVector.Z);
-	}
-
-	explicit FGlobalVector(const int32 InValue)
-		: X(InValue), Y(InValue), Z(InValue) {}
-
-	explicit FGlobalVector(const int32 InX, const int32 InY, const int32 InZ)
-		: X(InX), Y(InY), Z(InZ) {}
-
-	explicit FGlobalVector()
-		: X(0), Y(0), Z(0) {}
-};
 
 /**
  * Lightweight AABB.
@@ -605,13 +195,13 @@ struct TBounds
 	 * @note Chunks are NOT automatically initialized.
 	 * 
 	 * @tparam T VectorType which must be of type FGlobalVector.
-	 * @tparam Func <ChunkKey, NavmeshDirection, TBounds<FMortonVector>>
+	 * @tparam Func <ChunkKey, DirectionType, TBounds<FMortonVector>>
 	 * @param Callback Called for each intersecting chunk.
 	 */
 	template<typename T = VectorType, typename Func>
 	std::enable_if_t<std::is_same_v<T, FGlobalVector>, void> ForEachChunk(Func Callback) const
 	{
-		static_assert(std::is_invocable_v<Func, const ChunkKeyType, const NavmeshDirection, TBounds<FMortonVector>>, "'::ForEachChunk' callback must be invocable with 'const ChunkKeyType, const NavmeshDirection, TBounds<FMortonVector>>'");
+		static_assert(std::is_invocable_v<Func, const ChunkKeyType, const DirectionType, TBounds<FMortonVector>>, "'::ForEachChunk' callback must be invocable with 'const ChunkKeyType, const DirectionType, TBounds<FMortonVector>>'");
 		if(!IsValid()) return;
 
 		// Get the start/end axis of the chunks from the boundaries.
@@ -623,19 +213,19 @@ struct TBounds
 		{
 			const FGlobalVector ChunkLocation = FGlobalVector(ChunkMin.X, ChunkMin.Y, ChunkMin.Z);
 			const TBounds<FMortonVector> MortonBounds = GetIntersection(TBounds<FGlobalVector>(ChunkLocation, ChunkLocation+FNavMeshStatic::ChunkSize)).ToMortonSpace(ChunkLocation);
-			Callback(ChunkLocation.ToKey(), DIRECTION_ALL_POSITIVE, MortonBounds);
+			Callback(ChunkLocation.ToKey(), Direction::XYZ_Positive, MortonBounds);
 			return;
 		}
 
 		// Loop over the chunks, keeping track of every axis the chunk is the most-positive in.
 		for (int32 GlobalX = ChunkMin.X; GlobalX <= ChunkMax.X; GlobalX+=FNavMeshStatic::ChunkSize){
-			const uint8 ChunkPositiveX = GlobalX == ChunkMax.X ? DIRECTION_X_POSITIVE : DIRECTION_NONE;
+			const uint8 ChunkPositiveX = GlobalX == ChunkMax.X ? Direction::X_Positive : Direction::None;
 		
 			for (int32 GlobalY = ChunkMin.Y; GlobalY <= ChunkMax.Y; GlobalY+=FNavMeshStatic::ChunkSize){
-				const uint8 ChunkPositiveY = GlobalY == ChunkMax.Y ? DIRECTION_Y_POSITIVE : DIRECTION_NONE;
+				const uint8 ChunkPositiveY = GlobalY == ChunkMax.Y ? Direction::Y_Positive : Direction::None;
 			
 				for (int32 GlobalZ = ChunkMin.Z; GlobalZ <= ChunkMax.Z; GlobalZ+=FNavMeshStatic::ChunkSize){
-					const uint8 ChunkPositiveZ = GlobalZ == ChunkMax.Z ? DIRECTION_Z_POSITIVE : DIRECTION_NONE;
+					const uint8 ChunkPositiveZ = GlobalZ == ChunkMax.Z ? Direction::Z_Positive : Direction::None;
 
 					const FGlobalVector ChunkLocation = FGlobalVector(GlobalX, GlobalY, GlobalZ);
 					const TBounds<FMortonVector> MortonBounds = GetIntersection(TBounds<FGlobalVector>(ChunkLocation, ChunkLocation+FNavMeshStatic::ChunkSize)).ToMortonSpace(ChunkLocation);
@@ -745,7 +335,7 @@ struct TBounds
 		}
 	}
 };
-typedef ankerl::unordered_dense::map<ActorKeyType, TBounds<FGlobalVector>> FBoundsMap; // todo to ankerl with ActorKeyType
+typedef ankerl::unordered_dense::map<ActorKeyType, TBounds<FGlobalVector>> FBoundsMap;
 
 /**
  * Pair of bounds for storing changes that have happened.

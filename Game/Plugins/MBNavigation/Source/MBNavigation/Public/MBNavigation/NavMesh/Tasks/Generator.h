@@ -3,7 +3,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "MBNavigation/Types/NavMesh.h"
+#include "MBNavigation/NavMesh/Types/Chunk.h"
+#include "MBNavigation/NavMesh/Types/Node.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogNavMeshGenerator, Log, All);
 

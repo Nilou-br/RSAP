@@ -3,9 +3,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "MBNavigation/Types/NavMesh.h"
 #include "HAL/Runnable.h"
 #include "HAL/RunnableThread.h"
+#include "MBNavigation/NavMesh/Types/Chunk.h"
+#include "MBNavigation/NavMesh/Types/Node.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogNavMeshUpdater, Log, All);
 
@@ -40,17 +41,17 @@ protected:
 	virtual void Stop() override { StopTaskCounter.Increment(); }
 
 private:
-	bool StartReRasterizeNode(const FChunk& Chunk, const MortonCodeType MortonCode, const LayerIdxType LayerIdx, const NavmeshDirection RelationsToUpdate);
+	bool StartReRasterizeNode(const FChunk& Chunk, const NodeMortonType MortonCode, const LayerIdxType LayerIdx, const DirectionType RelationsToUpdate);
 	static void RecursiveReRasterizeNode(const UWorld* World, const FChunk& Chunk, FNodePair& NodePair, const LayerIdxType LayerIdx, const FMortonVector MortonLocation);
 	
-	bool StartClearUnoccludedChildrenOfNode(const FChunk& Chunk, const MortonCodeType MortonCode, const LayerIdxType LayerIdx, const NavmeshDirection RelationsToUpdate);
-	void RecursiveClearUnoccludedChildren(const FChunk& Chunk, const FNodePair& NodePair, const LayerIdxType LayerIdx, const NavmeshDirection RelationsToUpdate);
+	bool StartClearUnoccludedChildrenOfNode(const FChunk& Chunk, const NodeMortonType MortonCode, const LayerIdxType LayerIdx, const DirectionType RelationsToUpdate);
+	void RecursiveClearUnoccludedChildren(const FChunk& Chunk, const FNodePair& NodePair, const LayerIdxType LayerIdx, const DirectionType RelationsToUpdate);
 	
-	void StartClearAllChildrenOfNode(const FChunk& Chunk, const MortonCodeType MortonCode, const LayerIdxType LayerIdx, const NavmeshDirection RelationsToUpdate);
+	void StartClearAllChildrenOfNode(const FChunk& Chunk, const NodeMortonType MortonCode, const LayerIdxType LayerIdx, const DirectionType RelationsToUpdate);
 	static void RecursiveClearAllChildren(const FChunk& Chunk, const FNodePair& NodePair, const LayerIdxType LayerIdx);
 	
-	void InitializeParents(const FChunk& Chunk, const MortonCodeType ChildMortonCode, const LayerIdxType ChildLayerIdx);
-	void TryUnRasterizeNodes(const FChunk& Chunk,  const std::unordered_set<MortonCodeType>& MortonCodes, const LayerIdxType LayerIdx);
+	void InitializeParents(const FChunk& Chunk, const NodeMortonType ChildMortonCode, const LayerIdxType ChildLayerIdx);
+	void TryUnRasterizeNodes(const FChunk& Chunk,  const std::unordered_set<NodeMortonType>& MortonCodes, const LayerIdxType LayerIdx);
 	
 	void SetNegativeNeighbourRelations(const FChunk& Chunk); // todo: temp method. Remove when neighbour bug is fixed.
 	

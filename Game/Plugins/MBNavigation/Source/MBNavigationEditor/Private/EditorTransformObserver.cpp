@@ -4,7 +4,6 @@
 #include "LevelEditor.h"
 #include "Engine/StaticMeshActor.h"
 #include "Kismet/GameplayStatics.h"
-#include "MBNavigation/NavMesh/Shared.h"
 
 DEFINE_LOG_CATEGORY(LogEditorTransformSubsystem)
 

@@ -1,15 +1,15 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-#include "MBNavigation/NavMesh/Generator.h"
 
+#include "MBNavigation/NavMesh/Tasks/Generator.h"
+#include "MBNavigation/NavMesh/Math/Bounds.h"
+#include "MBNavigation/NavMesh/Math/MortonUtils.h"
+#include "MBNavigation/NavMesh/Types/Chunk.h"
+#include "MBNavigation/NavMesh/Types/Node.h"
+#include "MBNavigation/NavMesh/Math/Overlap.h"
 #include <chrono>
 #include <ranges>
 #include <set>
-
-#include "unordered_dense.h"
-#include "MBNavigation/NavMesh/Shared.h"
-#include "MBNavigation/Types/NavMesh.h"
-#include "MBNavigation/Types/Math.h"
 
 DEFINE_LOG_CATEGORY(LogNavMeshGenerator)
 
@@ -65,7 +65,7 @@ void FNavMeshGenerator::GenerateChunks(const FBoundsMap& BoundsMap)
 		FOctreeLayer& Layer = *Chunk.Octrees[0]->Layers[0];
 
 		// Rasterize the octree starting from the root-node until static-depth is reached.
-		auto [NodeIterator, bInserted] = Layer.emplace(0, FNode(static_cast<NavmeshDirection>(DIRECTION_ALL)));
+		auto [NodeIterator, bInserted] = Layer.emplace(0, FNode(static_cast<DirectionType>(Direction::All)));
 		RasterizeStaticNode(Chunk, *NodeIterator, 0);
 
 		// Set all the relations to the nodes that are in the negative direction from this chunk.
@@ -80,7 +80,7 @@ void FNavMeshGenerator::GenerateChunks(const FBoundsMap& BoundsMap)
  */
 void FNavMeshGenerator::RasterizeStaticNode(FChunk& Chunk, FNodePair& NodePair, const LayerIdxType LayerIdx)
 {
-	const MortonCodeType MortonCode = NodePair.first;
+	const NodeMortonType MortonCode = NodePair.first;
 	FNode& Node = NodePair.second;
 	
 	// If overlapping any static object.
@@ -98,7 +98,7 @@ void FNavMeshGenerator::RasterizeStaticNode(FChunk& Chunk, FNodePair& NodePair, 
 	ChildLayer.reserve(ChildLayer.size() + 8);
 	for (uint8 ChildIdx = 0; ChildIdx < 8; ++ChildIdx)
 	{
-		const MortonCodeType ChildMortonCode = FMortonUtils::GetChild(MortonCode, ChildLayerIdx, ChildIdx);
+		const NodeMortonType ChildMortonCode = FNodeMortonUtils::GetChild(MortonCode, ChildLayerIdx, ChildIdx);
 
 		// Add this new child-node to the child-layer.
 		const auto ChildNodeIterator = Chunk.Octrees[0]->Layers[ChildLayerIdx]->emplace(ChildMortonCode, FNode(ChildIdx, Node.ChunkBorder)).first;
@@ -131,7 +131,7 @@ void FNavMeshGenerator::SetNegativeNeighbourRelations(const FChunk& Chunk)
 	{
 		for (auto& [MortonCode, Node] : *Layer)
 		{
-			Node.UpdateRelations(NavMeshPtr, Chunk, MortonCode, LayerIdx, DIRECTION_ALL_NEGATIVE);
+			// Node.UpdateRelations(NavMeshPtr, Chunk, MortonCode, LayerIdx, Direction::XYZ_Negative);
 		}
 		++LayerIdx;
 	}

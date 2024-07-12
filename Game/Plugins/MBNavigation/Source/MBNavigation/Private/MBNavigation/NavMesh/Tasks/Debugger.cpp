@@ -1,13 +1,15 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-#include "MBNavigation/NavMesh/Debugger.h"
-
+#include "MBNavigation/NavMesh/Tasks/Debugger.h"
+#include "MBNavigation/NavMesh/Math/MortonUtils.h"
+#include "MBNavigation/NavMesh/Math/Vectors.h"
+#include "MBNavigation/NavMesh/Types/Chunk.h"
+#include "MBNavigation/NavMesh/Types/Node.h"
 #include <bitset>
-#include <ranges>
 #include <string>
-#include "MBNavigation/Types/NavMesh.h"
 
 DEFINE_LOG_CATEGORY(LogNavMeshDebugger)
+
 
 
 FString To6BitBinaryString(const uint8 Value) {
@@ -98,7 +100,7 @@ void FNavMeshDebugger::DrawNodes(const FVector& CameraLocation, const FVector& C
 	}
 }
 
-void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const MortonCodeType MortonCode, const LayerIdxType LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector) const
+void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const NodeMortonType MortonCode, const LayerIdxType LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector) const
 {
 	const auto NodeIterator = Chunk->Octrees[0]->Layers[LayerIdx]->find(MortonCode);
 	if(NodeIterator == Chunk->Octrees[0]->Layers[LayerIdx]->end()) return;
@@ -124,39 +126,39 @@ void FNavMeshDebugger::RecursiveDrawNodes(const FChunk* Chunk, const MortonCodeT
 		const FString BitString = To6BitBinaryString(Node.ChunkBorder);
 		DrawDebugString(World, NodeGlobalCenterLocation, BitString, nullptr, FColor::Red, -1, false, 1);
 		
-		for (const NavmeshDirection Direction : FNavMeshStatic::Directions)
+		for (const DirectionType Direction : FNavMeshStatic::Directions)
 		{
 			FGlobalVector CenterOffset;
 			switch (Direction) {
-				case DIRECTION_X_NEGATIVE: CenterOffset = FGlobalVector(-FNavMeshStatic::NodeHalveSizes[LayerIdx] + 5, 0, 0); break;
-				case DIRECTION_Y_NEGATIVE: CenterOffset = FGlobalVector(0, -FNavMeshStatic::NodeHalveSizes[LayerIdx] + 5, 0); break;
-				case DIRECTION_Z_NEGATIVE: CenterOffset = FGlobalVector(0, 0, -FNavMeshStatic::NodeHalveSizes[LayerIdx] + 5); break;
-				case DIRECTION_X_POSITIVE: CenterOffset = FGlobalVector(FNavMeshStatic::NodeHalveSizes[LayerIdx] - 5, 0, 0);  break;
-				case DIRECTION_Y_POSITIVE: CenterOffset = FGlobalVector(0, FNavMeshStatic::NodeHalveSizes[LayerIdx] - 5, 0);  break;
-				case DIRECTION_Z_POSITIVE: CenterOffset = FGlobalVector(0, 0, FNavMeshStatic::NodeHalveSizes[LayerIdx] - 5);  break;
+				case Direction::X_Negative: CenterOffset = FGlobalVector(-FNavMeshStatic::NodeHalveSizes[LayerIdx] + 5, 0, 0); break;
+				case Direction::Y_Negative: CenterOffset = FGlobalVector(0, -FNavMeshStatic::NodeHalveSizes[LayerIdx] + 5, 0); break;
+				case Direction::Z_Negative: CenterOffset = FGlobalVector(0, 0, -FNavMeshStatic::NodeHalveSizes[LayerIdx] + 5); break;
+				case Direction::X_Positive: CenterOffset = FGlobalVector(FNavMeshStatic::NodeHalveSizes[LayerIdx] - 5, 0, 0);  break;
+				case Direction::Y_Positive: CenterOffset = FGlobalVector(0, FNavMeshStatic::NodeHalveSizes[LayerIdx] - 5, 0);  break;
+				case Direction::Z_Positive: CenterOffset = FGlobalVector(0, 0, FNavMeshStatic::NodeHalveSizes[LayerIdx] - 5);  break;
 				default: break;
 			}
 			if(FVector::Dist(CameraLocation, NodeGlobalCenterLocation + CenterOffset.ToVector()) > 600) continue;
 
 			const LayerIdxType NeighbourLayerIdx = Node.Relations.GetFromDirection(Direction);
-			FString LayerString = NeighbourLayerIdx != LAYER_INDEX_INVALID ? FString::FromInt(NeighbourLayerIdx) : FString("None");
+			FString LayerString = NeighbourLayerIdx != Layer_Idx_Invalid ? FString::FromInt(NeighbourLayerIdx) : FString("None");
 			DrawDebugString(World, NodeGlobalCenterLocation + CenterOffset.ToVector(), LayerString, nullptr, FColor::White, -1, false, 1);
 		}
 	}
 
 	if(FNavMeshDebugSettings::bDisplayRelations)
 	{
-		for (const NavmeshDirection Direction : FNavMeshStatic::Directions)
+		for (const DirectionType Direction : FNavMeshStatic::Directions)
 		{
 			const LayerIdxType NeighbourLayerIdx = Node.Relations.GetFromDirection(Direction);
-			if(NeighbourLayerIdx == LAYER_INDEX_INVALID) continue;
+			if(NeighbourLayerIdx == Layer_Idx_Invalid) continue;
 
 			// Get node center.
 			FGlobalVector NodeLocation = Node.GetGlobalLocation(Chunk->Location, MortonCode);
 			FGlobalVector NodeCenter = NodeLocation + FNavMeshStatic::NodeHalveSizes[LayerIdx];
 
 			// Get neighbour center.
-			const MortonCodeType NeighbourMortonCode = FMortonUtils::MoveAndMask(MortonCode, NeighbourLayerIdx, Direction);
+			const NodeMortonType NeighbourMortonCode = FNodeMortonUtils::MoveAndMask(MortonCode, NeighbourLayerIdx, Direction);
 			const FGlobalVector NeighbourChunkLocation = Node.ChunkBorder & Direction ? Chunk->GetNeighbourLocation(Direction) : Chunk->Location;
 			FGlobalVector NeighbourLocation = FGlobalVector::FromMortonCode(NeighbourMortonCode, NeighbourChunkLocation);
 			FGlobalVector NeighbourCenter = NeighbourLocation + FNavMeshStatic::NodeHalveSizes[NeighbourLayerIdx];

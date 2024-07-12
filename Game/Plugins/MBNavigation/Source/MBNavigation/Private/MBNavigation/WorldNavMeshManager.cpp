@@ -1,11 +1,10 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #include "MBNavigation/WorldNavMeshManager.h"
-
-#include "MBNavigation/NavMesh/Serialize.h"
+#include "MBNavigation/NavMesh/Types/Serialize.h"
 
 #if WITH_EDITOR
-#include "MBNavigation/NavMesh/Debugger.h"
+	#include "MBNavigation/NavMesh/Tasks/Debugger.h"
 #endif
 
 

@@ -1,7 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "MBNavigation/MBNavigation.h"
-#include "MBNavigation/Types/NavMesh.h"
+#include "MBNavigation/NavMesh/Types/Static.h"
 
 #define LOCTEXT_NAMESPACE "FMBNavigationModule"
 

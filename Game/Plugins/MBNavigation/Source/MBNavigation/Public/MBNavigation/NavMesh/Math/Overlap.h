@@ -2,11 +2,13 @@
 
 #pragma once
 
-#include "MBNavigation/Types/NavMesh.h"
+// #include "Physics/Experimental/PhysInterface_Chaos.h"
 
 
 
-FORCEINLINE bool HasOverlap(const UWorld* World, const FChunk& Chunk, const MortonCodeType MortonCode, const LayerIdxType LayerIdx)
+// todo: For very large objects, like terrain, do a recursive overlap check to filter out the parts that have no overlap. Should be a certain size that the chunk-size fits in perfectly.
+
+FORCEINLINE bool HasOverlap(const UWorld* World, const FChunk& Chunk, const NodeMortonType MortonCode, const LayerIdxType LayerIdx)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("HasOverlap");
 	
@@ -55,7 +57,7 @@ FORCEINLINE static bool HasGeomOverlap(const FBodyInstance* BodyInstance, const 
 	return false;
 }
 
-FORCEINLINE void DrawNodeFromMorton(const UWorld* World, const FChunk* Chunk, const MortonCodeType MortonCode, const uint8 LayerIdx, const FColor Color = FColor::Black)
+FORCEINLINE void DrawNodeFromMorton(const UWorld* World, const FChunk* Chunk, const NodeMortonType MortonCode, const uint8 LayerIdx, const FColor Color = FColor::Black)
 {
 	const FGlobalVector GlobalNodeLocation = FGlobalVector::FromMortonCode(MortonCode, Chunk->Location);
 	const TBounds<FGlobalVector> NodeBoundaries(GlobalNodeLocation, GlobalNodeLocation+FNavMeshStatic::NodeSizes[LayerIdx]);
