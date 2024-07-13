@@ -50,7 +50,7 @@ private:
 	void StartClearAllChildrenOfNode(const FChunk& Chunk, const NodeMortonType MortonCode, const LayerIdxType LayerIdx, const DirectionType RelationsToUpdate);
 	static void RecursiveClearAllChildren(const FChunk& Chunk, const FNodePair& NodePair, const LayerIdxType LayerIdx);
 	
-	void InitializeParents(const FChunk& Chunk, const NodeMortonType ChildMortonCode, const LayerIdxType ChildLayerIdx);
+	void InitializeParents(const FChunk& Chunk, const NodeMortonType MortonCode, const LayerIdxType LayerIdx);
 	void TryUnRasterizeNodes(const FChunk& Chunk,  const std::unordered_set<NodeMortonType>& MortonCodes, const LayerIdxType LayerIdx);
 	
 	void SetNegativeNeighbourRelations(const FChunk& Chunk); // todo: temp method. Remove when neighbour bug is fixed.

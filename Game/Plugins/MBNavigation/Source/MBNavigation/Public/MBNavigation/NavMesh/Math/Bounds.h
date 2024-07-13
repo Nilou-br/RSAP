@@ -335,6 +335,8 @@ struct TBounds
 		}
 	}
 };
+
+// Map associating an actor with boundaries.
 typedef ankerl::unordered_dense::map<ActorKeyType, TBounds<FGlobalVector>> FBoundsMap;
 
 /**
@@ -366,4 +368,6 @@ struct TChangedBounds
 		Current.Draw(World, FColor::Green);
 	}
 };
+
+// Map associating an actor with changed boundaries. To hold changes that have happened for multiple actors.
 typedef ankerl::unordered_dense::map<ActorKeyType, TChangedBounds<FGlobalVector>> FChangedBoundsMap;

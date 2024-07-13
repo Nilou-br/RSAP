@@ -2,8 +2,8 @@
 
 #pragma once
 #include "Static.h"
-#include "MBNavigation/NavMesh/Math/Bounds.h"
 #include "MBNavigation/NavMesh/Types/Node.h"
+#include "MBNavigation/NavMesh/Math/Bounds.h"
 
 
 typedef ankerl::unordered_dense::map<NodeMortonType, FNode> FOctreeLayer;
@@ -99,6 +99,17 @@ public:
 	FORCEINLINE ChunkKeyType GetNeighbour(const DirectionType Direction) const
 	{
 		return GetNeighbourLocation(Direction).ToKey();
+	}
+
+	// This will not check if the node exists, so only use in code where you are certain it will.
+	FORCEINLINE FNodePair& GetNode(const NodeMortonType NodeMortonCode, const LayerIdxType LayerIdx, const NodeStateType NodeState) const
+	{
+		return *Octrees[NodeState]->Layers[LayerIdx]->find(NodeMortonCode);
+	}
+
+	FORCEINLINE void EraseNode(const NodeMortonType NodeMortonCode, const LayerIdxType LayerIdx, const NodeStateType NodeState) const
+	{
+		Octrees[NodeState]->Layers[LayerIdx]->erase(NodeMortonCode);
 	}
 };
 

@@ -1,9 +1,6 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #include "MBNavigation/NavMesh/Types/Node.h"
-
-#include "MBNavigation/NavMesh/Math/MortonUtils.h"
-#include "MBNavigation/NavMesh/Types/Chunk.h"
 #include "MBNavigation/NavMesh/Math/Vectors.h"
 #include "MBNavigation/NavMesh/Types/Static.h"
 
@@ -17,18 +14,6 @@ FNode::FNode(const uint8 ChildIdx, const DirectionType ParentChunkBorder)
 		ChunkBorder |= ChildIdx & 4 ? Direction::Z_Positive : Direction::Z_Negative;
 		ChunkBorder &= ParentChunkBorder; // Can only be against the same border(s) as the parent.
 	}
-}
-
-std::array<LayerIdxType, 6> FNode::GetRelations() const
-{
-	return {
-		Relations.X_Negative_LayerIdx,
-		Relations.Y_Negative_LayerIdx,
-		Relations.Z_Negative_LayerIdx,
-		Relations.X_Positive_LayerIdx,
-		Relations.Y_Positive_LayerIdx,
-		Relations.Z_Positive_LayerIdx
-	};
 }
 
 // // For the given node, set its children's relation in the Direction to the given LayerIdxToSet. Only the children against the same border in this direction will be updated.
@@ -208,30 +193,4 @@ void FNode::Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const 
 	const FVector GlobalCenter = GetGlobalLocation(ChunkLocation, MortonCode).ToVector() + NodeHalveSize;
 	const FVector Extent(NodeHalveSize);
 	DrawDebugBox(World, GlobalCenter, Extent, Color, true, -1, 0, Thickness);
-}
-
-// Runs the given callback for each child of this node.
-// The callback is invocable with an FNodePair.
-template <typename Func>
-void FNode::ForEachChild(const FChunk& Chunk, const NodeMortonType MortonCode, const LayerIdxType LayerIdx, Func Callback) const // todo: return the morton-codes instead, do the find where you need it.
-{
-	if(!HasChildren()) return;
-		
-	const LayerIdxType ChildLayerIdx = LayerIdx+1;
-	const int_fast16_t ChildOffset = FNavMeshStatic::MortonOffsets[ChildLayerIdx];
-	const FMortonVector NodeMortonLocation = FMortonVector::FromMortonCode(MortonCode);
-		
-	for (uint8 ChildIdx = 0; ChildIdx < 8; ++ChildIdx)
-	{
-		// todo: use FNodeMortonUtils
-		const uint_fast16_t ChildMortonX = NodeMortonLocation.X + (ChildIdx & 1 ? ChildOffset : 0);
-		const uint_fast16_t ChildMortonY = NodeMortonLocation.Y + (ChildIdx & 2 ? ChildOffset : 0);
-		const uint_fast16_t ChildMortonZ = NodeMortonLocation.Z + (ChildIdx & 4 ? ChildOffset : 0);
-
-		const FMortonVector ChildMortonLocation = FMortonVector(ChildMortonX, ChildMortonY, ChildMortonZ);
-		const NodeMortonType ChildMortonCode = ChildMortonLocation.ToMortonCode();
-			
-		const auto NodeIterator = Chunk.Octrees[0]->Layers[ChildLayerIdx]->find(ChildMortonCode);
-		Callback(*NodeIterator);
-	}
 }

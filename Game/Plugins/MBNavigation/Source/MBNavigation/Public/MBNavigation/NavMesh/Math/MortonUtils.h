@@ -2,11 +2,12 @@
 
 #pragma once
 
-#include "MBNavigation/NavMesh/Definitions.h"
+#include <array>
+#include "MBNavigation/NavMesh/Types/Static.h"
 #include "morton.h"
 
 
-
+// Provides all functionality for node morton-codes.
 struct FNodeMortonUtils
 {
 	static inline constexpr NodeMortonType Mask_X = 0b00001001001001001001001001001001;
@@ -67,6 +68,21 @@ struct FNodeMortonUtils
 			case 7: return Add(ParentMortonCode, ChildLayerIdx);											// X+Y+Z
 			default: return ParentMortonCode;
 		}
+	}
+
+	FORCEINLINE static std::array<NodeMortonType, 8> GetChildren(const NodeMortonType ParentMortonCode, const LayerIdxType ChildLayerIdx)
+	{
+		// todo: test performance.
+		return {
+			ParentMortonCode,
+			AddX(ParentMortonCode, ChildLayerIdx),
+			AddY(ParentMortonCode, ChildLayerIdx),
+			AddX(ParentMortonCode, ChildLayerIdx) | AddY(ParentMortonCode, ChildLayerIdx),
+			AddZ(ParentMortonCode, ChildLayerIdx),
+			AddX(ParentMortonCode, ChildLayerIdx) | AddZ(ParentMortonCode, ChildLayerIdx),
+			AddY(ParentMortonCode, ChildLayerIdx) | AddZ(ParentMortonCode, ChildLayerIdx),
+			Add(ParentMortonCode, ChildLayerIdx)
+		};
 	}
 
 	// Moves the morton-code in the given direction. The amount it moves is determined by the layer-index, which translates to the node-size for that layer.
@@ -152,6 +168,7 @@ struct FNodeMortonUtils
 
 
 
+// Provides all functionality for chunk morton-codes.
 struct FChunkMortonUtils
 {
 	static inline constexpr ChunkMortonType Mask_X = 0b0001001001001001001001001001001001001001001001001001001001001001;
@@ -161,29 +178,31 @@ struct FChunkMortonUtils
 	static inline constexpr ChunkMortonType Mask_XY = Mask_X | Mask_Y;
 	static inline constexpr ChunkMortonType Mask_XZ = Mask_X | Mask_Z;
 	static inline constexpr ChunkMortonType Mask_YZ = Mask_Y | Mask_Z;
-
+	
 	static inline constexpr uint32 EncodeDecodeOffset = 1073741312; // To convert between morton-space and global-space for a chunk.
 
 
 	
+	// Encode global world coordinates into a chunk morton-code. Max range from -1073741312 to +1073741312.
 	FORCEINLINE static ChunkMortonType Encode(const int32 X, const int32 Y, const int32 Z) // todo: test these
 	{
-		// First cast to 64-bit int to prevent overflow during addition, then left shift the chunk-size to fit into 32 bits.
-		const uint_fast32_t InX = (static_cast<int64>(X) + EncodeDecodeOffset) << FNavMeshStatic::ChunkKeyShift;
-		const uint_fast32_t InY = (static_cast<int64>(Y) + EncodeDecodeOffset) << FNavMeshStatic::ChunkKeyShift;
-		const uint_fast32_t InZ = (static_cast<int64>(Z) + EncodeDecodeOffset) << FNavMeshStatic::ChunkKeyShift;
+		// Then left shift the chunk-size to fit back into 32 bits.
+		const uint_fast32_t InX = (X + EncodeDecodeOffset) << FNavMeshStatic::ChunkKeyShift;
+		const uint_fast32_t InY = (Y + EncodeDecodeOffset) << FNavMeshStatic::ChunkKeyShift;
+		const uint_fast32_t InZ = (Z + EncodeDecodeOffset) << FNavMeshStatic::ChunkKeyShift;
 		
 		return libmorton::morton3D_64_encode(InX, InY, InZ);
 	}
 
+	// Decode a chunk's morton-code back into global world coordinates.
 	FORCEINLINE static void Decode(const ChunkMortonType ChunkMorton, int32& OutX, int32& OutY, int32& OutZ)
 	{
-		uint32 X, Y, Z;
+		uint_fast32_t X, Y, Z;
 		libmorton::morton3D_64_decode(ChunkMorton, X, Y, Z);
 		
-		OutX = (static_cast<int64>(X) >> FNavMeshStatic::ChunkKeyShift) - EncodeDecodeOffset;
-		OutY = (static_cast<int64>(Y) >> FNavMeshStatic::ChunkKeyShift) - EncodeDecodeOffset;
-		OutZ = (static_cast<int64>(Z) >> FNavMeshStatic::ChunkKeyShift) - EncodeDecodeOffset;
+		OutX = (X >> FNavMeshStatic::ChunkKeyShift) - EncodeDecodeOffset;
+		OutY = (Y >> FNavMeshStatic::ChunkKeyShift) - EncodeDecodeOffset;
+		OutZ = (Z >> FNavMeshStatic::ChunkKeyShift) - EncodeDecodeOffset;
 	}
 	
 	// Moves the morton-code exactly one chunk in the given direction.

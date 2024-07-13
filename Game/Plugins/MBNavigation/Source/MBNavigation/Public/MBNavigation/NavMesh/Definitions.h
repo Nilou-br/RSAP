@@ -8,8 +8,8 @@
 // Typedefs to avoid confusion. todo: remove _t on integers.
 // todo: normal uint32 and uint64 for serialization for compatibility across all systems !!!
 
-typedef uint_fast32_t NodeMortonType;
-typedef uint_fast64_t ChunkMortonType;
+typedef uint32 NodeMortonType;
+typedef uint64 ChunkMortonType;
 typedef uint64 ChunkKeyType;
 typedef uint32 ActorKeyType;
 

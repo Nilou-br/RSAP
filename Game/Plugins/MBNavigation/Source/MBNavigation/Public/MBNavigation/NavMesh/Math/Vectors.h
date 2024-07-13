@@ -12,9 +12,7 @@
  */
 struct FMortonVector
 {
-	uint_fast16_t X: 10;
-	uint_fast16_t Y: 10;
-	uint_fast16_t Z: 10;
+	uint16 X, Y, Z: 10;
 	
 	FORCEINLINE NodeMortonType ToMortonCode() const
 	{
@@ -77,27 +75,12 @@ struct FMortonVector
 		return X == Other.X && Y == Other.Y && Z == Other.Z;
 	}
 
-	// todo: move to somewhere else? Refactor this.
-	FORCEINLINE FVector GetCenterVector(const LayerIdxType LayerIdx) const
-	{
-		return ToVector() + FVector(FNavMeshStatic::MortonOffsets[LayerIdx])/2;
-	}
-
-	// todo: move to somewhere else? Refactor this.
-	static FORCEINLINE FVector GetExtentsVector(const LayerIdxType LayerIdx)
-	{
-		return FVector(FNavMeshStatic::MortonOffsets[LayerIdx])/2;
-	}
-
-	FORCEINLINE FVector ToVector() const
+	FORCEINLINE FVector ToVector() const // todo: rename, or overload '*' dereference operator
 	{
 		return FVector(X, Y, Z);
 	}
 
 	explicit FMortonVector(const uint16 InX, const uint16 InY, const uint16 InZ)
-		: X(InX), Y(InY), Z(InZ) {}
-
-	explicit FMortonVector(const uint_fast16_t InX, const uint_fast16_t InY, const uint_fast16_t InZ)
 		: X(InX), Y(InY), Z(InZ) {}
 
 	FMortonVector()
@@ -106,14 +89,14 @@ struct FMortonVector
 };
 
 /**
- * Custom vector type optimized to work with my navmesh.
+ * Custom 32-bit vector type optimized for my navmesh.
  * Used for global locations within the world.
+ *
+ * @note World-size range from -1073741312 to +1073741312.
  */
 struct FGlobalVector
 {
-	int_fast32_t X;
-	int_fast32_t Y;
-	int_fast32_t Z;
+	int32 X, Y, Z;
 	
 	// Creates key from the coordinates that is usable for hashmaps.
 	// The FGlobalVector can have max 31 bits per axis to support this method.

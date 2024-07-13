@@ -1,12 +1,12 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-#include "Chunk.h"
 #include "MBNavigation/NavMesh/Definitions.h"
+#include "MBNavigation/NavMesh/Math/MortonUtils.h"
 #include "MBNavigation/NavMesh/Math/Vectors.h"
 
 
-class FChunk;
+
 struct FGlobalVector;
 /**
  * Each side of a node holds a relation to another node. There is a relation for each side of a node, and it stores the layer and type of the node in this direction.
@@ -151,17 +151,30 @@ struct FNode
 		return bHasChildren;
 	}
 
-	std::array<LayerIdxType, 6> GetRelations() const;
+	std::array<LayerIdxType, 6> GetRelations() const
+	{
+		return {
+			Relations.X_Negative_LayerIdx,
+			Relations.Y_Negative_LayerIdx,
+			Relations.Z_Negative_LayerIdx,
+			Relations.X_Positive_LayerIdx,
+			Relations.Y_Positive_LayerIdx,
+			Relations.Z_Positive_LayerIdx
+		};
+	}
 
 	//void UpdateRelations(const FNavMeshPtr& NavMeshPtr, const FChunk& Chunk, const NodeMortonType MortonCode,  const LayerIdxType LayerIdx, const DirectionType RelationsToUpdate);
 	bool HasOverlap(const UWorld* World, const FGlobalVector& ChunkLocation, const NodeMortonType MortonCode, const LayerIdxType LayerIdx) const;
 	//static bool HasGeomOverlap(const FBodyInstance* BodyInstance, const FGlobalVector& CenterLocation, const LayerIdxType LayerIdx);
 	void Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const NodeMortonType MortonCode, const LayerIdxType LayerIndex, const FColor Color = FColor::Black, const uint32 Thickness = 0) const;
 
-	template<typename Func>
-	void ForEachChild(const FChunk& Chunk, const NodeMortonType MortonCode, const LayerIdxType LayerIdx, Func Callback) const;
-
-
+	template <typename Func>
+	void ForEachChild(const NodeMortonType MortonCode, const LayerIdxType LayerIdx, Func&& Callback) const {
+		if(!HasChildren()) return;
+		for (const NodeMortonType ChildMortonCode : FNodeMortonUtils::GetChildren(MortonCode, LayerIdx)) {
+			Callback(ChildMortonCode);
+		}
+	}
 	
 	// Packs the members of the node into a single 64 bit unsigned integer which can be used to serialize the node.
 	FORCEINLINE uint64 Pack() const {
