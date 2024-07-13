@@ -76,7 +76,7 @@ public:
 		);
 	}
 
-	FORCEINLINE TBounds<FGlobalVector> GetBounds() const
+	FORCEINLINE FGlobalBounds GetBounds() const
 	{
 		return TBounds(Location, Location+FNavMeshStatic::ChunkSize);
 	}

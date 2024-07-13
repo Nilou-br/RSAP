@@ -165,7 +165,7 @@ void UEditorNavMeshManager::OnCameraMoved(const FVector& CameraLocation, const F
 	if(!NavMeshUpdater->IsRunning()) NavMeshDebugger->Draw(CameraLocation, CameraRotation);
 }
 
-void UEditorNavMeshManager::OnActorBoundsChanged(const ActorKeyType ActorKey, const TChangedBounds<FGlobalVector>& ChangedBounds)
+void UEditorNavMeshManager::OnActorBoundsChanged(const ActorKeyType ActorKey, const FChangedBounds& ChangedBounds)
 {
 	UE_LOG(LogEditorTransformSubsystem, Log, TEXT("OnActorBoundsChanged"));
 	ChangedBounds.Draw(EditorWorld);

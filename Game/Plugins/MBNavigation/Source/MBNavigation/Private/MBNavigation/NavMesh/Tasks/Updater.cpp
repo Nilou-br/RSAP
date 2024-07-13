@@ -20,7 +20,7 @@ void FNavMeshUpdater::StageData(const FChangedBoundsMap& BoundsPairMap)
 	}
 }
 
-void FNavMeshUpdater::StageData(const ActorKeyType ActorKey, const TChangedBounds<FGlobalVector>& ChangedBounds)
+void FNavMeshUpdater::StageData(const ActorKeyType ActorKey, const FChangedBounds& ChangedBounds)
 {
 	auto Iterator = StagedDataMap.find(ActorKey);
 	if(Iterator == StagedDataMap.end()) std::tie(Iterator, std::ignore) = StagedDataMap.emplace(ActorKey, FStageType());
@@ -68,7 +68,7 @@ void FNavMeshUpdater::Update()
  * Calculates the optimal starting layer used for rounding the bounds.
  * This gives us a layer-index where the node-size for that layer fits at-least once inside the largest side of both bounds.
  */
-LayerIdxType CalculateOptimalStartingLayer(const TChangedBounds<FGlobalVector>& BoundsPair)
+LayerIdxType CalculateOptimalStartingLayer(const FChangedBounds& BoundsPair)
 {
 	LayerIdxType StartingLayer = FNavMeshStatic::StaticDepth;
 
@@ -112,8 +112,8 @@ uint32 FUpdateTask::Run() // todo: updater runs when starting editor for some re
 	typedef ankerl::unordered_dense::map<NodeMortonType, FNodeUpdateType> FNodeUpdateMap;
 	ankerl::unordered_dense::map<ChunkKeyType, FNodeUpdateMap> ChunksToUpdate;
 
-	// Loops through the bounds and gets the nodes where each node is a paired with the data required to update the node.
-	const auto GetNodesToUpdateWithinBounds = [](const TBounds<FMortonVector>& Bounds, const LayerIdxType LayerIdx, const DirectionType PositiveDirectionsToTrack) -> FNodeUpdateMap
+	// Loops through the bounds, and get the nodes, where each node is a paired with the data required to update the node.
+	const auto GetNodesToUpdateWithinBounds = [](const FMortonBounds& Bounds, const LayerIdxType LayerIdx, const DirectionType PositiveDirectionsToTrack) -> FNodeUpdateMap
 	{
 		const uint_fast16_t MortonOffset = FNavMeshStatic::MortonOffsets[LayerIdx];
 		FNodeUpdateMap ResultMap;
@@ -137,7 +137,7 @@ uint32 FUpdateTask::Run() // todo: updater runs when starting editor for some re
 	};
 
 	// Fills the ChunksToUpdate map with the nodes within the given bounds. Filters out duplicates.
-	const auto FillChunksToUpdate = [&ChunksToUpdate, &GetNodesToUpdateWithinBounds](const ChunkKeyType ChunkKey, const DirectionType ChunkPositiveDirections, const TBounds<FMortonVector>& Bounds, const LayerIdxType LayerIdx)
+	const auto FillChunksToUpdate = [&ChunksToUpdate, &GetNodesToUpdateWithinBounds](const ChunkKeyType ChunkKey, const DirectionType ChunkPositiveDirections, const FMortonBounds& Bounds, const LayerIdxType LayerIdx)
 	{
 		const FNodeUpdateMap NodesMap = GetNodesToUpdateWithinBounds(Bounds, LayerIdx, ChunkPositiveDirections);
 		if(NodesMap.empty()) return;
@@ -175,7 +175,7 @@ uint32 FUpdateTask::Run() // todo: updater runs when starting editor for some re
 		const LayerIdxType StartingLayerIdx = CalculateOptimalStartingLayer(TChangedBounds(PreviousBoundsList.back(), CurrentBounds));
 
 		// Round the bounds to this layer.
-		const TBounds<FGlobalVector> CurrentRounded = CurrentBounds.RoundToLayer(StartingLayerIdx);
+		const FGlobalBounds CurrentRounded = CurrentBounds.RoundToLayer(StartingLayerIdx);
 		
 		for (const auto& PreviousBounds : PreviousBoundsList)
 		{
@@ -183,14 +183,14 @@ uint32 FUpdateTask::Run() // todo: updater runs when starting editor for some re
 			// This prevents looping through nodes that will already be looped through from the current-bounds later.
 			for (auto PreviousRemainder : CurrentRounded.Cut(PreviousBounds.RoundToLayer(StartingLayerIdx)))
 			{
-				PreviousRemainder.ForEachChunk([&FillChunksToUpdate, StartingLayerIdx](const ChunkKeyType ChunkKey, const DirectionType ChunkPositiveDirections, const TBounds<FMortonVector>& MortonBounds)
+				PreviousRemainder.ForEachChunk([&FillChunksToUpdate, StartingLayerIdx](const ChunkKeyType ChunkKey, const DirectionType ChunkPositiveDirections, const FMortonBounds& MortonBounds)
 				{
 					FillChunksToUpdate(ChunkKey, ChunkPositiveDirections, MortonBounds, StartingLayerIdx);
 				});
 			}
 		}
 		
-		CurrentRounded.ForEachChunk([&FillChunksToUpdate, StartingLayerIdx](const ChunkKeyType ChunkKey, const DirectionType ChunkPositiveDirections, const TBounds<FMortonVector>& MortonBounds)
+		CurrentRounded.ForEachChunk([&FillChunksToUpdate, StartingLayerIdx](const ChunkKeyType ChunkKey, const DirectionType ChunkPositiveDirections, const FMortonBounds& MortonBounds)
 		{
 			FillChunksToUpdate(ChunkKey, ChunkPositiveDirections, MortonBounds, StartingLayerIdx);
 		});
@@ -283,7 +283,7 @@ bool FUpdateTask::StartReRasterizeNode(const FChunk& Chunk, const NodeMortonType
 				Node.SetHasChildren(false);
 			}
 			Node.SetOccluded(false);
-			// Dont clear the Node here, should be done from the parent.
+			// Dont clear the node here, should be done from the parent.
 		}
 		return true; // Should check parent because this Node's space has no overlap.
 	}

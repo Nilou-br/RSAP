@@ -13,7 +13,7 @@ DECLARE_LOG_CATEGORY_EXTERN(LogEditorTransformSubsystem, Log, All);
 struct FCachedActor
 {
 	TWeakObjectPtr<const AActor> ActorPtr;
-	TBounds<FGlobalVector> Bounds;
+	FGlobalBounds Bounds;
 };
 
 UCLASS()
@@ -22,7 +22,7 @@ class UEditorTransformObserver final : public UEditorSubsystem
 	GENERATED_BODY()
 
 	DECLARE_DELEGATE_OneParam(FOnLevelActorsInitialized, const FBoundsMap&);
-	DECLARE_DELEGATE_TwoParams(FOnActorBoundsChanged, const ActorKeyType, const TChangedBounds<FGlobalVector>&);
+	DECLARE_DELEGATE_TwoParams(FOnActorBoundsChanged, const ActorKeyType, const FChangedBounds&);
 
 protected:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;

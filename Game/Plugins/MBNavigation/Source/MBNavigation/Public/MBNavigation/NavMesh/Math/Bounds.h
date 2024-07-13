@@ -13,6 +13,9 @@ template<typename VectorType>
 struct TBounds
 {
 	static_assert(std::is_same_v<VectorType, FGlobalVector> || std::is_same_v<VectorType, FMortonVector>, "TBounds can only be instantiated with FGlobalVector or FMortonVector");
+
+	using FGlobalBounds = TBounds<FGlobalVector>;
+	using FMortonBounds = TBounds<FMortonVector>;
 	
 	VectorType Min;
 	VectorType Max;
@@ -83,15 +86,15 @@ struct TBounds
 	}
 
 	template<typename T = VectorType>
-	FORCEINLINE auto operator&(const int32 Mask) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, TBounds<FGlobalVector>>
+	FORCEINLINE auto operator&(const int32 Mask) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, FGlobalBounds>
 	{
-		return TBounds<FGlobalVector>(Min & Mask, Max & Mask, bIsValid);
+		return FGlobalBounds(Min & Mask, Max & Mask, bIsValid);
 	}
 
 	template<typename T = VectorType>
-	FORCEINLINE auto operator&(const uint16 Mask) const -> std::enable_if_t<std::is_same_v<T, FMortonVector>, TBounds<FMortonVector>>
+	FORCEINLINE auto operator&(const uint16 Mask) const -> std::enable_if_t<std::is_same_v<T, FMortonVector>, FMortonBounds>
 	{
-		return TBounds<FMortonVector>(Min & Mask, Max & Mask, bIsValid);
+		return FMortonBounds(Min & Mask, Max & Mask, bIsValid);
 	}
 
 	FORCEINLINE bool operator!() const
@@ -102,7 +105,7 @@ struct TBounds
 
 	// Rounds the bounds to the layer's node-size in global-space. Min will be rounded down, Max will be rounded up.
 	template<typename T = VectorType>
-	FORCEINLINE auto RoundToLayer(const LayerIdxType LayerIdx) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, TBounds<FGlobalVector>>
+	FORCEINLINE auto RoundToLayer(const LayerIdxType LayerIdx) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, FGlobalBounds>
 	{
 		// Apply the Voxel-Size-Exponent to these masks since this VectorType exist in global space.
 		static constexpr uint16 LayerMasks[10] = {
@@ -113,7 +116,7 @@ struct TBounds
 			static_cast<uint16>(~((1 << 2  >> FNavMeshStatic::VoxelSizeExponent) - 1)), static_cast<uint16>(~((1 << 1 >> FNavMeshStatic::VoxelSizeExponent) - 1))
 		};
 		
-		TBounds<FGlobalVector> Rounded = *this & LayerMasks[LayerIdx];
+		FGlobalBounds Rounded = *this & LayerMasks[LayerIdx];
 
 		// Round the Max bounds up, but only if it is smaller than the un-rounded bounds.
 		// Its possible for the un-rounded value to already equal the rounded to value, but we still want to round it a whole node-size upwards ( otherwise the Min axis would equal the Max and there is no width, thus no volume ).
@@ -125,7 +128,7 @@ struct TBounds
 
 	// Rounds the bounds to the layer's node-size in morton-space. Min will be rounded down, Max will be rounded up.
 	template<typename T = VectorType>
-	FORCEINLINE auto RoundToLayer(const LayerIdxType LayerIdx) const -> std::enable_if_t<std::is_same_v<T, FMortonVector>, TBounds<FMortonVector>>
+	FORCEINLINE auto RoundToLayer(const LayerIdxType LayerIdx) const -> std::enable_if_t<std::is_same_v<T, FMortonVector>, FMortonBounds>
 	{
 		static constexpr uint16 LayerMasks[10] = {
 			static_cast<uint16>(~((1<<10)-1)), static_cast<uint16>(~((1<<9)-1)),
@@ -135,7 +138,7 @@ struct TBounds
 			static_cast<uint16>(~((1<<2)-1)),  static_cast<uint16>(~((1<<1)-1))
 		};
 		
-		TBounds<FMortonVector> Rounded = *this & LayerMasks[LayerIdx];
+		FMortonBounds Rounded = *this & LayerMasks[LayerIdx];
 
 		// Round the max up.
 		// The '-1' is to adjust to nodes in morton-space. Because the origin of a node is at its negative most corner. So if Min/Max are equal, then they hold the same node. Min/Max just determine the 'first' and 'last' node in the bounds.
@@ -159,7 +162,7 @@ struct TBounds
 	
 	// Gets the remaining parts of the bounds that are not overlapping with the other bounds. A boolean-cut.
 	template<typename T = VectorType>
-	auto Cut(const TBounds<FGlobalVector>& Other) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, std::vector<TBounds<FGlobalVector>>>
+	auto Cut(const FGlobalBounds& Other) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, std::vector<FGlobalBounds>>
 	{
 		if(!IsValid()) return { Other };
 		if(!Other.IsValid() || !HasSimpleOverlap(Other)) return { Other }; // Return the whole instance when there is no overlap between the two bounds.
@@ -168,21 +171,21 @@ struct TBounds
 		TBounds RemainingBounds = Other;
 		
 		if(Other.Max.X > Max.X){  // + X
-			BoundsList.push_back(TBounds<FGlobalVector>(VectorType(Max.X, RemainingBounds.Min.Y, RemainingBounds.Min.Z), RemainingBounds.Max));
+			BoundsList.push_back(FGlobalBounds(VectorType(Max.X, RemainingBounds.Min.Y, RemainingBounds.Min.Z), RemainingBounds.Max));
 			RemainingBounds.Max.X = Max.X;
 		}if(Other.Min.X < Min.X){ // + X
-			BoundsList.push_back(TBounds<FGlobalVector>(RemainingBounds.Min, VectorType(Min.X, RemainingBounds.Max.Y, RemainingBounds.Max.Z)));
+			BoundsList.push_back(FGlobalBounds(RemainingBounds.Min, VectorType(Min.X, RemainingBounds.Max.Y, RemainingBounds.Max.Z)));
 			RemainingBounds.Min.X = Min.X;
 		}if(Other.Max.Y > Max.Y){ // + Y
-			BoundsList.push_back(TBounds<FGlobalVector>(VectorType(RemainingBounds.Min.X, Max.Y, RemainingBounds.Min.Z), RemainingBounds.Max));
+			BoundsList.push_back(FGlobalBounds(VectorType(RemainingBounds.Min.X, Max.Y, RemainingBounds.Min.Z), RemainingBounds.Max));
 			RemainingBounds.Max.Y = Max.Y;
 		}if(Other.Min.Y < Min.Y){ // - Y
-			BoundsList.push_back(TBounds<FGlobalVector>(RemainingBounds.Min, VectorType(RemainingBounds.Max.X, Min.Y, RemainingBounds.Max.Z)));
+			BoundsList.push_back(FGlobalBounds(RemainingBounds.Min, VectorType(RemainingBounds.Max.X, Min.Y, RemainingBounds.Max.Z)));
 			RemainingBounds.Min.Y = Min.Y;
 		}if(Other.Max.Z > Max.Z){ // + Z
-			BoundsList.push_back(TBounds<FGlobalVector>(VectorType(RemainingBounds.Min.X, RemainingBounds.Min.Y, Max.Z), RemainingBounds.Max));
+			BoundsList.push_back(FGlobalBounds(VectorType(RemainingBounds.Min.X, RemainingBounds.Min.Y, Max.Z), RemainingBounds.Max));
 		}if(Other.Min.Z < Min.Z) { // - Z
-			BoundsList.push_back(TBounds<FGlobalVector>(RemainingBounds.Min, VectorType(RemainingBounds.Max.X, RemainingBounds.Max.Y, Min.Z)));
+			BoundsList.push_back(FGlobalBounds(RemainingBounds.Min, VectorType(RemainingBounds.Max.X, RemainingBounds.Max.Y, Min.Z)));
 		}
 		
 		return BoundsList;
@@ -195,13 +198,13 @@ struct TBounds
 	 * @note Chunks are NOT automatically initialized.
 	 * 
 	 * @tparam T VectorType which must be of type FGlobalVector.
-	 * @tparam Func <ChunkKey, DirectionType, TBounds<FMortonVector>>
+	 * @tparam Func <ChunkKey, DirectionType, FMortonBounds>
 	 * @param Callback Called for each intersecting chunk.
 	 */
 	template<typename T = VectorType, typename Func>
 	std::enable_if_t<std::is_same_v<T, FGlobalVector>, void> ForEachChunk(Func Callback) const
 	{
-		static_assert(std::is_invocable_v<Func, const ChunkKeyType, const DirectionType, TBounds<FMortonVector>>, "'::ForEachChunk' callback must be invocable with 'const ChunkKeyType, const DirectionType, TBounds<FMortonVector>>'");
+		static_assert(std::is_invocable_v<Func, const ChunkKeyType, const DirectionType, FMortonBounds>, "'::ForEachChunk' callback must be invocable with 'const ChunkKeyType, const DirectionType, FMortonBounds>'");
 		if(!IsValid()) return;
 
 		// Get the start/end axis of the chunks from the boundaries.
@@ -212,7 +215,7 @@ struct TBounds
 		if(ChunkMin == ChunkMax)
 		{
 			const FGlobalVector ChunkLocation = FGlobalVector(ChunkMin.X, ChunkMin.Y, ChunkMin.Z);
-			const TBounds<FMortonVector> MortonBounds = GetIntersection(TBounds<FGlobalVector>(ChunkLocation, ChunkLocation+FNavMeshStatic::ChunkSize)).ToMortonSpace(ChunkLocation);
+			const FMortonBounds MortonBounds = GetIntersection(FGlobalBounds(ChunkLocation, ChunkLocation+FNavMeshStatic::ChunkSize)).ToMortonSpace(ChunkLocation);
 			Callback(ChunkLocation.ToKey(), Direction::XYZ_Positive, MortonBounds);
 			return;
 		}
@@ -228,7 +231,7 @@ struct TBounds
 					const uint8 ChunkPositiveZ = GlobalZ == ChunkMax.Z ? Direction::Z_Positive : Direction::None;
 
 					const FGlobalVector ChunkLocation = FGlobalVector(GlobalX, GlobalY, GlobalZ);
-					const TBounds<FMortonVector> MortonBounds = GetIntersection(TBounds<FGlobalVector>(ChunkLocation, ChunkLocation+FNavMeshStatic::ChunkSize)).ToMortonSpace(ChunkLocation);
+					const FMortonBounds MortonBounds = GetIntersection(FGlobalBounds(ChunkLocation, ChunkLocation+FNavMeshStatic::ChunkSize)).ToMortonSpace(ChunkLocation);
 					Callback(ChunkLocation.ToKey(), ChunkPositiveX | ChunkPositiveY | ChunkPositiveZ, MortonBounds);
 				}
 			}
@@ -267,7 +270,7 @@ struct TBounds
 
 	// Used to check if these bounds are overlapping with another.
 	template<typename T = VectorType>
-	FORCEINLINE auto HasSimpleOverlap(const TBounds<FGlobalVector>& Other) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, bool>
+	FORCEINLINE auto HasSimpleOverlap(const FGlobalBounds& Other) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, bool>
 	{
 		return	Max.X > Other.Min.X && Min.X < Other.Max.X &&
 				Max.Y > Other.Min.Y && Min.Y < Other.Max.Y &&
@@ -275,19 +278,19 @@ struct TBounds
 	}
 
 	template<typename T = VectorType>
-	FORCEINLINE auto ToMortonSpace(const FGlobalVector& ChunkLocation) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, TBounds<FMortonVector>>
+	FORCEINLINE auto ToMortonSpace(const FGlobalVector& ChunkLocation) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, FMortonBounds>
 	{
 		const FMortonVector LocalMin = ( Min-ChunkLocation << FNavMeshStatic::VoxelSizeExponent).ToMortonVector();
 		const FMortonVector LocalMax = ((Max-ChunkLocation << FNavMeshStatic::VoxelSizeExponent) - FNavMeshStatic::SmallestNodeSize).ToMortonVector();
-		return TBounds<FMortonVector>(LocalMin, LocalMax, IsValid());
+		return FMortonBounds(LocalMin, LocalMax, IsValid());
 	}
 
 	template<typename T = VectorType>
-	FORCEINLINE auto ToGlobalSpace(const FGlobalVector& ChunkLocation) const -> std::enable_if_t<std::is_same_v<T, FMortonVector>, TBounds<FGlobalVector>>
+	FORCEINLINE auto ToGlobalSpace(const FGlobalVector& ChunkLocation) const -> std::enable_if_t<std::is_same_v<T, FMortonVector>, FGlobalBounds>
 	{
 		const FGlobalVector LocalMin = (FGlobalVector(Min) >> FNavMeshStatic::VoxelSizeExponent) + ChunkLocation;
 		const FGlobalVector LocalMax = ((FGlobalVector(Max) + FNavMeshStatic::SmallestNodeSize) >> FNavMeshStatic::VoxelSizeExponent) + ChunkLocation;
-		return TBounds<FGlobalVector>(LocalMin, LocalMax, IsValid());
+		return FGlobalBounds(LocalMin, LocalMax, IsValid());
 	}
 
 	template<typename T = VectorType>
@@ -336,8 +339,11 @@ struct TBounds
 	}
 };
 
+typedef TBounds<FGlobalVector> FGlobalBounds;
+typedef TBounds<FMortonVector> FMortonBounds;
+
 // Map associating an actor with boundaries.
-typedef ankerl::unordered_dense::map<ActorKeyType, TBounds<FGlobalVector>> FBoundsMap;
+typedef ankerl::unordered_dense::map<ActorKeyType, FGlobalBounds> FBoundsMap;
 
 /**
  * Pair of bounds for storing changes that have happened.
@@ -348,17 +354,19 @@ template<typename VectorType>
 struct TChangedBounds
 {
 	static_assert(std::is_same_v<VectorType, FGlobalVector> || std::is_same_v<VectorType, FMortonVector>, "TChangedBounds can only be instantiated with FGlobalVector or FMortonVector");
+
+	using FBounds = TBounds<VectorType>;
 	
-	TBounds<VectorType> Previous;
-	TBounds<VectorType> Current;
+	FBounds Previous;
+	FBounds Current;
 	
 
 	TChangedBounds() {}
 	
-	TChangedBounds(const TBounds<VectorType>& InPrevious, const TBounds<VectorType>& InCurrent)
+	TChangedBounds(const FBounds& InPrevious, const FBounds& InCurrent)
 		: Previous(InPrevious), Current(InCurrent) {}
 
-	TChangedBounds(const TBounds<VectorType>& InPrevious, const AActor* Actor)
+	TChangedBounds(const FBounds& InPrevious, const AActor* Actor)
 		: Previous(InPrevious), Current(Actor) {}
 
 	
@@ -369,5 +377,8 @@ struct TChangedBounds
 	}
 };
 
+typedef TChangedBounds<FGlobalVector> FChangedBounds;
+typedef TChangedBounds<FMortonVector> FChangedMortonBounds;
+
 // Map associating an actor with changed boundaries. To hold changes that have happened for multiple actors.
-typedef ankerl::unordered_dense::map<ActorKeyType, TChangedBounds<FGlobalVector>> FChangedBoundsMap;
+typedef ankerl::unordered_dense::map<ActorKeyType, FChangedBounds> FChangedBoundsMap;

@@ -59,7 +59,7 @@ void UEditorTransformObserver::OnMapOpened(const FString& Filename, bool bAsTemp
 			if (!ActorHasCollision(Actor)) continue;
 			
 			const ActorKeyType ActorID = GetTypeHash(Actor->GetActorGuid());
-			const TBounds<FGlobalVector> Bounds(Actor);
+			const FGlobalBounds Bounds(Actor);
 
 			CachedActorBounds.emplace(ActorID, Bounds);
 			CachedActors.emplace(ActorID, Actor);
@@ -86,10 +86,10 @@ void UEditorTransformObserver::OnActorSelectionChanged(const TArray<UObject*>& O
 		// If this actor is not yet in the cache, then it has just been added to the world.
 		// Add this new actor to the cache, but only if it has collision.
 		if(CachedActors.find(ActorKey) != CachedActors.end() || !ActorHasCollision(Actor)) continue;
-		const TBounds<FGlobalVector> ActorBounds(Actor);
+		const FGlobalBounds ActorBounds(Actor);
 		CachedActors.emplace(ActorKey, Actor);
 		CachedActorBounds.emplace(ActorKey, ActorBounds);
-		if(OnActorBoundsChanged.IsBound()) OnActorBoundsChanged.Execute(ActorKey, TChangedBounds(TBounds<FGlobalVector>::EmptyBounds(), ActorBounds));
+		if(OnActorBoundsChanged.IsBound()) OnActorBoundsChanged.Execute(ActorKey, TChangedBounds(FGlobalBounds::EmptyBounds(), ActorBounds));
 	}
 
 	// Loop through remaining 'previous selected actors', and check their alive state.
@@ -100,14 +100,14 @@ void UEditorTransformObserver::OnActorSelectionChanged(const TArray<UObject*>& O
 		if(Iterator == CachedActors.end() || IsValid(Iterator->second.Get())) continue;
 
 		// Get it's last stored bounds.
-		const TBounds<FGlobalVector> PreviousBounds = CachedActorBounds.find(PrevActorKey)->second;
+		const FGlobalBounds PreviousBounds = CachedActorBounds.find(PrevActorKey)->second;
 
 		// Remove this actor from the cache.
 		CachedActors.erase(PrevActorKey);
 		CachedActorBounds.erase(PrevActorKey);
 
 		// Broadcast deletion by leaving the "current" bounds empty.
-		if(OnActorBoundsChanged.IsBound()) OnActorBoundsChanged.Execute(PrevActorKey, TChangedBounds(PreviousBounds, TBounds<FGlobalVector>::EmptyBounds()));	
+		if(OnActorBoundsChanged.IsBound()) OnActorBoundsChanged.Execute(PrevActorKey, TChangedBounds(PreviousBounds, FGlobalBounds::EmptyBounds()));	
 	}
 }
 
@@ -123,19 +123,19 @@ void UEditorTransformObserver::OnPropertyChangedEvent(UObject* Object, FProperty
 	{
 		// This actor is not cached, so it either has been dropped in the viewport, or the user has triggered an "undo" operation on a deleted actor.
 		// Cache it, and broadcast the event without any "previous" bounds.
-		const TBounds<FGlobalVector> ActorBounds(Actor);
+		const FGlobalBounds ActorBounds(Actor);
 		CachedActorBounds.emplace(ActorKey, ActorBounds);
-		if(OnActorBoundsChanged.IsBound()) OnActorBoundsChanged.Execute(ActorKey, TChangedBounds(TBounds<FGlobalVector>::EmptyBounds(), ActorBounds));
+		if(OnActorBoundsChanged.IsBound()) OnActorBoundsChanged.Execute(ActorKey, TChangedBounds(FGlobalBounds::EmptyBounds(), ActorBounds));
 		return;
 	}
 
 	// The actor is already cached, so check if there is a change in it's bounds.
-	const TBounds<FGlobalVector>& StoredBounds = Iterator->second;
-	const TBounds<FGlobalVector> CurrentBounds(Actor);
+	const FGlobalBounds& StoredBounds = Iterator->second;
+	const FGlobalBounds CurrentBounds(Actor);
 	if(CurrentBounds.Equals(StoredBounds)) return;
 
 	// There is a change, so get a copy of the stored value before replacing it with the new one.
-	const TBounds<FGlobalVector> PreviousBounds = StoredBounds;
+	const FGlobalBounds PreviousBounds = StoredBounds;
 	CachedActorBounds[ActorKey] = CurrentBounds;
 
 	// Broadcast the change that happened.

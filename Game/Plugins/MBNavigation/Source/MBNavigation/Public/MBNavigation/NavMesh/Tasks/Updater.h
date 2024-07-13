@@ -10,7 +10,7 @@
 
 DECLARE_LOG_CATEGORY_EXTERN(LogNavMeshUpdater, Log, All);
 
-typedef std::pair<std::vector<TBounds<FGlobalVector>>, TBounds<FGlobalVector>> FStageType;
+typedef std::pair<std::vector<FGlobalBounds>, FGlobalBounds> FStageType;
 typedef ankerl::unordered_dense::map<ActorKeyType, FStageType> FStagedMap;
 
 
@@ -86,7 +86,7 @@ public:
 	
 	void SetWorld(const UWorld* InWorld) { World = InWorld; }
 	void StageData(const FChangedBoundsMap& BoundsPairMap);
-	void StageData(const ActorKeyType ActorKey, const TChangedBounds<FGlobalVector>& ChangedBounds);
+	void StageData(const ActorKeyType ActorKey, const FChangedBounds& ChangedBounds);
 	bool IsRunning() const { return bIsRunning; }
 	
 	virtual void Tick(float DeltaTime) override;

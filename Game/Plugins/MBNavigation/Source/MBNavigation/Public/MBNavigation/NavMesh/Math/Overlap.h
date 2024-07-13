@@ -60,6 +60,6 @@ FORCEINLINE static bool HasGeomOverlap(const FBodyInstance* BodyInstance, const 
 FORCEINLINE void DrawNodeFromMorton(const UWorld* World, const FChunk* Chunk, const NodeMortonType MortonCode, const uint8 LayerIdx, const FColor Color = FColor::Black)
 {
 	const FGlobalVector GlobalNodeLocation = FGlobalVector::FromMortonCode(MortonCode, Chunk->Location);
-	const TBounds<FGlobalVector> NodeBoundaries(GlobalNodeLocation, GlobalNodeLocation+FNavMeshStatic::NodeSizes[LayerIdx]);
+	const FGlobalBounds NodeBoundaries(GlobalNodeLocation, GlobalNodeLocation+FNavMeshStatic::NodeSizes[LayerIdx]);
 	NodeBoundaries.Draw(World, Color);
 }
