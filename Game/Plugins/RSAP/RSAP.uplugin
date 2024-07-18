@@ -1,0 +1,29 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "RSAP",
+	"Description": "Realistic Sound Attenuation and Pathfinding",
+	"Category": "Sound.Pathfinding",
+	"CreatedBy": "Melvin Brink",
+	"CreatedByURL": "https://www.melvinbrink.com",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "RSAP",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "RSAP_Editor",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
+	]
+}

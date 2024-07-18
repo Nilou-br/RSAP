@@ -1,0 +1,280 @@
+﻿// Copyright Melvin Brink 2023. All Rights Reserved.
+
+// ReSharper disable CppUE4CodingStandardNamingViolationWarning
+#pragma once
+
+#include "RSAP/Definitions.h"
+#include "RSAP/ThirdParty/LibMorton/morton.h"
+
+
+
+// Provides functionality for morton-codes.
+struct FMortonUtils
+{
+	struct Node
+	{
+		static inline constexpr node_morton Mask_X = 0b00001001001001001001001001001001;
+		static inline constexpr node_morton Mask_Y = 0b00010010010010010010010010010010;
+		static inline constexpr node_morton Mask_Z = 0b00100100100100100100100100100100;
+		
+		static inline constexpr node_morton Mask_XY = Mask_X | Mask_Y;
+		static inline constexpr node_morton Mask_XZ = Mask_X | Mask_Z;
+		static inline constexpr node_morton Mask_YZ = Mask_Y | Mask_Z;
+		
+		// Accessed using layer-index of the node you would like to get the parent of.
+		static inline constexpr node_morton LayerMasks[10] = {
+			static_cast<node_morton>(~((1 << 30) - 1)),
+			static_cast<node_morton>(~((1 << 27) - 1)),
+			static_cast<node_morton>(~((1 << 24) - 1)),
+			static_cast<node_morton>(~((1 << 21) - 1)),
+			static_cast<node_morton>(~((1 << 18) - 1)),
+			static_cast<node_morton>(~((1 << 15) - 1)),
+			static_cast<node_morton>(~((1 << 12) - 1)),
+			static_cast<node_morton>(~((1 << 9)  - 1)),
+			static_cast<node_morton>(~((1 << 6)  - 1)),
+			static_cast<node_morton>(~((1 << 3)  - 1))
+		};
+		
+		// The offsets are: 1024, 512, 256, 128, 64, 32, 16, 8, 4, 2.
+		static inline constexpr node_morton LayerOffsets[10] = {
+			
+			// These are used to offset a single axis on the morton code by a specific node-size.
+			// This only works with 'powers of 2' due to the nature of morton-codes, which is how my navmesh is build.
+		
+			// Every axis can use the same offset. This is because the offsets start at the first bit of an interleaved 'zyx' part ( the bit for 'x' ).
+			// Explanation: when masking any two axis on the morton-code, and adding any offset to this result, then the first bit to the left of the offset that is '0' will be set to '1'.
+			// The axis you are trying to add the offset to is the only one that remains unmasked, so its the only one that can have any bits set to '0'.
+			
+			1 << 30, 1 << 27, 1 << 24, 1 << 21, 1 << 18,
+			1 << 15, 1 << 12, 1 << 9,  1 << 6,  1 << 3
+		};
+		
+		// Encode the local node coordinates into a node morton-code.
+		FORCEINLINE static node_morton Encode(const uint_fast16_t X, const uint_fast16_t Y, const uint_fast16_t Z)
+		{
+			return libmorton::morton3D_32_encode(X, Y, Z);
+		}
+
+		// Decode a node's morton-code back into local node coordinates.
+		FORCEINLINE static void Decode(const node_morton NodeMorton, uint16& OutX, uint16& OutY, uint16& OutZ)
+		{
+			uint_fast16_t X, Y, Z;
+			libmorton::morton3D_32_decode(NodeMorton, X, Y, Z);
+			
+			OutX = X;
+			OutY = Y;
+			OutZ = Z;
+		}
+		
+		// Get the parent's morton-code. The layer-index is the index of the layer the parent is in.
+		FORCEINLINE static node_morton GetParent(const node_morton MortonCode, const layer_idx LayerIdx)
+		{
+			return MortonCode & LayerMasks[LayerIdx-1];
+		}
+
+		FORCEINLINE static node_morton GetChild(const node_morton ParentMortonCode, const layer_idx ChildLayerIdx, const uint8 ChildIdx)
+		{
+			switch (ChildIdx)
+			{
+				case 0: return ParentMortonCode;																// No offset.
+				case 1: return AddX(ParentMortonCode, ChildLayerIdx);											// X
+				case 2: return AddY(ParentMortonCode, ChildLayerIdx);											// Y
+				case 3: return AddX(ParentMortonCode, ChildLayerIdx) | AddY(ParentMortonCode, ChildLayerIdx);	// X+Y
+				case 4: return AddZ(ParentMortonCode, ChildLayerIdx);											// Z
+				case 5: return AddX(ParentMortonCode, ChildLayerIdx) | AddZ(ParentMortonCode, ChildLayerIdx);	// X+Z
+				case 6: return AddY(ParentMortonCode, ChildLayerIdx) | AddZ(ParentMortonCode, ChildLayerIdx);	// Y+Z
+				case 7: return Add(ParentMortonCode, ChildLayerIdx);											// X+Y+Z
+				default: return ParentMortonCode;
+			}
+		}
+
+		FORCEINLINE static std::array<node_morton, 8> GetChildren(const node_morton ParentMortonCode, const layer_idx ChildLayerIdx)
+		{
+			// todo: test performance.
+			return {
+				ParentMortonCode,
+				AddX(ParentMortonCode, ChildLayerIdx),
+				AddY(ParentMortonCode, ChildLayerIdx),
+				AddX(ParentMortonCode, ChildLayerIdx) | AddY(ParentMortonCode, ChildLayerIdx),
+				AddZ(ParentMortonCode, ChildLayerIdx),
+				AddX(ParentMortonCode, ChildLayerIdx) | AddZ(ParentMortonCode, ChildLayerIdx),
+				AddY(ParentMortonCode, ChildLayerIdx) | AddZ(ParentMortonCode, ChildLayerIdx),
+				Add(ParentMortonCode, ChildLayerIdx)
+			};
+		}
+
+		// Moves the morton-code in the given direction. The amount it moves is determined by the layer-index, which translates to the node-size for that layer.
+		FORCEINLINE static node_morton Move(const node_morton MortonCode, const layer_idx LayerIdx, const rsap_direction Direction)
+		{
+			switch (Direction) {
+				case Direction::X_Negative: return SubtractX(MortonCode, LayerIdx);
+				case Direction::Y_Negative: return SubtractY(MortonCode, LayerIdx);
+				case Direction::Z_Negative: return SubtractZ(MortonCode, LayerIdx);
+				case Direction::X_Positive: return AddX(MortonCode, LayerIdx);
+				case Direction::Y_Positive: return AddY(MortonCode, LayerIdx);
+				case Direction::Z_Positive: return AddZ(MortonCode, LayerIdx);
+				default: return MortonCode;
+			}
+		}
+
+		// Moves the morton-code in the direction, and also masks away the layers below the layer-index. Used to get the neighbour of a node in the given direction, which could also be in an upper layer.
+		FORCEINLINE static node_morton MoveAndMask(const node_morton MortonCode, const layer_idx LayerIdx, const rsap_direction Direction)
+		{
+			return Move(MortonCode, LayerIdx, Direction) & LayerMasks[LayerIdx];
+		}
+
+		// Adds the node-size of the layer-index to the X-axis.
+		FORCEINLINE static node_morton AddX(const node_morton MortonCode, const layer_idx LayerIdx)
+		{
+			const node_morton SumX = (MortonCode | Mask_YZ) + LayerOffsets[LayerIdx];
+			return SumX & Mask_X | MortonCode & Mask_YZ;
+		}
+
+		// Subtracts the node-size of the layer-index from the X-axis.
+		FORCEINLINE static node_morton SubtractX(const node_morton MortonCode, const layer_idx LayerIdx)
+		{
+			const node_morton DiffX = (MortonCode & Mask_X) - LayerOffsets[LayerIdx];
+			return DiffX & Mask_X | MortonCode & Mask_YZ;
+		}
+
+		// Adds the node-size of the layer-index to the Y-axis.
+		FORCEINLINE static node_morton AddY(const node_morton MortonCode, const layer_idx LayerIdx)
+		{
+			const node_morton SumY = (MortonCode | Mask_XZ) + LayerOffsets[LayerIdx];
+			return SumY & Mask_Y | MortonCode & Mask_XZ;
+		}
+
+		// Subtracts the node-size of the layer-index from the Y-axis.
+		FORCEINLINE static node_morton SubtractY(const node_morton MortonCode, const layer_idx LayerIdx)
+		{
+			const node_morton DiffY = (MortonCode & Mask_Y) - LayerOffsets[LayerIdx];
+			return DiffY & Mask_Y | MortonCode & Mask_XZ;
+		}
+
+		// Adds the node-size of the layer-index to the Z-axis.
+		FORCEINLINE static node_morton AddZ(const node_morton MortonCode, const layer_idx LayerIdx)
+		{
+			const node_morton SumZ = (MortonCode | Mask_XY) + LayerOffsets[LayerIdx];
+			return SumZ & Mask_Z | MortonCode & Mask_XY;
+		}
+
+		// Subtracts the node-size of the layer-index from the Z-axis.
+		FORCEINLINE static node_morton SubtractZ(const node_morton MortonCode, const layer_idx LayerIdx)
+		{
+			const node_morton DiffZ = (MortonCode & Mask_Z) - LayerOffsets[LayerIdx];
+			return DiffZ & Mask_Z | MortonCode & Mask_XY;
+		}
+
+		// Adds the node-size of the layer-index to all axis.
+		FORCEINLINE static node_morton Add(const node_morton MortonCode, const layer_idx LayerIdx)
+		{
+			const node_morton SumX = (MortonCode | Mask_YZ) + LayerOffsets[LayerIdx];
+			const node_morton SumY = (MortonCode | Mask_XZ) + LayerOffsets[LayerIdx];
+			const node_morton SumZ = (MortonCode | Mask_XY) + LayerOffsets[LayerIdx];
+			return SumX & Mask_X | SumY & Mask_Y | SumZ & Mask_Z;
+		}
+
+		// Subtracts the node-size of the layer-index from all axis.
+		FORCEINLINE static node_morton Subtract(const node_morton MortonCode, const layer_idx LayerIdx)
+		{
+			const node_morton DiffX = (MortonCode & Mask_X) - LayerOffsets[LayerIdx];
+			const node_morton DiffY = (MortonCode & Mask_Y) - LayerOffsets[LayerIdx];
+			const node_morton DiffZ = (MortonCode & Mask_Z) - LayerOffsets[LayerIdx];
+			return DiffX & Mask_X | DiffY & Mask_Y | DiffZ & Mask_Z;
+		}
+	};
+
+
+	
+	struct Chunk
+	{
+		static inline constexpr chunk_morton Mask_X = 0b0001001001001001001001001001001001001001001001001001001001001001;
+		static inline constexpr chunk_morton Mask_Y = 0b0010010010010010010010010010010010010010010010010010010010010010;
+		static inline constexpr chunk_morton Mask_Z = 0b0100100100100100100100100100100100100100100100100100100100100100;
+
+		static inline constexpr chunk_morton Mask_XY = Mask_X | Mask_Y;
+		static inline constexpr chunk_morton Mask_XZ = Mask_X | Mask_Z;
+		static inline constexpr chunk_morton Mask_YZ = Mask_Y | Mask_Z;
+		
+		static inline constexpr uint32 EncodeDecodeOffset = 1073741312; // To convert between morton-space and global-space for a chunk.
+		
+		// Encode the global world coordinates into a chunk morton-code. Max range from -1073741312 to +1073741312.
+		FORCEINLINE static chunk_morton Encode(const int32 X, const int32 Y, const int32 Z) // todo: test these
+		{
+			// Because a chunk has a minimum size, the last x amount of bits are all set to 0.
+			// So we can apply a bit-shift to "compress" this value, which makes it fit into a 64 bit morton-code.
+			const uint_fast32_t InX = (X + EncodeDecodeOffset) << RsapStatic::ChunkKeyShift;
+			const uint_fast32_t InY = (Y + EncodeDecodeOffset) << RsapStatic::ChunkKeyShift;
+			const uint_fast32_t InZ = (Z + EncodeDecodeOffset) << RsapStatic::ChunkKeyShift;
+			
+			return libmorton::morton3D_64_encode(InX, InY, InZ);
+		}
+
+		// Decode a chunk's morton-code back into global world coordinates.
+		FORCEINLINE static void Decode(const chunk_morton ChunkMorton, int32& OutX, int32& OutY, int32& OutZ)
+		{
+			uint_fast32_t X, Y, Z;
+			libmorton::morton3D_64_decode(ChunkMorton, X, Y, Z);
+			
+			OutX = (X >> RsapStatic::ChunkKeyShift) - EncodeDecodeOffset;
+			OutY = (Y >> RsapStatic::ChunkKeyShift) - EncodeDecodeOffset;
+			OutZ = (Z >> RsapStatic::ChunkKeyShift) - EncodeDecodeOffset;
+		}
+		
+		// Moves the morton-code exactly one chunk in the given direction.
+		FORCEINLINE static chunk_morton Move(const chunk_morton MortonCode, const rsap_direction Direction)
+		{
+			switch (Direction) {
+				case Direction::X_Negative: return SubtractX(MortonCode);
+				case Direction::Y_Negative: return SubtractY(MortonCode);
+				case Direction::Z_Negative: return SubtractZ(MortonCode);
+				case Direction::X_Positive: return AddX(MortonCode);
+				case Direction::Y_Positive: return AddY(MortonCode);
+				case Direction::Z_Positive: return AddZ(MortonCode);
+				default: return MortonCode;
+			}
+		}
+
+		// Moves one chunk positively along the X-axis.
+		FORCEINLINE static chunk_morton AddX(const chunk_morton MortonCode)
+		{
+			const chunk_morton SumX = (MortonCode | Mask_YZ) + 1;
+			return SumX & Mask_X | MortonCode & Mask_YZ;
+		}
+
+		// Moves one chunk negatively along the X-axis.
+		FORCEINLINE static chunk_morton SubtractX(const chunk_morton MortonCode)
+		{
+			const chunk_morton DiffX = (MortonCode & Mask_X) - 1;
+			return DiffX & Mask_X | MortonCode & Mask_YZ;
+		}
+
+		// Moves one chunk positively along the Y-axis.
+		FORCEINLINE static chunk_morton AddY(const chunk_morton MortonCode)
+		{
+			const chunk_morton SumY = (MortonCode | Mask_XZ) + 1;
+			return SumY & Mask_Y | MortonCode & Mask_XZ;
+		}
+
+		// Moves one chunk negatively along the Y-axis.
+		FORCEINLINE static chunk_morton SubtractY(const chunk_morton MortonCode)
+		{
+			const chunk_morton DiffY = (MortonCode & Mask_Y) - 1;
+			return DiffY & Mask_Y | MortonCode & Mask_XZ;
+		}
+
+		// Moves one chunk positively along the Z-axis.
+		FORCEINLINE static chunk_morton AddZ(const chunk_morton MortonCode)
+		{
+			const chunk_morton SumZ = (MortonCode | Mask_XY) + 1;
+			return SumZ & Mask_Z | MortonCode & Mask_XY;
+		}
+
+		// Moves one chunk negatively along the Z-axis.
+		FORCEINLINE static chunk_morton SubtractZ(const chunk_morton MortonCode)
+		{
+			const chunk_morton DiffZ = (MortonCode & Mask_Z) - 1;
+			return DiffZ & Mask_Z | MortonCode & Mask_XY;
+		}
+	};
+};
