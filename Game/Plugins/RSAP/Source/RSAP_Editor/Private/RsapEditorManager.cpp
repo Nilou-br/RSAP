@@ -1,9 +1,9 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-
-#include "..\Public\RsapEditorManager.h"
-#include "..\Public\NavMesh\RsapDebugger.h"
-#include "..\Public\NavMesh\RsapEditorUpdater.h"
+#include "RSAP_Editor/Public/RsapEditorManager.h"
+#include "RSAP_Editor/Public/RsapEditorEvents.h"
+#include "RSAP_Editor/Public/NavMesh/RsapDebugger.h"
+#include "RSAP_Editor/Public/NavMesh/RsapEditorUpdater.h"
 #include "RSAP/NavMesh/Types/Serialize.h"
 #include "UObject/ObjectSaveContext.h"
 #include "Engine/World.h"
@@ -19,6 +19,9 @@ void URsapEditorManager::Initialize(FSubsystemCollectionBase& Collection)
 	NavMeshUpdater = new FRsapEditorUpdater();
 	NavMeshDebugger = new FRsapDebugger();
 
+	FRsapEditorEvents::OnMapOpened.BindUObject(this, &ThisClass::OnMapOpened);
+
+	return;
 	OnMapLoadDelegateHandle = FEditorDelegates::OnMapLoad.AddUObject(this, &ThisClass::OnMapLoad);
 	PreSaveWorldDelegateHandle = FEditorDelegates::PreSaveWorldWithContext.AddUObject(this, &ThisClass::PreWorldSaved);
 	PostSaveWorldDelegateHandle = FEditorDelegates::PostSaveWorldWithContext.AddUObject(this, &ThisClass::PostWorldSaved);
@@ -30,6 +33,10 @@ void URsapEditorManager::Initialize(FSubsystemCollectionBase& Collection)
 
 void URsapEditorManager::Deinitialize()
 {
+	FRsapEditorEvents::OnMapOpened.Unbind();
+	
+	Super::Deinitialize();
+	return;
 	FEditorDelegates::OnMapLoad.Remove(OnMapLoadDelegateHandle); OnMapLoadDelegateHandle.Reset();
 	FEditorDelegates::PreSaveWorldWithContext.Remove(PreSaveWorldDelegateHandle); PreSaveWorldDelegateHandle.Reset();
 	FEditorDelegates::PostSaveWorldWithContext.Remove(PostSaveWorldDelegateHandle); PostSaveWorldDelegateHandle.Reset();
@@ -98,6 +105,11 @@ void URsapEditorManager::UpdateDebugSettings (
 	NavMeshDebugger->Draw();
 }
 
+void URsapEditorManager::OnMapOpened(const FActorBoundsMap& ActorBoundsMap)
+{
+	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnMapOpened"))
+}
+
 void URsapEditorManager::OnMapLoad(const FString& Filename, FCanLoadMap& OutCanLoadMap)
 {
 	// LevelSettings = nullptr;
@@ -105,7 +117,7 @@ void URsapEditorManager::OnMapLoad(const FString& Filename, FCanLoadMap& OutCanL
 	// NavMesh->clear();
 }
 
-void URsapEditorManager::OnLevelActorsInitialized(const FBoundsMap& BoundsMap)
+void URsapEditorManager::OnLevelActorsInitialized(const FActorBoundsMap& BoundsMap)
 {
 	EditorWorld = GEditor->GetEditorWorldContext().World();
 	NavMeshUpdater->SetWorld(EditorWorld);

@@ -352,7 +352,7 @@ typedef std::pair<std::vector<FGlobalBounds>, FGlobalBounds> FUpdatedBoundsType;
 typedef ankerl::unordered_dense::map<actor_key, std::pair<std::vector<FGlobalBounds>, FGlobalBounds>> FUpdatedActorMap;
 
 // Map associating an actor with boundaries.
-typedef ankerl::unordered_dense::map<actor_key, FGlobalBounds> FBoundsMap;
+typedef ankerl::unordered_dense::map<actor_key, FGlobalBounds> FActorBoundsMap;
 
 /**
  * Pair of bounds for storing changes that have happened.

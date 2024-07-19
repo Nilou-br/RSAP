@@ -3,7 +3,6 @@
 #pragma once
 
 #include "RSAP/LevelSettings.h"
-#include "RsapEditorEvents.h"
 #include "RSAP/NavMesh/Types/Chunk.h"
 #include "RsapEditorManager.generated.h"
 
@@ -54,9 +53,12 @@ private:
 	FNavMesh NavMesh;
 	FRsapEditorUpdater* NavMeshUpdater;
 	FRsapDebugger* NavMeshDebugger;
-	
+
+	FDelegateHandle OnMapOpenedHandle; void OnMapOpened(const FActorBoundsMap& ActorBoundsMap);
+
+	// Old
 	FDelegateHandle OnMapLoadDelegateHandle; void OnMapLoad(const FString& Filename, FCanLoadMap& OutCanLoadMap);
-	FDelegateHandle OnLevelActorsInitializedDelegateHandle; void OnLevelActorsInitialized(const FBoundsMap& BoundsMap);
+	FDelegateHandle OnLevelActorsInitializedDelegateHandle; void OnLevelActorsInitialized(const FActorBoundsMap& BoundsMap);
 	FDelegateHandle PreSaveWorldDelegateHandle; void PreWorldSaved(UWorld* World, FObjectPreSaveContext ObjectPreSaveContext);
 	FDelegateHandle PostSaveWorldDelegateHandle; void PostWorldSaved(UWorld* World, FObjectPostSaveContext ObjectSaveContext);
 	FDelegateHandle OnCameraMovedDelegateHandle; void OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation, ELevelViewportType LevelViewportType, int32) const;

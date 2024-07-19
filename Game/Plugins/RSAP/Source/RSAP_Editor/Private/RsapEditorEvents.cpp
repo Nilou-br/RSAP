@@ -5,9 +5,23 @@
 #include "Kismet/GameplayStatics.h"
 
 
+// Static member definitions.
+
+FRsapEditorEvents::FOnMapOpened FRsapEditorEvents::OnMapOpened;
+FRsapEditorEvents::FOnActorMoved FRsapEditorEvents::OnActorMoved;
+
+FRsapEditorEvents::FActorMap FRsapEditorEvents::CachedActors;
+FActorBoundsMap FRsapEditorEvents::CachedActorBounds;
+std::vector<actor_key> FRsapEditorEvents::SelectedActors;
+
+FDelegateHandle FRsapEditorEvents::MapOpenedHandle;
+FDelegateHandle FRsapEditorEvents::OnActorSelectionChangedDelegateHandle;
+FDelegateHandle FRsapEditorEvents::OnPropertyChangedDelegateHandle;
+
+
 
 // Returns true if the actor has any component with collision.
-bool FRsapEditorEvents::ActorHasCollisionComponent(const AActor* Actor) const
+bool FRsapEditorEvents::ActorHasCollisionComponent(const AActor* Actor)
 {
 	// Check all components of this actor for if they have collision enabled.
 	for (UActorComponent* Component : Actor->K2_GetComponentsByClass(UPrimitiveComponent::StaticClass()))
@@ -19,35 +33,6 @@ bool FRsapEditorEvents::ActorHasCollisionComponent(const AActor* Actor) const
 		}
 	}
 	return false;
-}
-
-void FRsapEditorEvents::OnMapOpened(const FString& Filename, bool bAsTemplate)
-{
-	// Static-mesh actors are initialized next frame. (FWorldDelegates::OnWorldInitializedActors event also doesn't have them initialized for some reason.)
-	GEditor->GetEditorWorldContext().World()->GetTimerManager().SetTimerForNextTick([&]()
-	{
-		// For some reason, we need to get a new world from the editor-context because the previous one used for the Next-Tick is a different world?
-		const UWorld* EditorWorld = GEditor->GetEditorWorldContext().World();
-		
-		// Get all the static-mesh actors.
-		TArray<AActor*> FoundActors; UGameplayStatics::GetAllActorsOfClass(EditorWorld, AStaticMeshActor::StaticClass(), FoundActors);
-
-		// Cache all of their boundaries.
-		for (AActor* Actor : FoundActors)
-		{
-			// Skip the actors that don't have any collision.
-			if (!ActorHasCollisionComponent(Actor)) continue;
-			
-			const actor_key ActorID = GetTypeHash(Actor->GetActorGuid());
-			const FGlobalBounds Bounds(Actor);
-
-			CachedActorBounds.emplace(ActorID, Bounds);
-			CachedActors.emplace(ActorID, Actor);
-		}
-
-		// Notify that the actors are ready.
-		// if(OnLevelActorsInitialized.IsBound()) OnLevelActorsInitialized.Execute(CachedActorBounds);
-	});
 }
 
 void FRsapEditorEvents::OnActorSelectionChanged(const TArray<UObject*>& Objects, bool)
@@ -130,23 +115,43 @@ void FRsapEditorEvents::OnPropertyChangedEvent(UObject* Object, FPropertyChanged
 
 void FRsapEditorEvents::Initialize()
 {
-	if (Instance) return;
-	Instance = new FRsapEditorEvents;
-
-	// Bind events
-	// OnMapOpenedDelegateHandle = FEditorDelegates::OnMapOpened.AddUObject(this, &ThisClass::OnMapOpened);
+	MapOpenedHandle = FEditorDelegates::OnMapOpened.AddStatic(&FRsapEditorEvents::HandleMapOpened);
 	// OnActorSelectionChangedDelegateHandle = FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor").OnActorSelectionChanged().AddUObject(this, &ThisClass::OnActorSelectionChanged);
 	// OnPropertyChangedDelegateHandle = FCoreUObjectDelegates::OnObjectPropertyChanged.AddUObject(this, &ThisClass::OnPropertyChangedEvent);
 }
 
 void FRsapEditorEvents::Deinitialize()
 {
-	if(!Instance) return;
-	
-	// Unbind events
-	// FEditorDelegates::OnMapOpened.Remove(OnMapOpenedDelegateHandle); OnMapOpenedDelegateHandle.Reset();
+	FEditorDelegates::OnMapOpened.Remove(MapOpenedHandle); MapOpenedHandle.Reset();
 	// FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor").OnActorSelectionChanged().Remove(OnActorSelectionChangedDelegateHandle); OnActorSelectionChangedDelegateHandle.Reset();
 	// FCoreUObjectDelegates::OnObjectPropertyChanged.Remove(OnPropertyChangedDelegateHandle); OnPropertyChangedDelegateHandle.Reset();
+}
 
-	delete Instance;
+void FRsapEditorEvents::HandleMapOpened(const FString& Filename, bool bAsTemplate)
+{
+	// Static-mesh actors are initialized next frame. (FWorldDelegates::OnWorldInitializedActors event also doesn't have them initialized for some reason.)
+	GEditor->GetEditorWorldContext().World()->GetTimerManager().SetTimerForNextTick([&]()
+	{
+		// For some reason, we need to get a new world from the editor-context because the previous one used for the Next-Tick is a different world?
+		const UWorld* EditorWorld = GEditor->GetEditorWorldContext().World();
+		
+		// Get all the static-mesh actors.
+		TArray<AActor*> FoundActors; UGameplayStatics::GetAllActorsOfClass(EditorWorld, AStaticMeshActor::StaticClass(), FoundActors);
+
+		// Cache all of their boundaries.
+		for (AActor* Actor : FoundActors)
+		{
+			// Skip the actors that don't have any collision.
+			if (!ActorHasCollisionComponent(Actor)) continue;
+			
+			const actor_key ActorID = GetTypeHash(Actor->GetActorGuid());
+			const FGlobalBounds Bounds(Actor);
+
+			CachedActorBounds.emplace(ActorID, Bounds);
+			CachedActors.emplace(ActorID, Actor);
+		}
+
+		// Notify that the actors are ready.
+		if(OnMapOpened.IsBound()) OnMapOpened.Execute(CachedActorBounds);
+	});
 }

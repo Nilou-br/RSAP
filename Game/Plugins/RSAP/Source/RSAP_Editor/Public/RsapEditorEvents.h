@@ -8,36 +8,40 @@
 
 
 
+/**
+ * Provides easy to read events to be used by the editor manager.
+ */
 class FRsapEditorEvents
 {
+	typedef ankerl::unordered_dense::map<actor_key, TWeakObjectPtr<const AActor>> FActorMap;
+	
 	struct FCachedActor
 	{
 		TWeakObjectPtr<const AActor> ActorPtr;
 		FGlobalBounds Bounds;
 	};
 	
-	DECLARE_DELEGATE_OneParam(FOnLevelActorsInitialized, const FBoundsMap&);
-	DECLARE_DELEGATE_TwoParams(FOnActorBoundsChanged, const actor_key, const FChangedBounds&);
+	DECLARE_DELEGATE_OneParam(FOnMapOpened, const FActorBoundsMap& /*, levelname (for serialize) */);
+	// DECLARE_DELEGATE_OneParam(FOnLevelClosed);
+	DECLARE_DELEGATE_TwoParams(FOnActorMoved, const actor_key, const FChangedBounds&);
 
 public:
 	static void Initialize();
 	static void Deinitialize();
 
-	static FOnLevelActorsInitialized OnLevelActorsInitialized;
-	static FOnActorBoundsChanged OnActorBoundsChanged;
+	static FOnMapOpened OnMapOpened;
+	static FOnActorMoved OnActorMoved;
 	
-	FORCEINLINE FBoundsMap& GetLevelActorBounds(){ return CachedActorBounds; }
+	FORCEINLINE static FActorBoundsMap& GetLevelActorBounds(){ return CachedActorBounds; }
 	
 private:
-	static inline FRsapEditorEvents* Instance = nullptr;
+	FORCEINLINE static bool ActorHasCollisionComponent(const AActor* Actor);
 	
-	FORCEINLINE bool ActorHasCollisionComponent(const AActor* Actor) const;
+	static FActorMap CachedActors;
+	static FActorBoundsMap CachedActorBounds; // Easier to manage when stored separately.
+	static std::vector<actor_key> SelectedActors;
 	
-	ankerl::unordered_dense::map<actor_key, TWeakObjectPtr<const AActor>> CachedActors; // For finding an actor using its ID.
-	FBoundsMap CachedActorBounds; // Easier to manage when stored separately.
-	std::vector<actor_key> SelectedActors;
-	
-	FDelegateHandle OnMapOpenedDelegateHandle; void OnMapOpened(const FString& Filename, bool bAsTemplate);
-	FDelegateHandle OnActorSelectionChangedDelegateHandle; void OnActorSelectionChanged(const TArray<UObject*>& Objects, bool);
-	FDelegateHandle OnPropertyChangedDelegateHandle; void OnPropertyChangedEvent(UObject* Object, FPropertyChangedEvent& PropertyChangedEvent);
+	static FDelegateHandle MapOpenedHandle; static void HandleMapOpened(const FString& Filename, bool bAsTemplate);
+	static FDelegateHandle OnActorSelectionChangedDelegateHandle; void OnActorSelectionChanged(const TArray<UObject*>& Objects, bool);
+	static FDelegateHandle OnPropertyChangedDelegateHandle; void OnPropertyChangedEvent(UObject* Object, FPropertyChangedEvent& PropertyChangedEvent);
 };

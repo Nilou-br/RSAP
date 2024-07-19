@@ -10,7 +10,7 @@
 //
 //
 //
-// // void FNavMeshGenerator::Generate(const FBoundsMap& BoundsMap)
+// // void FNavMeshGenerator::Generate(const FActorBoundsMap& BoundsMap)
 // // {
 // // 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("NavMesh Generate");
 // // 	if (!World)
@@ -39,7 +39,7 @@
 //  * Create a grid of chunks filling the entire area of the level-boundaries.
 //  * Chunks are be placed so that their origin align with the world coordinates x0,y0,z0.
 //  */
-// void GenerateChunks(const FBoundsMap& BoundsMap)
+// void GenerateChunks(const FActorBoundsMap& BoundsMap)
 // {
 // 	// Get all the chunks.
 // 	std::set<chunk_morton> ChunkMortonCodes;
