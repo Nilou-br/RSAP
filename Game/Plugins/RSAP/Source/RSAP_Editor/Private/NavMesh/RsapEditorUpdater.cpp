@@ -1,24 +1,39 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-#include "..\..\Public\NavMesh\RsapEditorUpdater.h"
+#include "RSAP_Editor/Public/NavMesh/RsapEditorUpdater.h"
 #include "RSAP/Definitions.h"
 #include "RSAP/Math/Bounds.h"
 #include <set>
 
+// Static definition
+FRsapEditorUpdater::FOnUpdateComplete FRsapEditorUpdater::OnUpdateComplete;
 
 
-void FRsapEditorUpdater::StageData(const FChangedBoundsMap& BoundsPairMap)
+
+// Takes in a map of actors and their current bounds.
+void FRsapEditorUpdater::StageData(const FActorBoundsMap& ActorBoundsMap)
 {
-	for (const auto& [ActorKey, ChangedBounds] : BoundsPairMap)
+	for (const auto& [ActorKey, Bounds] : ActorBoundsMap)
 	{
-		StageData(ActorKey, ChangedBounds);
+		// Simply create pass an instance of FMovedBounds where the 'from' bounds is empty/invalid.
+		StageData(ActorKey, FMovedBounds(FGlobalBounds::EmptyBounds(), Bounds));
 	}
 }
 
-void FRsapEditorUpdater::StageData(const actor_key ActorKey, const FChangedBounds& ChangedBounds)
+// Stages the movement of multiple actors.
+void FRsapEditorUpdater::StageData(const FMovedBoundsMap& MovedBoundsMap)
 {
-	auto Iterator = UpdatedActorMap.find(ActorKey);
-	if(Iterator == UpdatedActorMap.end()) std::tie(Iterator, std::ignore) = UpdatedActorMap.emplace(ActorKey, FUpdatedBoundsType({ChangedBounds.Previous}, ChangedBounds.Current));
+	for (const auto& [ActorKey, MovedBounds] : MovedBoundsMap)
+	{
+		StageData(ActorKey, MovedBounds);
+	}
+}
+
+// Stages a single actor's movement.
+void FRsapEditorUpdater::StageData(const actor_key ActorKey, const FMovedBounds& MovedBounds)
+{
+	auto Iterator = StagedActorBoundaries.find(ActorKey);
+	if(Iterator == StagedActorBoundaries.end()) std::tie(Iterator, std::ignore) = StagedActorBoundaries.emplace(ActorKey, FNavMeshUpdateType({MovedBounds.From}, MovedBounds.To));
 
 	// Explanation why the actors are staged like this:
 	// If this actor is already staged, then it means that the actor has its transform updated for another frame while the updater was still running asynchronously.
@@ -31,13 +46,8 @@ void FRsapEditorUpdater::StageData(const actor_key ActorKey, const FChangedBound
 	// So when this next update finishes, it will immediately start a new one with the newest "current" bounds around the actor.
 	
 	auto& [PreviousBoundsList, CurrentBounds] = Iterator->second;
-	PreviousBoundsList.emplace_back(ChangedBounds.Previous);
-	CurrentBounds = ChangedBounds.Current;
-}
-
-void FRsapEditorUpdater::Tick(float DeltaTime)
-{
-	if(!IsRunning() && UpdatedActorMap.size()) Update();
+	PreviousBoundsList.emplace_back(MovedBounds.From);
+	CurrentBounds = MovedBounds.To;
 }
 
 // Starts a new update task, which will clear any accumulated staged-data, and use it for the update.
@@ -49,13 +59,17 @@ void FRsapEditorUpdater::Update()
 		// Broadcast the completion on the game-thread.
 		FFunctionGraphTask::CreateAndDispatchWhenReady([this]()
 		{
-			UE_LOG(LogTemp, Log, TEXT("Navmesh has been updated."));
-			bIsRunning = false;
-			if(OnNavMeshUpdatedDelegate.IsBound()) OnNavMeshUpdatedDelegate.Execute();
+			delete UpdateTask;
+			bIsRunningTask = false;
+			OnUpdateComplete.Broadcast();
 		}, TStatId(), nullptr, ENamedThreads::GameThread);
 	});
 
-	UE_LOG(LogTemp, Log, TEXT("Starting navmesh update..."));
-	bIsRunning = true;
-	UpdateTask = new FRsapEditorUpdateTask(Promise, GEditor->GetEditorWorldContext().World(), NavMesh, UpdatedActorMap); // todo clear this variable after completion ??
+	bIsRunningTask = true;
+	UpdateTask = new FRsapEditorUpdateTask(Promise, GEditor->GetEditorWorldContext().World(), NavMesh, StagedActorBoundaries);
+}
+
+void FRsapEditorUpdater::Tick(float DeltaTime)
+{
+	if(!IsRunningTask() && StagedActorBoundaries.size()) Update();
 }

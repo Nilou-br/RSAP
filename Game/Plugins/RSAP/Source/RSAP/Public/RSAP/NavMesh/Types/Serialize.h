@@ -97,7 +97,7 @@ RSAP_API inline void SerializeNavMesh(FNavMeshType& NavMesh, FGuid& ID)
 	FArchive* FileArchive = IFileManager::Get().CreateFileWriter(*FilePath);
 	if (!FileArchive)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Failed to save navmesh data to file: '%s'. Please contact plugin author if this keeps occurring."), *FilePath);
+		UE_LOG(LogRsap, Error, TEXT("Failed to save the sound-navigation-mesh. Please contact plugin author if this keeps occurring."));
 		return;
 	}
 
@@ -109,13 +109,11 @@ RSAP_API inline void SerializeNavMesh(FNavMeshType& NavMesh, FGuid& ID)
 
 RSAP_API inline bool DeserializeNavMesh(FNavMeshType& OutNavMesh, FGuid& OutID)
 {
+	OutNavMesh.clear();
+	
 	const FString FilePath = FPaths::ProjectSavedDir() / TEXT("NavMeshData.bin");
 	FArchive* FileArchive = IFileManager::Get().CreateFileReader(*FilePath);
-	if (!FileArchive)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Failed to load navmesh data from file: '%s'. Please contact plugin author if this keeps occurring."), *FilePath);
-		return false;
-	}
+	if (!FileArchive) return false;
 
 	*FileArchive << OutID;
 	*FileArchive << OutNavMesh;

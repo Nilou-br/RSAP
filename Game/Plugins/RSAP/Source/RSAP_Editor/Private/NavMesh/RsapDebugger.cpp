@@ -18,7 +18,7 @@ FString To6BitBinaryString(const uint8 Value) {
 	return FString(BinaryString.substr(2, 6).c_str());
 }
 
-void FRsapDebugger::Draw() const
+void FRsapDebugger::Draw(const UWorld* World) const
 {
 	FVector CameraLocation;
 	FRotator CameraRotation;
@@ -47,10 +47,10 @@ void FRsapDebugger::Draw() const
 		CameraRotation = CameraManager->GetCameraRotation();
 	}
 	
-	Draw(CameraLocation, CameraRotation);
+	Draw(World, CameraLocation, CameraRotation);
 }
 
-void FRsapDebugger::Draw(const FVector& CameraLocation, const FRotator& CameraRotation) const
+void FRsapDebugger::Draw(const UWorld* World, const FVector& CameraLocation, const FRotator& CameraRotation) const
 {
 	if(!NavMesh || !DebugSettings.bEnabled) return;
 
@@ -58,10 +58,10 @@ void FRsapDebugger::Draw(const FVector& CameraLocation, const FRotator& CameraRo
 	FlushDebugStrings(World);
 	
 	const FVector CameraForwardVector = FRotationMatrix(CameraRotation).GetUnitAxis(EAxis::X);
-	DrawNodes(CameraLocation, CameraForwardVector);
+	DrawNodes(World, CameraLocation, CameraForwardVector);
 }
 
-void FRsapDebugger::DrawNodes(const FVector& CameraLocation, const FVector& CameraForwardVector) const
+void FRsapDebugger::DrawNodes(const UWorld* World, const FVector& CameraLocation, const FVector& CameraForwardVector) const
 {
 	// Get x amount of chunks around camera.
 	const FGlobalVector CameraChunkLocation = FGlobalVector::FromVector(CameraLocation) & RsapStatic::ChunkMask;
@@ -95,12 +95,12 @@ void FRsapDebugger::DrawNodes(const FVector& CameraLocation, const FVector& Came
 		if(	DebugSettings.bDisplayNodes || DebugSettings.bDisplayPaths ||
 			DebugSettings.bDisplayRelations || DebugSettings.bDisplayNodeBorder)
 		{
-			RecursiveDrawNodes(Chunk, 0, 0, CameraLocation, CameraForwardVector);
+			RecursiveDrawNodes(World, Chunk, 0, 0, CameraLocation, CameraForwardVector);
 		}
 	}
 }
 
-void FRsapDebugger::RecursiveDrawNodes(const FChunk* Chunk, const node_morton MortonCode, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector) const
+void FRsapDebugger::RecursiveDrawNodes(const UWorld* World, const FChunk* Chunk, const node_morton MortonCode, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector) const
 {
 	const auto NodeIterator = Chunk->Octrees[0]->Layers[LayerIdx]->find(MortonCode);
 	if(NodeIterator == Chunk->Octrees[0]->Layers[LayerIdx]->end()) return;
@@ -186,6 +186,6 @@ void FRsapDebugger::RecursiveDrawNodes(const FChunk* Chunk, const node_morton Mo
 		const uint_fast16_t ChildX = NodeMortonLocation.X + (ChildIdx & 1 ? ChildMortonOffset : 0);
 		const uint_fast16_t ChildY = NodeMortonLocation.Y + (ChildIdx & 2 ? ChildMortonOffset : 0);
 		const uint_fast16_t ChildZ = NodeMortonLocation.Z + (ChildIdx & 4 ? ChildMortonOffset : 0);
-		RecursiveDrawNodes(Chunk, FNodeVector::ToNodeMorton(ChildX, ChildY, ChildZ), ChildLayerIndex, CameraLocation, CameraForwardVector);
+		RecursiveDrawNodes(World, Chunk, FNodeVector::ToNodeMorton(ChildX, ChildY, ChildZ), ChildLayerIndex, CameraLocation, CameraForwardVector);
 	}
 }

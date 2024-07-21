@@ -30,8 +30,6 @@ protected:
 
 private:
 	void LoadLevelSettings();
-	void SaveNavMesh() const;
-	void OnNavMeshUpdated() const;
 	
 public:
 	UFUNCTION(BlueprintCallable, Category="Rsap | Navigation Mesh")
@@ -49,18 +47,19 @@ public:
 private:
 	UPROPERTY() const UWorld* EditorWorld;
 	UPROPERTY() URsapLevelSettings* LevelSettings;
-
+	
 	FNavMesh NavMesh;
 	FRsapEditorUpdater* NavMeshUpdater;
 	FRsapDebugger* NavMeshDebugger;
 
-	FDelegateHandle OnMapOpenedHandle; void OnMapOpened(const FActorBoundsMap& ActorBoundsMap);
+	void OnMapOpened(const FActorBoundsMap& ActorBoundsMap);
+	void PreMapSaved();
+	
+	void OnActorMoved(const actor_key ActorKey, const FMovedBounds& MovedBounds);
+	void OnActorAdded(const actor_key ActorKey, const FGlobalBounds& Bounds);
+	void OnActorDeleted(const actor_key ActorKey, const FGlobalBounds& Bounds);
 
-	// Old
-	FDelegateHandle OnMapLoadDelegateHandle; void OnMapLoad(const FString& Filename, FCanLoadMap& OutCanLoadMap);
-	FDelegateHandle OnLevelActorsInitializedDelegateHandle; void OnLevelActorsInitialized(const FActorBoundsMap& BoundsMap);
-	FDelegateHandle PreSaveWorldDelegateHandle; void PreWorldSaved(UWorld* World, FObjectPreSaveContext ObjectPreSaveContext);
-	FDelegateHandle PostSaveWorldDelegateHandle; void PostWorldSaved(UWorld* World, FObjectPostSaveContext ObjectSaveContext);
-	FDelegateHandle OnCameraMovedDelegateHandle; void OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation, ELevelViewportType LevelViewportType, int32) const;
-	FDelegateHandle OnActorBoundsChangedDelegateHandle; void OnActorBoundsChanged(const actor_key ActorKey, const FChangedBounds& ChangedBounds);
+	void OnNavMeshUpdated() const;
+
+	void OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation) const;
 };

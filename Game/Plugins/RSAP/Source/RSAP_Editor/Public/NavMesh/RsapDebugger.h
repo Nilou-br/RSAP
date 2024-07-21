@@ -25,17 +25,15 @@ class FRsapDebugger
 public:
 	explicit FRsapDebugger(){}
 	
-	void SetWorld(const UWorld* InWorld) { World = InWorld; }
-	void Draw() const;
-	void Draw(const FVector& CameraLocation, const FRotator& CameraRotation) const;
+	void Draw(const UWorld* World) const;
+	void Draw(const UWorld* World, const FVector& CameraLocation, const FRotator& CameraRotation) const;
 	void UpdateSettings(const FRsapDebugSettings InDebugSettings){ DebugSettings = InDebugSettings;	}
 
 private:
-	void DrawNodes(const FVector& CameraLocation, const FVector& CameraForwardVector) const;
-	void RecursiveDrawNodes(const FChunk* Chunk, const node_morton MortonCode, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector) const;
+	void DrawNodes(const UWorld* World, const FVector& CameraLocation, const FVector& CameraForwardVector) const;
+	void RecursiveDrawNodes(const UWorld* World, const FChunk* Chunk, const node_morton MortonCode, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector) const;
 
 	FNavMesh NavMesh;
-	const UWorld* World = nullptr;
 
 	static inline constexpr FColor LayerColors[10] = {
 		{255, 0, 0},       // Red

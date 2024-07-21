@@ -47,7 +47,7 @@ struct TBounds
 		if(Max.Z == Min.Z) ++Max.Z;
 	}
 
-	// Returns a bounds object that has no dimensions and is set to be invalid. Used within the TChangedBounds type to know it will be ignored.
+	// Returns a bounds object that has no dimensions and is set to be invalid. Used within the TMovedBounds type to know it will be ignored.
 	static TBounds<VectorType> EmptyBounds()
 	{
 		return TBounds<VectorType>();
@@ -347,11 +347,13 @@ struct TBounds
 typedef TBounds<FGlobalVector> FGlobalBounds;
 typedef TBounds<FNodeVector> FMortonBounds;
 
-// Map storing the changed boundaries for each actor. The first in the pair is a list of previous known bounds for the actor, and the second is the current bounds for the actor.
-typedef std::pair<std::vector<FGlobalBounds>, FGlobalBounds> FUpdatedBoundsType;
-typedef ankerl::unordered_dense::map<actor_key, std::pair<std::vector<FGlobalBounds>, FGlobalBounds>> FUpdatedActorMap;
+// Type used for updating the navmesh.
+// Will store all the previous known bounds of the actor since last update, paired with its current bounds.
+typedef std::pair<std::vector<FGlobalBounds>, FGlobalBounds> FNavMeshUpdateType;
+// Map holding FNavMeshUpdateType.
+typedef ankerl::unordered_dense::map<actor_key, std::pair<std::vector<FGlobalBounds>, FGlobalBounds>> FNavMeshUpdateMap;
 
-// Map associating an actor with boundaries.
+// Map holding actors and their boundaries.
 typedef ankerl::unordered_dense::map<actor_key, FGlobalBounds> FActorBoundsMap;
 
 /**
@@ -360,34 +362,34 @@ typedef ankerl::unordered_dense::map<actor_key, FGlobalBounds> FActorBoundsMap;
  * @tparam VectorType FGlobalVector or FNodeVector
  */
 template<typename VectorType>
-struct TChangedBounds // todo: rename to pair?
+struct TMovedBounds // todo: rename to pair?
 {
-	static_assert(std::is_same_v<VectorType, FGlobalVector> || std::is_same_v<VectorType, FNodeVector>, "TChangedBounds can only be instantiated with FGlobalVector or FNodeVector");
+	static_assert(std::is_same_v<VectorType, FGlobalVector> || std::is_same_v<VectorType, FNodeVector>, "TMovedBounds can only be instantiated with FGlobalVector or FNodeVector");
 
 	using FBounds = TBounds<VectorType>;
 	
-	FBounds Previous;
-	FBounds Current;
+	FBounds From;
+	FBounds To;
 	
 
-	TChangedBounds() {}
+	TMovedBounds() {}
 	
-	TChangedBounds(const FBounds& InPrevious, const FBounds& InCurrent)
-		: Previous(InPrevious), Current(InCurrent) {}
+	TMovedBounds(const FBounds& InFrom, const FBounds& InTo)
+		: From(InFrom), To(InTo) {}
 
-	TChangedBounds(const FBounds& InPrevious, const AActor* Actor)
-		: Previous(InPrevious), Current(Actor) {}
+	TMovedBounds(const FBounds& InFrom, const AActor* Actor)
+		: From(InFrom), To(Actor) {}
 
 	
 	FORCEINLINE void Draw(const UWorld* World) const
 	{
-		Previous.Draw(World, FColor::Red);
-		Current.Draw(World, FColor::Green);
+		From.Draw(World, FColor::Red);
+		To.Draw(World, FColor::Green);
 	}
 };
 
-typedef TChangedBounds<FGlobalVector> FChangedBounds;
-typedef TChangedBounds<FNodeVector> FChangedMortonBounds;
+typedef TMovedBounds<FGlobalVector> FMovedBounds;
+typedef TMovedBounds<FNodeVector> FChangedMortonBounds;
 
 // Map associating an actor with changed boundaries. To hold changes that have happened for multiple actors.
-typedef ankerl::unordered_dense::map<actor_key, FChangedBounds> FChangedBoundsMap;
+typedef ankerl::unordered_dense::map<actor_key, FMovedBounds> FMovedBoundsMap;

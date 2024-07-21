@@ -5,7 +5,6 @@
 #include "RSAP_Editor/Public/NavMesh/RsapDebugger.h"
 #include "RSAP_Editor/Public/NavMesh/RsapEditorUpdater.h"
 #include "RSAP/NavMesh/Types/Serialize.h"
-#include "UObject/ObjectSaveContext.h"
 #include "Engine/World.h"
 #include "Editor.h"
 
@@ -20,34 +19,29 @@ void URsapEditorManager::Initialize(FSubsystemCollectionBase& Collection)
 	NavMeshDebugger = new FRsapDebugger();
 
 	FRsapEditorEvents::OnMapOpened.BindUObject(this, &ThisClass::OnMapOpened);
+	FRsapEditorEvents::PreMapSaved.BindUObject(this, &ThisClass::PreMapSaved);
 
-	return;
-	OnMapLoadDelegateHandle = FEditorDelegates::OnMapLoad.AddUObject(this, &ThisClass::OnMapLoad);
-	PreSaveWorldDelegateHandle = FEditorDelegates::PreSaveWorldWithContext.AddUObject(this, &ThisClass::PreWorldSaved);
-	PostSaveWorldDelegateHandle = FEditorDelegates::PostSaveWorldWithContext.AddUObject(this, &ThisClass::PostWorldSaved);
-	OnCameraMovedDelegateHandle = FEditorDelegates::OnEditorCameraMoved.AddUObject(this, &ThisClass::OnCameraMoved);
-	NavMeshUpdater->OnNavMeshUpdatedDelegate.BindUObject(this, &ThisClass::OnNavMeshUpdated);
-	// TransformObserver->OnLevelActorsInitialized.BindUObject(this, &ThisClass::OnLevelActorsInitialized);
-	// TransformObserver->OnActorBoundsChanged.BindUObject(this, &ThisClass::OnActorBoundsChanged);
+	FRsapEditorEvents::OnActorMoved.BindUObject(this, &ThisClass::OnActorMoved);
+	FRsapEditorEvents::OnActorAdded.BindUObject(this, &ThisClass::OnActorAdded);
+	FRsapEditorEvents::OnActorDeleted.BindUObject(this, &ThisClass::OnActorDeleted);
+
+	FRsapEditorUpdater::OnUpdateComplete.AddUObject(this, &ThisClass::OnNavMeshUpdated);
 }
 
 void URsapEditorManager::Deinitialize()
 {
-	FRsapEditorEvents::OnMapOpened.Unbind();
-	
-	Super::Deinitialize();
-	return;
-	FEditorDelegates::OnMapLoad.Remove(OnMapLoadDelegateHandle); OnMapLoadDelegateHandle.Reset();
-	FEditorDelegates::PreSaveWorldWithContext.Remove(PreSaveWorldDelegateHandle); PreSaveWorldDelegateHandle.Reset();
-	FEditorDelegates::PostSaveWorldWithContext.Remove(PostSaveWorldDelegateHandle); PostSaveWorldDelegateHandle.Reset();
-	FEditorDelegates::OnEditorCameraMoved.Remove(OnCameraMovedDelegateHandle); OnCameraMovedDelegateHandle.Reset();
-	NavMeshUpdater->OnNavMeshUpdatedDelegate.Unbind();
-	// TransformObserver->OnLevelActorsInitialized.Unbind();
-	// TransformObserver->OnActorBoundsChanged.Unbind();
-	
 	NavMesh.reset();
 	delete NavMeshUpdater;
 	delete NavMeshDebugger;
+	
+	FRsapEditorEvents::OnMapOpened.Unbind();
+	FRsapEditorEvents::PreMapSaved.Unbind();
+
+	FRsapEditorEvents::OnActorMoved.Unbind();
+	FRsapEditorEvents::OnActorAdded.Unbind();
+	FRsapEditorEvents::OnActorDeleted.Unbind();
+
+	FRsapEditorUpdater::OnUpdateComplete.RemoveAll(this);
 	
 	Super::Deinitialize();
 }
@@ -64,17 +58,6 @@ void URsapEditorManager::LoadLevelSettings()
 	}
 }
 
-void URsapEditorManager::SaveNavMesh() const
-{
-	if(!NavMesh) return;
-	SerializeNavMesh(*NavMesh, LevelSettings->NavMeshID);
-}
-
-void URsapEditorManager::OnNavMeshUpdated() const
-{
-	NavMeshDebugger->Draw();
-}
-
 void URsapEditorManager::Regenerate()
 {
 	if(!EditorWorld)
@@ -83,13 +66,13 @@ void URsapEditorManager::Regenerate()
 		return;
 	}
 	
-	// NavMeshGenerator->Generate(GEditor->GetEditorSubsystem<UEditorTransformObserver>()->GetLevelActorBounds());
-	if(const UPackage* Package = Cast<UPackage>(EditorWorld->GetOuter()); !Package->IsDirty() && Package->MarkPackageDirty())
-	{
-		UE_LOG(LogRsap, Log, TEXT("Level is marked dirty. The 'sound-navigation-mesh' will be saved when the user saves the level."))
-	}
-
-	NavMeshDebugger->Draw();
+	// // NavMeshGenerator->Generate(GEditor->GetEditorSubsystem<UEditorTransformObserver>()->GetLevelActorBounds());
+	// if(const UPackage* Package = Cast<UPackage>(EditorWorld->GetOuter()); !Package->IsDirty() && Package->MarkPackageDirty())
+	// {
+	// 	UE_LOG(LogRsap, Log, TEXT("Level is marked dirty. The 'sound-navigation-mesh' will be saved when the user saves the level."))
+	// }
+	//
+	// NavMeshDebugger->Draw(EditorWorld);
 }
 
 void URsapEditorManager::UpdateDebugSettings (
@@ -102,73 +85,107 @@ void URsapEditorManager::UpdateDebugSettings (
 	
 	// FNavMeshDebugSettings::Initialize(bDebugEnabled, bDisplayNodes, bDisplayNodeBorder, bDisplayRelations, bDisplayPaths, bDisplayChunks);
 	// RsapModule.InitializeDebugSettings(bDebugEnabled, bDisplayNodes, bDisplayNodeBorder, bDisplayRelations, bDisplayPaths, bDisplayChunks);
-	NavMeshDebugger->Draw();
+	NavMeshDebugger->Draw(EditorWorld);
 }
 
 void URsapEditorManager::OnMapOpened(const FActorBoundsMap& ActorBoundsMap)
 {
-	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnMapOpened"))
-}
-
-void URsapEditorManager::OnMapLoad(const FString& Filename, FCanLoadMap& OutCanLoadMap)
-{
-	// LevelSettings = nullptr;
-	// EditorWorld = nullptr;
-	// NavMesh->clear();
-}
-
-void URsapEditorManager::OnLevelActorsInitialized(const FActorBoundsMap& BoundsMap)
-{
+	// Get the editor-world and load the settings stored on it.
 	EditorWorld = GEditor->GetEditorWorldContext().World();
-	NavMeshUpdater->SetWorld(EditorWorld);
-	NavMeshDebugger->SetWorld(EditorWorld);
-
 	LoadLevelSettings();
 
-	// Get cached navmesh.
-	FGuid CachedNavMeshID;
-	DeserializeNavMesh(*NavMesh, CachedNavMeshID);
-	
-	// Regenerate if the navmesh is empty, or if ID differs.
-	// If the cached ID is not the same, then the navmesh is not in-sync with the level.
-	// todo: this should be checked, something is not right.
-	if(!NavMesh->empty() && LevelSettings->NavMeshID == CachedNavMeshID) return;
-	
-	// NavMeshGenerator->Generate(BoundsMap);
-	if(EditorWorld->GetOuter()->MarkPackageDirty()) // todo: regenerate in background using updater, and mark dirty when complete. 
+	// Get the cached navmesh for this world.
+	bool bRegenerate = false;
+	if(FGuid CachedNavMeshID; !DeserializeNavMesh(*NavMesh, CachedNavMeshID))
 	{
-		UE_LOG(LogRsap, Log, TEXT("Level is marked dirty. The 'Sound Navigation Mesh' will be serialized when the level is saved."))
+		// No .bin file has been found for this map, which likely means that the plugin has just been activated.
+		// It could also mean that the user fiddled with the .bin file, or edited the map outside the ue-editor.
+		UE_LOG(LogRsap, Log, TEXT("Generating the sound-navigation-mesh for this world..."));
+		bRegenerate = true;
 	}
+	else if(LevelSettings->NavMeshID != CachedNavMeshID)
+	{
+		// If the cached ID differs from what is stored on the level's asset-data, then the navmesh is not in-sync.
+		UE_LOG(LogRsap, Log, TEXT("The sound-navigation-mesh is not in-sync with the world. Starting regeneration..."));
+		bRegenerate = true;
+	}
+
+	if(bRegenerate)
+	{
+		// Stage all the actors to the updater.
+		// This will be a bit less efficient than a separate generator that does not need to check any 'from' boundaries, but the result is the same.
+		NavMeshUpdater->StageData(ActorBoundsMap);
+		
+		UE_LOG(LogRsap, Log, TEXT("This can take a moment depending on the amount of actors in the world. The map will be marked 'dirty' when complete."));
+		
+		auto OnNavMeshUpdatedHandlePtr = MakeShared<FDelegateHandle>();
+		*OnNavMeshUpdatedHandlePtr = FRsapEditorUpdater::OnUpdateComplete.AddLambda([OnNavMeshUpdatedHandlePtr, &World = EditorWorld]()
+		{
+			FRsapEditorUpdater::OnUpdateComplete.Remove(*OnNavMeshUpdatedHandlePtr);
+			if(World->GetOuter()->MarkPackageDirty())
+			{
+				UE_LOG(LogRsap, Log, TEXT("Regeneration complete. The sound-navigation-mesh will be cached when you save the map."))
+			}
+		});	
+	}
+	
+	// Start the updater.
+	NavMeshUpdater->Start(EditorWorld, NavMesh);
 }
 
-void URsapEditorManager::PreWorldSaved(UWorld* World, FObjectPreSaveContext ObjectPreSaveContext)
+// Will update the navmesh-ID for this level to a new random ID, and saves the navmesh after the map has successfully been saved.
+void URsapEditorManager::PreMapSaved()
 {
-	// return; // todo fix being able to save without being in a level
-	
-	// todo when in PostWorldSaved the save has failed, reset to old GUID?
-	// Store any changes on the LevelSettings on the level before the actual world/level save occurs.
+	// Update the navmesh-ID on the level-settings asset-data, and add it to the level before the save occurs.
+	const FGuid PrevID = LevelSettings->NavMeshID;
 	LevelSettings->NavMeshID = FGuid::NewGuid();
 	EditorWorld->PersistentLevel->AddAssetUserData(LevelSettings);
-}
-
-void URsapEditorManager::PostWorldSaved(UWorld* World, FObjectPostSaveContext ObjectSaveContext)
-{
-	// return; // todo fix being able to save without being in a level
 	
-	if(ObjectSaveContext.SaveSucceeded())
+	FRsapEditorEvents::PostMapSaved.BindLambda([&, PrevID](const bool bSuccess)
 	{
-		SaveNavMesh();
-	}
+		FRsapEditorEvents::PostMapSaved.Unbind();
+		
+		if(!bSuccess)
+		{
+			// Save not successful, so revert back to old ID.
+			LevelSettings->NavMeshID = PrevID;
+			UE_LOG(LogRsap, Warning, TEXT("The map has failed to save. Rsap's sound navmesh will not be saved as a result."));
+			return;
+		}
+
+		SerializeNavMesh(*NavMesh, LevelSettings->NavMeshID);
+	});
 }
 
-void URsapEditorManager::OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation, ELevelViewportType LevelViewportType, int32) const
+void URsapEditorManager::OnActorMoved(const actor_key ActorKey, const FMovedBounds& MovedBounds)
 {
-	if(!NavMeshUpdater->IsRunning()) NavMeshDebugger->Draw(CameraLocation, CameraRotation);
+	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnActorMoved"))
+
+	NavMeshUpdater->StageData(ActorKey, MovedBounds);
 }
 
-void URsapEditorManager::OnActorBoundsChanged(const actor_key ActorKey, const FChangedBounds& ChangedBounds)
+void URsapEditorManager::OnActorAdded(const actor_key ActorKey, const FGlobalBounds& Bounds)
 {
-	UE_LOG(LogRsap, Log, TEXT("OnActorBoundsChanged"));
-	ChangedBounds.Draw(EditorWorld);
-	NavMeshUpdater->StageData(ActorKey, ChangedBounds);
+	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnActorAdded"))
+
+	// Leave 'from' empty because the actor did not exist before this operation.
+	NavMeshUpdater->StageData(ActorKey, FMovedBounds(FGlobalBounds::EmptyBounds(), Bounds));
+}
+
+void URsapEditorManager::OnActorDeleted(const actor_key ActorKey, const FGlobalBounds& Bounds)
+{
+	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnActorDeleted"))
+
+	// Leave 'to' empty because the actor does not exist anymore.
+	NavMeshUpdater->StageData(ActorKey, FMovedBounds(Bounds, FGlobalBounds::EmptyBounds()));
+}
+
+void URsapEditorManager::OnNavMeshUpdated() const
+{
+	NavMeshDebugger->Draw(EditorWorld);
+}
+
+void URsapEditorManager::OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation) const
+{
+	if(!NavMeshUpdater->IsRunningTask()) NavMeshDebugger->Draw(EditorWorld, CameraLocation, CameraRotation);
 }
