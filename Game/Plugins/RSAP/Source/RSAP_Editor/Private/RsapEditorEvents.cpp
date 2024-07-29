@@ -26,6 +26,8 @@ FRsapEditorEvents::FOnActorMoved	FRsapEditorEvents::OnActorMoved;
 FRsapEditorEvents::FOnActorAdded	FRsapEditorEvents::OnActorAdded;
 FRsapEditorEvents::FOnActorDeleted	FRsapEditorEvents::OnActorDeleted;
 
+FRsapEditorEvents::FOnCameraMoved	FRsapEditorEvents::OnCameraMoved;
+
 // Delegate handles:
 
 FDelegateHandle FRsapEditorEvents::MapOpenedHandle;
@@ -34,6 +36,8 @@ FDelegateHandle FRsapEditorEvents::PostMapSavedHandle;
 
 FDelegateHandle FRsapEditorEvents::ActorSelectionChangedHandle;
 FDelegateHandle FRsapEditorEvents::ObjectPropertyChangedHandle;
+
+FDelegateHandle FRsapEditorEvents::OnCameraMovedHandle;
 
 
 
@@ -60,6 +64,8 @@ void FRsapEditorEvents::Initialize()
 	
 	ActorSelectionChangedHandle = FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor").OnActorSelectionChanged().AddStatic(&FRsapEditorEvents::HandleActorSelectionChanged);
 	ObjectPropertyChangedHandle = FCoreUObjectDelegates::OnObjectPropertyChanged.AddStatic(&FRsapEditorEvents::HandleObjectPropertyChanged);
+
+	OnCameraMovedHandle = FEditorDelegates::OnEditorCameraMoved.AddStatic(&FRsapEditorEvents::HandleOnCameraMoved);
 }
 
 void FRsapEditorEvents::Deinitialize()
@@ -70,6 +76,8 @@ void FRsapEditorEvents::Deinitialize()
 	
 	FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor").OnActorSelectionChanged().Remove(ActorSelectionChangedHandle); ActorSelectionChangedHandle.Reset();
 	FCoreUObjectDelegates::OnObjectPropertyChanged.Remove(ObjectPropertyChangedHandle); ObjectPropertyChangedHandle.Reset();
+
+	FEditorDelegates::OnEditorCameraMoved.Remove(OnCameraMovedHandle); OnCameraMovedHandle.Reset();
 }
 
 void FRsapEditorEvents::HandleMapOpened(const FString& Filename, bool bAsTemplate)
@@ -183,4 +191,9 @@ void FRsapEditorEvents::HandleObjectPropertyChanged(UObject* Object, FPropertyCh
 
 	// Broadcast the change that happened.
 	if(OnActorMoved.IsBound()) OnActorMoved.Execute(ActorKey, FMovedBounds(PreviousBounds, CurrentBounds));
+}
+
+void FRsapEditorEvents::HandleOnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation, ELevelViewportType LevelViewportType, int32 RandomInt)
+{
+	if(OnCameraMoved.IsBound()) OnCameraMoved.Execute(CameraLocation, CameraRotation);
 }

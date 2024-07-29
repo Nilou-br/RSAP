@@ -31,7 +31,7 @@ struct FNodeVector // todo: rename to FNodeVector?
 		return FNodeVector(OutX, OutY, OutZ);
 	}
 
-	FORCEINLINE FNodeVector operator+(const uint_fast16_t Value) const
+	FORCEINLINE FNodeVector operator+(const uint16 Value) const
 	{
 		return FNodeVector(X + Value, Y + Value, Z + Value);
 	}
@@ -41,7 +41,7 @@ struct FNodeVector // todo: rename to FNodeVector?
 		return FNodeVector(X + Other.X, Y + Other.Y, Z + Other.Z);
 	}
 
-	FORCEINLINE FNodeVector operator-(const uint_fast16_t Value) const
+	FORCEINLINE FNodeVector operator-(const uint16 Value) const
 	{
 		return FNodeVector(X - Value, Y - Value, Z - Value);
 	}
@@ -194,7 +194,7 @@ struct FGlobalVector // todo: FChunkVector with 21 bits per axis?
 		return FVector(X, Y, Z);
 	}
 
-	// Returns Unreal Engine's FVector type.
+	// Converts to Unreal Engine's FVector type.
 	FORCEINLINE FVector operator*() const
 	{
 		return FVector(X, Y, Z);
@@ -206,14 +206,9 @@ struct FGlobalVector // todo: FChunkVector with 21 bits per axis?
 	}
 	
 	// Make sure every axis value fits in 10 bits, unsigned.
-	FORCEINLINE FNodeVector ToMortonVector() const
+	FORCEINLINE FNodeVector ToNodeVector() const
 	{
-		return FNodeVector(static_cast<uint_fast16_t>(X), static_cast<uint_fast16_t>(Y), static_cast<uint_fast16_t>(Z));
-	}
-	
-	static FORCEINLINE FGlobalVector FromVector(const FVector& InVector)
-	{
-		return FGlobalVector(InVector.X, InVector.Y, InVector.Z);
+		return FNodeVector(static_cast<uint16>(X), static_cast<uint16>(Y), static_cast<uint16>(Z));
 	}
 
 	FORCEINLINE int32 GetLargestAxis() const
@@ -223,16 +218,16 @@ struct FGlobalVector // todo: FChunkVector with 21 bits per axis?
 
 	explicit FGlobalVector(const FVector &InVector)
 	{
-		X = static_cast<int_fast32_t>(std::round(InVector.X));
-		Y = static_cast<int_fast32_t>(std::round(InVector.Y));
-		Z = static_cast<int_fast32_t>(std::round(InVector.Z));
+		X = static_cast<int32>(std::round(InVector.X));
+		Y = static_cast<int32>(std::round(InVector.Y));
+		Z = static_cast<int32>(std::round(InVector.Z));
 	}
 
 	explicit FGlobalVector(const FNodeVector &InVector)
 	{
-		X = static_cast<int_fast32_t>(InVector.X);
-		Y = static_cast<int_fast32_t>(InVector.Y);
-		Z = static_cast<int_fast32_t>(InVector.Z);
+		X = static_cast<int32>(InVector.X);
+		Y = static_cast<int32>(InVector.Y);
+		Z = static_cast<int32>(InVector.Z);
 	}
 
 	explicit FGlobalVector(const int32 InValue)

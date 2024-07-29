@@ -4,6 +4,7 @@
 #include "RSAP/Math/Morton.h"
 #include "RSAP/Math/Vectors.h"
 #include "RSAP/Definitions.h"
+#include "RSAP/Math/Overlap.h"
 
 struct FGlobalVector;
 
@@ -107,34 +108,20 @@ struct FNodeRelations
  * - MortonCode: represents its 3d location in a single value, used as a key to find nodes.
  *				 Also makes the nodes locally coherent in memory for cache efficiency.
  *				 The morton-code is not stored on this class. This is because these are already associated with nodes as key-value pairs on the hashmap.
- * - Relations: Every face of the node has a 4 bit layer-index for locating its neighbour.
- * - ChunkBorder: Bitmask for determining the chunk-borders this node is against. Used to efficiently calculate the next chunk to get when pathfinding.
+ * - Relations: Every face of the node has a 4 bit layer-index, and a node-state, for locating it's neighbour.
+ *				A neighbour can only be on the same-layer as this node, or above ( as in a parent layer ).
+ * - ChildOcclusions: bitmask indicating which of this node's children are alive and thus occluding.
+ * - ChildStates: bitmask indicating the node type for this node's children.
  * - SoundPresetId: Identifier to a preset of attenuation settings for the actor this node is occluding.
- * - Childnode_states: bitmask indicating the node type for each child this node has.
  */
-struct FNode // todo: rename all types to include prefix 'Rsap' ?
+struct FNode
 {
 	FNodeRelations Relations;
-	rsap_direction ChunkBorder: 6 = 0b000000;
-	uint8 bIsOccluding: 1 = 0;
-	uint8 bHasChildren: 1 = 0;
+	uint8 ChildOcclusions: 8 = 0b00000000;
 	uint8 ChildStates: 8 = 0b00000000;
 	uint16 SoundPresetID = 0;
-	
-	explicit FNode(const rsap_direction InChunkBorder = 0b000000)
-		: ChunkBorder(InChunkBorder)
-	{}
-	
-	explicit FNode(const uint8 ChildIdx, const rsap_direction ParentChunkBorder)
-	{
-		if (ParentChunkBorder)
-		{
-			ChunkBorder |= ChildIdx & 1 ? Direction::X_Positive : Direction::X_Negative;
-			ChunkBorder |= ChildIdx & 2 ? Direction::Y_Positive : Direction::Y_Negative;
-			ChunkBorder |= ChildIdx & 4 ? Direction::Z_Positive : Direction::Z_Negative;
-			ChunkBorder &= ParentChunkBorder; // Can only be against the same border(s) as the parent.
-		}
-	}
+
+	FNode() = default;
 
 	static FORCEINLINE FNodeVector GetMortonLocation(const node_morton MortonCode)
 	{
@@ -147,21 +134,15 @@ struct FNode // todo: rename all types to include prefix 'Rsap' ?
 	{
 		return ChunkLocation + GetMortonLocation(MortonCode);
 	}
-	
-	FORCEINLINE void SetOccluded(const bool Value) {
-		bIsOccluding = Value;
-	}
 
-	FORCEINLINE bool IsOccluded() const {
-		return bIsOccluding;
-	}
-
-	FORCEINLINE void SetHasChildren(const bool Value) {
-		bHasChildren = Value;
+	// Sets the bit for the child to '1' to indicate it is alive and occluding.
+	FORCEINLINE void SetChildOccluding(const child_idx ChildIdx)
+	{
+		ChildOcclusions |= ChildIdxMasks::Masks[ChildIdx];
 	}
 
 	FORCEINLINE bool HasChildren() const {
-		return bHasChildren;
+		return ChildOcclusions > 0;
 	}
 
 	std::array<layer_idx, 6> GetRelations() const
@@ -176,27 +157,53 @@ struct FNode // todo: rename all types to include prefix 'Rsap' ?
 		};
 	}
 
+	FORCEINLINE bool DoesChildExist(const uint8 ChildIdx) const
+	{
+		return ChildOcclusions & ChildIdxMasks::Masks[ChildIdx];
+	}
+
+	FORCEINLINE static FGlobalVector GetChildLocation(FGlobalVector ParentNodeLocation, const layer_idx ChildLayerIdx, const uint8 ChildIdx)
+	{
+		switch (ChildIdx)
+		{
+			case 0: return ParentNodeLocation;
+			case 1: ParentNodeLocation.X += RsapStatic::NodeSizes[ChildLayerIdx]; break;
+			case 2: ParentNodeLocation.Y += RsapStatic::NodeSizes[ChildLayerIdx]; break;
+			case 3: ParentNodeLocation.X += RsapStatic::NodeSizes[ChildLayerIdx]; ParentNodeLocation.Y += RsapStatic::NodeSizes[ChildLayerIdx]; break;
+			case 4: ParentNodeLocation.Z += RsapStatic::NodeSizes[ChildLayerIdx]; break;
+			case 5: ParentNodeLocation.X += RsapStatic::NodeSizes[ChildLayerIdx]; ParentNodeLocation.Z += RsapStatic::NodeSizes[ChildLayerIdx]; break;
+			case 6: ParentNodeLocation.Y += RsapStatic::NodeSizes[ChildLayerIdx]; ParentNodeLocation.Z += RsapStatic::NodeSizes[ChildLayerIdx]; break;
+			case 7: return ParentNodeLocation + RsapStatic::NodeSizes[ChildLayerIdx];
+			default: return ParentNodeLocation;
+		}
+		return ParentNodeLocation;
+	}
+
 	template <typename Func>
-	void ForEachChild(const node_morton NodeMorton, const layer_idx LayerIdx, Func&& Callback) const {
+	void ForEachChild(const node_morton NodeMC, const layer_idx LayerIdx, Func&& Callback) const {
 		if(!HasChildren()) return;
-		for (const node_morton ChildMortonCode : FMortonUtils::Node::GetChildren(NodeMorton, LayerIdx)) {
+		// todo: update method using bitmask
+		for (const node_morton ChildMortonCode : FMortonUtils::Node::GetChildren(NodeMC, LayerIdx)) {
 			Callback(ChildMortonCode);
 		}
 	}
 
-	//static bool HasGeomOverlap(const FBodyInstance* BodyInstance, const FGlobalVector& CenterLocation, const layer_idx LayerIdx);
-	FORCEINLINE static bool HasOverlap(const UWorld* World, const FGlobalVector& ChunkLocation, const node_morton NodeMorton, const layer_idx LayerIdx)
+	// Occlusion checks
+	FORCEINLINE static bool HasWorldOverlap(const UWorld* World, const FGlobalVector& ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx)
 	{
-		TRACE_CPUPROFILER_EVENT_SCOPE_STR("Node Has-World-Overlap");
-		return FPhysicsInterface::GeomOverlapBlockingTest(
-			World,
-			RsapStatic::CollisionBoxes[LayerIdx],
-			*(GetGlobalLocation(ChunkLocation, NodeMorton) + RsapStatic::NodeHalveSizes[LayerIdx]),
-			FQuat::Identity,
-			ECollisionChannel::ECC_WorldStatic,
-			FCollisionQueryParams::DefaultQueryParam,
-			FCollisionResponseParams::DefaultResponseParam
-		);
+		return FRsapOverlap::World(World, GetGlobalLocation(ChunkLocation, NodeMC), LayerIdx);
+	}
+	FORCEINLINE static bool HasWorldOverlap(const UWorld* World, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
+	{
+		return FRsapOverlap::World(World, NodeLocation, LayerIdx);
+	}
+	FORCEINLINE static bool HasGeomOverlap(const FBodyInstance* BodyInstance, const FGlobalVector& ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx)
+	{
+		return FRsapOverlap::Geom(BodyInstance, GetGlobalLocation(ChunkLocation, NodeMC), LayerIdx);
+	}
+	FORCEINLINE static bool HasGeomOverlap(const FBodyInstance* BodyInstance, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
+	{
+		return FRsapOverlap::Geom(BodyInstance, NodeLocation, LayerIdx);
 	}
 
 	FORCEINLINE void Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const node_morton MortonCode, const layer_idx LayerIdx, const FColor Color, const uint32 Thickness) const
@@ -206,27 +213,23 @@ struct FNode // todo: rename all types to include prefix 'Rsap' ?
 		const FVector Extent(NodeHalveSize);
 		DrawDebugBox(World, GlobalCenter, Extent, Color, true, -1, 0, Thickness);
 	}
-	
+
 	// Packs the members of the node into a single 64 bit unsigned integer which can be used to serialize the node.
 	FORCEINLINE uint64 Pack() const {
 		uint64 PackedData = 0;
-		PackedData |= static_cast<uint64>(ChunkBorder);
-		PackedData |= static_cast<uint64>(SoundPresetID) << 6;
-		PackedData |= static_cast<uint64>(bIsOccluding) << 22;
-		PackedData |= static_cast<uint64>(bHasChildren) << 23;
-		PackedData |= static_cast<uint64>(ChildStates) << 24;
+		PackedData |= static_cast<uint64>(ChildOcclusions);
+		PackedData |= static_cast<uint64>(ChildStates) << 8;
+		PackedData |= static_cast<uint64>(SoundPresetID) << 16;
 		PackedData |= static_cast<uint64>(Relations.Pack()) << 32;
 		return PackedData;
 	}
 
 	// This constructor overload is meant for initializing a node using serialized data which is packed in a single 64 bit unsigned integer.
 	explicit FNode(const uint64 PackedData) {
-		ChunkBorder		= PackedData;
-		SoundPresetID	= PackedData >> 6;
-		bIsOccluding	= PackedData >> 22;
-		bHasChildren	= PackedData >> 23;
-		ChildStates		= PackedData >> 24;
-		Relations.Unpack(PackedData >> 32);
+		ChildOcclusions = PackedData;
+		ChildStates		= PackedData >> 8;
+		SoundPresetID	= PackedData >> 16;
+		Relations.Unpack(PackedData  >> 32);
 	}
 };
 

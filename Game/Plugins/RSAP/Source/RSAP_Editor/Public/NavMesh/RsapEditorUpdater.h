@@ -1,7 +1,7 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-#include "RSAP_Editor/Public/NavMesh/Tasks/RsapEditorUpdateTask.h"
+#include "RSAP_Editor/Public/NavMesh/Tasks/Update/RsapEditorUpdateTask.h"
 #include "RSAP/Definitions.h"
 #include "RSAP/Math/Bounds.h"
 

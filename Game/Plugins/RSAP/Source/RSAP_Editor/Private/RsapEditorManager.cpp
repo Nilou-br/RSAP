@@ -26,6 +26,7 @@ void URsapEditorManager::Initialize(FSubsystemCollectionBase& Collection)
 	FRsapEditorEvents::OnActorDeleted.BindUObject(this, &ThisClass::OnActorDeleted);
 
 	FRsapEditorUpdater::OnUpdateComplete.AddUObject(this, &ThisClass::OnNavMeshUpdated);
+	FRsapEditorEvents::OnCameraMoved.BindUObject(this, &ThisClass::OnCameraMoved);
 }
 
 void URsapEditorManager::Deinitialize()
@@ -42,6 +43,7 @@ void URsapEditorManager::Deinitialize()
 	FRsapEditorEvents::OnActorDeleted.Unbind();
 
 	FRsapEditorUpdater::OnUpdateComplete.RemoveAll(this);
+	FRsapEditorEvents::OnCameraMoved.Unbind();
 	
 	Super::Deinitialize();
 }
@@ -85,7 +87,7 @@ void URsapEditorManager::UpdateDebugSettings (
 	
 	// FNavMeshDebugSettings::Initialize(bDebugEnabled, bDisplayNodes, bDisplayNodeBorder, bDisplayRelations, bDisplayPaths, bDisplayChunks);
 	// RsapModule.InitializeDebugSettings(bDebugEnabled, bDisplayNodes, bDisplayNodeBorder, bDisplayRelations, bDisplayPaths, bDisplayChunks);
-	NavMeshDebugger->Draw(EditorWorld);
+	NavMeshDebugger->Draw(NavMesh, EditorWorld);
 }
 
 void URsapEditorManager::OnMapOpened(const FActorBoundsMap& ActorBoundsMap)
@@ -182,10 +184,10 @@ void URsapEditorManager::OnActorDeleted(const actor_key ActorKey, const FGlobalB
 
 void URsapEditorManager::OnNavMeshUpdated() const
 {
-	NavMeshDebugger->Draw(EditorWorld);
+	NavMeshDebugger->Draw(NavMesh, EditorWorld);
 }
 
 void URsapEditorManager::OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation) const
 {
-	if(!NavMeshUpdater->IsRunningTask()) NavMeshDebugger->Draw(EditorWorld, CameraLocation, CameraRotation);
+	if(!NavMeshUpdater->IsRunningTask()) NavMeshDebugger->Draw(NavMesh, EditorWorld, CameraLocation, CameraRotation);
 }

@@ -6,26 +6,11 @@
 #include "RSAP/Math/Vectors.h"
 #include "RSAP/Math/Morton.h"
 #include "RSAP/Definitions.h"
+#include "RSAP/Math/Overlap.h"
 
 
 
 typedef ankerl::unordered_dense::map<node_morton, FNode> FOctreeLayer;
-
-/**
- * The octree has 10 layers, layer 0 holding the root nodes.
- */
-struct FOctree
-{
-	std::array<std::unique_ptr<FOctreeLayer>, 10> Layers;
-
-	FOctree()
-	{
-		for (layer_idx LayerIdx = 0; LayerIdx < 10; ++LayerIdx)
-		{
-			Layers[LayerIdx] = std::make_unique<FOctreeLayer>();
-		}
-	}
-};
 
 /**
  * A Chunk stores two octrees.
@@ -34,13 +19,19 @@ struct FOctree
  */
 class FChunk
 {
-	void Initialize(const node_state Rootnode_state)
+	struct FOctree
 	{
-		Octrees[0] = std::make_unique<FOctree>();
-		Octrees[1] = std::make_unique<FOctree>();
-		Octrees[Rootnode_state]->Layers[0]->emplace(0, FNode(static_cast<rsap_direction>(0b111111)));
-	}
+		std::array<std::unique_ptr<FOctreeLayer>, 10> Layers;
 
+		FOctree()
+		{
+			for (layer_idx LayerIdx = 0; LayerIdx < 10; ++LayerIdx)
+			{
+				Layers[LayerIdx] = std::make_unique<FOctreeLayer>();
+			}
+		}
+	};
+	
 	void Initialize()
 	{
 		Octrees[0] = std::make_unique<FOctree>();
@@ -48,27 +39,24 @@ class FChunk
 	}
 	
 public:
-	FGlobalVector Location; // Located at the chunk's negative most corner.
-	std::array<std::unique_ptr<FOctree>, 2> Octrees; // Accessed using node-state, 0 static, 1 dynamic.
-	
-	explicit FChunk(const FGlobalVector& InLocation, const node_state RootNodeState)
-		: Location(InLocation)
-	{
-		Initialize(RootNodeState);
-	}
+	std::array<std::unique_ptr<FOctree>, 2> Octrees; // Accessed using a node-state, 0 static, 1 dynamic.
 
-	explicit FChunk(const chunk_morton ChunkMorton, const node_state RootNodeState)
-		: Location(FGlobalVector::FromChunkMorton(ChunkMorton))
-	{
-		Initialize(RootNodeState);
-	}
-
-	// This overload should only be used for deserializing the chunk. It does not create the root node.
-	explicit FChunk()
-		: Location(0)
+	FChunk()
 	{
 		Initialize();
 	}
+	
+	// explicit FChunk(const FGlobalVector& InLocation, const node_state RootNodeState)
+	// 	: Location(InLocation)
+	// {
+	// 	Initialize(RootNodeState);
+	// }
+	//
+	// explicit FChunk(const chunk_morton ChunkMorton, const node_state RootNodeState)
+	// 	: Location(FGlobalVector::FromChunkMorton(ChunkMorton))
+	// {
+	// 	Initialize(RootNodeState);
+	// }
 
 	FORCEINLINE FVector GetCenter(const uint32 ChunkHalveSize) const
 	{
@@ -104,10 +92,23 @@ public:
 		return FMortonUtils::Chunk::Move(ChunkMorton, Direction);
 	}
 
-	// This will not check if the node exists, so only use in code where you are certain it will.
-	FORCEINLINE FNodePair& GetNode(const node_morton NodeMortonCode, const layer_idx LayerIdx, const node_state NodeState) const
+	// Returns a reference to an existing node. Use only when you are certain it exists.
+	FORCEINLINE FNode& GetNode(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
 	{
-		return *Octrees[NodeState]->Layers[LayerIdx]->find(NodeMortonCode);
+		return Octrees[NodeState]->Layers[LayerIdx]->find(NodeMC)->second;
+	}
+
+	// Returns reference to this node. Will initialize one if it does not exist yet.
+	FORCEINLINE FNode& TryInitNode(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
+	{
+		return Octrees[NodeState]->Layers[LayerIdx]->try_emplace(NodeMC).first->second;
+	}
+	// Has additional boolean to check if the node has been inserted.
+	FORCEINLINE FNode& TryInitNode(bool& bOutInserted, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
+	{
+		const auto [NodePair, bInserted] = Octrees[NodeState]->Layers[LayerIdx]->try_emplace(NodeMC);
+		bOutInserted = bInserted;
+		return NodePair->second;
 	}
 
 	FORCEINLINE void EraseNode(const node_morton NodeMortonCode, const layer_idx LayerIdx, const node_state NodeState) const
@@ -115,17 +116,14 @@ public:
 		Octrees[NodeState]->Layers[LayerIdx]->erase(NodeMortonCode);
 	}
 
-	FORCEINLINE static bool HasOverlap(const UWorld* World, const FGlobalVector& ChunkLocation)
+	FORCEINLINE static bool HasWorldOverlap(const UWorld* World, const FGlobalVector& ChunkLocation)
 	{
-		return FPhysicsInterface::GeomOverlapBlockingTest(
-			World,
-			RsapStatic::CollisionBoxes[0],
-			ChunkLocation.ToVector() + RsapStatic::NodeHalveSizes[0],
-			FQuat::Identity,
-			ECollisionChannel::ECC_WorldStatic,
-			FCollisionQueryParams::DefaultQueryParam,
-			FCollisionResponseParams::DefaultResponseParam
-		);
+		return FRsapOverlap::World(World, ChunkLocation, 0);
+	}
+	
+	FORCEINLINE static bool HasGeomOverlap(const FBodyInstance* BodyInstance, const FGlobalVector& ChunkLocation)
+	{
+		return FRsapOverlap::Geom(BodyInstance, ChunkLocation, 0);
 	}
 };
 

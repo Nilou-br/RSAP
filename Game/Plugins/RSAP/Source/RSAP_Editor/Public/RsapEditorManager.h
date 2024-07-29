@@ -60,6 +60,5 @@ private:
 	void OnActorDeleted(const actor_key ActorKey, const FGlobalBounds& Bounds);
 
 	void OnNavMeshUpdated() const;
-
 	void OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation) const;
 };

@@ -14,7 +14,7 @@ struct TBounds
 	static_assert(std::is_same_v<VectorType, FGlobalVector> || std::is_same_v<VectorType, FNodeVector>, "TBounds can only be instantiated with FGlobalVector or FNodeVector");
 
 	using FGlobalBounds = TBounds<FGlobalVector>;
-	using FMortonBounds = TBounds<FNodeVector>;
+	using FNodeBounds = TBounds<FNodeVector>;
 	
 	VectorType Min;
 	VectorType Max;
@@ -91,9 +91,9 @@ struct TBounds
 	}
 
 	template<typename T = VectorType>
-	FORCEINLINE auto operator&(const uint16 Mask) const -> std::enable_if_t<std::is_same_v<T, FNodeVector>, FMortonBounds>
+	FORCEINLINE auto operator&(const uint16 Mask) const -> std::enable_if_t<std::is_same_v<T, FNodeVector>, FNodeBounds>
 	{
-		return FMortonBounds(Min & Mask, Max & Mask, bIsValid);
+		return FNodeBounds(Min & Mask, Max & Mask, bIsValid);
 	}
 
 	FORCEINLINE bool operator!() const
@@ -127,7 +127,7 @@ struct TBounds
 
 	// Rounds the bounds to the layer's node-size in morton-space. Min will be rounded down, Max will be rounded up.
 	template<typename T = VectorType>
-	FORCEINLINE auto RoundToLayer(const layer_idx LayerIdx) const -> std::enable_if_t<std::is_same_v<T, FNodeVector>, FMortonBounds>
+	FORCEINLINE auto RoundToLayer(const layer_idx LayerIdx) const -> std::enable_if_t<std::is_same_v<T, FNodeVector>, FNodeBounds>
 	{
 		static constexpr uint16 LayerMasks[10] = {
 			static_cast<uint16>(~((1<<10)-1)), static_cast<uint16>(~((1<<9)-1)),
@@ -137,7 +137,7 @@ struct TBounds
 			static_cast<uint16>(~((1<<2)-1)),  static_cast<uint16>(~((1<<1)-1))
 		};
 		
-		FMortonBounds Rounded = *this & LayerMasks[LayerIdx];
+		FNodeBounds Rounded = *this & LayerMasks[LayerIdx];
 
 		// Round the max up.
 		// The '-1' is to adjust to nodes in morton-space. Because the origin of a node is at its negative most corner. So if Min/Max are equal, then they hold the same node. Min/Max just determine the 'first' and 'last' node in the bounds.
@@ -191,53 +191,6 @@ struct TBounds
 	}
 
 	/**
-	 * Calls the given callback for each chunk intersecting these bounds.
-	 * Passes the key of the chunk, the chunk's positive most axis of all intersecting chunks, and the intersected bounds converted to morton-space.
-	 * 
-	 * @note Chunks are NOT automatically initialized.
-	 * 
-	 * @tparam T VectorType which must be of type FGlobalVector.
-	 * @tparam Func <ChunkKey, rsap_direction, FMortonBounds>
-	 * @param Callback Called for each intersecting chunk.
-	 */
-	template<typename T = VectorType, typename Func>
-	std::enable_if_t<std::is_same_v<T, FGlobalVector>, void> ForEachChunk(Func Callback) const
-	{
-		static_assert(std::is_invocable_v<Func, const chunk_morton, const rsap_direction, FMortonBounds>, "'::ForEachChunk' callback must be invocable with 'const ChunkKeyType, const rsap_direction, FMortonBounds>'");
-		if(!IsValid()) return;
-
-		// Get the start/end axis of the chunks from the boundaries.
-		const FGlobalVector ChunkMin = Min & RsapStatic::ChunkMask;
-		const FGlobalVector ChunkMax = Max-1 & RsapStatic::ChunkMask;
-
-		// Skip the loop if there is only one chunk intersecting the bounds, which is the case most of the time.
-		if(ChunkMin == ChunkMax)
-		{
-			const FGlobalVector ChunkLocation = FGlobalVector(ChunkMin.X, ChunkMin.Y, ChunkMin.Z);
-			const FMortonBounds MortonBounds = GetIntersection(FGlobalBounds(ChunkLocation, ChunkLocation+RsapStatic::ChunkSize)).ToMortonSpace(ChunkLocation);
-			Callback(ChunkLocation.ToChunkMorton(), Direction::XYZ_Positive, MortonBounds);
-			return;
-		}
-
-		// Loop over the chunks, keeping track of every axis the chunk is the most-positive in.
-		for (int32 GlobalX = ChunkMin.X; GlobalX <= ChunkMax.X; GlobalX+=RsapStatic::ChunkSize){
-			const uint8 ChunkPositiveX = GlobalX == ChunkMax.X ? Direction::X_Positive : Direction::None;
-		
-			for (int32 GlobalY = ChunkMin.Y; GlobalY <= ChunkMax.Y; GlobalY+=RsapStatic::ChunkSize){
-				const uint8 ChunkPositiveY = GlobalY == ChunkMax.Y ? Direction::Y_Positive : Direction::None;
-			
-				for (int32 GlobalZ = ChunkMin.Z; GlobalZ <= ChunkMax.Z; GlobalZ+=RsapStatic::ChunkSize){
-					const uint8 ChunkPositiveZ = GlobalZ == ChunkMax.Z ? Direction::Z_Positive : Direction::None;
-
-					const FGlobalVector ChunkLocation = FGlobalVector(GlobalX, GlobalY, GlobalZ);
-					const FMortonBounds MortonBounds = GetIntersection(FGlobalBounds(ChunkLocation, ChunkLocation+RsapStatic::ChunkSize)).ToMortonSpace(ChunkLocation);
-					Callback(ChunkLocation.ToChunkMorton(), ChunkPositiveX | ChunkPositiveY | ChunkPositiveZ, MortonBounds);
-				}
-			}
-		}
-	}
-
-	/**
 	 * Returns a set of morton-codes for each chunk that is intersecting with these boundaries.
 	 * 
 	 * @note Chunks are NOT automatically initialized.
@@ -267,12 +220,6 @@ struct TBounds
 		return ChunkKeys;
 	}
 
-	template<typename T = VectorType>
-	std::enable_if_t<std::is_same_v<T, FGlobalVector>, std::unordered_set<chunk_morton>> GetNodes() const
-	{
-		// 
-	}
-
 	// Used to check if these bounds are overlapping with another.
 	template<typename T = VectorType>
 	FORCEINLINE auto HasSimpleOverlap(const FGlobalBounds& Other) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, bool>
@@ -283,11 +230,11 @@ struct TBounds
 	}
 
 	template<typename T = VectorType>
-	FORCEINLINE auto ToMortonSpace(const FGlobalVector& ChunkLocation) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, FMortonBounds>
+	FORCEINLINE auto ToNodeSpace(const FGlobalVector& ChunkLocation) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, FNodeBounds>
 	{
-		const FNodeVector LocalMin = ( Min-ChunkLocation << RsapStatic::VoxelSizeExponent).ToMortonVector();
-		const FNodeVector LocalMax = ((Max-ChunkLocation << RsapStatic::VoxelSizeExponent) - RsapStatic::SmallestNodeSize).ToMortonVector();
-		return FMortonBounds(LocalMin, LocalMax, IsValid());
+		const FNodeVector LocalMin = ( Min-ChunkLocation << RsapStatic::VoxelSizeExponent).ToNodeVector();
+		const FNodeVector LocalMax = ((Max-ChunkLocation << RsapStatic::VoxelSizeExponent) - RsapStatic::SmallestNodeSize).ToNodeVector();
+		return FNodeBounds(LocalMin, LocalMax, IsValid());
 	}
 
 	template<typename T = VectorType>
@@ -345,7 +292,7 @@ struct TBounds
 };
 
 typedef TBounds<FGlobalVector> FGlobalBounds;
-typedef TBounds<FNodeVector> FMortonBounds;
+typedef TBounds<FNodeVector> FNodeBounds;
 
 // Type used for updating the navmesh.
 // Will store all the previous known bounds of the actor since last update, paired with its current bounds.

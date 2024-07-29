@@ -28,7 +28,8 @@ class FRsapEditorEvents
 	DECLARE_DELEGATE_TwoParams(FOnActorMoved, const actor_key, const FMovedBounds& MovedBounds);
 	DECLARE_DELEGATE_TwoParams(FOnActorAdded, const actor_key, const FGlobalBounds& Bounds);
 	DECLARE_DELEGATE_TwoParams(FOnActorDeleted, const actor_key, const FGlobalBounds& Bounds);
-	// todo: refactor FMovedBounds to just be two separate FGlobalBounds instead for simplicity.
+
+	DECLARE_DELEGATE_TwoParams(FOnCameraMoved, const FVector& CameraLocation, const FRotator& CameraRotation);
 
 public:
 	static void Initialize();
@@ -41,6 +42,8 @@ public:
 	static FOnActorMoved	OnActorMoved;
 	static FOnActorAdded	OnActorAdded;
 	static FOnActorDeleted	OnActorDeleted;
+
+	static FOnCameraMoved	OnCameraMoved;
 	
 	FORCEINLINE static FActorBoundsMap& GetLevelActorBounds(){ return CachedActorBounds; }
 	
@@ -57,4 +60,6 @@ private:
 	
 	static FDelegateHandle ActorSelectionChangedHandle; static void HandleActorSelectionChanged(const TArray<UObject*>& Objects, bool);
 	static FDelegateHandle ObjectPropertyChangedHandle; static void HandleObjectPropertyChanged(UObject* Object, FPropertyChangedEvent& PropertyChangedEvent);
+
+	static FDelegateHandle OnCameraMovedHandle; static void HandleOnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation, ELevelViewportType LevelViewportType, int32 RandomInt);
 };

@@ -18,7 +18,7 @@ FString To6BitBinaryString(const uint8 Value) {
 	return FString(BinaryString.substr(2, 6).c_str());
 }
 
-void FRsapDebugger::Draw(const UWorld* World) const
+void FRsapDebugger::Draw(const FNavMesh& NavMesh, const UWorld* World) const
 {
 	FVector CameraLocation;
 	FRotator CameraRotation;
@@ -47,60 +47,56 @@ void FRsapDebugger::Draw(const UWorld* World) const
 		CameraRotation = CameraManager->GetCameraRotation();
 	}
 	
-	Draw(World, CameraLocation, CameraRotation);
+	Draw(NavMesh, World, CameraLocation, CameraRotation);
 }
 
-void FRsapDebugger::Draw(const UWorld* World, const FVector& CameraLocation, const FRotator& CameraRotation) const
+void FRsapDebugger::Draw(const FNavMesh& NavMesh, const UWorld* World, const FVector& CameraLocation, const FRotator& CameraRotation) const
 {
-	if(!NavMesh || !DebugSettings.bEnabled) return;
+	//if(!NavMesh || !DebugSettings.bEnabled) return;
+	if(!NavMesh || !World) return;
+	const FVector CameraForwardVector = FRotationMatrix(CameraRotation).GetUnitAxis(EAxis::X);
 
 	FlushPersistentDebugLines(World);
 	FlushDebugStrings(World);
-	
-	const FVector CameraForwardVector = FRotationMatrix(CameraRotation).GetUnitAxis(EAxis::X);
-	DrawNodes(World, CameraLocation, CameraForwardVector);
+
+	// Get some chunks around camera.
+	static constexpr uint8 ChunkDistance = 4;
+	const FGlobalVector CenterChunkLocation = FGlobalVector(CameraLocation) & RsapStatic::ChunkMask;
+	const FGlobalBounds RenderBoundaries(CenterChunkLocation - RsapStatic::ChunkSize*ChunkDistance, CenterChunkLocation + RsapStatic::ChunkSize*ChunkDistance);
+
+	// Keep track of location and chunk morton-code.
+	FGlobalVector CurrentLocation;
+	chunk_morton ChunkMC = RenderBoundaries.Min.ToChunkMorton();
+
+	// Loop through chunks.
+	for (CurrentLocation.Z = RenderBoundaries.Min.Z; CurrentLocation.Z <= RenderBoundaries.Max.Z; CurrentLocation.Z += RsapStatic::ChunkSize)
+	{
+		for (CurrentLocation.Y = RenderBoundaries.Min.Y; CurrentLocation.Y <= RenderBoundaries.Max.Y; CurrentLocation.Y+= RsapStatic::ChunkSize)
+		{
+			for (CurrentLocation.X = RenderBoundaries.Min.X; CurrentLocation.X <= RenderBoundaries.Max.X; CurrentLocation.X += RsapStatic::ChunkSize)
+			{
+				const auto ChunkIterator = NavMesh->find(ChunkMC);
+				if(ChunkIterator != NavMesh->end())
+				{
+					//if(DebugSettings.bDisplayChunks){}
+					const FGlobalVector ChunkGlobalCenterLocation = CurrentLocation + RsapStatic::NodeHalveSizes[0];
+					const FVector Test = *ChunkGlobalCenterLocation;
+					DrawDebugBox(World, Test, FVector(RsapStatic::NodeHalveSizes[0]), FColor::Black, true, -1, 11, 5);
+				}
+				ChunkMC = FMortonUtils::Chunk::IncrementX(ChunkMC);
+			}
+			ChunkMC = FMortonUtils::Chunk::IncrementY(ChunkMC);
+		}
+		ChunkMC = FMortonUtils::Chunk::IncrementZ(ChunkMC);
+	}
 }
 
 void FRsapDebugger::DrawNodes(const UWorld* World, const FVector& CameraLocation, const FVector& CameraForwardVector) const
 {
-	// Get x amount of chunks around camera.
-	const FGlobalVector CameraChunkLocation = FGlobalVector::FromVector(CameraLocation) & RsapStatic::ChunkMask;
-	const FGlobalVector ChunksMinLoc = CameraChunkLocation - RsapStatic::ChunkSize*4;
-	const FGlobalVector ChunksMaxLoc = CameraChunkLocation + RsapStatic::ChunkSize*4;
-	TArray<FChunk*> ChunksToDraw;
-	for (int32 X = ChunksMinLoc.X; X <= ChunksMaxLoc.X; X+=RsapStatic::ChunkSize)
-	{
-		for (int32 Y = ChunksMinLoc.Y; Y <= ChunksMaxLoc.Y; Y+=RsapStatic::ChunkSize)
-		{
-			for (int32 Z = ChunksMinLoc.Z; Z <= ChunksMaxLoc.Z; Z+=RsapStatic::ChunkSize)
-			{
-				const auto ChunkIterator = NavMesh->find(FGlobalVector(X, Y, Z).ToChunkMorton());
-				if(ChunkIterator != NavMesh->end()) ChunksToDraw.Add(&ChunkIterator->second);
-			}
-		}
-	}
-
-	for (const auto Chunk : ChunksToDraw)
-	{
-		if(DebugSettings.bDisplayChunks)
-		{
-			const FVector ChunkGlobalCenterLocation = (Chunk->Location + RsapStatic::NodeHalveSizes[0]).ToVector();
-			const FVector DirectionToTarget = (ChunkGlobalCenterLocation - CameraLocation).GetSafeNormal();
-			if(FVector::DotProduct(CameraForwardVector, DirectionToTarget) > 0)
-			{
-				DrawDebugBox(World, ChunkGlobalCenterLocation, FVector(RsapStatic::NodeHalveSizes[0]), FColor::Black, true, -1, 11, 5);
-			}
-		}
-		
-		if(	DebugSettings.bDisplayNodes || DebugSettings.bDisplayPaths ||
-			DebugSettings.bDisplayRelations || DebugSettings.bDisplayNodeBorder)
-		{
-			RecursiveDrawNodes(World, Chunk, 0, 0, CameraLocation, CameraForwardVector);
-		}
-	}
+	
 }
 
-void FRsapDebugger::RecursiveDrawNodes(const UWorld* World, const FChunk* Chunk, const node_morton MortonCode, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector) const
+void FRsapDebugger::OldRecursiveDrawNodes(const UWorld* World, const FChunk* Chunk, const node_morton MortonCode, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector) const
 {
 	const auto NodeIterator = Chunk->Octrees[0]->Layers[LayerIdx]->find(MortonCode);
 	if(NodeIterator == Chunk->Octrees[0]->Layers[LayerIdx]->end()) return;
@@ -123,8 +119,8 @@ void FRsapDebugger::RecursiveDrawNodes(const UWorld* World, const FChunk* Chunk,
 
 	if(DebugSettings.bDisplayNodeBorder && World->IsPlayInEditor())
 	{
-		const FString BitString = To6BitBinaryString(Node.ChunkBorder);
-		DrawDebugString(World, NodeGlobalCenterLocation, BitString, nullptr, FColor::Red, -1, false, 1);
+		// const FString BitString = To6BitBinaryString(Node.ChunkBorder);
+		// DrawDebugString(World, NodeGlobalCenterLocation, BitString, nullptr, FColor::Red, -1, false, 1);
 		
 		for (const rsap_direction Direction : RsapStatic::Directions)
 		{
@@ -159,12 +155,12 @@ void FRsapDebugger::RecursiveDrawNodes(const UWorld* World, const FChunk* Chunk,
 
 			// Get neighbour center.
 			const node_morton NeighbourMortonCode = FMortonUtils::Node::MoveAndMask(MortonCode, NeighbourLayerIdx, Direction);
-			const FGlobalVector NeighbourChunkLocation = Node.ChunkBorder & Direction ? Chunk->GetNeighbourLocation(Direction) : Chunk->Location;
-			FGlobalVector NeighbourLocation = FGlobalVector::FromNodeMorton(NeighbourMortonCode, NeighbourChunkLocation);
-			FGlobalVector NeighbourCenter = NeighbourLocation + RsapStatic::NodeHalveSizes[NeighbourLayerIdx];
-
-			// Draw line between both.
-			DrawDebugLine(World, NodeCenter.ToVector(), NeighbourCenter.ToVector(), AdjustBrightness(LayerColors[LayerIdx], 0.8), true, -1, 11, 1);
+			// const FGlobalVector NeighbourChunkLocation = Node.ChunkBorder & Direction ? Chunk->GetNeighbourLocation(Direction) : Chunk->Location;
+			// FGlobalVector NeighbourLocation = FGlobalVector::FromNodeMorton(NeighbourMortonCode, NeighbourChunkLocation);
+			// FGlobalVector NeighbourCenter = NeighbourLocation + RsapStatic::NodeHalveSizes[NeighbourLayerIdx];
+			//
+			// // Draw line between both.
+			// DrawDebugLine(World, NodeCenter.ToVector(), NeighbourCenter.ToVector(), AdjustBrightness(LayerColors[LayerIdx], 0.8), true, -1, 11, 1);
 		}
 	}
 
@@ -186,6 +182,6 @@ void FRsapDebugger::RecursiveDrawNodes(const UWorld* World, const FChunk* Chunk,
 		const uint_fast16_t ChildX = NodeMortonLocation.X + (ChildIdx & 1 ? ChildMortonOffset : 0);
 		const uint_fast16_t ChildY = NodeMortonLocation.Y + (ChildIdx & 2 ? ChildMortonOffset : 0);
 		const uint_fast16_t ChildZ = NodeMortonLocation.Z + (ChildIdx & 4 ? ChildMortonOffset : 0);
-		RecursiveDrawNodes(World, Chunk, FNodeVector::ToNodeMorton(ChildX, ChildY, ChildZ), ChildLayerIndex, CameraLocation, CameraForwardVector);
+		OldRecursiveDrawNodes(World, Chunk, FNodeVector::ToNodeMorton(ChildX, ChildY, ChildZ), ChildLayerIndex, CameraLocation, CameraForwardVector);
 	}
 }

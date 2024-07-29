@@ -57,7 +57,7 @@ RSAP_API inline FArchive& operator<<(FArchive& Ar, FOctreeLayer& Layer)
 }
 
 RSAP_API inline FArchive& operator<<(FArchive& Ar, FChunk& Chunk){
-	Ar << Chunk.Location;
+	//Ar << Chunk.Location;
 
 	// Only serialize the static-octree.
 	for (layer_idx LayerIdx = 0; LayerIdx <= RsapStatic::StaticDepth; ++LayerIdx)
@@ -85,7 +85,7 @@ RSAP_API inline FArchive& operator<<(FArchive& Ar, FNavMeshType& NavMesh){
 		{
 			FChunk Chunk = FChunk();
 			Ar << Chunk;
-			NavMesh.emplace(Chunk.Location.ToChunkMorton(), std::move(Chunk));
+			//NavMesh.emplace(Chunk.Location.ToChunkMorton(), std::move(Chunk));
 		}
 	}
 	return Ar;
