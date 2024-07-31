@@ -214,17 +214,18 @@ struct FMortonUtils
 		static inline constexpr chunk_morton Mask_XY = Mask_X | Mask_Y;
 		static inline constexpr chunk_morton Mask_XZ = Mask_X | Mask_Z;
 		static inline constexpr chunk_morton Mask_YZ = Mask_Y | Mask_Z;
-		
-		static inline constexpr uint32 EncodeDecodeOffset = 1073741312; // To convert between morton-space and global-space for a chunk.
+
+		// Used to convert the chunk's global coordinates into positive values.
+		static inline constexpr uint32 EncodeDecodeOffset = 0b00111111111111111111110000000000; // '1073740800'.
 		
 		// Encode the global world coordinates into a chunk morton-code. Max range from -1073741312 to +1073741312.
 		FORCEINLINE static chunk_morton Encode(const int32 X, const int32 Y, const int32 Z) // todo: test these
 		{
-			// Because a chunk has a minimum size, the last x amount of bits are all set to 0.
-			// So we can apply a bit-shift to "compress" this value, which makes it fit into a 64 bit morton-code.
-			const uint_fast32_t InX = (X + EncodeDecodeOffset) << RsapStatic::ChunkKeyShift;
-			const uint_fast32_t InY = (Y + EncodeDecodeOffset) << RsapStatic::ChunkKeyShift;
-			const uint_fast32_t InZ = (Z + EncodeDecodeOffset) << RsapStatic::ChunkKeyShift;
+			// Apply offset to make the coordinates positive, and do a shift to compress the value.
+			// The last 10 bits will always be 0 because a chunk is 1024 units in size.
+			const uint_fast32_t InX = (X + EncodeDecodeOffset) >> RsapStatic::ChunkMortonShift;
+			const uint_fast32_t InY = (Y + EncodeDecodeOffset) >> RsapStatic::ChunkMortonShift;
+			const uint_fast32_t InZ = (Z + EncodeDecodeOffset) >> RsapStatic::ChunkMortonShift;
 			
 			return libmorton::morton3D_64_encode(InX, InY, InZ);
 		}
@@ -235,9 +236,9 @@ struct FMortonUtils
 			uint_fast32_t X, Y, Z;
 			libmorton::morton3D_64_decode(ChunkMorton, X, Y, Z);
 			
-			OutX = (X >> RsapStatic::ChunkKeyShift) - EncodeDecodeOffset;
-			OutY = (Y >> RsapStatic::ChunkKeyShift) - EncodeDecodeOffset;
-			OutZ = (Z >> RsapStatic::ChunkKeyShift) - EncodeDecodeOffset;
+			OutX = (X << RsapStatic::ChunkMortonShift) - EncodeDecodeOffset;
+			OutY = (Y << RsapStatic::ChunkMortonShift) - EncodeDecodeOffset;
+			OutZ = (Z << RsapStatic::ChunkMortonShift) - EncodeDecodeOffset;
 		}
 		
 		// Moves the morton-code exactly one chunk in the given direction.

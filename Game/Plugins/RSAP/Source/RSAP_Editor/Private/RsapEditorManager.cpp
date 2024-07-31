@@ -67,14 +67,16 @@ void URsapEditorManager::Regenerate()
 		UE_LOG(LogRsap, Warning, TEXT("Cannot regenerate the navmesh without an active world."));
 		return;
 	}
+
+	// todo:
+	// Stop updater.
+	// Wait until ongoing update completes.
+	// Clear navmesh.
+	// Stage all actors.
+	// Start updater.
 	
-	// // NavMeshGenerator->Generate(GEditor->GetEditorSubsystem<UEditorTransformObserver>()->GetLevelActorBounds());
-	// if(const UPackage* Package = Cast<UPackage>(EditorWorld->GetOuter()); !Package->IsDirty() && Package->MarkPackageDirty())
-	// {
-	// 	UE_LOG(LogRsap, Log, TEXT("Level is marked dirty. The 'sound-navigation-mesh' will be saved when the user saves the level."))
-	// }
-	//
-	// NavMeshDebugger->Draw(EditorWorld);
+	NavMeshUpdater->StageData(FRsapEditorEvents::GetLevelActorBounds());
+	// mark level dirty ...
 }
 
 void URsapEditorManager::UpdateDebugSettings (
@@ -189,5 +191,6 @@ void URsapEditorManager::OnNavMeshUpdated() const
 
 void URsapEditorManager::OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation) const
 {
+	const bool bUpdaterRunning = NavMeshUpdater->IsRunningTask();
 	if(!NavMeshUpdater->IsRunningTask()) NavMeshDebugger->Draw(NavMesh, EditorWorld, CameraLocation, CameraRotation);
 }

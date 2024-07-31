@@ -58,34 +58,34 @@ public:
 	// 	Initialize(RootNodeState);
 	// }
 
-	FORCEINLINE FVector GetCenter(const uint32 ChunkHalveSize) const
-	{
-		return FVector(
-			Location.X + ChunkHalveSize,
-			Location.Y + ChunkHalveSize,
-			Location.Z + ChunkHalveSize
-		);
-	}
+	// FORCEINLINE FVector GetCenter(const uint32 ChunkHalveSize) const
+	// {
+	// 	return FVector(
+	// 		Location.X + ChunkHalveSize,
+	// 		Location.Y + ChunkHalveSize,
+	// 		Location.Z + ChunkHalveSize
+	// 	);
+	// }
+	//
+	// FORCEINLINE FGlobalBounds GetBounds() const
+	// {
+	// 	return TBounds(Location, Location+RsapStatic::ChunkSize);
+	// }
 
-	FORCEINLINE FGlobalBounds GetBounds() const
-	{
-		return TBounds(Location, Location+RsapStatic::ChunkSize);
-	}
-
-	FORCEINLINE FGlobalVector GetNeighbourLocation(const rsap_direction Direction) const
-	{
-		FGlobalVector NeighbourLocation = Location;
-		switch (Direction) {
-			case Direction::X_Negative: NeighbourLocation.X -= RsapStatic::ChunkSize; break;
-			case Direction::Y_Negative: NeighbourLocation.Y -= RsapStatic::ChunkSize; break;
-			case Direction::Z_Negative: NeighbourLocation.Z -= RsapStatic::ChunkSize; break;
-			case Direction::X_Positive: NeighbourLocation.X += RsapStatic::ChunkSize; break;
-			case Direction::Y_Positive: NeighbourLocation.Y += RsapStatic::ChunkSize; break;
-			case Direction::Z_Positive: NeighbourLocation.Z += RsapStatic::ChunkSize; break;
-			default: break;
-		}
-		return NeighbourLocation;
-	}
+	// FORCEINLINE FGlobalVector GetNeighbourLocation(const rsap_direction Direction) const
+	// {
+	// 	FGlobalVector NeighbourLocation = Location;
+	// 	switch (Direction) {
+	// 		case Direction::X_Negative: NeighbourLocation.X -= RsapStatic::ChunkSize; break;
+	// 		case Direction::Y_Negative: NeighbourLocation.Y -= RsapStatic::ChunkSize; break;
+	// 		case Direction::Z_Negative: NeighbourLocation.Z -= RsapStatic::ChunkSize; break;
+	// 		case Direction::X_Positive: NeighbourLocation.X += RsapStatic::ChunkSize; break;
+	// 		case Direction::Y_Positive: NeighbourLocation.Y += RsapStatic::ChunkSize; break;
+	// 		case Direction::Z_Positive: NeighbourLocation.Z += RsapStatic::ChunkSize; break;
+	// 		default: break;
+	// 	}
+	// 	return NeighbourLocation;
+	// }
 	
 	static FORCEINLINE chunk_morton GetNeighbour(const chunk_morton ChunkMorton, const rsap_direction Direction)
 	{

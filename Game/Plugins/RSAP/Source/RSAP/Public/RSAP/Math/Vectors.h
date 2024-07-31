@@ -98,12 +98,12 @@ struct FGlobalVector // todo: FChunkVector with 21 bits per axis?
 {
 	int32 X, Y, Z;
 
-	FORCEINLINE node_morton ToChunkMorton() const
+	FORCEINLINE chunk_morton ToChunkMorton() const
 	{
 		return FMortonUtils::Chunk::Encode(X, Y, Z);
 	}
 
-	static FORCEINLINE node_morton ToChunkMorton(const int32 X, const int32 Y, const int32 Z)
+	static FORCEINLINE chunk_morton ToChunkMorton(const int32 X, const int32 Y, const int32 Z)
 	{
 		return FMortonUtils::Chunk::Encode(X, Y, Z);
 	}

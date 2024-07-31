@@ -25,6 +25,7 @@ public class RSAP_Editor : ModuleRules
 				"Blutility",
 				"UnrealEd",
 				"LevelEditor",
+				"Projects",
 				"ToolMenus",
 				"EditorStyle",
 				"EditorSubsystem",

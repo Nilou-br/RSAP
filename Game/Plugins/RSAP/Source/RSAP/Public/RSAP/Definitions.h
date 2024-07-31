@@ -54,8 +54,8 @@ namespace RsapStatic
 	static inline constexpr uint8 StaticDepth = 5;
 	static inline constexpr uint8 VoxelSizeExponent = 0;
 	static inline constexpr int32 ChunkSize = 1024;
-	static inline constexpr uint8 ChunkKeyShift = 10 + VoxelSizeExponent;
-	static inline constexpr uint32 ChunkMask = ~((1<<ChunkKeyShift)-1);
+	static inline constexpr uint8 ChunkMortonShift = 10 + VoxelSizeExponent;
+	static inline constexpr uint32 ChunkMask = ~((1<<ChunkMortonShift)-1);
 	static inline constexpr uint16 MortonOffsets[10] = {1024, 512, 256, 128, 64, 32, 16, 8, 4, 2};
 	static inline constexpr uint8 SmallestNodeSize = 2; // todo: set to 2.
 	static inline constexpr int32 NodeSizes[10] = {1024, 512, 256, 128, 64, 32, 16, 8, 4, 2};
