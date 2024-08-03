@@ -46,6 +46,7 @@ public:
 	static FOnCameraMoved	OnCameraMoved;
 	
 	FORCEINLINE static FActorBoundsMap& GetLevelActorBounds(){ return CachedActorBounds; }
+	FORCEINLINE static const AActor* GetActor(const actor_key Key) { return CachedActors.find(Key)->second.Get(); }
 	
 private:
 	FORCEINLINE static bool ActorHasCollisionComponent(const AActor* Actor);

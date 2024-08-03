@@ -68,11 +68,11 @@ namespace RsapStatic
 namespace ChildIdxMasks
 {
 	static inline constexpr uint8 Masks[8] = {
-		0b10000000, 0b01000000, 0b00100000, 0b00010000,
-		0b00001000, 0b00000100, 0b00000010, 0b00000001
+		0b00000001, 0b00000010, 0b00000100, 0b00001000,
+		0b00010000, 0b00100000, 0b01000000, 0b10000000
 	};
 	
-	namespace Set
+	namespace Clear
 	{
 		static inline constexpr uint8 X_Negative = 0b10101010;
 		static inline constexpr uint8 Y_Negative = 0b11001100;
@@ -83,7 +83,7 @@ namespace ChildIdxMasks
 		static inline constexpr uint8 Z_Positive = 0b11110000;
 	}
 		
-	namespace Clear
+	namespace Set
 	{
 		static inline constexpr uint8 X_Negative = 0b01010101;
 		static inline constexpr uint8 Y_Negative = 0b00110011;

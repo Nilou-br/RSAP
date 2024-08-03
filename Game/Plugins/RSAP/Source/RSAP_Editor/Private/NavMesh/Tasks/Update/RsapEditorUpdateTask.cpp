@@ -2,7 +2,7 @@
 
 #include "RSAP_Editor/Public/NavMesh/Tasks/Update/RsapEditorUpdateTask.h"
 #include "RSAP/Math/Bounds.h"
-
+#include "RSAP_Editor/Public/RsapEditorEvents.h"
 
 
 // Returns reference to this chunk. Will initialize one if it does not exist yet.
@@ -19,7 +19,7 @@ void FRsapEditorUpdateTask::InitParentsOfNode(const FChunk* Chunk, const node_mo
 
 	// If this parent was inserted, then continue recursion. Stop if we reached the root node.
 	bool bWasInserted;
-	FNode& ParentNode = Chunk->TryInitNode(bWasInserted, ParentNodeMC, LayerIdx, NodeState);
+	FNode& ParentNode = Chunk->TryInitNode(bWasInserted, ParentNodeMC, ParentLayerIdx, NodeState);
 	if(bWasInserted && ParentLayerIdx > 0) InitParentsOfNode(Chunk, ParentNodeMC, ParentLayerIdx, NodeState);
 
 	// Update the ChildOcclusions on the parent to know this child exists and is occluding.
@@ -30,10 +30,9 @@ void FRsapEditorUpdateTask::InitParentsOfNode(const FChunk* Chunk, const node_mo
 FNode& FRsapEditorUpdateTask::TryInitNodeAndParents(const FChunk* Chunk, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState)
 {
 	bool bWasInserted;
-	FNode& Node =  Chunk->TryInitNode(bWasInserted, NodeMC, LayerIdx, NodeState);
+	FNode& Node = Chunk->TryInitNode(bWasInserted, NodeMC, LayerIdx, NodeState);
 
-	// If the node was inserted, then also initialize it's parent if it does not exist yet.
-	// The parent's ChildOcclusions should also be updated to reflect this child being alive and occluding.
+	// If the node was inserted, then also initialize it's parents if they do not exist yet.
 	if(bWasInserted) InitParentsOfNode(Chunk, NodeMC, LayerIdx, NodeState);
 	return Node;
 }
@@ -129,12 +128,12 @@ void FRsapEditorUpdateTask::ReRasterizeBounds(const actor_key ActorKey, const FG
 	// This results in a bit-mask which tells exactly which nodes, and from which layer, fit between the rounded/un-rounded bounds, which don't have to be checked for occlusion because these do not overlap with the actor's bounds.
 	const FLayerSkipMasks LayerSkipMasks(Bounds, RoundedBounds);
 	
-	// Get the morton-codes of the first node and chunk. Updating these directly when moving to another node/chunk is extremely fast compared to encoding a new morton-code for every node/chunk.
-	node_morton NodeMC = RoundedBounds.Min.ToNodeVector().ToNodeMorton(); // Will will be updated in every iteration.
-	chunk_morton ChunkMC = RoundedBounds.Min.ToChunkMorton(); // Will be incremented when iterating into a new chunk. We know we are in a new chunk when an axis has overflown to 0.
-
-	// Get the first chunk.
-	FChunk* CurrentChunk = TryInitChunk(ChunkMC);
+	// Get the morton-codes of the first node and chunk. Updating these directly when moving to another node/chunk is extremely fast compared to encoding a new morton-code everytime.
+	// Keep track of the starting node/chunk morton-code to reset the axis to on the morton-code.
+	const node_morton StartingNodeMC = RoundedBounds.Min.ToNodeVector().ToNodeMorton();
+	const chunk_morton StartingChunkMC = RoundedBounds.Min.ToChunkMorton();
+	node_morton NodeMC = StartingNodeMC; // Will will be updated in every iteration.
+	chunk_morton ChunkMC = StartingChunkMC; // Will be updated when iterating into a new chunk. We know we are in a new chunk when the updated axis on the node's MC has overflown to 0.
 
 	// This mask represents the edges that have nodes that can be skipped. When we are at an edge in a certain direction, then that direction will certainly have nodes that can be skipped.
 	rsap_direction EdgesToCheck = 0b111000; // Initially set to be on the negative edge in every direction.
@@ -150,60 +149,63 @@ void FRsapEditorUpdateTask::ReRasterizeBounds(const actor_key ActorKey, const FG
 			for (NodeLocation.X = RoundedBounds.Min.X; NodeLocation.X <= RoundedBounds.Max.X; NodeLocation.X += RsapStatic::NodeSizes[LayerIdx])
 			{
 				if(NodeLocation.X == RoundedBounds.Max.X) EdgesToCheck &= Direction::X_Negative;
-
+				
 				if(FNode::HasWorldOverlap(World, NodeLocation, LayerIdx))
 				{
+					FChunk* CurrentChunk = TryInitChunk(ChunkMC);
+					
 					// There is an overlap, so get/init the node, and also init any missing parents.
 					FNode& Node = TryInitNodeAndParents(CurrentChunk, NodeMC, LayerIdx, 0);
 
 					// Re-rasterize if we are not yet on the static-depth.
 					if(LayerIdx < RsapStatic::StaticDepth)
 					{
-						ReRasterizeNode(CurrentChunk, ChunkMC, Node, NodeMC, NodeLocation, LayerIdx, EdgesToCheck, LayerSkipMasks);
+						ReRasterizeNode(CurrentChunk, Node, NodeMC, NodeLocation, LayerIdx, EdgesToCheck, LayerSkipMasks);
 					}
 				}
 				
 				if(NodeLocation.X == RoundedBounds.Min.X) EdgesToCheck &= Direction::NOT_X_Negative;
-				if(NodeLocation.X == RoundedBounds.Max.X) continue;
-				NodeMC = FMortonUtils::Node::AddX(NodeMC, LayerIdx);
-				if(FMortonUtils::Node::XEqualsZero(NodeMC))
+				if(NodeLocation.X == RoundedBounds.Max.X)
 				{
-					ChunkMC = FMortonUtils::Chunk::IncrementX(ChunkMC);
-					CurrentChunk = TryInitChunk(ChunkMC);
+					NodeMC = FMortonUtils::Node::CopyX(NodeMC, StartingNodeMC);
+					ChunkMC = FMortonUtils::Chunk::CopyX(ChunkMC, StartingChunkMC);
+					continue;
 				}
+				
+				NodeMC = FMortonUtils::Node::AddX(NodeMC, LayerIdx);
+				if(FMortonUtils::Node::XEqualsZero(NodeMC)) ChunkMC = FMortonUtils::Chunk::IncrementX(ChunkMC);
 			}
 	
 			if(NodeLocation.Y == RoundedBounds.Min.Y) EdgesToCheck &= Direction::NOT_Y_Negative;
-			if(NodeLocation.Y == RoundedBounds.Max.Y) continue;
-			NodeMC = FMortonUtils::Node::AddY(NodeMC, LayerIdx);
-			if(FMortonUtils::Node::YEqualsZero(NodeMC))
+			if(NodeLocation.Y == RoundedBounds.Max.Y)
 			{
-				ChunkMC = FMortonUtils::Chunk::IncrementY(ChunkMC);
-				CurrentChunk = TryInitChunk(ChunkMC);
+				NodeMC = FMortonUtils::Node::CopyY(NodeMC, StartingNodeMC);
+				ChunkMC = FMortonUtils::Chunk::CopyY(ChunkMC, StartingChunkMC);
+				continue;
 			}
+
+			NodeMC = FMortonUtils::Node::AddY(NodeMC, LayerIdx);
+			if(FMortonUtils::Node::YEqualsZero(NodeMC)) ChunkMC = FMortonUtils::Chunk::IncrementY(ChunkMC);
 		}
 	
 		if(NodeLocation.Z == RoundedBounds.Min.Z) EdgesToCheck &= Direction::NOT_Z_Negative;
-		if(NodeLocation.Z == RoundedBounds.Max.Z) continue;
+		if(NodeLocation.Z == RoundedBounds.Max.Z) continue; // Don't need to reset Z axis because this axis won't be repeated.
+		
 		NodeMC = FMortonUtils::Node::AddZ(NodeMC, LayerIdx);
-		if(FMortonUtils::Node::ZEqualsZero(NodeMC))
-		{
-			ChunkMC = FMortonUtils::Chunk::IncrementZ(ChunkMC);
-			CurrentChunk = TryInitChunk(ChunkMC);
-		}
+		if(FMortonUtils::Node::ZEqualsZero(NodeMC)) ChunkMC = FMortonUtils::Chunk::IncrementZ(ChunkMC);
 	}
 }
 
 // todo: unroll this method along with ::GetChildRasterizeMask.
 // Re-rasterizes the node while filtering out children that are not intersecting with the actor's boundaries.
 // This method is recursive.
-void FRsapEditorUpdateTask::ReRasterizeNode(FChunk* Chunk, const chunk_morton ChunkMC, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, rsap_direction EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks)
+void FRsapEditorUpdateTask::ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, rsap_direction EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks)
 {
 	// First check if we have any edges to check. If not, then do a full re-rasterization, which will check each child for occlusion.
 	if(!EdgesToCheck)
 	{
 		// Call the ReRasterizeNode overload that skips the filtering.
-		ReRasterizeNode(Chunk, ChunkMC, Node, NodeMC, NodeLocation, LayerIdx);
+		ReRasterizeNode(Chunk, Node, NodeMC, NodeLocation, LayerIdx);
 		return;
 	}
 
@@ -215,31 +217,30 @@ void FRsapEditorUpdateTask::ReRasterizeNode(FChunk* Chunk, const chunk_morton Ch
 	const uint8 ChildrenToRasterize = GetChildrenToRasterizeAndUpdateEdges(EdgesToCheck, LayerSkipMasks, LayerIdx, ChildLayerIdx);
 
 	// Create the children.
-	for(uint8 ChildIdx = 0; ChildIdx < 8; ++ChildIdx)
+	for(child_idx ChildIdx = 0; ChildIdx < 8; ++ChildIdx)
 	{
-		// If child should be re-rasterized.
-		if(ChildrenToRasterize & ChildIdxMasks::Masks[ChildIdx])
-		{
-			// Skip if not overlapping.
-			const FGlobalVector ChildLocation = FNode::GetChildLocation(NodeLocation, ChildLayerIdx, ChildIdx);
-			if(!FNode::HasWorldOverlap(World, ChildLocation, ChildLayerIdx)) continue;
+		// Skip if this one should not be re-rasterized.
+		if(!(ChildrenToRasterize & ChildIdxMasks::Masks[ChildIdx])) continue;
+		
+		// Skip if not overlapping.
+		const FGlobalVector ChildLocation = FNode::GetChildLocation(NodeLocation, ChildLayerIdx, ChildIdx);
+		if(!FNode::HasWorldOverlap(World, ChildLocation, ChildLayerIdx)) continue;
 
-			// Create node
-			const node_morton ChildNodeMC = FMortonUtils::Node::GetChild(NodeMC, ChildLayerIdx, ChildIdx);
-			FNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk->GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk->TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
+		// Create node
+		const node_morton ChildNodeMC = FMortonUtils::Node::GetChild(NodeMC, ChildLayerIdx, ChildIdx);
+		FNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk->GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk->TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
 
-			// Set child to be alive on parent.
-			Node.SetChildOccluding(ChildIdx);
+		// Set child to be alive on parent.
+		Node.SetChildOccluding(ChildIdx);
 
-			// Stop recursion if Static-Depth is reached.
-			if(ChildLayerIdx == RsapStatic::StaticDepth) continue;
-			ReRasterizeNode(Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildLocation, ChildLayerIdx, EdgesToCheck, LayerSkipMasks);
-		}
+		// Stop recursion if Static-Depth is reached.
+		if(ChildLayerIdx == RsapStatic::StaticDepth) continue;
+		ReRasterizeNode(Chunk, ChildNode, ChildNodeMC, ChildLocation, ChildLayerIdx, EdgesToCheck, LayerSkipMasks);
 	}
 }
 
 // Re-rasterizes the node normally without filtering.
-void FRsapEditorUpdateTask::ReRasterizeNode(FChunk* Chunk, const chunk_morton ChunkMC, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
+void FRsapEditorUpdateTask::ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
 {
 	const layer_idx ChildLayerIdx = LayerIdx+1;
 	
@@ -258,7 +259,7 @@ void FRsapEditorUpdateTask::ReRasterizeNode(FChunk* Chunk, const chunk_morton Ch
 
 		// Stop recursion if Static-Depth is reached.
 		if(ChildLayerIdx == RsapStatic::StaticDepth) continue;
-		ReRasterizeNode(Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildLocation, ChildLayerIdx);
+		ReRasterizeNode(Chunk, ChildNode, ChildNodeMC, ChildLocation, ChildLayerIdx);
 	}
 }
 
@@ -279,6 +280,7 @@ uint32 FRsapEditorUpdateTask::Run() // todo: runs on startup
 		// Get the optimal layer to start updating the nodes in.
 		const layer_idx StartingLayerIdx = CalculateOptimalStartingLayer(FMovedBounds(PrevBoundsList.back(), CurrBounds));
 
+		const AActor* Actor = FRsapEditorEvents::GetActor(ActorKey);
 		ReRasterizeBounds(ActorKey, CurrBounds, StartingLayerIdx);
 
 		// for (int i = 0; i < 50000; ++i)

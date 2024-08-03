@@ -173,6 +173,10 @@ void FRsapEditorEvents::HandleObjectPropertyChanged(UObject* Object, FPropertyCh
 	if(Iterator == CachedActorBounds.end())
 	{
 		// This actor is not cached, so it either has been dropped in the viewport, or the user has triggered an "undo" operation on a deleted actor.
+		
+		// Check if actor has any collision component.
+		if(!ActorHasCollisionComponent(Actor)) return;
+		
 		// Cache it, and broadcast the event without any "previous" bounds.
 		const FGlobalBounds ActorBounds(Actor);
 		CachedActorBounds.emplace(ActorKey, ActorBounds);

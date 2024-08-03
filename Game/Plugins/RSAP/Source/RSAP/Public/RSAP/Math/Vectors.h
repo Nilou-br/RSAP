@@ -115,6 +115,11 @@ struct FGlobalVector // todo: FChunkVector with 21 bits per axis?
 		return FGlobalVector(OutX, OutY, OutZ);
 	}
 
+	FORCEINLINE FGlobalVector RoundToChunk() const
+	{
+		return *this & RsapStatic::ChunkMask;
+	}
+
 	FORCEINLINE FGlobalVector ComponentMin(const FGlobalVector& Other) const
 	{
 		return FGlobalVector(FMath::Min(X, Other.X), FMath::Min(Y, Other.Y), FMath::Min(Z, Other.Z));

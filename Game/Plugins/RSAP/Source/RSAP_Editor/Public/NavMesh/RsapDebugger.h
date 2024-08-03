@@ -4,8 +4,6 @@
 
 #include "RSAP/Definitions.h"
 
-DECLARE_LOG_CATEGORY_EXTERN(LogNavMeshDebugger, Log, All);
-
 
 
 struct FRsapDebugSettings
@@ -21,6 +19,8 @@ struct FRsapDebugSettings
 class FRsapDebugger
 {
 	FRsapDebugSettings DebugSettings;
+
+	FORCEINLINE static void DrawNode(const UWorld* World, const FGlobalVector& NodeCenter, const layer_idx LayerIdx);
 	
 public:
 	explicit FRsapDebugger(){}
@@ -30,10 +30,8 @@ public:
 	void UpdateSettings(const FRsapDebugSettings InDebugSettings){ DebugSettings = InDebugSettings;	}
 
 private:
-	void DrawNodes(const UWorld* World, const FVector& CameraLocation, const FVector& CameraForwardVector) const;
-	//void RecursiveDrawNodes(const UWorld* World, const FChunk* Chunk, const node_morton MortonCode, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector) const;
-	
-	void OldRecursiveDrawNodes(const UWorld* World, const FChunk* Chunk, const node_morton MortonCode, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector) const;
+	static void DrawNodes(const UWorld* World, const FChunk& Chunk, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector);
+	static void SlowDrawNodes(const UWorld* World, const FChunk& Chunk, const FGlobalVector ChunkLocation, const layer_idx LayerIdx);
 
 	static inline constexpr FColor LayerColors[10] = {
 		{255, 0, 0},       // Red

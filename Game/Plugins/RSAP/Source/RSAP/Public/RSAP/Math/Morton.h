@@ -198,9 +198,27 @@ struct FMortonUtils
 			return DiffX & Mask_X | DiffY & Mask_Y | DiffZ & Mask_Z;
 		}
 
-		FORCEINLINE static bool XEqualsZero(const node_morton MortonCode) { return MortonCode & Mask_X; }
-		FORCEINLINE static bool YEqualsZero(const node_morton MortonCode) { return MortonCode & Mask_Y; }
-		FORCEINLINE static bool ZEqualsZero(const node_morton MortonCode) { return MortonCode & Mask_Z; }
+		// Copies the X coordinate from rhs into lhs and returns the modified lhs.
+		FORCEINLINE static node_morton CopyX(const node_morton lhs, const node_morton rhs)
+		{
+			return lhs & Mask_YZ | rhs & Mask_X;
+		}
+
+		// Copies the Y coordinate from rhs into lhs and returns the modified lhs.
+		FORCEINLINE static node_morton CopyY(const node_morton lhs, const node_morton rhs)
+		{
+			return lhs & Mask_XZ | rhs & Mask_Y;
+		}
+
+		// Copies the Z coordinate from rhs into lhs and returns the modified lhs.
+		FORCEINLINE static node_morton CopyZ(const node_morton lhs, const node_morton rhs)
+		{
+			return lhs & Mask_XY | rhs & Mask_Z;
+		}
+
+		FORCEINLINE static bool XEqualsZero(const node_morton MortonCode) { return (MortonCode & Mask_X) == 0; }
+		FORCEINLINE static bool YEqualsZero(const node_morton MortonCode) { return (MortonCode & Mask_Y) == 0; }
+		FORCEINLINE static bool ZEqualsZero(const node_morton MortonCode) { return (MortonCode & Mask_Z) == 0; }
 	};
 
 
@@ -245,12 +263,12 @@ struct FMortonUtils
 		FORCEINLINE static chunk_morton Move(const chunk_morton MortonCode, const rsap_direction Direction)
 		{
 			switch (Direction) {
-				case Direction::X_Negative: return IncrementX(MortonCode);
-				case Direction::Y_Negative: return IncrementY(MortonCode);
-				case Direction::Z_Negative: return IncrementZ(MortonCode);
-				case Direction::X_Positive: return DecrementX(MortonCode);
-				case Direction::Y_Positive: return DecrementY(MortonCode);
-				case Direction::Z_Positive: return DecrementZ(MortonCode);
+				case Direction::X_Negative: return DecrementX(MortonCode);
+				case Direction::Y_Negative: return DecrementY(MortonCode);
+				case Direction::Z_Negative: return DecrementZ(MortonCode);
+				case Direction::X_Positive: return IncrementX(MortonCode);
+				case Direction::Y_Positive: return IncrementY(MortonCode);
+				case Direction::Z_Positive: return IncrementZ(MortonCode);
 				default: return MortonCode;
 			}
 		}
@@ -295,6 +313,24 @@ struct FMortonUtils
 		{
 			const chunk_morton DiffZ = (MortonCode & Mask_Z) - 1;
 			return DiffZ & Mask_Z | MortonCode & Mask_XY;
+		}
+		
+		// Copies the X coordinate from rhs into lhs and returns the modified lhs.
+		FORCEINLINE static chunk_morton CopyX(const chunk_morton lhs, const chunk_morton rhs)
+		{
+			return lhs & Mask_YZ | rhs & Mask_X;
+		}
+
+		// Copies the Y coordinate from rhs into lhs and returns the modified lhs.
+		FORCEINLINE static chunk_morton CopyY(const chunk_morton lhs, const chunk_morton rhs)
+		{
+			return lhs & Mask_XZ | rhs & Mask_Y;
+		}
+
+		// Copies the Z coordinate from rhs into lhs and returns the modified lhs.
+		FORCEINLINE static chunk_morton CopyZ(const chunk_morton lhs, const chunk_morton rhs)
+		{
+			return lhs & Mask_XY | rhs & Mask_Z;
 		}
 	};
 };

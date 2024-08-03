@@ -157,7 +157,7 @@ struct FNode
 		};
 	}
 
-	FORCEINLINE bool DoesChildExist(const uint8 ChildIdx) const
+	FORCEINLINE bool DoesChildExist(const child_idx ChildIdx) const
 	{
 		return ChildOcclusions & ChildIdxMasks::Masks[ChildIdx];
 	}
@@ -182,9 +182,15 @@ struct FNode
 	template <typename Func>
 	void ForEachChild(const node_morton NodeMC, const layer_idx LayerIdx, Func&& Callback) const {
 		if(!HasChildren()) return;
-		// todo: update method using bitmask
-		for (const node_morton ChildMortonCode : FMortonUtils::Node::GetChildren(NodeMC, LayerIdx)) {
-			Callback(ChildMortonCode);
+
+		const layer_idx ChildLayerIdx = LayerIdx+1;
+		child_idx ChildIdx = 0;
+		for(uint8 ChildMask = 0b00000001; ChildMask != 0; ChildMask <<= 1, ++ChildIdx)
+		{
+			// Skip this child if it does not exist.
+			if(!(ChildMask & ChildOcclusions)) continue;
+
+			Callback(FMortonUtils::Node::GetChild(NodeMC, ChildLayerIdx, ChildIdx));
 		}
 	}
 

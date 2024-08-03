@@ -74,7 +74,8 @@ void URsapEditorManager::Regenerate()
 	// Clear navmesh.
 	// Stage all actors.
 	// Start updater.
-	
+
+	NavMesh->clear();
 	NavMeshUpdater->StageData(FRsapEditorEvents::GetLevelActorBounds());
 	// mark level dirty ...
 }
