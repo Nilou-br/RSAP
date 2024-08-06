@@ -195,21 +195,21 @@ struct FNode
 	}
 
 	// Occlusion checks
-	FORCEINLINE static bool HasWorldOverlap(const UWorld* World, const FGlobalVector& ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx)
+	FORCEINLINE static bool HasAnyOverlap(const UWorld* World, const FGlobalVector& ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx)
 	{
-		return FRsapOverlap::World(World, GetGlobalLocation(ChunkLocation, NodeMC), LayerIdx);
+		return FRsapOverlap::Any(World, GetGlobalLocation(ChunkLocation, NodeMC), LayerIdx);
 	}
-	FORCEINLINE static bool HasWorldOverlap(const UWorld* World, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
+	FORCEINLINE static bool HasAnyOverlap(const UWorld* World, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
 	{
-		return FRsapOverlap::World(World, NodeLocation, LayerIdx);
+		return FRsapOverlap::Any(World, NodeLocation, LayerIdx);
 	}
-	FORCEINLINE static bool HasGeomOverlap(const FBodyInstance* BodyInstance, const FGlobalVector& ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx)
+	FORCEINLINE static bool HasComponentOverlap(const UWorld* World, const UPrimitiveComponent* Component, const FGlobalVector& ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx)
 	{
-		return FRsapOverlap::Geom(BodyInstance, GetGlobalLocation(ChunkLocation, NodeMC), LayerIdx);
+		return FRsapOverlap::Component(World, Component, GetGlobalLocation(ChunkLocation, NodeMC), LayerIdx);
 	}
-	FORCEINLINE static bool HasGeomOverlap(const FBodyInstance* BodyInstance, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
+	FORCEINLINE static bool HasComponentOverlap(const UWorld* World, const UPrimitiveComponent* Component, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
 	{
-		return FRsapOverlap::Geom(BodyInstance, NodeLocation, LayerIdx);
+		return FRsapOverlap::Component(World, Component, NodeLocation, LayerIdx);
 	}
 
 	FORCEINLINE void Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const node_morton MortonCode, const layer_idx LayerIdx, const FColor Color, const uint32 Thickness) const

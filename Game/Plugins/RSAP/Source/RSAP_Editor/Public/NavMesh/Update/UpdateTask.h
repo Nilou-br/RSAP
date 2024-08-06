@@ -9,7 +9,7 @@
 /**
  * FRunnable task which is responsible for updating the navmesh.
  */
-class FRsapEditorUpdateTask final : public FRunnable
+class FRsapUpdateTask final : public FRunnable
 {
 	// Used to tell which nodes can be skipped during re-rasterization.
 	// Similar to TBounds, but offers better readability.
@@ -47,13 +47,13 @@ class FRsapEditorUpdateTask final : public FRunnable
 	};
 	
 public:
-	explicit FRsapEditorUpdateTask(const TSharedPtr<TPromise<void>>& Promise, const UWorld* InWorld, const FNavMesh& InNavMesh, FNavMeshUpdateMap& StagedActorBoundaries)
+	explicit FRsapUpdateTask(const TSharedPtr<TPromise<void>>& Promise, const UWorld* InWorld, const FNavMesh& InNavMesh, FNavMeshUpdateMap& StagedActorBoundaries)
 		: Promise(Promise), StopTaskCounter(0),  World(InWorld), NavMesh(InNavMesh), StagedActorBoundaries(std::move(StagedActorBoundaries))
 	{
 		Thread = FRunnableThread::Create(this, TEXT("RsapThread"));
 	}
 
-	virtual ~FRsapEditorUpdateTask() override
+	virtual ~FRsapUpdateTask() override
 	{
 		if (!Thread) return;
 		Thread->Kill(true);
@@ -67,9 +67,9 @@ private:
 	FORCEINLINE static layer_idx CalculateOptimalStartingLayer(const FMovedBounds& MovedBounds);
 	FORCEINLINE static uint8 GetChildrenToRasterizeAndUpdateEdges(rsap_direction& EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks, const layer_idx LayerIdx, const layer_idx ChildLayerIdx);
 	
-	void ReRasterizeBounds(const actor_key ActorKey, const FGlobalBounds& Bounds, const layer_idx LayerIdx);
-	FORCEINLINE void ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, rsap_direction EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks);
-	FORCEINLINE void ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx);
+	void ReRasterizeBounds(const UPrimitiveComponent* CollisionComponent);
+	FORCEINLINE void ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, rsap_direction EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks, const UPrimitiveComponent* CollisionComponent);
+	FORCEINLINE void ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent);
 
 protected:
 	virtual bool Init() override { return true; }

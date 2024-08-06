@@ -1,19 +1,31 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-#include "RSAP_Editor/Public/NavMesh/Tasks/Update/RsapEditorUpdateTask.h"
+#include "RSAP_Editor/Public/NavMesh/Generate/Generator.h"
+
+#include <ranges>
+
 #include "RSAP/Math/Bounds.h"
+#include "RSAP/NavMesh/Types/Chunk.h"
+#include "RSAP/NavMesh/Types/Node.h"
 #include "RSAP_Editor/Public/RsapEditorEvents.h"
 
 
+
+FNavMesh		FRsapGenerator::NavMesh;
+const UWorld*	FRsapGenerator::World;
+
 // Returns reference to this chunk. Will initialize one if it does not exist yet.
-FChunk* FRsapEditorUpdateTask::TryInitChunk(const chunk_morton ChunkMC) const
+FChunk* FRsapGenerator::TryInitChunk(const chunk_morton ChunkMC)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Generator ::TryInitChunk");
 	return &NavMesh->try_emplace(ChunkMC).first->second;
 }
 
 // Recursively inits the parents of the node until an existing one is found. All parents will have their ChildOcclusions set correctly.
-void FRsapEditorUpdateTask::InitParentsOfNode(const FChunk* Chunk, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState)
+void FRsapGenerator::InitParentsOfNode(const FChunk* Chunk, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Generator ::InitParentsOfNode");
+	
 	const layer_idx ParentLayerIdx = LayerIdx-1;
 	const node_morton ParentNodeMC = FMortonUtils::Node::GetParent(NodeMC, ParentLayerIdx);
 
@@ -27,7 +39,7 @@ void FRsapEditorUpdateTask::InitParentsOfNode(const FChunk* Chunk, const node_mo
 	ParentNode.SetChildOccluding(ChildIdx);
 }
 
-FNode& FRsapEditorUpdateTask::TryInitNodeAndParents(const FChunk* Chunk, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState)
+FNode& FRsapGenerator::TryInitNodeAndParents(const FChunk* Chunk, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState)
 {
 	bool bWasInserted;
 	FNode& Node = Chunk->TryInitNode(bWasInserted, NodeMC, LayerIdx, NodeState);
@@ -44,7 +56,7 @@ FNode& FRsapEditorUpdateTask::TryInitNodeAndParents(const FChunk* Chunk, const n
  * so it will skip any upper layers that will definitely occlude the actor anyway,
  * but it will also not return a very deep layer, which is not efficient to loop through compared to using recursion to skip large unoccluded parts.
  */
-layer_idx FRsapEditorUpdateTask::CalculateOptimalStartingLayer(const FMovedBounds& MovedBounds)
+layer_idx FRsapGenerator::CalculateOptimalStartingLayer(const FMovedBounds& MovedBounds)
 {
 	layer_idx StartingLayer = RsapStatic::StaticDepth;
 
@@ -66,8 +78,10 @@ layer_idx FRsapEditorUpdateTask::CalculateOptimalStartingLayer(const FMovedBound
 // Returns a bit-mask that represents the children that should be re-rasterized. 
 // Will also update the EdgesToCheck at the same time.
 // Combining these two prevents having to check each direction multiple times when split in different methods.
-uint8 FRsapEditorUpdateTask::GetChildrenToRasterizeAndUpdateEdges(rsap_direction& EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks, const layer_idx LayerIdx, const layer_idx ChildLayerIdx)
+uint8 FRsapGenerator::GetChildrenToRasterizeAndUpdateEdges(rsap_direction& EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks, const layer_idx LayerIdx, const layer_idx ChildLayerIdx)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Generator ::GetChildrenToRasterizeAndUpdateEdges");
+	
 	const uint16 ClearParentMask = FLayerSkipMasks::ClearParentMasks[LayerIdx];
 	uint8 ChildrenToRasterize = 0b11111111;
 
@@ -119,8 +133,16 @@ uint8 FRsapEditorUpdateTask::GetChildrenToRasterizeAndUpdateEdges(rsap_direction
 }
 
 // todo: this method can be made a template to take in a callback, where the callback is the generate/update specific code.
-void FRsapEditorUpdateTask::ReRasterizeBounds(const actor_key ActorKey, const FGlobalBounds& Bounds, const layer_idx LayerIdx)
+void FRsapGenerator::ReRasterizeBounds(const UPrimitiveComponent* CollisionComponent)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Generator ::ReRasterizeBounds");
+	
+	// Get the bounds of this component.
+	const FGlobalBounds Bounds(CollisionComponent);
+
+	// Get the optimal update layer for these boundaries.
+	const layer_idx LayerIdx = CalculateOptimalStartingLayer(FMovedBounds(FGlobalBounds::EmptyBounds(), Bounds));
+	
 	// Round the bounds to the node-size of the layer. This is the layer we will be looping through.
 	const FGlobalBounds RoundedBounds = Bounds.RoundToLayer(LayerIdx);
 
@@ -150,7 +172,7 @@ void FRsapEditorUpdateTask::ReRasterizeBounds(const actor_key ActorKey, const FG
 			{
 				if(NodeLocation.X == RoundedBounds.Max.X) EdgesToCheck &= Direction::X_Negative;
 				
-				if(FNode::HasWorldOverlap(World, NodeLocation, LayerIdx))
+				if(FNode::HasComponentOverlap(World, CollisionComponent, NodeLocation, LayerIdx))
 				{
 					FChunk* CurrentChunk = TryInitChunk(ChunkMC);
 					
@@ -160,7 +182,7 @@ void FRsapEditorUpdateTask::ReRasterizeBounds(const actor_key ActorKey, const FG
 					// Re-rasterize if we are not yet on the static-depth.
 					if(LayerIdx < RsapStatic::StaticDepth)
 					{
-						ReRasterizeNode(CurrentChunk, Node, NodeMC, NodeLocation, LayerIdx, EdgesToCheck, LayerSkipMasks);
+						ReRasterizeNode(CurrentChunk, Node, NodeMC, NodeLocation, LayerIdx, EdgesToCheck, LayerSkipMasks, CollisionComponent);
 					}
 				}
 				
@@ -199,13 +221,15 @@ void FRsapEditorUpdateTask::ReRasterizeBounds(const actor_key ActorKey, const FG
 // todo: unroll this method along with ::GetChildRasterizeMask.
 // Re-rasterizes the node while filtering out children that are not intersecting with the actor's boundaries.
 // This method is recursive.
-void FRsapEditorUpdateTask::ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, rsap_direction EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks)
+void FRsapGenerator::ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, rsap_direction EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks, const UPrimitiveComponent* CollisionComponent)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Generator ::ReRasterizeNode");
+	
 	// First check if we have any edges to check. If not, then do a full re-rasterization, which will check each child for occlusion.
 	if(!EdgesToCheck)
 	{
 		// Call the ReRasterizeNode overload that skips the filtering.
-		ReRasterizeNode(Chunk, Node, NodeMC, NodeLocation, LayerIdx);
+		ReRasterizeNode(Chunk, Node, NodeMC, NodeLocation, LayerIdx, CollisionComponent);
 		return;
 	}
 
@@ -224,7 +248,7 @@ void FRsapEditorUpdateTask::ReRasterizeNode(FChunk* Chunk, FNode& Node, const no
 		
 		// Skip if not overlapping.
 		const FGlobalVector ChildLocation = FNode::GetChildLocation(NodeLocation, ChildLayerIdx, ChildIdx);
-		if(!FNode::HasWorldOverlap(World, ChildLocation, ChildLayerIdx)) continue;
+		if(!FNode::HasComponentOverlap(World, CollisionComponent, ChildLocation, ChildLayerIdx)) continue;
 
 		// Create node
 		const node_morton ChildNodeMC = FMortonUtils::Node::GetChild(NodeMC, ChildLayerIdx, ChildIdx);
@@ -235,13 +259,15 @@ void FRsapEditorUpdateTask::ReRasterizeNode(FChunk* Chunk, FNode& Node, const no
 
 		// Stop recursion if Static-Depth is reached.
 		if(ChildLayerIdx == RsapStatic::StaticDepth) continue;
-		ReRasterizeNode(Chunk, ChildNode, ChildNodeMC, ChildLocation, ChildLayerIdx, EdgesToCheck, LayerSkipMasks);
+		ReRasterizeNode(Chunk, ChildNode, ChildNodeMC, ChildLocation, ChildLayerIdx, EdgesToCheck, LayerSkipMasks, CollisionComponent);
 	}
 }
 
 // Re-rasterizes the node normally without filtering.
-void FRsapEditorUpdateTask::ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
+void FRsapGenerator::ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Generator ::ReRasterizeNode");
+	
 	const layer_idx ChildLayerIdx = LayerIdx+1;
 	
 	// Create the children.
@@ -249,7 +275,7 @@ void FRsapEditorUpdateTask::ReRasterizeNode(FChunk* Chunk, FNode& Node, const no
 	{
 		// Skip if not overlapping.
 		const FGlobalVector ChildLocation = FNode::GetChildLocation(NodeLocation, ChildLayerIdx, ChildIdx);
-		if(!FNode::HasWorldOverlap(World, ChildLocation, ChildLayerIdx)) continue;
+		if(!FNode::HasComponentOverlap(World, CollisionComponent, ChildLocation, ChildLayerIdx)) continue;
 
 		const node_morton ChildNodeMC = FMortonUtils::Node::GetChild(NodeMC, ChildLayerIdx, ChildIdx);
 		FNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk->GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk->TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
@@ -259,40 +285,50 @@ void FRsapEditorUpdateTask::ReRasterizeNode(FChunk* Chunk, FNode& Node, const no
 
 		// Stop recursion if Static-Depth is reached.
 		if(ChildLayerIdx == RsapStatic::StaticDepth) continue;
-		ReRasterizeNode(Chunk, ChildNode, ChildNodeMC, ChildLocation, ChildLayerIdx);
+		ReRasterizeNode(Chunk, ChildNode, ChildNodeMC, ChildLocation, ChildLayerIdx, CollisionComponent);
 	}
 }
 
-/**
- * Updates the navmesh using the given list of bound-pairs which indicates the areas that needs to be updated.
- */
-uint32 FRsapEditorUpdateTask::Run() // todo: runs on startup
+void FRsapGenerator::Generate(const UWorld* InWorld, const FNavMesh& InNavMesh, const FActorMap& ActorMap)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Generator ::Run");
+
+	World = InWorld;
+	NavMesh = InNavMesh;
+	
 	const auto StartTime = std::chrono::high_resolution_clock::now();
 
 	FRsapOverlap::InitCollisionBoxes();
 	
-	for (auto& [ActorKey, StagedBounds] : StagedActorBoundaries)
+	for (const auto ActorPtr : ActorMap | std::views::values)
 	{
-		const std::vector<FGlobalBounds>& PrevBoundsList = StagedBounds.first;
-		FGlobalBounds CurrBounds = StagedBounds.second;
-		
-		// Get the optimal layer to start updating the nodes in.
-		const layer_idx StartingLayerIdx = CalculateOptimalStartingLayer(FMovedBounds(PrevBoundsList.back(), CurrBounds));
+		// Get the components that have collisions from this actor. REFACTOR.
+		std::vector<const UPrimitiveComponent*> CollisionComponents;
+		TArray<UActorComponent*> Components;
+		ActorPtr->GetComponents(Components);
+		for (UActorComponent* Component : Components)
+		{
+			if (const UPrimitiveComponent* PrimitiveComponent = Cast<UPrimitiveComponent>(Component); PrimitiveComponent)
+			{
+				CollisionComponents.emplace_back(PrimitiveComponent);
+			}
+		}
+		if(CollisionComponents.empty()) continue;
 
-		const AActor* Actor = FRsapEditorEvents::GetActor(ActorKey);
-		ReRasterizeBounds(ActorKey, CurrBounds, StartingLayerIdx);
-
-		// for (int i = 0; i < 50000; ++i)
-		// {
-		// 	
-		// }
+		for (const UPrimitiveComponent* CollisionComponent : CollisionComponents)
+		{
+			// ReRasterizeBounds(CollisionComponents, CurrBounds, StartingLayerIdx);
+			for (int i = 0; i < 10000; ++i)
+			{
+				ReRasterizeBounds(CollisionComponent);
+			}
+		}
 	}
 
+	NavMesh.reset();
+
 	const auto EndTime = std::chrono::high_resolution_clock::now();
-	UE_LOG(LogRsap, Warning, TEXT("Update took:"));
+	UE_LOG(LogRsap, Warning, TEXT("Generation took:"));
 	UE_LOG(LogRsap, Warning, TEXT("'%lld' milli-seconds"), std::chrono::duration_cast<std::chrono::milliseconds>(EndTime - StartTime).count());
 	UE_LOG(LogRsap, Warning, TEXT("'%lld' micro-seconds"), std::chrono::duration_cast<std::chrono::microseconds>(EndTime - StartTime).count());
-
-	return 0;
 }

@@ -47,6 +47,27 @@ struct TBounds
 		if(Max.Z == Min.Z) ++Max.Z;
 	}
 
+	explicit TBounds(const UPrimitiveComponent* Component) : bIsValid(true)
+	{
+		const FVector Origin = Component->Bounds.Origin;
+		const FVector Extent = Component->Bounds.BoxExtent;
+        
+		// Get the bounds from the Origin and Extent, and rounding the result down to an integer.
+		Min = VectorType(	FMath::RoundToInt(Origin.X - Extent.X), 
+							FMath::RoundToInt(Origin.Y - Extent.Y), 
+							FMath::RoundToInt(Origin.Z - Extent.Z));
+		
+		Max = VectorType(	FMath::RoundToInt(Origin.X + Extent.X), 
+							FMath::RoundToInt(Origin.Y + Extent.Y), 
+							FMath::RoundToInt(Origin.Z + Extent.Z));
+
+		// Increment axis on Max if it equals the corresponding axis on Min.
+		// There needs to be at least 1 unit of depth.
+		if(Max.X == Min.X) ++Max.X;
+		if(Max.Y == Min.Y) ++Max.Y;
+		if(Max.Z == Min.Z) ++Max.Z;
+	}
+
 	// Returns a bounds object that has no dimensions and is set to be invalid. Used within the TMovedBounds type to know it will be ignored.
 	static TBounds<VectorType> EmptyBounds()
 	{

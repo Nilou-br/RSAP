@@ -19,11 +19,28 @@ struct FRsapOverlap
 		}
 	}
 
-	static bool World(const UWorld* World, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
+	static bool Any(const UWorld* World, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
 	{
-		TRACE_CPUPROFILER_EVENT_SCOPE_STR("HasWorldOverlap");
-	
-		return FPhysicsInterface::GeomOverlapBlockingTest(
+		TRACE_CPUPROFILER_EVENT_SCOPE_STR("Overlap ::WorldAny");
+
+		// GeomOverlapBlockingTest
+		return FPhysicsInterface::GeomOverlapAnyTest(
+			World,
+			CollisionBoxes[LayerIdx],
+			*(NodeLocation + RsapStatic::NodeHalveSizes[LayerIdx]),
+			FQuat::Identity,
+			ECollisionChannel::ECC_WorldStatic,
+			FCollisionQueryParams::DefaultQueryParam,
+			FCollisionResponseParams::DefaultResponseParam
+		);
+	}
+
+	static bool Component(const UWorld* World, const UPrimitiveComponent* Component, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE_STR("Overlap ::WorldActor");
+
+		// GeomOverlapBlockingTest
+		return FPhysicsInterface::GeomOverlapAnyTest(
 			World,
 			CollisionBoxes[LayerIdx],
 			*(NodeLocation + RsapStatic::NodeHalveSizes[LayerIdx]),
@@ -36,17 +53,8 @@ struct FRsapOverlap
 
 	FORCEINLINE static bool Geom(const FBodyInstance* BodyInstance, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
 	{
-		TRACE_CPUPROFILER_EVENT_SCOPE_STR("HasGeomOverlap");
+		TRACE_CPUPROFILER_EVENT_SCOPE_STR("Overlap ::Geom");
 
-		// Sample code to get the body-instance from an actor:
-		// TArray<UPrimitiveComponent*> PrimitiveComponents;
-		// Actor->GetComponents<UPrimitiveComponent>(PrimitiveComponents);
-		// for (const UPrimitiveComponent* PrimitiveComponent : PrimitiveComponents)
-		// {
-		// 	if (!PrimitiveComponent || !PrimitiveComponent->IsCollisionEnabled()) continue;
-		// 	if(FPhysInterface_Chaos::Overlap_Geom(BodyInstance, RsapStatic::CollisionBoxes[LayerIdx], FQuat::Identity, FTransform(FQuat::Identity, CenterLocation.ToVector()))) return true;
-		// }
-	
 		return FPhysInterface_Chaos::Overlap_Geom(
 			BodyInstance,
 			CollisionBoxes[LayerIdx],

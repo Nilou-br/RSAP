@@ -1,7 +1,7 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-#include "RSAP_Editor/Public/NavMesh/Tasks/Update/RsapEditorUpdateTask.h"
+#include "RSAP_Editor/Public/NavMesh/Update/UpdateTask.h"
 #include "RSAP/Definitions.h"
 #include "RSAP/Math/Bounds.h"
 
@@ -15,14 +15,14 @@
  * ::IsRunning	- To know whether there is any ongoing update.
  * ::StageData	- To add data that is used to update the navmesh. You can stage data before starting the updater.
  */
-class FRsapEditorUpdater final : public FTickableGameObject
+class FRsapUpdater final : public FTickableGameObject
 {
 	DECLARE_MULTICAST_DELEGATE(FOnUpdateComplete);
 	
 public:
 	static FOnUpdateComplete OnUpdateComplete;
 	
-	explicit FRsapEditorUpdater(){}
+	explicit FRsapUpdater(){}
 	
 	void Start(const UWorld* InWorld, const FNavMesh& InNavMesh) { World = InWorld; NavMesh = InNavMesh, bStarted = true; }
 	void Stop() { bStarted = false; NavMesh.reset(); }
@@ -42,7 +42,7 @@ private:
 	bool bIsRunningTask = false;
 
 	FNavMeshUpdateMap StagedActorBoundaries;
-	FRsapEditorUpdateTask* UpdateTask = nullptr;
+	FRsapUpdateTask* UpdateTask = nullptr;
 
 protected:
 	virtual void Tick(float DeltaTime) override;

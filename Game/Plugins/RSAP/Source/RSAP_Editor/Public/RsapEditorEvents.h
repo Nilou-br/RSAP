@@ -13,8 +13,6 @@
  */
 class FRsapEditorEvents
 {
-	typedef ankerl::unordered_dense::map<actor_key, TWeakObjectPtr<const AActor>> FActorMap;
-	
 	struct FCachedActor
 	{
 		TWeakObjectPtr<const AActor> ActorPtr;
@@ -47,6 +45,7 @@ public:
 	
 	FORCEINLINE static FActorBoundsMap& GetLevelActorBounds(){ return CachedActorBounds; }
 	FORCEINLINE static const AActor* GetActor(const actor_key Key) { return CachedActors.find(Key)->second.Get(); }
+	FORCEINLINE static const FActorMap& GetActors() { return CachedActors; }
 	
 private:
 	FORCEINLINE static bool ActorHasCollisionComponent(const AActor* Actor);

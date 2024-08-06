@@ -6,7 +6,7 @@
 #include "RSAP/NavMesh/Types/Chunk.h"
 #include "RsapEditorManager.generated.h"
 
-class FRsapEditorUpdater;
+class FRsapUpdater;
 class FRsapDebugger;
 
 
@@ -49,8 +49,8 @@ private:
 	UPROPERTY() URsapLevelSettings* LevelSettings;
 	
 	FNavMesh NavMesh;
-	FRsapEditorUpdater* NavMeshUpdater;
-	FRsapDebugger* NavMeshDebugger;
+	FRsapUpdater* NavMeshUpdater;
+	// FRsapDebugger* NavMeshDebugger;
 
 	void OnMapOpened(const FActorBoundsMap& ActorBoundsMap);
 	void PreMapSaved();

@@ -103,3 +103,5 @@ struct FGlobalVector;
 
 typedef ankerl::unordered_dense::map<chunk_morton, FChunk> FNavMeshType;
 typedef std::shared_ptr<FNavMeshType> FNavMesh;
+
+typedef ankerl::unordered_dense::map<actor_key, TWeakObjectPtr<const AActor>> FActorMap;

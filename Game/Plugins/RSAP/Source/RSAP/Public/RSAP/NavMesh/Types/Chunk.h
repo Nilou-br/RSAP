@@ -116,14 +116,14 @@ public:
 		Octrees[NodeState]->Layers[LayerIdx]->erase(NodeMortonCode);
 	}
 
-	FORCEINLINE static bool HasWorldOverlap(const UWorld* World, const FGlobalVector& ChunkLocation)
+	FORCEINLINE static bool HasAnyOverlap(const UWorld* World, const FGlobalVector& ChunkLocation)
 	{
-		return FRsapOverlap::World(World, ChunkLocation, 0);
+		return FRsapOverlap::Any(World, ChunkLocation, 0);
 	}
 	
-	FORCEINLINE static bool HasGeomOverlap(const FBodyInstance* BodyInstance, const FGlobalVector& ChunkLocation)
+	FORCEINLINE static bool HasComponentOverlap(const UWorld* World, const UPrimitiveComponent* Component, const FGlobalVector& ChunkLocation)
 	{
-		return FRsapOverlap::Geom(BodyInstance, ChunkLocation, 0);
+		return FRsapOverlap::Component(World, Component, ChunkLocation, 0);
 	}
 };
 

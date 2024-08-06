@@ -1,17 +1,17 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-#include "RSAP_Editor/Public/NavMesh/RsapEditorUpdater.h"
+#include "RSAP_Editor/Public/NavMesh/Update/Updater.h"
 #include "RSAP/Definitions.h"
 #include "RSAP/Math/Bounds.h"
 #include <set>
 
 // Static definition
-FRsapEditorUpdater::FOnUpdateComplete FRsapEditorUpdater::OnUpdateComplete;
+FRsapUpdater::FOnUpdateComplete FRsapUpdater::OnUpdateComplete;
 
 
 
 // Takes in a map of actors and their current bounds.
-void FRsapEditorUpdater::StageData(const FActorBoundsMap& ActorBoundsMap)
+void FRsapUpdater::StageData(const FActorBoundsMap& ActorBoundsMap)
 {
 	for (const auto& [ActorKey, Bounds] : ActorBoundsMap)
 	{
@@ -21,7 +21,7 @@ void FRsapEditorUpdater::StageData(const FActorBoundsMap& ActorBoundsMap)
 }
 
 // Stages the movement of multiple actors.
-void FRsapEditorUpdater::StageData(const FMovedBoundsMap& MovedBoundsMap)
+void FRsapUpdater::StageData(const FMovedBoundsMap& MovedBoundsMap)
 {
 	for (const auto& [ActorKey, MovedBounds] : MovedBoundsMap)
 	{
@@ -30,7 +30,7 @@ void FRsapEditorUpdater::StageData(const FMovedBoundsMap& MovedBoundsMap)
 }
 
 // Stages a single actor's movement.
-void FRsapEditorUpdater::StageData(const actor_key ActorKey, const FMovedBounds& MovedBounds)
+void FRsapUpdater::StageData(const actor_key ActorKey, const FMovedBounds& MovedBounds)
 {
 	auto Iterator = StagedActorBoundaries.find(ActorKey);
 	if(Iterator == StagedActorBoundaries.end()) std::tie(Iterator, std::ignore) = StagedActorBoundaries.emplace(ActorKey, FNavMeshUpdateType({MovedBounds.From}, MovedBounds.To));
@@ -51,7 +51,7 @@ void FRsapEditorUpdater::StageData(const actor_key ActorKey, const FMovedBounds&
 }
 
 // Starts a new update task, which will clear any accumulated staged-data, and use it for the update.
-void FRsapEditorUpdater::Update()
+void FRsapUpdater::Update()
 {
 	const TSharedPtr<TPromise<void>> Promise = MakeShared<TPromise<void>>();
 	Promise->GetFuture().Next([this](int)
@@ -66,10 +66,10 @@ void FRsapEditorUpdater::Update()
 	});
 
 	bIsRunningTask = true;
-	UpdateTask = new FRsapEditorUpdateTask(Promise, GEditor->GetEditorWorldContext().World(), NavMesh, StagedActorBoundaries);
+	UpdateTask = new FRsapUpdateTask(Promise, GEditor->GetEditorWorldContext().World(), NavMesh, StagedActorBoundaries);
 }
 
-void FRsapEditorUpdater::Tick(float DeltaTime)
+void FRsapUpdater::Tick(float DeltaTime)
 {
 	if(!IsRunningTask() && StagedActorBoundaries.size()) Update();
 }

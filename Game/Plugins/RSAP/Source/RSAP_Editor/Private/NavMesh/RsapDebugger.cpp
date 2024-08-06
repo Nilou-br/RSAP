@@ -1,6 +1,6 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-#include "RSAP_Editor/Public/NavMesh/RsapDebugger.h"
+#include "..\..\Public\NavMesh\Debugger.h"
 #include "RSAP/NavMesh/Types/Chunk.h"
 #include "RSAP/NavMesh/Types/Node.h"
 #include "RSAP/Math/Morton.h"
@@ -22,7 +22,7 @@ void FRsapDebugger::DrawNode(const UWorld* World, const FGlobalVector& NodeCente
 	DrawDebugBox(World, *NodeCenter, FVector(RsapStatic::NodeHalveSizes[LayerIdx]), LayerColors[LayerIdx], true, -1, 0, 2.5 - (LayerIdx/3.5));
 }
 
-void FRsapDebugger::Draw(const FNavMesh& NavMesh, const UWorld* World) const
+void FRsapDebugger::Draw(const FNavMesh& NavMesh, const UWorld* World)
 {
 	FVector CameraLocation;
 	FRotator CameraRotation;
@@ -54,9 +54,10 @@ void FRsapDebugger::Draw(const FNavMesh& NavMesh, const UWorld* World) const
 	Draw(NavMesh, World, CameraLocation, CameraRotation);
 }
 
-void FRsapDebugger::Draw(const FNavMesh& NavMesh, const UWorld* World, const FVector& CameraLocation, const FRotator& CameraRotation) const
+void FRsapDebugger::Draw(const FNavMesh& NavMesh, const UWorld* World, const FVector& CameraLocation, const FRotator& CameraRotation)
 {
 	//if(!NavMesh || !DebugSettings.bEnabled) return;
+	// return;
 	if(!NavMesh || !World) return;
 	const FVector CameraForwardVector = FRotationMatrix(CameraRotation).GetUnitAxis(EAxis::X);
 
@@ -82,13 +83,13 @@ void FRsapDebugger::Draw(const FNavMesh& NavMesh, const UWorld* World, const FVe
 			{
 				if(const auto ChunkIterator = NavMesh->find(CurrentChunkMC); ChunkIterator != NavMesh->end())
 				{
-					if(DebugSettings.bDisplayChunks){}
+					// if(DebugSettings.bDisplayChunks){}
 					
 					const FGlobalVector ChunkGlobalCenterLocation = ChunkLocation + RsapStatic::NodeHalveSizes[0];
 					DrawDebugBox(World, *ChunkGlobalCenterLocation, FVector(RsapStatic::NodeHalveSizes[0]), FColor::Black, true, -1, 11, 5);
 
-					//DrawNodes(World, ChunkIterator->second, ChunkLocation, 0, 0, CameraLocation, CameraForwardVector);
-					SlowDrawNodes(World, ChunkIterator->second, ChunkLocation, 0);
+					DrawNodes(World, ChunkIterator->second, ChunkLocation, 0, 0, CameraLocation, CameraForwardVector);
+					// SlowDrawNodes(World, ChunkIterator->second, ChunkLocation, 0);
 				}
 
 				if(ChunkLocation.X == RenderBoundaries.Max.X)

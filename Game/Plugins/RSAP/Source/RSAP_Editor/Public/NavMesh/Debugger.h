@@ -25,9 +25,9 @@ class FRsapDebugger
 public:
 	explicit FRsapDebugger(){}
 	
-	void Draw(const FNavMesh& NavMesh, const UWorld* World) const;
-	void Draw(const FNavMesh& NavMesh, const UWorld* World, const FVector& CameraLocation, const FRotator& CameraRotation) const;
-	void UpdateSettings(const FRsapDebugSettings InDebugSettings){ DebugSettings = InDebugSettings;	}
+	static void Draw(const FNavMesh& NavMesh, const UWorld* World);
+	static void Draw(const FNavMesh& NavMesh, const UWorld* World, const FVector& CameraLocation, const FRotator& CameraRotation);
+	// static void UpdateSettings(const FRsapDebugSettings InDebugSettings){ DebugSettings = InDebugSettings;	}
 
 private:
 	static void DrawNodes(const UWorld* World, const FChunk& Chunk, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector);

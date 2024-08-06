@@ -12,7 +12,7 @@
 
 // Variables:
 
-FRsapEditorEvents::FActorMap		FRsapEditorEvents::CachedActors;
+FActorMap							FRsapEditorEvents::CachedActors;
 FActorBoundsMap						FRsapEditorEvents::CachedActorBounds;
 std::vector<actor_key>				FRsapEditorEvents::SelectedActors;
 

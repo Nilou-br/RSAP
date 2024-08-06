@@ -2,12 +2,12 @@
 
 #include "RSAP_Editor/Public/RsapEditorManager.h"
 #include "RSAP_Editor/Public/RsapEditorEvents.h"
-#include "RSAP_Editor/Public/NavMesh/RsapDebugger.h"
-#include "RSAP_Editor/Public/NavMesh/RsapEditorUpdater.h"
+#include "RSAP_Editor/Public/NavMesh/Debugger.h"
+#include "RSAP_Editor/Public/NavMesh/Update/Updater.h"
+#include "RSAP_Editor/Public/NavMesh/Generate/Generator.h"
 #include "RSAP/NavMesh/Types/Serialize.h"
 #include "Engine/World.h"
 #include "Editor.h"
-
 
 
 void URsapEditorManager::Initialize(FSubsystemCollectionBase& Collection)
@@ -15,8 +15,7 @@ void URsapEditorManager::Initialize(FSubsystemCollectionBase& Collection)
 	Super::Initialize(Collection);
 	
 	NavMesh = std::make_shared<FNavMeshType>();
-	NavMeshUpdater = new FRsapEditorUpdater();
-	NavMeshDebugger = new FRsapDebugger();
+	NavMeshUpdater = new FRsapUpdater();
 
 	FRsapEditorEvents::OnMapOpened.BindUObject(this, &ThisClass::OnMapOpened);
 	FRsapEditorEvents::PreMapSaved.BindUObject(this, &ThisClass::PreMapSaved);
@@ -25,7 +24,7 @@ void URsapEditorManager::Initialize(FSubsystemCollectionBase& Collection)
 	FRsapEditorEvents::OnActorAdded.BindUObject(this, &ThisClass::OnActorAdded);
 	FRsapEditorEvents::OnActorDeleted.BindUObject(this, &ThisClass::OnActorDeleted);
 
-	FRsapEditorUpdater::OnUpdateComplete.AddUObject(this, &ThisClass::OnNavMeshUpdated);
+	FRsapUpdater::OnUpdateComplete.AddUObject(this, &ThisClass::OnNavMeshUpdated);
 	FRsapEditorEvents::OnCameraMoved.BindUObject(this, &ThisClass::OnCameraMoved);
 }
 
@@ -33,7 +32,6 @@ void URsapEditorManager::Deinitialize()
 {
 	NavMesh.reset();
 	delete NavMeshUpdater;
-	delete NavMeshDebugger;
 	
 	FRsapEditorEvents::OnMapOpened.Unbind();
 	FRsapEditorEvents::PreMapSaved.Unbind();
@@ -42,7 +40,7 @@ void URsapEditorManager::Deinitialize()
 	FRsapEditorEvents::OnActorAdded.Unbind();
 	FRsapEditorEvents::OnActorDeleted.Unbind();
 
-	FRsapEditorUpdater::OnUpdateComplete.RemoveAll(this);
+	FRsapUpdater::OnUpdateComplete.RemoveAll(this);
 	FRsapEditorEvents::OnCameraMoved.Unbind();
 	
 	Super::Deinitialize();
@@ -72,11 +70,10 @@ void URsapEditorManager::Regenerate()
 	// Stop updater.
 	// Wait until ongoing update completes.
 	// Clear navmesh.
-	// Stage all actors.
-	// Start updater.
+	// Call generate on generator.
 
 	NavMesh->clear();
-	NavMeshUpdater->StageData(FRsapEditorEvents::GetLevelActorBounds());
+	FRsapGenerator::Generate(EditorWorld, NavMesh, FRsapEditorEvents::GetActors());
 	// mark level dirty ...
 }
 
@@ -90,7 +87,7 @@ void URsapEditorManager::UpdateDebugSettings (
 	
 	// FNavMeshDebugSettings::Initialize(bDebugEnabled, bDisplayNodes, bDisplayNodeBorder, bDisplayRelations, bDisplayPaths, bDisplayChunks);
 	// RsapModule.InitializeDebugSettings(bDebugEnabled, bDisplayNodes, bDisplayNodeBorder, bDisplayRelations, bDisplayPaths, bDisplayChunks);
-	NavMeshDebugger->Draw(NavMesh, EditorWorld);
+	FRsapDebugger::Draw(NavMesh, EditorWorld);
 }
 
 void URsapEditorManager::OnMapOpened(const FActorBoundsMap& ActorBoundsMap)
@@ -117,25 +114,29 @@ void URsapEditorManager::OnMapOpened(const FActorBoundsMap& ActorBoundsMap)
 
 	if(bRegenerate)
 	{
-		// Stage all the actors to the updater.
-		// This will be a bit less efficient than a separate generator that does not need to check any 'from' boundaries, but the result is the same.
-		NavMeshUpdater->StageData(ActorBoundsMap);
-		
 		UE_LOG(LogRsap, Log, TEXT("This can take a moment depending on the amount of actors in the world. The map will be marked 'dirty' when complete."));
-		
-		auto OnNavMeshUpdatedHandlePtr = MakeShared<FDelegateHandle>();
-		*OnNavMeshUpdatedHandlePtr = FRsapEditorUpdater::OnUpdateComplete.AddLambda([OnNavMeshUpdatedHandlePtr, &World = EditorWorld]()
-		{
-			FRsapEditorUpdater::OnUpdateComplete.Remove(*OnNavMeshUpdatedHandlePtr);
-			if(World->GetOuter()->MarkPackageDirty())
-			{
-				UE_LOG(LogRsap, Log, TEXT("Regeneration complete. The sound-navigation-mesh will be cached when you save the map."))
-			}
-		});	
+		FRsapGenerator::Generate(EditorWorld, NavMesh, FRsapEditorEvents::GetActors());
+		UE_LOG(LogRsap, Log, TEXT("Generation complete. The sound-navigation-mesh will be cached when you save the map."))
 	}
 	
 	// Start the updater.
 	NavMeshUpdater->Start(EditorWorld, NavMesh);
+
+
+
+	// Backup code to wait for update complete ( for PIE start during update scenario ):
+
+	// NavMeshUpdater->StageData(Data);
+	// auto OnNavMeshUpdatedHandlePtr = MakeShared<FDelegateHandle>();
+	// *OnNavMeshUpdatedHandlePtr = FRsapUpdater::OnUpdateComplete.AddLambda([OnNavMeshUpdatedHandlePtr, &World = EditorWorld]()
+	// {
+	// 	FRsapUpdater::OnUpdateComplete.Remove(*OnNavMeshUpdatedHandlePtr);
+	// 	if(World->GetOuter()->MarkPackageDirty())
+	// 	{
+	// 		UE_LOG(LogRsap, Log, TEXT("Regeneration complete. The sound-navigation-mesh will be cached when you save the map."))
+	// 	}
+	// });
+	// NavMeshUpdater->Start(EditorWorld, NavMesh);
 }
 
 // Will update the navmesh-ID for this level to a new random ID, and saves the navmesh after the map has successfully been saved.
@@ -187,11 +188,10 @@ void URsapEditorManager::OnActorDeleted(const actor_key ActorKey, const FGlobalB
 
 void URsapEditorManager::OnNavMeshUpdated() const
 {
-	NavMeshDebugger->Draw(NavMesh, EditorWorld);
+	FRsapDebugger::Draw(NavMesh, EditorWorld);
 }
 
 void URsapEditorManager::OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation) const
 {
-	const bool bUpdaterRunning = NavMeshUpdater->IsRunningTask();
-	if(!NavMeshUpdater->IsRunningTask()) NavMeshDebugger->Draw(NavMesh, EditorWorld, CameraLocation, CameraRotation);
+	if(!NavMeshUpdater->IsRunningTask()) FRsapDebugger::Draw(NavMesh, EditorWorld, CameraLocation, CameraRotation);
 }
