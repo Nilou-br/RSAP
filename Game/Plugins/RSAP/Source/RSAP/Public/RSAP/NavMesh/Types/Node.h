@@ -184,13 +184,9 @@ struct FNode
 		if(!HasChildren()) return;
 
 		const layer_idx ChildLayerIdx = LayerIdx+1;
-		child_idx ChildIdx = 0;
-		for(uint8 ChildMask = 0b00000001; ChildMask != 0; ChildMask <<= 1, ++ChildIdx)
+		for(child_idx ChildIdx = 0; ChildIdx < 8; ++ChildIdx)
 		{
-			// Skip this child if it does not exist.
-			if(!(ChildMask & ChildOcclusions)) continue;
-
-			Callback(FMortonUtils::Node::GetChild(NodeMC, ChildLayerIdx, ChildIdx));
+			if(DoesChildExist(ChildIdx)) Callback(FMortonUtils::Node::GetChild(NodeMC, ChildLayerIdx, ChildIdx));
 		}
 	}
 

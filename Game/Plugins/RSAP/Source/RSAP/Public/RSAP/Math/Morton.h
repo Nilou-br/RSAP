@@ -76,14 +76,14 @@ struct FMortonUtils
 
 		FORCEINLINE static child_idx GetChildIndex(const node_morton MortonCode, const layer_idx LayerIdx)
 		{
-			// Shift the MortonCode, and masking the last 3 bits.
+			// Shift the MortonCode, and mask the last 3 bits.
 			// The remainder evaluates directly to the node's index in it's parent.
 			static constexpr node_morton ChildIdxMask = 0b00000000000000000000000000000111;
-			static constexpr uint8 Shifts[10] = {27, 24, 21, 18, 15, 12, 9, 6, 3, 0};
+			static constexpr uint8 Shifts[10] = {30, 27, 24, 21, 18, 15, 12, 9, 6, 3}; // todo: update when changing root node to be 8 nodes instead of one, which makes the smallest node 1cm which needs 0 as the lst shift here.
 			return (MortonCode >> Shifts[LayerIdx]) & ChildIdxMask;
 		}
 
-		FORCEINLINE static node_morton GetChild(const node_morton ParentMortonCode, const layer_idx ChildLayerIdx, const uint8 ChildIdx)
+		FORCEINLINE static node_morton GetChild(const node_morton ParentMortonCode, const layer_idx ChildLayerIdx, const child_idx ChildIdx)
 		{
 			switch (ChildIdx)
 			{
@@ -101,13 +101,13 @@ struct FMortonUtils
 
 		FORCEINLINE static std::array<node_morton, 8> GetChildren(const node_morton ParentMortonCode, const layer_idx ChildLayerIdx)
 		{
-			// Pre compute these values which can be reused.
+			// Compute these values once and reuse them.
 			const node_morton AddedX = AddX(ParentMortonCode, ChildLayerIdx);
 			const node_morton AddedY = AddY(ParentMortonCode, ChildLayerIdx);
 			const node_morton AddedZ = AddZ(ParentMortonCode, ChildLayerIdx);
 			
 			return {
-				ParentMortonCode, // First child has the same morton as parent.
+				ParentMortonCode,
 				AddedX,
 				AddedY,
 				AddedX | AddedY,

@@ -122,7 +122,7 @@ void FRsapDebugger::DrawNodes(const UWorld* World, const FChunk& Chunk, const FG
 	const FGlobalVector NodeLocation = FGlobalVector::FromNodeMorton(NodeMC, ChunkLocation);
 	const FGlobalVector NodeCenter = NodeLocation+RsapStatic::NodeHalveSizes[LayerIdx];
 	
-	if(FVector::Dist(CameraLocation, *NodeCenter) > (RsapStatic::NodeSizes[LayerIdx] << 2)+300 - 24*LayerIdx) return; // todo: custom ::Dist on FGlobalVector.
+	// if(FVector::Dist(CameraLocation, *NodeCenter) > (RsapStatic::NodeSizes[LayerIdx] << 2)+300 - 24*LayerIdx) return; // todo: custom ::Dist on FGlobalVector.
 	DrawNode(World, NodeCenter, LayerIdx);
 
 	Node.ForEachChild(NodeMC, LayerIdx, [&](const node_morton ChildMC)
@@ -140,7 +140,7 @@ void FRsapDebugger::SlowDrawNodes(const UWorld* World, const FChunk& Chunk, cons
 		DrawNode(World, NodeCenter, LayerIdx);
 	}
 
-	if(LayerIdx < RsapStatic::MaxDepth) SlowDrawNodes(World, Chunk, ChunkLocation, LayerIdx+1);
+	if(LayerIdx < RsapStatic::StaticDepth) SlowDrawNodes(World, Chunk, ChunkLocation, LayerIdx+1);
 }
 
 // void FRsapDebugger::OldRecursiveDrawNodes(const UWorld* World, const FChunk* Chunk, const node_morton MortonCode, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector) const

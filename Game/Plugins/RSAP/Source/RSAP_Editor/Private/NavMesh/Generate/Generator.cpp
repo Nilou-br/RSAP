@@ -325,6 +325,7 @@ void FRsapGenerator::Generate(const UWorld* InWorld, const FNavMesh& InNavMesh, 
 		}
 	}
 
+	World = nullptr;
 	NavMesh.reset();
 
 	const auto EndTime = std::chrono::high_resolution_clock::now();

@@ -74,7 +74,10 @@ void URsapEditorManager::Regenerate()
 
 	NavMesh->clear();
 	FRsapGenerator::Generate(EditorWorld, NavMesh, FRsapEditorEvents::GetActors());
-	// mark level dirty ...
+	if(EditorWorld->GetOuter()->MarkPackageDirty())
+	{
+		UE_LOG(LogRsap, Log, TEXT("Regeneration complete. The sound-navigation-mesh will be cached when you save the map."))
+	}
 }
 
 void URsapEditorManager::UpdateDebugSettings (
@@ -116,16 +119,16 @@ void URsapEditorManager::OnMapOpened(const FActorBoundsMap& ActorBoundsMap)
 	{
 		UE_LOG(LogRsap, Log, TEXT("This can take a moment depending on the amount of actors in the world. The map will be marked 'dirty' when complete."));
 		FRsapGenerator::Generate(EditorWorld, NavMesh, FRsapEditorEvents::GetActors());
-		UE_LOG(LogRsap, Log, TEXT("Generation complete. The sound-navigation-mesh will be cached when you save the map."))
+		if(EditorWorld->GetOuter()->MarkPackageDirty())
+		{
+			UE_LOG(LogRsap, Log, TEXT("Generation complete. The sound-navigation-mesh will be cached when you save the map."))
+		}
 	}
 	
 	// Start the updater.
 	NavMeshUpdater->Start(EditorWorld, NavMesh);
-
-
-
+	
 	// Backup code to wait for update complete ( for PIE start during update scenario ):
-
 	// NavMeshUpdater->StageData(Data);
 	// auto OnNavMeshUpdatedHandlePtr = MakeShared<FDelegateHandle>();
 	// *OnNavMeshUpdatedHandlePtr = FRsapUpdater::OnUpdateComplete.AddLambda([OnNavMeshUpdatedHandlePtr, &World = EditorWorld]()
@@ -136,7 +139,6 @@ void URsapEditorManager::OnMapOpened(const FActorBoundsMap& ActorBoundsMap)
 	// 		UE_LOG(LogRsap, Log, TEXT("Regeneration complete. The sound-navigation-mesh will be cached when you save the map."))
 	// 	}
 	// });
-	// NavMeshUpdater->Start(EditorWorld, NavMesh);
 }
 
 // Will update the navmesh-ID for this level to a new random ID, and saves the navmesh after the map has successfully been saved.
