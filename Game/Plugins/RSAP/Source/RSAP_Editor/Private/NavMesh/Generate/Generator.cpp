@@ -14,40 +14,6 @@
 FNavMesh		FRsapGenerator::NavMesh;
 const UWorld*	FRsapGenerator::World;
 
-// Returns reference to this chunk. Will initialize one if it does not exist yet.
-FChunk* FRsapGenerator::TryInitChunk(const chunk_morton ChunkMC)
-{
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Generator ::TryInitChunk");
-	return &NavMesh->try_emplace(ChunkMC).first->second;
-}
-
-// Recursively inits the parents of the node until an existing one is found. All parents will have their ChildOcclusions set correctly.
-void FRsapGenerator::InitParentsOfNode(const FChunk* Chunk, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState)
-{
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Generator ::InitParentsOfNode");
-	
-	const layer_idx ParentLayerIdx = LayerIdx-1;
-	const node_morton ParentNodeMC = FMortonUtils::Node::GetParent(NodeMC, ParentLayerIdx);
-
-	// If this parent was inserted, then continue recursion. Stop if we reached the root node.
-	bool bWasInserted;
-	FNode& ParentNode = Chunk->TryInitNode(bWasInserted, ParentNodeMC, ParentLayerIdx, NodeState);
-	if(bWasInserted && ParentLayerIdx > 0) InitParentsOfNode(Chunk, ParentNodeMC, ParentLayerIdx, NodeState);
-
-	// Update the ChildOcclusions on the parent to know this child exists and is occluding.
-	const child_idx ChildIdx = FMortonUtils::Node::GetChildIndex(NodeMC, LayerIdx);
-	ParentNode.SetChildOccluding(ChildIdx);
-}
-
-FNode& FRsapGenerator::TryInitNodeAndParents(const FChunk* Chunk, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState)
-{
-	bool bWasInserted;
-	FNode& Node = Chunk->TryInitNode(bWasInserted, NodeMC, LayerIdx, NodeState);
-
-	// If the node was inserted, then also initialize it's parents if they do not exist yet.
-	if(bWasInserted) InitParentsOfNode(Chunk, NodeMC, LayerIdx, NodeState);
-	return Node;
-}
 
 /**
  * Calculates the optimal starting layer for this movement.
@@ -56,23 +22,21 @@ FNode& FRsapGenerator::TryInitNodeAndParents(const FChunk* Chunk, const node_mor
  * so it will skip any upper layers that will definitely occlude the actor anyway,
  * but it will also not return a very deep layer, which is not efficient to loop through compared to using recursion to skip large unoccluded parts.
  */
-layer_idx FRsapGenerator::CalculateOptimalStartingLayer(const FMovedBounds& MovedBounds)
+layer_idx FRsapGenerator::CalculateOptimalStartingLayer(const FGlobalBounds& Bounds)
 {
-	layer_idx StartingLayer = RsapStatic::StaticDepth;
+	// Get the largest dimension of this bounding-box.
+	const int32 LargestSide = Bounds.GetLengths().GetLargestAxis();
 
-	// Get the largest side of the bounds-pair. One of the bounds could be invalid when undo/redoing to a state where the actor does not exist.
-	const int32 MaxSide = MovedBounds.To.IsValid()
-		? MovedBounds.To.GetLengths().GetLargestAxis() : MovedBounds.From.GetLengths().GetLargestAxis();
-
-	// Get the first layer where the node-size fits at-least 3 times in any side of the bounds of the object.
-	for (layer_idx LayerIndex = 0; LayerIndex<RsapStatic::StaticDepth; ++LayerIndex)
+	// Get the first layer where at-least 3 nodes are required to fill the side.
+	layer_idx CurrentLayer = RsapStatic::StaticDepth; // Start at the static-depth because most meshes will be around 1 meter in average.
+	for (layer_idx LayerIdx = 0; LayerIdx < RsapStatic::StaticDepth; ++LayerIdx)
 	{
-		if(MaxSide / RsapStatic::NodeSizes[LayerIndex] <= 1) continue;
-		StartingLayer = LayerIndex;
+		if(LargestSide / RsapStatic::NodeSizes[LayerIdx] <= 1) continue;
+		CurrentLayer = LayerIdx;
 		break;
 	}
 	
-	return StartingLayer;
+	return CurrentLayer;
 }
 
 // Returns a bit-mask that represents the children that should be re-rasterized. 
@@ -141,7 +105,7 @@ void FRsapGenerator::ReRasterizeBounds(const UPrimitiveComponent* CollisionCompo
 	const FGlobalBounds Bounds(CollisionComponent);
 
 	// Get the optimal update layer for these boundaries.
-	const layer_idx LayerIdx = CalculateOptimalStartingLayer(FMovedBounds(FGlobalBounds::EmptyBounds(), Bounds));
+	const layer_idx LayerIdx = CalculateOptimalStartingLayer(Bounds);
 	
 	// Round the bounds to the node-size of the layer. This is the layer we will be looping through.
 	const FGlobalBounds RoundedBounds = Bounds.RoundToLayer(LayerIdx);
@@ -174,10 +138,10 @@ void FRsapGenerator::ReRasterizeBounds(const UPrimitiveComponent* CollisionCompo
 				
 				if(FNode::HasComponentOverlap(World, CollisionComponent, NodeLocation, LayerIdx))
 				{
-					FChunk* CurrentChunk = TryInitChunk(ChunkMC);
+					FChunk* CurrentChunk = FChunk::TryInit(NavMesh, ChunkMC);
 					
 					// There is an overlap, so get/init the node, and also init any missing parents.
-					FNode& Node = TryInitNodeAndParents(CurrentChunk, NodeMC, LayerIdx, 0);
+					FNode& Node = CurrentChunk->TryInitNodeAndParents(NodeMC, LayerIdx, 0);
 
 					// Re-rasterize if we are not yet on the static-depth.
 					if(LayerIdx < RsapStatic::StaticDepth)

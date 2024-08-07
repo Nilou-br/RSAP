@@ -3,6 +3,7 @@
 #pragma once
 
 #include "RSAP/LevelSettings.h"
+#include "RSAP/Math/Bounds.h"
 #include "RSAP/NavMesh/Types/Chunk.h"
 #include "RsapEditorManager.generated.h"
 

@@ -123,14 +123,14 @@ struct FNode
 
 	FNode() = default;
 
-	static FORCEINLINE FNodeVector GetMortonLocation(const node_morton MortonCode)
+	FORCEINLINE static FNodeVector GetMortonLocation(const node_morton MortonCode)
 	{
 		uint16 X, Y, Z;
 		FMortonUtils::Node::Decode(MortonCode, X, Y, Z);
 		return FNodeVector(X, Y, Z);
 	}
 	
-	static FORCEINLINE FGlobalVector GetGlobalLocation(const FGlobalVector& ChunkLocation, const node_morton MortonCode)
+	FORCEINLINE static FGlobalVector GetGlobalLocation(const FGlobalVector& ChunkLocation, const node_morton MortonCode)
 	{
 		return ChunkLocation + GetMortonLocation(MortonCode);
 	}

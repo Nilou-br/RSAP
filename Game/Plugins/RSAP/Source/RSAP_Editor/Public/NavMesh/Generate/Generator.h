@@ -45,10 +45,7 @@ class FRsapGenerator
 															   0b0000000111, 0b0000000011, 0b0000000001, 0b0000000000, 0b0000000000};
 	};
 
-	static FChunk* TryInitChunk(chunk_morton ChunkMC);
-	static void InitParentsOfNode(const FChunk* Chunk, node_morton NodeMC, layer_idx LayerIdx, node_state NodeState);
-	static FNode& TryInitNodeAndParents(const FChunk* Chunk, node_morton NodeMC, layer_idx LayerIdx, node_state NodeState);
-	static layer_idx CalculateOptimalStartingLayer(const FMovedBounds& MovedBounds);
+	static layer_idx CalculateOptimalStartingLayer(const FGlobalBounds& Bounds);
 	static uint8 GetChildrenToRasterizeAndUpdateEdges(rsap_direction& EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks,
 	                                           layer_idx LayerIdx, layer_idx ChildLayerIdx);
 	static void ReRasterizeBounds(const UPrimitiveComponent* CollisionComponent);

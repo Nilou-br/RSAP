@@ -2,7 +2,6 @@
 
 #pragma once
 #include "Node.h"
-#include "RSAP/Math/Bounds.h"
 #include "RSAP/Math/Vectors.h"
 #include "RSAP/Math/Morton.h"
 #include "RSAP/Definitions.h"
@@ -46,48 +45,7 @@ public:
 		Initialize();
 	}
 	
-	// explicit FChunk(const FGlobalVector& InLocation, const node_state RootNodeState)
-	// 	: Location(InLocation)
-	// {
-	// 	Initialize(RootNodeState);
-	// }
-	//
-	// explicit FChunk(const chunk_morton ChunkMorton, const node_state RootNodeState)
-	// 	: Location(FGlobalVector::FromChunkMorton(ChunkMorton))
-	// {
-	// 	Initialize(RootNodeState);
-	// }
-
-	// FORCEINLINE FVector GetCenter(const uint32 ChunkHalveSize) const
-	// {
-	// 	return FVector(
-	// 		Location.X + ChunkHalveSize,
-	// 		Location.Y + ChunkHalveSize,
-	// 		Location.Z + ChunkHalveSize
-	// 	);
-	// }
-	//
-	// FORCEINLINE FGlobalBounds GetBounds() const
-	// {
-	// 	return TBounds(Location, Location+RsapStatic::ChunkSize);
-	// }
-
-	// FORCEINLINE FGlobalVector GetNeighbourLocation(const rsap_direction Direction) const
-	// {
-	// 	FGlobalVector NeighbourLocation = Location;
-	// 	switch (Direction) {
-	// 		case Direction::X_Negative: NeighbourLocation.X -= RsapStatic::ChunkSize; break;
-	// 		case Direction::Y_Negative: NeighbourLocation.Y -= RsapStatic::ChunkSize; break;
-	// 		case Direction::Z_Negative: NeighbourLocation.Z -= RsapStatic::ChunkSize; break;
-	// 		case Direction::X_Positive: NeighbourLocation.X += RsapStatic::ChunkSize; break;
-	// 		case Direction::Y_Positive: NeighbourLocation.Y += RsapStatic::ChunkSize; break;
-	// 		case Direction::Z_Positive: NeighbourLocation.Z += RsapStatic::ChunkSize; break;
-	// 		default: break;
-	// 	}
-	// 	return NeighbourLocation;
-	// }
-	
-	static FORCEINLINE chunk_morton GetNeighbour(const chunk_morton ChunkMorton, const rsap_direction Direction)
+	FORCEINLINE static chunk_morton GetNeighbour(const chunk_morton ChunkMorton, const rsap_direction Direction)
 	{
 		return FMortonUtils::Chunk::Move(ChunkMorton, Direction);
 	}
@@ -97,8 +55,14 @@ public:
 	{
 		return Octrees[NodeState]->Layers[LayerIdx]->find(NodeMC)->second;
 	}
+	
+	// Returns reference to this chunk. Will initialize one if it does not exist yet.
+	FORCEINLINE static FChunk* TryInit(const FNavMesh& NavMesh, const chunk_morton ChunkMC)
+	{
+		return &NavMesh->try_emplace(ChunkMC).first->second;
+	}
 
-	// Returns reference to this node. Will initialize one if it does not exist yet.
+	// Returns a reference to this node. Will initialize one if it does not exist yet.
 	FORCEINLINE FNode& TryInitNode(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
 	{
 		return Octrees[NodeState]->Layers[LayerIdx]->try_emplace(NodeMC).first->second;
@@ -109,6 +73,17 @@ public:
 		const auto [NodePair, bInserted] = Octrees[NodeState]->Layers[LayerIdx]->try_emplace(NodeMC);
 		bOutInserted = bInserted;
 		return NodePair->second;
+	}
+
+	// Returns a reference to this node. Will initialize one if it does not exist yet. Will also init any parents of this node that do not exist yet.
+	FORCEINLINE FNode& TryInitNodeAndParents(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState)
+	{
+		bool bWasInserted;
+		FNode& Node = TryInitNode(bWasInserted, NodeMC, LayerIdx, NodeState);
+
+		// If the node was inserted, then also initialize it's parents if they do not exist yet.
+		if(bWasInserted) InitParentsOfNode(NodeMC, LayerIdx, NodeState);
+		return Node;
 	}
 
 	FORCEINLINE void EraseNode(const node_morton NodeMortonCode, const layer_idx LayerIdx, const node_state NodeState) const
@@ -124,6 +99,25 @@ public:
 	FORCEINLINE static bool HasComponentOverlap(const UWorld* World, const UPrimitiveComponent* Component, const FGlobalVector& ChunkLocation)
 	{
 		return FRsapOverlap::Component(World, Component, ChunkLocation, 0);
+	}
+
+private:
+	// Recursively inits the parents of the node until an existing one is found. All parents will have their ChildOcclusions set correctly.
+	FORCEINLINE void InitParentsOfNode(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState)
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE_STR("Generator ::InitParentsOfNode");
+	
+		const layer_idx ParentLayerIdx = LayerIdx-1;
+		const node_morton ParentNodeMC = FMortonUtils::Node::GetParent(NodeMC, ParentLayerIdx);
+
+		// If this parent was inserted, then continue recursion. Stop if we reached the root node.
+		bool bWasInserted;
+		FNode& ParentNode = TryInitNode(bWasInserted, ParentNodeMC, ParentLayerIdx, NodeState);
+		if(bWasInserted && ParentLayerIdx > 0) InitParentsOfNode(ParentNodeMC, ParentLayerIdx, NodeState);
+
+		// Update the ChildOcclusions on the parent to know this child exists and is occluding.
+		const child_idx ChildIdx = FMortonUtils::Node::GetChildIndex(NodeMC, LayerIdx);
+		ParentNode.SetChildOccluding(ChildIdx);
 	}
 };
 
