@@ -1,9 +1,7 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #include "RSAP_Editor/Public/NavMesh/Generate/Generator.h"
-
 #include <ranges>
-
 #include "RSAP/Math/Bounds.h"
 #include "RSAP/NavMesh/Types/Chunk.h"
 #include "RSAP/NavMesh/Types/Node.h"
@@ -282,7 +280,7 @@ void FRsapGenerator::Generate(const UWorld* InWorld, const FNavMesh& InNavMesh, 
 		for (const UPrimitiveComponent* CollisionComponent : CollisionComponents)
 		{
 			// ReRasterizeBounds(CollisionComponents, CurrBounds, StartingLayerIdx);
-			for (int i = 0; i < 10000; ++i)
+			for (int i = 0; i < 50000; ++i)
 			{
 				ReRasterizeBounds(CollisionComponent);
 			}

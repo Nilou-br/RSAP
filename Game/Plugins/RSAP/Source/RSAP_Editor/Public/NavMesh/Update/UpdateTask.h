@@ -2,6 +2,7 @@
 
 #pragma once
 #include "RSAP/Definitions.h"
+#include "RSAP/Math/Bounds.h"
 #include "RSAP/NavMesh/Types/Chunk.h"
 
 

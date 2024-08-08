@@ -165,6 +165,13 @@ void URsapEditorManager::PreMapSaved()
 	});
 }
 
+FVector Transform(const FVector& Location, const FTransform& ActorTransform)
+{
+	const FVector ScaledPosition = Location * ActorTransform.GetScale3D();
+	const FVector RotatedPosition = ActorTransform.GetRotation().RotateVector(ScaledPosition);
+	return ActorTransform.GetLocation() + RotatedPosition;
+}
+
 void URsapEditorManager::OnActorMoved(const actor_key ActorKey, const FMovedBounds& MovedBounds)
 {
 	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnActorMoved"))

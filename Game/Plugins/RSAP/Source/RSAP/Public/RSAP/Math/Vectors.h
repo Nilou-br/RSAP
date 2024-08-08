@@ -120,6 +120,16 @@ struct FGlobalVector // todo: FChunkVector with 21 bits per axis?
 		return *this & RsapStatic::ChunkMask;
 	}
 
+	FORCEINLINE FGlobalVector RoundToLayer(const layer_idx LayerIdx) const
+	{
+		static constexpr uint32 LayerMasks[10] = {
+			static_cast<uint32>(~((1<<10)-1)), static_cast<uint32>(~((1<<9)-1)), static_cast<uint32>(~((1<<8)-1)), static_cast<uint32>(~((1<<7)-1)), static_cast<uint32>(~((1<<6)-1)),
+			static_cast<uint32>(~((1<<5)-1)),  static_cast<uint32>(~((1<<4)-1)), static_cast<uint32>(~((1<<3)-1)), static_cast<uint32>(~((1<<2)-1)), static_cast<uint32>(~((1<<1)-1))
+		};
+		
+		return *this & LayerMasks[LayerIdx];
+	}
+
 	FORCEINLINE FGlobalVector ComponentMin(const FGlobalVector& Other) const
 	{
 		return FGlobalVector(FMath::Min(X, Other.X), FMath::Min(Y, Other.Y), FMath::Min(Z, Other.Z));

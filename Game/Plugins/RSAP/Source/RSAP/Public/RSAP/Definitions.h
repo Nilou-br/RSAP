@@ -57,10 +57,11 @@ namespace RsapStatic
 	static inline constexpr uint8 ChunkMortonShift = 10 + VoxelSizeExponent;
 	static inline constexpr uint32 ChunkMask = ~((1<<ChunkMortonShift)-1);
 	static inline constexpr uint16 MortonOffsets[10] = {1024, 512, 256, 128, 64, 32, 16, 8, 4, 2};
-	static inline constexpr uint8 SmallestNodeSize = 2; // todo: set to 2.
+	static inline constexpr uint8 SmallestNodeSize = 2;
 	static inline constexpr int32 NodeSizes[10] = {1024, 512, 256, 128, 64, 32, 16, 8, 4, 2};
 	static inline constexpr uint16 NodeHalveSizes[10] = {512, 256, 128, 64, 32, 16, 8, 4, 2, 1};
 	static inline constexpr rsap_direction Directions[6] = {0b100000, 0b010000, 0b001000, 0b000100, 0b000010, 0b000001};
+	// static inline constexpr uint32 EncodeDecodeOffset = 0b00111111111111111111110000000000; // '1073740800'. To convert any negative coordinates into positive values for certain calculations.
 }
 
 // todo: refactor

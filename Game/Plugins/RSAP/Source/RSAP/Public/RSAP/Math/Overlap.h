@@ -37,9 +37,9 @@ struct FRsapOverlap
 
 	static bool Component(const UWorld* World, const UPrimitiveComponent* Component, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
 	{
-		TRACE_CPUPROFILER_EVENT_SCOPE_STR("Overlap ::WorldActor");
+		TRACE_CPUPROFILER_EVENT_SCOPE_STR("Overlap ::Component");
 
-		// GeomOverlapBlockingTest
+		//World->ComponentOverlapMultiByChannel();
 		return FPhysicsInterface::GeomOverlapAnyTest(
 			World,
 			CollisionBoxes[LayerIdx],

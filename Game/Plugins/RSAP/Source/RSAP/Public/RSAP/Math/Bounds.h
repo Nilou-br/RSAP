@@ -127,23 +127,25 @@ struct TBounds
 	template<typename T = VectorType>
 	FORCEINLINE auto RoundToLayer(const layer_idx LayerIdx) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, FGlobalBounds>
 	{
-		// Apply the Voxel-Size-Exponent to these masks since this VectorType exist in global space.
-		static constexpr uint16 LayerMasks[10] = {
-			static_cast<uint16>(~((1 << 10 >> RsapStatic::VoxelSizeExponent) - 1)), static_cast<uint16>(~((1 << 9 >> RsapStatic::VoxelSizeExponent) - 1)),
-			static_cast<uint16>(~((1 << 8  >> RsapStatic::VoxelSizeExponent) - 1)), static_cast<uint16>(~((1 << 7 >> RsapStatic::VoxelSizeExponent) - 1)),
-			static_cast<uint16>(~((1 << 6  >> RsapStatic::VoxelSizeExponent) - 1)), static_cast<uint16>(~((1 << 5 >> RsapStatic::VoxelSizeExponent) - 1)),
-			static_cast<uint16>(~((1 << 4  >> RsapStatic::VoxelSizeExponent) - 1)), static_cast<uint16>(~((1 << 3 >> RsapStatic::VoxelSizeExponent) - 1)),
-			static_cast<uint16>(~((1 << 2  >> RsapStatic::VoxelSizeExponent) - 1)), static_cast<uint16>(~((1 << 1 >> RsapStatic::VoxelSizeExponent) - 1))
+		auto Round = [LayerIdx](const int32 Value) -> int32 {
+			if (Value >= 0) return (Value >> LayerIdx) << LayerIdx;							// Positive numbers
+			return ((Value - RsapStatic::NodeSizes[LayerIdx] + 1) >> LayerIdx) << LayerIdx;	// Negative numbers
 		};
 		
-		FGlobalBounds Rounded = *this & LayerMasks[LayerIdx];
+		FGlobalBounds Bounds = *this;
+		Bounds.Max.X = Round(Bounds.Max.X);
+		Bounds.Max.Y = Round(Bounds.Max.Y);
+		Bounds.Max.Z = Round(Bounds.Max.Z);
+		Bounds.Min.X = Round(Bounds.Min.X);
+		Bounds.Min.Y = Round(Bounds.Min.Y);
+		Bounds.Min.Z = Round(Bounds.Min.Z);
 
 		// Round the Max bounds up, but only if it is smaller than the un-rounded bounds.
 		// Its possible for the un-rounded value to already equal the rounded to value, but we still want to round it a whole node-size upwards ( otherwise the Min axis would equal the Max and there is no width, thus no volume ).
-		if(Rounded.Max.X < Max.X) Rounded.Max.X += RsapStatic::NodeSizes[LayerIdx];
-		if(Rounded.Max.Y < Max.Y) Rounded.Max.Y += RsapStatic::NodeSizes[LayerIdx];
-		if(Rounded.Max.Z < Max.Z) Rounded.Max.Z += RsapStatic::NodeSizes[LayerIdx];
-		return Rounded;
+		if(Bounds.Max.X < Max.X) Bounds.Max.X += RsapStatic::NodeSizes[LayerIdx];
+		if(Bounds.Max.Y < Max.Y) Bounds.Max.Y += RsapStatic::NodeSizes[LayerIdx];
+		if(Bounds.Max.Z < Max.Z) Bounds.Max.Z += RsapStatic::NodeSizes[LayerIdx];
+		return Bounds;
 	}
 
 	// Rounds the bounds to the layer's node-size in morton-space. Min will be rounded down, Max will be rounded up.

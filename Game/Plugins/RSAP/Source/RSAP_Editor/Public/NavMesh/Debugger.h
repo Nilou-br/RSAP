@@ -31,7 +31,6 @@ public:
 
 private:
 	static void DrawNodes(const UWorld* World, const FChunk& Chunk, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector);
-	static void SlowDrawNodes(const UWorld* World, const FChunk& Chunk, const FGlobalVector ChunkLocation, const layer_idx LayerIdx);
 
 	static inline constexpr FColor LayerColors[10] = {
 		{255, 0, 0},       // Red

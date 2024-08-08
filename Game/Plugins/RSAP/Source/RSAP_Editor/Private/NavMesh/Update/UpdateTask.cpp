@@ -293,6 +293,9 @@ uint32 FRsapUpdateTask::Run() // todo: runs on startup
 	
 	for (auto& [ActorKey, StagedBounds] : StagedActorBoundaries)
 	{
+		const AActor* Actor = FRsapEditorEvents::GetActor(ActorKey);
+		if(!IsValid(Actor)) continue;
+		
 		const std::vector<FGlobalBounds>& PrevBoundsList = StagedBounds.first;
 		FGlobalBounds CurrBounds = StagedBounds.second;
 		
@@ -300,7 +303,6 @@ uint32 FRsapUpdateTask::Run() // todo: runs on startup
 		const layer_idx StartingLayerIdx = CalculateOptimalStartingLayer(FMovedBounds(PrevBoundsList.back(), CurrBounds));
 		
 		// Get the components that have collisions from this actor. REFACTOR.
-		const AActor* Actor = FRsapEditorEvents::GetActor(ActorKey);
 		std::vector<const UPrimitiveComponent*> CollisionComponents;
 		TArray<UActorComponent*> Components;
 		Actor->GetComponents(Components);

@@ -51,7 +51,6 @@ private:
 	
 	FNavMesh NavMesh;
 	FRsapUpdater* NavMeshUpdater;
-	// FRsapDebugger* NavMeshDebugger;
 
 	void OnMapOpened(const FActorBoundsMap& ActorBoundsMap);
 	void PreMapSaved();

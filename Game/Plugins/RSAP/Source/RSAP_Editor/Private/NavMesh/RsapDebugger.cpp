@@ -6,9 +6,8 @@
 #include "RSAP/Math/Morton.h"
 #include "RSAP/Math/Vectors.h"
 #include <bitset>
-#include <ranges>
 #include <string>
-
+#include "RSAP/Math/Bounds.h"
 
 
 FString To6BitBinaryString(const uint8 Value) {
@@ -129,18 +128,6 @@ void FRsapDebugger::DrawNodes(const UWorld* World, const FChunk& Chunk, const FG
 	{
 		DrawNodes(World, Chunk, ChunkLocation, ChildMC, LayerIdx+1, CameraLocation, CameraForwardVector);
 	});
-}
-
-void FRsapDebugger::SlowDrawNodes(const UWorld* World, const FChunk& Chunk, const FGlobalVector ChunkLocation, const layer_idx LayerIdx)
-{
-	for (const auto& NodeMC : *Chunk.Octrees[0]->Layers[LayerIdx] | std::views::keys)
-	{
-		const FGlobalVector NodeLocation = FGlobalVector::FromNodeMorton(NodeMC, ChunkLocation);
-		const FGlobalVector NodeCenter = NodeLocation+RsapStatic::NodeHalveSizes[LayerIdx];
-		DrawNode(World, NodeCenter, LayerIdx);
-	}
-
-	if(LayerIdx < RsapStatic::StaticDepth) SlowDrawNodes(World, Chunk, ChunkLocation, LayerIdx+1);
 }
 
 // void FRsapDebugger::OldRecursiveDrawNodes(const UWorld* World, const FChunk* Chunk, const node_morton MortonCode, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector) const
