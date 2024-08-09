@@ -98,7 +98,7 @@ public:
 	
 	FORCEINLINE static bool HasComponentOverlap(const UWorld* World, const UPrimitiveComponent* Component, const FGlobalVector& ChunkLocation)
 	{
-		return FRsapOverlap::Component(World, Component, ChunkLocation, 0);
+		return FRsapOverlap::Component(Component, ChunkLocation, 0);
 	}
 
 private:

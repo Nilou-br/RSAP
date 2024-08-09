@@ -134,7 +134,7 @@ void FRsapGenerator::ReRasterizeBounds(const UPrimitiveComponent* CollisionCompo
 			{
 				if(NodeLocation.X == RoundedBounds.Max.X) EdgesToCheck &= Direction::X_Negative;
 				
-				if(FNode::HasComponentOverlap(World, CollisionComponent, NodeLocation, LayerIdx))
+				if(FNode::HasComponentOverlap(CollisionComponent, NodeLocation, LayerIdx))
 				{
 					FChunk* CurrentChunk = FChunk::TryInit(NavMesh, ChunkMC);
 					
@@ -210,7 +210,7 @@ void FRsapGenerator::ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_mort
 		
 		// Skip if not overlapping.
 		const FGlobalVector ChildLocation = FNode::GetChildLocation(NodeLocation, ChildLayerIdx, ChildIdx);
-		if(!FNode::HasComponentOverlap(World, CollisionComponent, ChildLocation, ChildLayerIdx)) continue;
+		if(!FNode::HasComponentOverlap(CollisionComponent, ChildLocation, ChildLayerIdx)) continue;
 
 		// Create node
 		const node_morton ChildNodeMC = FMortonUtils::Node::GetChild(NodeMC, ChildLayerIdx, ChildIdx);
@@ -237,7 +237,7 @@ void FRsapGenerator::ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_mort
 	{
 		// Skip if not overlapping.
 		const FGlobalVector ChildLocation = FNode::GetChildLocation(NodeLocation, ChildLayerIdx, ChildIdx);
-		if(!FNode::HasComponentOverlap(World, CollisionComponent, ChildLocation, ChildLayerIdx)) continue;
+		if(!FNode::HasComponentOverlap(CollisionComponent, ChildLocation, ChildLayerIdx)) continue;
 
 		const node_morton ChildNodeMC = FMortonUtils::Node::GetChild(NodeMC, ChildLayerIdx, ChildIdx);
 		FNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk->GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk->TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
@@ -279,11 +279,18 @@ void FRsapGenerator::Generate(const UWorld* InWorld, const FNavMesh& InNavMesh, 
 
 		for (const UPrimitiveComponent* CollisionComponent : CollisionComponents)
 		{
-			// ReRasterizeBounds(CollisionComponents, CurrBounds, StartingLayerIdx);
-			for (int i = 0; i < 50000; ++i)
+			FPhysicsCommand::ExecuteRead(CollisionComponent->BodyInstance.ActorHandle, [&](const FPhysicsActorHandle& Actor)
 			{
 				ReRasterizeBounds(CollisionComponent);
-			}
+			});
+			
+			// for (int i = 0; i < 50000; ++i)
+			// {
+			// 	FPhysicsCommand::ExecuteRead(CollisionComponent->BodyInstance.ActorHandle, [&](const FPhysicsActorHandle& Actor)
+			// 	{
+			// 		ReRasterizeBounds(CollisionComponent);
+			// 	});
+			// }
 		}
 	}
 

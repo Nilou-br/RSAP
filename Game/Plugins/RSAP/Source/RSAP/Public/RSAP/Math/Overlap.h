@@ -5,7 +5,6 @@
 #include "Physics/Experimental/PhysInterface_Chaos.h"
 
 
-
 // todo: For very large objects, like terrain, do a recursive overlap check to filter out the parts that have no overlap. Should be a certain size that the chunk-size fits in perfectly.
 
 struct FRsapOverlap
@@ -16,12 +15,13 @@ struct FRsapOverlap
 		for (layer_idx LayerIdx = 0; LayerIdx < 10; ++LayerIdx)
 		{
 			CollisionBoxes[LayerIdx] = FCollisionShape::MakeBox(FVector(RsapStatic::NodeHalveSizes[LayerIdx]));
+			// CollisionBoxes[LayerIdx] = FCollisionShape::MakeSphere(RsapStatic::NodeHalveSizes[LayerIdx]);
 		}
 	}
 
 	static bool Any(const UWorld* World, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
 	{
-		TRACE_CPUPROFILER_EVENT_SCOPE_STR("Overlap ::WorldAny");
+		TRACE_CPUPROFILER_EVENT_SCOPE_STR("Overlap ::Any");
 
 		// GeomOverlapBlockingTest
 		return FPhysicsInterface::GeomOverlapAnyTest(
@@ -35,32 +35,21 @@ struct FRsapOverlap
 		);
 	}
 
-	static bool Component(const UWorld* World, const UPrimitiveComponent* Component, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
+	static bool Component(const UPrimitiveComponent* Component, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE_STR("Overlap ::Component");
 
-		//World->ComponentOverlapMultiByChannel();
-		return FPhysicsInterface::GeomOverlapAnyTest(
-			World,
-			CollisionBoxes[LayerIdx],
-			*(NodeLocation + RsapStatic::NodeHalveSizes[LayerIdx]),
-			FQuat::Identity,
-			ECollisionChannel::ECC_WorldStatic,
-			FCollisionQueryParams::DefaultQueryParam,
-			FCollisionResponseParams::DefaultResponseParam
-		);
-	}
+		// Note that OverlapTest_AssumesLocked is not thread safe.
+		return Component->GetBodyInstance()->OverlapTest_AssumesLocked(*(NodeLocation + RsapStatic::NodeHalveSizes[LayerIdx]), FQuat::Identity, CollisionBoxes[LayerIdx]);
 
-	FORCEINLINE static bool Geom(const FBodyInstance* BodyInstance, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
-	{
-		TRACE_CPUPROFILER_EVENT_SCOPE_STR("Overlap ::Geom");
-
-		return FPhysInterface_Chaos::Overlap_Geom(
-			BodyInstance,
-			CollisionBoxes[LayerIdx],
-			FQuat::Identity,
-			FTransform(FQuat::Identity, *(NodeLocation + RsapStatic::NodeHalveSizes[LayerIdx]))
-		);
+		// Thread safe example:
+		// bool bHasOverlap = false;
+		// const FBodyInstance* BodyInstance = Component->GetBodyInstance();
+		// FPhysicsCommand::ExecuteRead(BodyInstance->ActorHandle, [&](const FPhysicsActorHandle& Actor)
+		// {
+		// 	bHasOverlap = BodyInstance->OverlapTest_AssumesLocked(*(NodeLocation + RsapStatic::NodeHalveSizes[LayerIdx]), FQuat::Identity, CollisionBoxes[LayerIdx]);
+		// });
+		// return bHasOverlap;
 	}
 };
 

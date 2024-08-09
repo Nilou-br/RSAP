@@ -199,13 +199,13 @@ struct FNode
 	{
 		return FRsapOverlap::Any(World, NodeLocation, LayerIdx);
 	}
-	FORCEINLINE static bool HasComponentOverlap(const UWorld* World, const UPrimitiveComponent* Component, const FGlobalVector& ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx)
+	FORCEINLINE static bool HasComponentOverlap(const UPrimitiveComponent* Component, const FGlobalVector& ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx)
 	{
-		return FRsapOverlap::Component(World, Component, GetGlobalLocation(ChunkLocation, NodeMC), LayerIdx);
+		return FRsapOverlap::Component(Component, GetGlobalLocation(ChunkLocation, NodeMC), LayerIdx);
 	}
-	FORCEINLINE static bool HasComponentOverlap(const UWorld* World, const UPrimitiveComponent* Component, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
+	FORCEINLINE static bool HasComponentOverlap(const UPrimitiveComponent* Component, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
 	{
-		return FRsapOverlap::Component(World, Component, NodeLocation, LayerIdx);
+		return FRsapOverlap::Component(Component, NodeLocation, LayerIdx);
 	}
 
 	FORCEINLINE void Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const node_morton MortonCode, const layer_idx LayerIdx, const FColor Color, const uint32 Thickness) const

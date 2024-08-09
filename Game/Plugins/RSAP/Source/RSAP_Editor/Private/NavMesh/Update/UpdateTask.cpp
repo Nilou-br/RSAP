@@ -163,7 +163,7 @@ void FRsapUpdateTask::ReRasterizeBounds(const UPrimitiveComponent* CollisionComp
 			{
 				if(NodeLocation.X == RoundedBounds.Max.X) EdgesToCheck &= Direction::X_Negative;
 				
-				if(FNode::HasComponentOverlap(World, CollisionComponent, NodeLocation, LayerIdx))
+				if(FNode::HasComponentOverlap(CollisionComponent, NodeLocation, LayerIdx))
 				{
 					FChunk* CurrentChunk = TryInitChunk(ChunkMC);
 					
@@ -239,7 +239,7 @@ void FRsapUpdateTask::ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_mor
 		
 		// Skip if not overlapping.
 		const FGlobalVector ChildLocation = FNode::GetChildLocation(NodeLocation, ChildLayerIdx, ChildIdx);
-		if(!FNode::HasComponentOverlap(World, CollisionComponent, ChildLocation, ChildLayerIdx)) continue;
+		if(!FNode::HasComponentOverlap(CollisionComponent, ChildLocation, ChildLayerIdx)) continue;
 
 		// Create node
 		const node_morton ChildNodeMC = FMortonUtils::Node::GetChild(NodeMC, ChildLayerIdx, ChildIdx);
@@ -266,7 +266,7 @@ void FRsapUpdateTask::ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_mor
 	{
 		// Skip if not overlapping.
 		const FGlobalVector ChildLocation = FNode::GetChildLocation(NodeLocation, ChildLayerIdx, ChildIdx);
-		if(!FNode::HasComponentOverlap(World, CollisionComponent, ChildLocation, ChildLayerIdx)) continue;
+		if(!FNode::HasComponentOverlap(CollisionComponent, ChildLocation, ChildLayerIdx)) continue;
 
 		const node_morton ChildNodeMC = FMortonUtils::Node::GetChild(NodeMC, ChildLayerIdx, ChildIdx);
 		FNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk->GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk->TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
