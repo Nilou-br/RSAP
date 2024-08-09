@@ -29,7 +29,6 @@ public class RSAP_Editor : ModuleRules
 				"ToolMenus",
 				"EditorStyle",
 				"EditorSubsystem",
-				"Chaos",
 				"RSAP"
 			}
 		);

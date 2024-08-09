@@ -27,7 +27,7 @@ void FRsapUpdateTask::InitParentsOfNode(const FChunk* Chunk, const node_morton N
 
 	// Update the ChildOcclusions on the parent to know this child exists and is occluding.
 	const child_idx ChildIdx = FMortonUtils::Node::GetChildIndex(NodeMC, LayerIdx);
-	ParentNode.SetChildOccluding(ChildIdx);
+	ParentNode.SetChildAlive(ChildIdx);
 }
 
 FNode& FRsapUpdateTask::TryInitNodeAndParents(const FChunk* Chunk, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState)
@@ -82,42 +82,42 @@ uint8 FRsapUpdateTask::GetChildrenToRasterizeAndUpdateEdges(rsap_direction& Edge
 
 	// Negative
 	// X
-	if(EdgesToCheck & Direction::X_Negative)
+	if(EdgesToCheck & RsapDirection::X_Negative)
 	{
 		if(!(LayerSkipMasks.X_Negative & FLayerSkipMasks::Masks[LayerIdx])) ChildrenToRasterize &= ChildIdxMasks::Clear::X_Negative;
-		if(!(LayerSkipMasks.X_Negative & ClearParentMask)) EdgesToCheck &= Direction::NOT_X_Negative;
+		if(!(LayerSkipMasks.X_Negative & ClearParentMask)) EdgesToCheck &= RsapDirection::NOT_X_Negative;
 	}
 	// Y
-	if(EdgesToCheck & Direction::Y_Negative && !(LayerSkipMasks.Y_Negative & FLayerSkipMasks::Masks[LayerIdx]))
+	if(EdgesToCheck & RsapDirection::Y_Negative && !(LayerSkipMasks.Y_Negative & FLayerSkipMasks::Masks[LayerIdx]))
 	{
 		if(!(LayerSkipMasks.Y_Negative & FLayerSkipMasks::Masks[LayerIdx])) ChildrenToRasterize &= ChildIdxMasks::Clear::Y_Negative;
-		if(!(LayerSkipMasks.Y_Negative & ClearParentMask)) EdgesToCheck &= Direction::NOT_Y_Negative;
+		if(!(LayerSkipMasks.Y_Negative & ClearParentMask)) EdgesToCheck &= RsapDirection::NOT_Y_Negative;
 	}
 	// Z
-	if(EdgesToCheck & Direction::Z_Negative && !(LayerSkipMasks.Z_Negative & FLayerSkipMasks::Masks[LayerIdx]))
+	if(EdgesToCheck & RsapDirection::Z_Negative && !(LayerSkipMasks.Z_Negative & FLayerSkipMasks::Masks[LayerIdx]))
 	{
 		if(!(LayerSkipMasks.Z_Negative & FLayerSkipMasks::Masks[LayerIdx])) ChildrenToRasterize &= ChildIdxMasks::Clear::Z_Negative;
-		if(!(LayerSkipMasks.Z_Negative & ClearParentMask)) EdgesToCheck &= Direction::NOT_Z_Negative;
+		if(!(LayerSkipMasks.Z_Negative & ClearParentMask)) EdgesToCheck &= RsapDirection::NOT_Z_Negative;
 	}
 
 	// Positive
 	// X
-	if(EdgesToCheck & Direction::X_Positive && !(LayerSkipMasks.X_Positive & FLayerSkipMasks::Masks[LayerIdx]))
+	if(EdgesToCheck & RsapDirection::X_Positive && !(LayerSkipMasks.X_Positive & FLayerSkipMasks::Masks[LayerIdx]))
 	{
 		if(!(LayerSkipMasks.X_Positive & FLayerSkipMasks::Masks[LayerIdx])) ChildrenToRasterize &= ChildIdxMasks::Clear::X_Positive;
-		if(!(LayerSkipMasks.X_Positive & ClearParentMask)) EdgesToCheck &= Direction::NOT_X_Positive;
+		if(!(LayerSkipMasks.X_Positive & ClearParentMask)) EdgesToCheck &= RsapDirection::NOT_X_Positive;
 	}
 	// Y
-	if(EdgesToCheck & Direction::Y_Positive && !(LayerSkipMasks.Y_Positive & FLayerSkipMasks::Masks[LayerIdx]))
+	if(EdgesToCheck & RsapDirection::Y_Positive && !(LayerSkipMasks.Y_Positive & FLayerSkipMasks::Masks[LayerIdx]))
 	{
 		if(!(LayerSkipMasks.Y_Positive & FLayerSkipMasks::Masks[LayerIdx])) ChildrenToRasterize &= ChildIdxMasks::Clear::Y_Positive;
-		if(!(LayerSkipMasks.Y_Positive & ClearParentMask)) EdgesToCheck &= Direction::NOT_Y_Positive;
+		if(!(LayerSkipMasks.Y_Positive & ClearParentMask)) EdgesToCheck &= RsapDirection::NOT_Y_Positive;
 	}
 	// Z
-	if(EdgesToCheck & Direction::Z_Positive && !(LayerSkipMasks.Z_Positive & FLayerSkipMasks::Masks[LayerIdx]))
+	if(EdgesToCheck & RsapDirection::Z_Positive && !(LayerSkipMasks.Z_Positive & FLayerSkipMasks::Masks[LayerIdx]))
 	{
 		if(!(LayerSkipMasks.Z_Positive & FLayerSkipMasks::Masks[LayerIdx])) ChildrenToRasterize &= ChildIdxMasks::Clear::Z_Positive;
-		if(!(LayerSkipMasks.Z_Positive & ClearParentMask)) EdgesToCheck &= Direction::NOT_Z_Positive;
+		if(!(LayerSkipMasks.Z_Positive & ClearParentMask)) EdgesToCheck &= RsapDirection::NOT_Z_Positive;
 	}
 
 	return ChildrenToRasterize;
@@ -155,13 +155,13 @@ void FRsapUpdateTask::ReRasterizeBounds(const UPrimitiveComponent* CollisionComp
 	FGlobalVector NodeLocation;
 	for (NodeLocation.Z = RoundedBounds.Min.Z; NodeLocation.Z <= RoundedBounds.Max.Z; NodeLocation.Z += RsapStatic::NodeSizes[LayerIdx])
 	{
-		if(NodeLocation.Z == RoundedBounds.Max.Z) EdgesToCheck &= Direction::Z_Negative;
+		if(NodeLocation.Z == RoundedBounds.Max.Z) EdgesToCheck &= RsapDirection::Z_Negative;
 		for (NodeLocation.Y = RoundedBounds.Min.Y; NodeLocation.Y <= RoundedBounds.Max.Y; NodeLocation.Y += RsapStatic::NodeSizes[LayerIdx])
 		{
-			if(NodeLocation.Y == RoundedBounds.Max.Y) EdgesToCheck &= Direction::Y_Negative;
+			if(NodeLocation.Y == RoundedBounds.Max.Y) EdgesToCheck &= RsapDirection::Y_Negative;
 			for (NodeLocation.X = RoundedBounds.Min.X; NodeLocation.X <= RoundedBounds.Max.X; NodeLocation.X += RsapStatic::NodeSizes[LayerIdx])
 			{
-				if(NodeLocation.X == RoundedBounds.Max.X) EdgesToCheck &= Direction::X_Negative;
+				if(NodeLocation.X == RoundedBounds.Max.X) EdgesToCheck &= RsapDirection::X_Negative;
 				
 				if(FNode::HasComponentOverlap(CollisionComponent, NodeLocation, LayerIdx))
 				{
@@ -177,7 +177,7 @@ void FRsapUpdateTask::ReRasterizeBounds(const UPrimitiveComponent* CollisionComp
 					}
 				}
 				
-				if(NodeLocation.X == RoundedBounds.Min.X) EdgesToCheck &= Direction::NOT_X_Negative;
+				if(NodeLocation.X == RoundedBounds.Min.X) EdgesToCheck &= RsapDirection::NOT_X_Negative;
 				if(NodeLocation.X == RoundedBounds.Max.X)
 				{
 					NodeMC = FMortonUtils::Node::CopyX(NodeMC, StartingNodeMC);
@@ -189,7 +189,7 @@ void FRsapUpdateTask::ReRasterizeBounds(const UPrimitiveComponent* CollisionComp
 				if(FMortonUtils::Node::XEqualsZero(NodeMC)) ChunkMC = FMortonUtils::Chunk::IncrementX(ChunkMC);
 			}
 	
-			if(NodeLocation.Y == RoundedBounds.Min.Y) EdgesToCheck &= Direction::NOT_Y_Negative;
+			if(NodeLocation.Y == RoundedBounds.Min.Y) EdgesToCheck &= RsapDirection::NOT_Y_Negative;
 			if(NodeLocation.Y == RoundedBounds.Max.Y)
 			{
 				NodeMC = FMortonUtils::Node::CopyY(NodeMC, StartingNodeMC);
@@ -201,7 +201,7 @@ void FRsapUpdateTask::ReRasterizeBounds(const UPrimitiveComponent* CollisionComp
 			if(FMortonUtils::Node::YEqualsZero(NodeMC)) ChunkMC = FMortonUtils::Chunk::IncrementY(ChunkMC);
 		}
 	
-		if(NodeLocation.Z == RoundedBounds.Min.Z) EdgesToCheck &= Direction::NOT_Z_Negative;
+		if(NodeLocation.Z == RoundedBounds.Min.Z) EdgesToCheck &= RsapDirection::NOT_Z_Negative;
 		if(NodeLocation.Z == RoundedBounds.Max.Z) continue; // Don't need to reset Z axis because this axis won't be repeated.
 		
 		NodeMC = FMortonUtils::Node::AddZ(NodeMC, LayerIdx);
@@ -246,7 +246,7 @@ void FRsapUpdateTask::ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_mor
 		FNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk->GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk->TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
 
 		// Set child to be alive on parent.
-		Node.SetChildOccluding(ChildIdx);
+		Node.SetChildAlive(ChildIdx);
 
 		// Stop recursion if Static-Depth is reached.
 		if(ChildLayerIdx == RsapStatic::StaticDepth) continue;
@@ -272,7 +272,7 @@ void FRsapUpdateTask::ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_mor
 		FNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk->GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk->TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
 
 		// Set child to be alive on parent.
-		Node.SetChildOccluding(ChildIdx);
+		Node.SetChildAlive(ChildIdx);
 
 		// Stop recursion if Static-Depth is reached.
 		if(ChildLayerIdx == RsapStatic::StaticDepth) continue;

@@ -33,25 +33,39 @@ struct FNodeRelations
 	FORCEINLINE rsap_direction GetFromDirection(const rsap_direction Direction) const
 	{
 		switch (Direction) {
-			case Direction::X_Negative: return X_Negative_LayerIdx;
-			case Direction::Y_Negative: return Y_Negative_LayerIdx;
-			case Direction::Z_Negative: return Z_Negative_LayerIdx;
-			case Direction::X_Positive: return X_Positive_LayerIdx;
-			case Direction::Y_Positive: return Y_Positive_LayerIdx;
-			case Direction::Z_Positive: return Z_Positive_LayerIdx;
+			case RsapDirection::X_Negative: return X_Negative_LayerIdx;
+			case RsapDirection::Y_Negative: return Y_Negative_LayerIdx;
+			case RsapDirection::Z_Negative: return Z_Negative_LayerIdx;
+			case RsapDirection::X_Positive: return X_Positive_LayerIdx;
+			case RsapDirection::Y_Positive: return Y_Positive_LayerIdx;
+			case RsapDirection::Z_Positive: return Z_Positive_LayerIdx;
 			default: return Layer_Idx_Invalid;
 		}
 	}
 
-	FORCEINLINE void SetFromDirection(const layer_idx LayerIdx, const rsap_direction Direction)
+	FORCEINLINE void SetFromDirection(const rsap_direction Direction, const layer_idx LayerIdx)
 	{
 		switch (Direction) {
-			case Direction::X_Negative: X_Negative_LayerIdx = LayerIdx; break;
-			case Direction::Y_Negative: Y_Negative_LayerIdx = LayerIdx; break;
-			case Direction::Z_Negative: Z_Negative_LayerIdx = LayerIdx; break;
-			case Direction::X_Positive: X_Positive_LayerIdx = LayerIdx; break;
-			case Direction::Y_Positive: Y_Positive_LayerIdx = LayerIdx; break;
-			case Direction::Z_Positive: Z_Positive_LayerIdx = LayerIdx; break;
+			case RsapDirection::X_Negative: X_Negative_LayerIdx = LayerIdx; break;
+			case RsapDirection::Y_Negative: Y_Negative_LayerIdx = LayerIdx; break;
+			case RsapDirection::Z_Negative: Z_Negative_LayerIdx = LayerIdx; break;
+			case RsapDirection::X_Positive: X_Positive_LayerIdx = LayerIdx; break;
+			case RsapDirection::Y_Positive: Y_Positive_LayerIdx = LayerIdx; break;
+			case RsapDirection::Z_Positive: Z_Positive_LayerIdx = LayerIdx; break;
+			default: break;
+		}
+	}
+
+	// Same as SetFromDirection, but will set the opposite relation from the given direction.
+	FORCEINLINE void SetFromDirectionInverse(const rsap_direction Direction, const layer_idx LayerIdx)
+	{
+		switch (Direction) {
+			case RsapDirection::X_Negative: X_Positive_LayerIdx = LayerIdx; break;
+			case RsapDirection::Y_Negative: Y_Positive_LayerIdx = LayerIdx; break;
+			case RsapDirection::Z_Negative: Z_Positive_LayerIdx = LayerIdx; break;
+			case RsapDirection::X_Positive: X_Negative_LayerIdx = LayerIdx; break;
+			case RsapDirection::Y_Positive: Y_Negative_LayerIdx = LayerIdx; break;
+			case RsapDirection::Z_Positive: Z_Negative_LayerIdx = LayerIdx; break;
 			default: break;
 		}
 	}
@@ -59,12 +73,12 @@ struct FNodeRelations
 	FORCEINLINE bool IsRelationValid(const rsap_direction Direction) const
 	{
 		switch (Direction) {
-			case Direction::X_Negative: return X_Negative_LayerIdx != Layer_Idx_Invalid;
-			case Direction::Y_Negative: return Y_Negative_LayerIdx != Layer_Idx_Invalid;
-			case Direction::Z_Negative: return Z_Negative_LayerIdx != Layer_Idx_Invalid;
-			case Direction::X_Positive: return X_Positive_LayerIdx != Layer_Idx_Invalid;
-			case Direction::Y_Positive: return Y_Positive_LayerIdx != Layer_Idx_Invalid;
-			case Direction::Z_Positive: return Z_Positive_LayerIdx != Layer_Idx_Invalid;
+			case RsapDirection::X_Negative: return X_Negative_LayerIdx != Layer_Idx_Invalid;
+			case RsapDirection::Y_Negative: return Y_Negative_LayerIdx != Layer_Idx_Invalid;
+			case RsapDirection::Z_Negative: return Z_Negative_LayerIdx != Layer_Idx_Invalid;
+			case RsapDirection::X_Positive: return X_Positive_LayerIdx != Layer_Idx_Invalid;
+			case RsapDirection::Y_Positive: return Y_Positive_LayerIdx != Layer_Idx_Invalid;
+			case RsapDirection::Z_Positive: return Z_Positive_LayerIdx != Layer_Idx_Invalid;
 			default: return false;
 		}
 	}
@@ -110,14 +124,14 @@ struct FNodeRelations
  *				 The morton-code is not stored on this class. This is because these are already associated with nodes as key-value pairs on the hashmap.
  * - Relations: Every face of the node has a 4 bit layer-index, and a node-state, for locating it's neighbour.
  *				A neighbour can only be on the same-layer as this node, or above ( as in a parent layer ).
- * - ChildOcclusions: bitmask indicating which of this node's children are alive and thus occluding.
+ * - Children: bitmask indicating which of this node's children are alive and occluding.
  * - ChildStates: bitmask indicating the node type for this node's children.
  * - SoundPresetId: Identifier to a preset of attenuation settings for the actor this node is occluding.
  */
 struct FNode
 {
 	FNodeRelations Relations;
-	uint8 ChildOcclusions: 8 = 0b00000000;
+	uint8 Children: 8 = 0b00000000;
 	uint8 ChildStates: 8 = 0b00000000;
 	uint16 SoundPresetID = 0;
 
@@ -135,14 +149,14 @@ struct FNode
 		return ChunkLocation + GetMortonLocation(MortonCode);
 	}
 
-	// Sets the bit for the child to '1' to indicate it is alive and occluding.
-	FORCEINLINE void SetChildOccluding(const child_idx ChildIdx)
+	// Sets the bit for this child to '1' to indicate it is alive and occluding.
+	FORCEINLINE void SetChildAlive(const child_idx ChildIdx)
 	{
-		ChildOcclusions |= ChildIdxMasks::Masks[ChildIdx];
+		Children |= ChildIdxMasks::Masks[ChildIdx];
 	}
 
 	FORCEINLINE bool HasChildren() const {
-		return ChildOcclusions > 0;
+		return Children > 0;
 	}
 
 	std::array<layer_idx, 6> GetRelations() const
@@ -159,7 +173,7 @@ struct FNode
 
 	FORCEINLINE bool DoesChildExist(const child_idx ChildIdx) const
 	{
-		return ChildOcclusions & ChildIdxMasks::Masks[ChildIdx];
+		return Children & ChildIdxMasks::Masks[ChildIdx];
 	}
 
 	FORCEINLINE static FGlobalVector GetChildLocation(FGlobalVector ParentNodeLocation, const layer_idx ChildLayerIdx, const uint8 ChildIdx)
@@ -208,6 +222,7 @@ struct FNode
 		return FRsapOverlap::Component(Component, NodeLocation, LayerIdx);
 	}
 
+	// Debug draw
 	FORCEINLINE void Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const node_morton MortonCode, const layer_idx LayerIdx, const FColor Color, const uint32 Thickness) const
 	{
 		const float NodeHalveSize = RsapStatic::NodeHalveSizes[LayerIdx];
@@ -216,19 +231,19 @@ struct FNode
 		DrawDebugBox(World, GlobalCenter, Extent, Color, true, -1, 0, Thickness);
 	}
 
-	// Packs the members of the node into a single 64 bit unsigned integer which can be used to serialize the node.
+	// Packs the data of this node into a single 64 bit unsigned integer which is used for serializing the node.
 	FORCEINLINE uint64 Pack() const {
 		uint64 PackedData = 0;
-		PackedData |= static_cast<uint64>(ChildOcclusions);
+		PackedData |= static_cast<uint64>(Children);
 		PackedData |= static_cast<uint64>(ChildStates) << 8;
 		PackedData |= static_cast<uint64>(SoundPresetID) << 16;
 		PackedData |= static_cast<uint64>(Relations.Pack()) << 32;
 		return PackedData;
 	}
 
-	// This constructor overload is meant for initializing a node using serialized data which is packed in a single 64 bit unsigned integer.
+	// This overload is meant for initializing a node from serialized data that was packed.
 	explicit FNode(const uint64 PackedData) {
-		ChildOcclusions = PackedData;
+		Children		= PackedData;
 		ChildStates		= PackedData >> 8;
 		SoundPresetID	= PackedData >> 16;
 		Relations.Unpack(PackedData  >> 32);

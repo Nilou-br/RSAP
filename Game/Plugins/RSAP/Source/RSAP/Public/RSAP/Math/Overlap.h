@@ -2,7 +2,6 @@
 
 #pragma once
 #include "Vectors.h"
-#include "Physics/Experimental/PhysInterface_Chaos.h"
 
 
 // todo: For very large objects, like terrain, do a recursive overlap check to filter out the parts that have no overlap. Should be a certain size that the chunk-size fits in perfectly.
@@ -10,16 +9,18 @@
 struct FRsapOverlap
 {
 	static inline FCollisionShape CollisionBoxes[RsapStatic::MaxDepth];
+	static inline FCollisionShape CollisionSpheres[RsapStatic::MaxDepth];
 	static void InitCollisionBoxes()
 	{
 		for (layer_idx LayerIdx = 0; LayerIdx < 10; ++LayerIdx)
 		{
 			CollisionBoxes[LayerIdx] = FCollisionShape::MakeBox(FVector(RsapStatic::NodeHalveSizes[LayerIdx]));
-			// CollisionBoxes[LayerIdx] = FCollisionShape::MakeSphere(RsapStatic::NodeHalveSizes[LayerIdx]);
+			CollisionSpheres[LayerIdx] = FCollisionShape::MakeSphere(RsapStatic::NodeHalveSizes[LayerIdx]);
 		}
 	}
 
-	static bool Any(const UWorld* World, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
+	// Does a trace against the world to check if this node overlaps any geometry.
+	FORCEINLINE static bool Any(const UWorld* World, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE_STR("Overlap ::Any");
 
@@ -35,7 +36,8 @@ struct FRsapOverlap
 		);
 	}
 
-	static bool Component(const UPrimitiveComponent* Component, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
+	// Does a trace against a specific component's geometry to check if this node overlaps it. Faster than a world trace.
+	FORCEINLINE static bool Component(const UPrimitiveComponent* Component, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE_STR("Overlap ::Component");
 

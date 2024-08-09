@@ -27,11 +27,12 @@ public:
 	
 	static void Draw(const FNavMesh& NavMesh, const UWorld* World);
 	static void Draw(const FNavMesh& NavMesh, const UWorld* World, const FVector& CameraLocation, const FRotator& CameraRotation);
+	static void DrawNodes(const UWorld* World, const FChunk& Chunk, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector);
+	
+	static void ProfileIteration(const FNavMesh& NavMesh);
 	// static void UpdateSettings(const FRsapDebugSettings InDebugSettings){ DebugSettings = InDebugSettings;	}
 
 private:
-	static void DrawNodes(const UWorld* World, const FChunk& Chunk, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector);
-
 	static inline constexpr FColor LayerColors[10] = {
 		{255, 0, 0},       // Red
 		{0, 255, 0},       // Green

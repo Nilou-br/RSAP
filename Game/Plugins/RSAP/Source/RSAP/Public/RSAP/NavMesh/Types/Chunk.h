@@ -44,8 +44,15 @@ public:
 	{
 		Initialize();
 	}
-	
-	FORCEINLINE static chunk_morton GetNeighbour(const chunk_morton ChunkMorton, const rsap_direction Direction)
+
+	// Returns reference to the chunk with this morton-code. New chunk will be initialized if it does not exist yet.
+	FORCEINLINE static FChunk* TryInit(const FNavMesh& NavMesh, const chunk_morton ChunkMC)
+	{
+		return &NavMesh->try_emplace(ChunkMC).first->second;
+	}
+
+	// Returns the neighbour's morton-code in the given direction.
+	FORCEINLINE static chunk_morton GetNeighbourMC(const chunk_morton ChunkMorton, const rsap_direction Direction)
 	{
 		return FMortonUtils::Chunk::Move(ChunkMorton, Direction);
 	}
@@ -56,18 +63,22 @@ public:
 		return Octrees[NodeState]->Layers[LayerIdx]->find(NodeMC)->second;
 	}
 	
-	// Returns reference to this chunk. Will initialize one if it does not exist yet.
-	FORCEINLINE static FChunk* TryInit(const FNavMesh& NavMesh, const chunk_morton ChunkMC)
+	// Tries to find a node. Returns true if the node exists.
+	FORCEINLINE bool FindNode(FNode& OutNode, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
 	{
-		return &NavMesh->try_emplace(ChunkMC).first->second;
+		const auto& Iterator = Octrees[NodeState]->Layers[LayerIdx]->find(NodeMC);
+		if(Iterator == Octrees[NodeState]->Layers[LayerIdx]->end()) return false;
+		OutNode = Iterator->second;
+		return true;
 	}
-
+	
 	// Returns a reference to this node. Will initialize one if it does not exist yet.
 	FORCEINLINE FNode& TryInitNode(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
 	{
 		return Octrees[NodeState]->Layers[LayerIdx]->try_emplace(NodeMC).first->second;
 	}
-	// Has additional boolean to check if the node has been inserted.
+	
+	// Returns a reference to this node. Will initialize one if it does not exist yet.
 	FORCEINLINE FNode& TryInitNode(bool& bOutInserted, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
 	{
 		const auto [NodePair, bInserted] = Octrees[NodeState]->Layers[LayerIdx]->try_emplace(NodeMC);
@@ -76,33 +87,78 @@ public:
 	}
 
 	// Returns a reference to this node. Will initialize one if it does not exist yet. Will also init any parents of this node that do not exist yet.
-	FORCEINLINE FNode& TryInitNodeAndParents(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState)
+	FNode& TryInitNodeAndParents(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState, const rsap_direction RelationsToSet = RsapDirection::XYZ_Negative)
 	{
 		bool bWasInserted;
 		FNode& Node = TryInitNode(bWasInserted, NodeMC, LayerIdx, NodeState);
 
-		// If the node was inserted, then also initialize it's parents if they do not exist yet.
-		if(bWasInserted) InitParentsOfNode(NodeMC, LayerIdx, NodeState);
+		// If the node was inserted, then set it's relations, and also initialize any missing parents.
+		if(bWasInserted)
+		{
+			if(RelationsToSet) TrySetNodeRelations(Node, NodeMC, LayerIdx, RelationsToSet);
+			InitParentsOfNode(NodeMC, LayerIdx, NodeState);
+		}
 		return Node;
 	}
 
-	FORCEINLINE void EraseNode(const node_morton NodeMortonCode, const layer_idx LayerIdx, const node_state NodeState) const
+	// Remove this node from the chunk.
+	FORCEINLINE void EraseNode(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
 	{
-		Octrees[NodeState]->Layers[LayerIdx]->erase(NodeMortonCode);
+		Octrees[NodeState]->Layers[LayerIdx]->erase(NodeMC);
 	}
 
+	// Tries to set the given relation for this node.
+	// Relations can be set to uninitialized nodes within the same parent.
+	void TrySetNodeRelation(FNode& Node, const node_morton NodeMC, const layer_idx LayerIdx, const rsap_direction Relation) const
+	{
+		// Find the the neighbour for this relation starting from the current LayerIdx.
+		node_morton NeighbourMC = FMortonUtils::Node::Move(NodeMC, LayerIdx, Relation);
+		for(layer_idx NeighbourLayerIdx = LayerIdx; NeighbourLayerIdx < RsapStatic::MaxDepth; --NeighbourLayerIdx)
+		{
+			if(FNode NeighbourNode; FindNode(NeighbourNode, NeighbourMC, LayerIdx, 0))
+			{
+				// Neighbour exists, so set the relations on the node, and the neighbour.
+				Node.Relations.SetFromDirection(Relation, NeighbourLayerIdx);
+				NeighbourNode.Relations.SetFromDirectionInverse(Relation, NeighbourLayerIdx);
+				// Also update the relations of the neighbour's children that are against the node.
+				// todo: extra flag argument that tells us if we want to update any children BELOW the node's LayerIdx.
+				// RecursiveSetChildRelations
+				return;
+			}
+
+			// Neighbour not found, set the morton-code to the parent.
+			const layer_idx ParentLayerIdx = LayerIdx-1;
+			NeighbourMC = FMortonUtils::Node::GetParent(NeighbourMC, ParentLayerIdx);
+			
+			// Move again in this direction if the neighbour's parent and the node's parent are the same.
+			if(NeighbourMC != FMortonUtils::Node::GetParent(NodeMC, ParentLayerIdx)) continue;
+			NeighbourMC = FMortonUtils::Node::Move(NodeMC, ParentLayerIdx, Relation);
+		}
+	}
+
+	// Tries to set the relations for this node, the given Relations holds the directions we want to set.
+	// Will try to find the first neighbour for each relation starting from the layer this node is in, a relation can only be on the same layer, or above.
+	// If there is no neighbour for any of the given relations, then it will be set to an invalid index.
+	void TrySetNodeRelations(FNode& Node, const node_morton NodeMC, const layer_idx LayerIdx, const rsap_direction Relations) const
+	{
+		for (const rsap_direction Direction : RsapStatic::Directions)
+		{
+			if(const rsap_direction Relation = Relations & Direction; Relation) TrySetNodeRelation(Node, NodeMC, LayerIdx, Relation);
+		}
+	}
+
+	// Overlap checks
 	FORCEINLINE static bool HasAnyOverlap(const UWorld* World, const FGlobalVector& ChunkLocation)
 	{
 		return FRsapOverlap::Any(World, ChunkLocation, 0);
 	}
-	
 	FORCEINLINE static bool HasComponentOverlap(const UWorld* World, const UPrimitiveComponent* Component, const FGlobalVector& ChunkLocation)
 	{
 		return FRsapOverlap::Component(Component, ChunkLocation, 0);
 	}
 
 private:
-	// Recursively inits the parents of the node until an existing one is found. All parents will have their ChildOcclusions set correctly.
+	// Recursively inits the parents of the node until an existing one is found. All parents will have their Children mask updated correctly.
 	FORCEINLINE void InitParentsOfNode(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState)
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE_STR("Generator ::InitParentsOfNode");
@@ -113,11 +169,18 @@ private:
 		// If this parent was inserted, then continue recursion. Stop if we reached the root node.
 		bool bWasInserted;
 		FNode& ParentNode = TryInitNode(bWasInserted, ParentNodeMC, ParentLayerIdx, NodeState);
-		if(bWasInserted && ParentLayerIdx > 0) InitParentsOfNode(ParentNodeMC, ParentLayerIdx, NodeState);
+		if(bWasInserted)
+		{
+			// Just set all directions for the parent, this won't change performance noticeably because it's likely a parent already exists, and there aren't many iterations for the parents anyway.
+			TrySetNodeRelations(ParentNode, NodeMC, LayerIdx, RsapDirection::All);
 
-		// Update the ChildOcclusions on the parent to know this child exists and is occluding.
+			// Continue if we're not on the root yet.
+			if(ParentLayerIdx > 0) InitParentsOfNode(ParentNodeMC, ParentLayerIdx, NodeState);
+		}
+
+		// Update the Children mask on the parent to know this child exists and is occluding.
 		const child_idx ChildIdx = FMortonUtils::Node::GetChildIndex(NodeMC, LayerIdx);
-		ParentNode.SetChildOccluding(ChildIdx);
+		ParentNode.SetChildAlive(ChildIdx);
 	}
 };
 

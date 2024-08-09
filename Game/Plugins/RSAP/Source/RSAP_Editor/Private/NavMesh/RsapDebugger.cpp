@@ -6,6 +6,7 @@
 #include "RSAP/Math/Morton.h"
 #include "RSAP/Math/Vectors.h"
 #include <bitset>
+#include <ranges>
 #include <string>
 #include "RSAP/Math/Bounds.h"
 
@@ -87,8 +88,7 @@ void FRsapDebugger::Draw(const FNavMesh& NavMesh, const UWorld* World, const FVe
 					const FGlobalVector ChunkGlobalCenterLocation = ChunkLocation + RsapStatic::NodeHalveSizes[0];
 					DrawDebugBox(World, *ChunkGlobalCenterLocation, FVector(RsapStatic::NodeHalveSizes[0]), FColor::Black, true, -1, 11, 5);
 
-					DrawNodes(World, ChunkIterator->second, ChunkLocation, 0, 0, CameraLocation, CameraForwardVector);
-					// SlowDrawNodes(World, ChunkIterator->second, ChunkLocation, 0);
+					DrawNodes(World, ChunkIterator->second, CurrentChunkMC, ChunkLocation, 0, 0, CameraLocation, CameraForwardVector);
 				}
 
 				if(ChunkLocation.X == RenderBoundaries.Max.X)
@@ -112,7 +112,7 @@ void FRsapDebugger::Draw(const FNavMesh& NavMesh, const UWorld* World, const FVe
 	}
 }
 
-void FRsapDebugger::DrawNodes(const UWorld* World, const FChunk& Chunk, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector)
+void FRsapDebugger::DrawNodes(const UWorld* World, const FChunk& Chunk, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector)
 {
 	const auto NodeIterator = Chunk.Octrees[0]->Layers[LayerIdx]->find(NodeMC);
 	if(NodeIterator == Chunk.Octrees[0]->Layers[LayerIdx]->end()) return;
@@ -121,13 +121,49 @@ void FRsapDebugger::DrawNodes(const UWorld* World, const FChunk& Chunk, const FG
 	const FGlobalVector NodeLocation = FGlobalVector::FromNodeMorton(NodeMC, ChunkLocation);
 	const FGlobalVector NodeCenter = NodeLocation+RsapStatic::NodeHalveSizes[LayerIdx];
 	
-	// if(FVector::Dist(CameraLocation, *NodeCenter) > (RsapStatic::NodeSizes[LayerIdx] << 2)+300 - 24*LayerIdx) return; // todo: custom ::Dist on FGlobalVector.
+	// if(FVector::Dist(CameraLocation, *NodeCenter) > (RsapStatic::NodeSizes[LayerIdx] << 2)+300 - 24*LayerIdx) return;
 	DrawNode(World, NodeCenter, LayerIdx);
+
+	// If settings.bDrawRelations
+	for (const rsap_direction Direction : RsapStatic::Directions)
+	{
+		const layer_idx NeighbourLayerIdx = Node.Relations.GetFromDirection(Direction);
+		if(NeighbourLayerIdx == Layer_Idx_Invalid) continue;
+
+		// Draw line between node and neighbour.
+		const node_morton NeighbourMC = FMortonUtils::Node::Move(NodeMC, NeighbourLayerIdx, Direction);
+		const FGlobalVector NeighbourChunkLocation = FMortonUtils::Node::HasMovedIntoNewChunk(NodeMC, NeighbourMC, Direction)
+												   ? FGlobalVector::FromChunkMorton(FChunk::GetNeighbourMC(ChunkMC, Direction))
+												   : ChunkLocation;
+		const FGlobalVector NeighbourLocation = FGlobalVector::FromNodeMorton(NeighbourMC, NeighbourChunkLocation);
+		const FGlobalVector NeighbourCenter = NeighbourLocation+RsapStatic::NodeHalveSizes[NeighbourLayerIdx];
+		DrawDebugLine(World, NodeCenter.ToVector(), NeighbourCenter.ToVector(), AdjustBrightness(LayerColors[LayerIdx], 0.8), true, -1, 11, 1);
+	}
 
 	Node.ForEachChild(NodeMC, LayerIdx, [&](const node_morton ChildMC)
 	{
-		DrawNodes(World, Chunk, ChunkLocation, ChildMC, LayerIdx+1, CameraLocation, CameraForwardVector);
+		DrawNodes(World, Chunk, ChunkMC, ChunkLocation, ChildMC, LayerIdx+1, CameraLocation, CameraForwardVector);
 	});
+}
+
+void FRsapDebugger::ProfileIteration(const FNavMesh& NavMesh)
+{
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("RSAP ProfileIteration");
+	
+	uint64 Total = 0;
+	for (int i = 0; i < 50000; ++i)
+	{
+		for (const FChunk& Chunk : *NavMesh | std::views::values)
+		{
+			for (const auto& LayerPtr : Chunk.Octrees[0]->Layers)
+			{
+				for (const auto& MortonCode : *LayerPtr | std::views::keys)
+				{
+					Total += MortonCode;
+				}
+			}
+		}
+	}
 }
 
 // void FRsapDebugger::OldRecursiveDrawNodes(const UWorld* World, const FChunk* Chunk, const node_morton MortonCode, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector) const
@@ -160,12 +196,12 @@ void FRsapDebugger::DrawNodes(const UWorld* World, const FChunk& Chunk, const FG
 // 		{
 // 	 		FGlobalVector CenterOffset;
 // 	 		switch (Direction) {
-// 	 			case Direction::X_Negative: CenterOffset = FGlobalVector(-RsapStatic::NodeHalveSizes[LayerIdx] + 5, 0, 0); break;
-// 	 			case Direction::Y_Negative: CenterOffset = FGlobalVector(0, -RsapStatic::NodeHalveSizes[LayerIdx] + 5, 0); break;
-// 	 			case Direction::Z_Negative: CenterOffset = FGlobalVector(0, 0, -RsapStatic::NodeHalveSizes[LayerIdx] + 5); break;
-// 	 			case Direction::X_Positive: CenterOffset = FGlobalVector(RsapStatic::NodeHalveSizes[LayerIdx] - 5, 0, 0);  break;
-// 	 			case Direction::Y_Positive: CenterOffset = FGlobalVector(0, RsapStatic::NodeHalveSizes[LayerIdx] - 5, 0);  break;
-// 	 			case Direction::Z_Positive: CenterOffset = FGlobalVector(0, 0, RsapStatic::NodeHalveSizes[LayerIdx] - 5);  break;
+// 	 			case RsapDirection::X_Negative: CenterOffset = FGlobalVector(-RsapStatic::NodeHalveSizes[LayerIdx] + 5, 0, 0); break;
+// 	 			case RsapDirection::Y_Negative: CenterOffset = FGlobalVector(0, -RsapStatic::NodeHalveSizes[LayerIdx] + 5, 0); break;
+// 	 			case RsapDirection::Z_Negative: CenterOffset = FGlobalVector(0, 0, -RsapStatic::NodeHalveSizes[LayerIdx] + 5); break;
+// 	 			case RsapDirection::X_Positive: CenterOffset = FGlobalVector(RsapStatic::NodeHalveSizes[LayerIdx] - 5, 0, 0);  break;
+// 	 			case RsapDirection::Y_Positive: CenterOffset = FGlobalVector(0, RsapStatic::NodeHalveSizes[LayerIdx] - 5, 0);  break;
+// 	 			case RsapDirection::Z_Positive: CenterOffset = FGlobalVector(0, 0, RsapStatic::NodeHalveSizes[LayerIdx] - 5);  break;
 // 	 			default: break;
 // 	 		}
 // 	 		if(FVector::Dist(CameraLocation, NodeGlobalCenterLocation + CenterOffset.ToVector()) > 600) continue;

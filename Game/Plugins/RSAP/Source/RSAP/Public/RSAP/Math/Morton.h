@@ -122,12 +122,12 @@ struct FMortonUtils
 		FORCEINLINE static node_morton Move(const node_morton MortonCode, const layer_idx LayerIdx, const rsap_direction Direction)
 		{
 			switch (Direction) {
-				case Direction::X_Negative: return SubtractX(MortonCode, LayerIdx);
-				case Direction::Y_Negative: return SubtractY(MortonCode, LayerIdx);
-				case Direction::Z_Negative: return SubtractZ(MortonCode, LayerIdx);
-				case Direction::X_Positive: return AddX(MortonCode, LayerIdx);
-				case Direction::Y_Positive: return AddY(MortonCode, LayerIdx);
-				case Direction::Z_Positive: return AddZ(MortonCode, LayerIdx);
+				case RsapDirection::X_Negative: return SubtractX(MortonCode, LayerIdx);
+				case RsapDirection::Y_Negative: return SubtractY(MortonCode, LayerIdx);
+				case RsapDirection::Z_Negative: return SubtractZ(MortonCode, LayerIdx);
+				case RsapDirection::X_Positive: return AddX(MortonCode, LayerIdx);
+				case RsapDirection::Y_Positive: return AddY(MortonCode, LayerIdx);
+				case RsapDirection::Z_Positive: return AddZ(MortonCode, LayerIdx);
 				default: return MortonCode;
 			}
 		}
@@ -219,6 +219,19 @@ struct FMortonUtils
 		FORCEINLINE static bool XEqualsZero(const node_morton MortonCode) { return (MortonCode & Mask_X) == 0; }
 		FORCEINLINE static bool YEqualsZero(const node_morton MortonCode) { return (MortonCode & Mask_Y) == 0; }
 		FORCEINLINE static bool ZEqualsZero(const node_morton MortonCode) { return (MortonCode & Mask_Z) == 0; }
+
+		FORCEINLINE static bool HasMovedIntoNewChunk(const node_morton PrevMortonCode, const node_morton CurrMortonCode, const rsap_direction Direction)
+		{
+			switch (Direction) {
+				case RsapDirection::X_Negative: return XEqualsZero(PrevMortonCode);
+				case RsapDirection::Y_Negative: return YEqualsZero(PrevMortonCode);
+				case RsapDirection::Z_Negative: return ZEqualsZero(PrevMortonCode);
+				case RsapDirection::X_Positive: return XEqualsZero(CurrMortonCode);
+				case RsapDirection::Y_Positive: return YEqualsZero(CurrMortonCode);
+				case RsapDirection::Z_Positive: return ZEqualsZero(CurrMortonCode);
+				default:						return false;
+			}
+		}
 	};
 
 
@@ -263,12 +276,12 @@ struct FMortonUtils
 		FORCEINLINE static chunk_morton Move(const chunk_morton MortonCode, const rsap_direction Direction)
 		{
 			switch (Direction) {
-				case Direction::X_Negative: return DecrementX(MortonCode);
-				case Direction::Y_Negative: return DecrementY(MortonCode);
-				case Direction::Z_Negative: return DecrementZ(MortonCode);
-				case Direction::X_Positive: return IncrementX(MortonCode);
-				case Direction::Y_Positive: return IncrementY(MortonCode);
-				case Direction::Z_Positive: return IncrementZ(MortonCode);
+				case RsapDirection::X_Negative: return DecrementX(MortonCode);
+				case RsapDirection::Y_Negative: return DecrementY(MortonCode);
+				case RsapDirection::Z_Negative: return DecrementZ(MortonCode);
+				case RsapDirection::X_Positive: return IncrementX(MortonCode);
+				case RsapDirection::Y_Positive: return IncrementY(MortonCode);
+				case RsapDirection::Z_Positive: return IncrementZ(MortonCode);
 				default: return MortonCode;
 			}
 		}
