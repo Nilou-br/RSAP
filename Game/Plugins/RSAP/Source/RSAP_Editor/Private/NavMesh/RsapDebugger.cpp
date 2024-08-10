@@ -1,14 +1,16 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-#include "..\..\Public\NavMesh\Debugger.h"
-#include "RSAP/NavMesh/Types/Chunk.h"
-#include "RSAP/NavMesh/Types/Node.h"
+#include <bitset>
+#include <string>
+
+#include "RSAP/Math/Bounds.h"
 #include "RSAP/Math/Morton.h"
 #include "RSAP/Math/Vectors.h"
-#include <bitset>
-#include <ranges>
-#include <string>
-#include "RSAP/Math/Bounds.h"
+#include "RSAP/NavMesh/Types/Chunk.h"
+#include "RSAP/NavMesh/Types/Node.h"
+#include "RSAP_Editor/Public/RsapEditorEvents.h"
+#include "RSAP_Editor/Public/NavMesh/Debugger.h"
+
 
 
 FString To6BitBinaryString(const uint8 Value) {
@@ -144,26 +146,6 @@ void FRsapDebugger::DrawNodes(const UWorld* World, const FChunk& Chunk, const ch
 	{
 		DrawNodes(World, Chunk, ChunkMC, ChunkLocation, ChildMC, LayerIdx+1, CameraLocation, CameraForwardVector);
 	});
-}
-
-void FRsapDebugger::ProfileIteration(const FNavMesh& NavMesh)
-{
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("RSAP ProfileIteration");
-	
-	uint64 Total = 0;
-	for (int i = 0; i < 50000; ++i)
-	{
-		for (const FChunk& Chunk : *NavMesh | std::views::values)
-		{
-			for (const auto& LayerPtr : Chunk.Octrees[0]->Layers)
-			{
-				for (const auto& MortonCode : *LayerPtr | std::views::keys)
-				{
-					Total += MortonCode;
-				}
-			}
-		}
-	}
 }
 
 // void FRsapDebugger::OldRecursiveDrawNodes(const UWorld* World, const FChunk* Chunk, const node_morton MortonCode, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector) const

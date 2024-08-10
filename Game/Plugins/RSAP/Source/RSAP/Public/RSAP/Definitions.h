@@ -2,6 +2,7 @@
 
 // ReSharper disable CppUE4CodingStandardNamingViolationWarning
 #pragma once
+#include <map>
 #include "RSAP/ThirdParty/unordered_dense/unordered_dense.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogRsap, Log, All);
@@ -11,6 +12,15 @@ typedef uint32	node_morton;
 typedef uint64	chunk_morton;
 typedef uint32	actor_key;
 typedef uint8	child_idx;
+
+namespace RSAP
+{
+	template <class Key, class T, class Hash = ankerl::unordered_dense::hash<Key>, class KeyEqual = std::equal_to<Key>, class AllocatorOrContainer = std::allocator<std::pair<Key, T>>, class Bucket = ankerl::unordered_dense::bucket_type::standard>
+	using flat_map = ankerl::unordered_dense::map<Key, T, Hash, KeyEqual, AllocatorOrContainer, Bucket>;
+	
+	template <class Key, class T, class Compare = std::less<Key>, class Allocator = std::allocator<std::pair<const Key, T>>>
+	using ordered_map = std::map<Key, T, Compare, Allocator>;
+}
 
 // Directions within the navmesh use 6 bits to represent '-XYZ +XYZ' values. For example, '0b001100' is negative on the Z, and positive on the X.
 typedef uint8 rsap_direction;
@@ -101,7 +111,7 @@ struct FNode;
 struct FNodeVector;
 struct FGlobalVector;
 
-typedef ankerl::unordered_dense::map<chunk_morton, FChunk> FNavMeshType;
+typedef RSAP::ordered_map<chunk_morton, FChunk> FNavMeshType;
 typedef std::shared_ptr<FNavMeshType> FNavMesh;
 
-typedef ankerl::unordered_dense::map<actor_key, TWeakObjectPtr<const AActor>> FActorMap;
+typedef RSAP::flat_map<actor_key, TWeakObjectPtr<const AActor>> FActorMap;

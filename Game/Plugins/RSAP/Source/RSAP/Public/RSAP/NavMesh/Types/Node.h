@@ -251,3 +251,4 @@ struct FNode
 };
 
 typedef std::pair<node_morton, FNode> FNodePair;
+typedef RSAP::ordered_map<node_morton, FNode> FOctreeLayer;

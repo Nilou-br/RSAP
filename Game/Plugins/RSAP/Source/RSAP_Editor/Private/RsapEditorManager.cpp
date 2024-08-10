@@ -204,3 +204,60 @@ void URsapEditorManager::OnCameraMoved(const FVector& CameraLocation, const FRot
 {
 	if(!NavMeshUpdater->IsRunningTask()) FRsapDebugger::Draw(NavMesh, EditorWorld, CameraLocation, CameraRotation);
 }
+
+
+
+void URsapEditorManager::ProfileGeneration() const
+{
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("RSAP ProfileGeneration");
+	const auto StartTime = std::chrono::high_resolution_clock::now();
+
+	const FNavMesh ProfileNavMesh = std::make_shared<FNavMeshType>();
+	const FActorMap& ActorMap = FRsapEditorEvents::GetActors();
+	for (int i = 0; i < 50000; ++i)
+	{
+		FRsapGenerator::Generate(GEngine->GetWorld(), ProfileNavMesh, ActorMap);
+	}
+
+	const auto EndTime = std::chrono::high_resolution_clock::now();
+	UE_LOG(LogRsap, Warning, TEXT("Profile-Generation took:"));
+	UE_LOG(LogRsap, Warning, TEXT("'%lld' milli-seconds"), std::chrono::duration_cast<std::chrono::milliseconds>(EndTime - StartTime).count());
+	UE_LOG(LogRsap, Warning, TEXT("'%lld' micro-seconds"), std::chrono::duration_cast<std::chrono::microseconds>(EndTime - StartTime).count());
+}
+
+void URsapEditorManager::ProfileIteration() const
+{
+	TRACE_CPUPROFILER_EVENT_SCOPE_STR("RSAP ProfileIteration");
+	const auto StartTime = std::chrono::high_resolution_clock::now();
+	
+	uint64 Total = 0;
+	chunk_morton LastChunkMC = 0;
+	bool bChunksOrdered = true;
+	bool bNodesOrdered = true;
+	for (int i = 0; i < 50000; ++i)
+	{
+		for(const auto& [ChunkMC, Chunk] : *NavMesh)
+		{
+			if(LastChunkMC && ChunkMC < LastChunkMC) bChunksOrdered = false;
+			LastChunkMC = ChunkMC;
+			for (const auto& LayerPtr : Chunk.Octrees[0]->Layers)
+			{
+				node_morton LastNodeMC = 0;
+				for (const auto& NodeMC : *LayerPtr | std::views::keys)
+				{
+					if(LastNodeMC && NodeMC < LastNodeMC) bNodesOrdered = false;
+					LastNodeMC = NodeMC;
+					Total += NodeMC;
+				}
+			}
+		}
+	}
+
+	UE_LOG(LogRsap, Warning, TEXT("Profile-Iteration: %s"), *FString(bChunksOrdered ? "Chunks are ordered." : "Chunks are NOT ordered."));
+	UE_LOG(LogRsap, Warning, TEXT("Profile-Iteration: %s"), *FString(bNodesOrdered ? "Nodes are ordered." : "Nodes are NOT ordered."));
+
+	const auto EndTime = std::chrono::high_resolution_clock::now();
+	UE_LOG(LogRsap, Warning, TEXT("Profile-Iteration took:"));
+	UE_LOG(LogRsap, Warning, TEXT("'%lld' milli-seconds"), std::chrono::duration_cast<std::chrono::milliseconds>(EndTime - StartTime).count());
+	UE_LOG(LogRsap, Warning, TEXT("'%lld' micro-seconds"), std::chrono::duration_cast<std::chrono::microseconds>(EndTime - StartTime).count());
+}

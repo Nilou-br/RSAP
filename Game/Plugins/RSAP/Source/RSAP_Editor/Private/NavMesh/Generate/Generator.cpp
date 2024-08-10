@@ -6,8 +6,6 @@
 #include "RSAP/NavMesh/Types/Chunk.h"
 #include "RSAP/NavMesh/Types/Node.h"
 #include "RSAP_Editor/Public/RsapEditorEvents.h"
-#include "RSAP_Editor/Public/NavMesh/Debugger.h"
-
 
 FNavMesh		FRsapGenerator::NavMesh;
 const UWorld*	FRsapGenerator::World;
@@ -258,7 +256,7 @@ void FRsapGenerator::Generate(const UWorld* InWorld, const FNavMesh& InNavMesh, 
 	World = InWorld;
 	NavMesh = InNavMesh;
 	
-	const auto StartTime = std::chrono::high_resolution_clock::now();
+	// const auto StartTime = std::chrono::high_resolution_clock::now();
 
 	FRsapOverlap::InitCollisionBoxes();
 	
@@ -283,25 +281,15 @@ void FRsapGenerator::Generate(const UWorld* InWorld, const FNavMesh& InNavMesh, 
 			{
 				ReRasterizeBounds(CollisionComponent);
 			});
-			
-			// for (int i = 0; i < 50000; ++i)
-			// {
-			// 	FPhysicsCommand::ExecuteRead(CollisionComponent->BodyInstance.ActorHandle, [&](const FPhysicsActorHandle& Actor)
-			// 	{
-			// 		ReRasterizeBounds(CollisionComponent);
-			// 	});
-			// }
 		}
 	}
-
-	FRsapDebugger::ProfileIteration(NavMesh);
 	
 	World = nullptr;
 	NavMesh.reset();
 
-	const auto EndTime = std::chrono::high_resolution_clock::now();
-	UE_LOG(LogRsap, Warning, TEXT("Generation took:"));
-	UE_LOG(LogRsap, Warning, TEXT("'%lld' milli-seconds"), std::chrono::duration_cast<std::chrono::milliseconds>(EndTime - StartTime).count());
-	UE_LOG(LogRsap, Warning, TEXT("'%lld' micro-seconds"), std::chrono::duration_cast<std::chrono::microseconds>(EndTime - StartTime).count());
+	// const auto EndTime = std::chrono::high_resolution_clock::now();
+	// UE_LOG(LogRsap, Warning, TEXT("Generation took:"));
+	// UE_LOG(LogRsap, Warning, TEXT("'%lld' milli-seconds"), std::chrono::duration_cast<std::chrono::milliseconds>(EndTime - StartTime).count());
+	// UE_LOG(LogRsap, Warning, TEXT("'%lld' micro-seconds"), std::chrono::duration_cast<std::chrono::microseconds>(EndTime - StartTime).count());
 }
 

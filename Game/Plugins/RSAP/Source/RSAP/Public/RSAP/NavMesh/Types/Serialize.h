@@ -3,26 +3,9 @@
 #pragma once
 #include "Chunk.h"
 #include "Node.h"
-#include "RSAP/Math/Vectors.h"
 #include <ranges>
 
 
-
-RSAP_API inline FArchive& operator<<(FArchive& Ar, FGlobalVector& ChunkLocation)
-{
-	if (Ar.IsSaving())
-	{
-		chunk_morton ChunkMorton = ChunkLocation.ToChunkMorton();
-		Ar << ChunkMorton;
-	}
-	else if(Ar.IsLoading())
-	{
-		chunk_morton ChunkMorton;
-		Ar << ChunkMorton;
-		ChunkLocation = FGlobalVector::FromChunkMorton(ChunkMorton);
-	}
-	return Ar;
-}
 
 RSAP_API inline FArchive& operator<<(FArchive& Ar, FOctreeLayer& Layer)
 {
@@ -31,11 +14,12 @@ RSAP_API inline FArchive& operator<<(FArchive& Ar, FOctreeLayer& Layer)
 	
 	if(Ar.IsSaving())
 	{
-		for(auto& [MortonCode, Node] : Layer)
+		for(const auto& [MortonCode, Node] : Layer)
 		{
 			uint64 PackedData = Node.Pack();
+			node_morton NodeMC = MortonCode;
 			
-			Ar << MortonCode;
+			Ar << NodeMC;
 			Ar << PackedData;
 		}
 	}
@@ -43,21 +27,20 @@ RSAP_API inline FArchive& operator<<(FArchive& Ar, FOctreeLayer& Layer)
 	{
 		for(size_t i = 0; i < Size; ++i)
 		{
-			node_morton NodeMorton;
+			node_morton NodeMC;
 			uint64 PackedData;
 			
-			Ar << NodeMorton;
+			Ar << NodeMC;
 			Ar << PackedData;
 			
-			Layer.emplace(NodeMorton, FNode(PackedData));
+			Layer.emplace(NodeMC, FNode(PackedData));
 		}
 	}
 	
 	return Ar;
 }
 
-RSAP_API inline FArchive& operator<<(FArchive& Ar, FChunk& Chunk){
-	//Ar << Chunk.Location;
+RSAP_API inline FArchive& operator<<(FArchive& Ar, const FChunk& Chunk){
 
 	// Only serialize the static-octree.
 	for (layer_idx LayerIdx = 0; LayerIdx <= RsapStatic::StaticDepth; ++LayerIdx)
@@ -73,8 +56,10 @@ RSAP_API inline FArchive& operator<<(FArchive& Ar, FNavMeshType& NavMesh){
 	Ar << Size;
 	if(Ar.IsSaving())
 	{
-		for(FChunk& Chunk : NavMesh | std::views::values)
+		for(const auto& [MortonCode, Chunk] : NavMesh)
 		{
+			chunk_morton ChunkMC = MortonCode;
+			Ar << ChunkMC;
 			Ar << Chunk;
 		}
 	}
@@ -83,9 +68,13 @@ RSAP_API inline FArchive& operator<<(FArchive& Ar, FNavMeshType& NavMesh){
 		NavMesh.clear();
 		for(size_t i = 0; i < Size; ++i)
 		{
+			chunk_morton ChunkMC;
 			FChunk Chunk = FChunk();
+			
+			Ar << ChunkMC;
 			Ar << Chunk;
-			//NavMesh.emplace(Chunk.Location.ToChunkMorton(), std::move(Chunk));
+			
+			NavMesh.emplace(ChunkMC, std::move(Chunk));
 		}
 	}
 	return Ar;

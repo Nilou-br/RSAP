@@ -9,8 +9,6 @@
 
 
 
-typedef ankerl::unordered_dense::map<node_morton, FNode> FOctreeLayer;
-
 /**
  * A Chunk stores two octrees.
  * The first octree at index 0 is static. The nodes are generated/updated within the editor, never during gameplay. Only the relations can be updated during gameplay to point to dynamic nodes, but these changes should not be serialized.

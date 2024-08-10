@@ -321,10 +321,10 @@ typedef TBounds<FNodeVector> FNodeBounds;
 // Will store all the previous known bounds of the actor since last update, paired with its current bounds.
 typedef std::pair<std::vector<FGlobalBounds>, FGlobalBounds> FNavMeshUpdateType;
 // Map holding FNavMeshUpdateType.
-typedef ankerl::unordered_dense::map<actor_key, std::pair<std::vector<FGlobalBounds>, FGlobalBounds>> FNavMeshUpdateMap;
+typedef RSAP::flat_map<actor_key, std::pair<std::vector<FGlobalBounds>, FGlobalBounds>> FNavMeshUpdateMap;
 
 // Map holding actors and their boundaries.
-typedef ankerl::unordered_dense::map<actor_key, FGlobalBounds> FActorBoundsMap;
+typedef RSAP::flat_map<actor_key, FGlobalBounds> FActorBoundsMap;
 
 /**
  * Pair of bounds for storing changes that have happened.
@@ -362,4 +362,4 @@ typedef TMovedBounds<FGlobalVector> FMovedBounds;
 typedef TMovedBounds<FNodeVector> FChangedMortonBounds;
 
 // Map associating an actor with changed boundaries. To hold changes that have happened for multiple actors.
-typedef ankerl::unordered_dense::map<actor_key, FMovedBounds> FMovedBoundsMap;
+typedef RSAP::flat_map<actor_key, FMovedBounds> FMovedBoundsMap;

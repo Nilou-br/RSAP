@@ -18,6 +18,10 @@ private:
     
     static TSharedRef<SWidget> GenerateDropdownMenu();
     static void OnRegenerateButtonClicked();
+    
+    static void GenerateProfilerSubMenu(FMenuBuilder& MenuBuilder);
+    static void OnProfileGenerationClicked();
+    static void OnProfileIterationClicked();
 };
 
 

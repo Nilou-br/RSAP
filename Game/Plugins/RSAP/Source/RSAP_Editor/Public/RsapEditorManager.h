@@ -61,4 +61,8 @@ private:
 
 	void OnNavMeshUpdated() const;
 	void OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation) const;
+
+public:
+	void ProfileGeneration() const;
+	void ProfileIteration() const;
 };

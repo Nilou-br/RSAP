@@ -57,6 +57,12 @@ TSharedRef<SWidget> FRsapEditorModule::GenerateDropdownMenu()
 		FUIAction(FExecuteAction::CreateStatic(&FRsapEditorModule::OnRegenerateButtonClicked))
 	);
 
+	MenuBuilder.AddSubMenu(
+		LOCTEXT("RsapSubMenuLabel", "Advanced Options"),
+		LOCTEXT("RsapSubMenuTooltip", "Show advanced options."),
+		FNewMenuDelegate::CreateStatic(&FRsapEditorModule::GenerateProfilerSubMenu)
+	);
+
 	return MenuBuilder.MakeWidget();
 }
 
@@ -66,6 +72,34 @@ void FRsapEditorModule::OnRegenerateButtonClicked()
 	EditorManager->Regenerate();
 }
 
+void FRsapEditorModule::GenerateProfilerSubMenu(FMenuBuilder& MenuBuilder)
+{
+	MenuBuilder.AddMenuEntry(
+		LOCTEXT("RsapSubMenuProfileGeneration", "Generation"),
+		LOCTEXT("RsapSubMenuOption1Tooltip", "Profiles the generation of the navmesh."),
+		FSlateIcon(),
+		FUIAction(FExecuteAction::CreateStatic(&FRsapEditorModule::OnProfileGenerationClicked))
+	);
+
+	MenuBuilder.AddMenuEntry(
+		LOCTEXT("RsapSubMenuProfileIteration", "Iteration"),
+		LOCTEXT("RsapSubMenuOption2Tooltip", "Profiles iterating over all the nodes within the navmesh."),
+		FSlateIcon(),
+		FUIAction(FExecuteAction::CreateStatic(&FRsapEditorModule::OnProfileIterationClicked))
+	);
+}
+
+void FRsapEditorModule::OnProfileGenerationClicked()
+{
+	const URsapEditorManager* EditorManager = GEditor->GetEditorSubsystem<URsapEditorManager>();
+	EditorManager->ProfileGeneration();
+}
+
+void FRsapEditorModule::OnProfileIterationClicked()
+{
+	const URsapEditorManager* EditorManager = GEditor->GetEditorSubsystem<URsapEditorManager>();
+	EditorManager->ProfileIteration();
+}
 
 
 #undef LOCTEXT_NAMESPACE
