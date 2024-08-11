@@ -24,10 +24,10 @@ layer_idx FRsapGenerator::CalculateOptimalStartingLayer(const FGlobalBounds& Bou
 	const int32 LargestSide = Bounds.GetLengths().GetLargestAxis();
 
 	// Get the first layer where at-least 3 nodes are required to fill the side.
-	layer_idx CurrentLayer = RsapStatic::StaticDepth; // Start at the static-depth because most meshes will be around 1 meter in average.
-	for (layer_idx LayerIdx = 0; LayerIdx < RsapStatic::StaticDepth; ++LayerIdx)
+	layer_idx CurrentLayer = Rsap::NavMesh::StaticDepth; // Start at the static-depth because most meshes will be around 1 meter in average.
+	for (layer_idx LayerIdx = 0; LayerIdx < Rsap::NavMesh::StaticDepth; ++LayerIdx)
 	{
-		if(LargestSide / RsapStatic::NodeSizes[LayerIdx] <= 1) continue;
+		if(LargestSide / Rsap::Node::Sizes[LayerIdx] <= 1) continue;
 		CurrentLayer = LayerIdx;
 		break;
 	}
@@ -42,6 +42,9 @@ uint8 FRsapGenerator::GetChildrenToRasterizeAndUpdateEdges(rsap_direction& Edges
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Generator ::GetChildrenToRasterizeAndUpdateEdges");
 	
+	using namespace Rsap::Node;
+	using namespace Rsap::Direction;
+	
 	const uint16 ClearParentMask = FLayerSkipMasks::ClearParentMasks[LayerIdx];
 	uint8 ChildrenToRasterize = 0b11111111;
 
@@ -51,42 +54,42 @@ uint8 FRsapGenerator::GetChildrenToRasterizeAndUpdateEdges(rsap_direction& Edges
 
 	// Negative
 	// X
-	if(EdgesToCheck & RsapDirection::X_Negative)
+	if(EdgesToCheck & Negative::X)
 	{
-		if(!(LayerSkipMasks.X_Negative & FLayerSkipMasks::Masks[LayerIdx])) ChildrenToRasterize &= ChildIdxMasks::Clear::X_Negative;
-		if(!(LayerSkipMasks.X_Negative & ClearParentMask)) EdgesToCheck &= RsapDirection::NOT_X_Negative;
+		if(!(LayerSkipMasks.X_Negative & FLayerSkipMasks::Masks[LayerIdx])) ChildrenToRasterize &= Children::Clear::Negative::X;
+		if(!(LayerSkipMasks.X_Negative & ClearParentMask)) EdgesToCheck &= Negative::NOT_X;
 	}
 	// Y
-	if(EdgesToCheck & RsapDirection::Y_Negative && !(LayerSkipMasks.Y_Negative & FLayerSkipMasks::Masks[LayerIdx]))
+	if(EdgesToCheck & Negative::Y && !(LayerSkipMasks.Y_Negative & FLayerSkipMasks::Masks[LayerIdx]))
 	{
-		if(!(LayerSkipMasks.Y_Negative & FLayerSkipMasks::Masks[LayerIdx])) ChildrenToRasterize &= ChildIdxMasks::Clear::Y_Negative;
-		if(!(LayerSkipMasks.Y_Negative & ClearParentMask)) EdgesToCheck &= RsapDirection::NOT_Y_Negative;
+		if(!(LayerSkipMasks.Y_Negative & FLayerSkipMasks::Masks[LayerIdx])) ChildrenToRasterize &= Children::Clear::Negative::Y;
+		if(!(LayerSkipMasks.Y_Negative & ClearParentMask)) EdgesToCheck &= Negative::NOT_Y;
 	}
 	// Z
-	if(EdgesToCheck & RsapDirection::Z_Negative && !(LayerSkipMasks.Z_Negative & FLayerSkipMasks::Masks[LayerIdx]))
+	if(EdgesToCheck & Negative::Z && !(LayerSkipMasks.Z_Negative & FLayerSkipMasks::Masks[LayerIdx]))
 	{
-		if(!(LayerSkipMasks.Z_Negative & FLayerSkipMasks::Masks[LayerIdx])) ChildrenToRasterize &= ChildIdxMasks::Clear::Z_Negative;
-		if(!(LayerSkipMasks.Z_Negative & ClearParentMask)) EdgesToCheck &= RsapDirection::NOT_Z_Negative;
+		if(!(LayerSkipMasks.Z_Negative & FLayerSkipMasks::Masks[LayerIdx])) ChildrenToRasterize &= Children::Clear::Negative::Z;
+		if(!(LayerSkipMasks.Z_Negative & ClearParentMask)) EdgesToCheck &= Negative::NOT_Z;
 	}
 
 	// Positive
 	// X
-	if(EdgesToCheck & RsapDirection::X_Positive && !(LayerSkipMasks.X_Positive & FLayerSkipMasks::Masks[LayerIdx]))
+	if(EdgesToCheck & Positive::X && !(LayerSkipMasks.X_Positive & FLayerSkipMasks::Masks[LayerIdx]))
 	{
-		if(!(LayerSkipMasks.X_Positive & FLayerSkipMasks::Masks[LayerIdx])) ChildrenToRasterize &= ChildIdxMasks::Clear::X_Positive;
-		if(!(LayerSkipMasks.X_Positive & ClearParentMask)) EdgesToCheck &= RsapDirection::NOT_X_Positive;
+		if(!(LayerSkipMasks.X_Positive & FLayerSkipMasks::Masks[LayerIdx])) ChildrenToRasterize &= Children::Clear::Positive::X;
+		if(!(LayerSkipMasks.X_Positive & ClearParentMask)) EdgesToCheck &= Positive::NOT_X;
 	}
 	// Y
-	if(EdgesToCheck & RsapDirection::Y_Positive && !(LayerSkipMasks.Y_Positive & FLayerSkipMasks::Masks[LayerIdx]))
+	if(EdgesToCheck & Positive::Y && !(LayerSkipMasks.Y_Positive & FLayerSkipMasks::Masks[LayerIdx]))
 	{
-		if(!(LayerSkipMasks.Y_Positive & FLayerSkipMasks::Masks[LayerIdx])) ChildrenToRasterize &= ChildIdxMasks::Clear::Y_Positive;
-		if(!(LayerSkipMasks.Y_Positive & ClearParentMask)) EdgesToCheck &= RsapDirection::NOT_Y_Positive;
+		if(!(LayerSkipMasks.Y_Positive & FLayerSkipMasks::Masks[LayerIdx])) ChildrenToRasterize &= Children::Clear::Positive::Y;
+		if(!(LayerSkipMasks.Y_Positive & ClearParentMask)) EdgesToCheck &= Positive::NOT_Y;
 	}
 	// Z
-	if(EdgesToCheck & RsapDirection::Z_Positive && !(LayerSkipMasks.Z_Positive & FLayerSkipMasks::Masks[LayerIdx]))
+	if(EdgesToCheck & Positive::Z && !(LayerSkipMasks.Z_Positive & FLayerSkipMasks::Masks[LayerIdx]))
 	{
-		if(!(LayerSkipMasks.Z_Positive & FLayerSkipMasks::Masks[LayerIdx])) ChildrenToRasterize &= ChildIdxMasks::Clear::Z_Positive;
-		if(!(LayerSkipMasks.Z_Positive & ClearParentMask)) EdgesToCheck &= RsapDirection::NOT_Z_Positive;
+		if(!(LayerSkipMasks.Z_Positive & FLayerSkipMasks::Masks[LayerIdx])) ChildrenToRasterize &= Children::Clear::Positive::Z;
+		if(!(LayerSkipMasks.Z_Positive & ClearParentMask)) EdgesToCheck &= Positive::NOT_Z;
 	}
 
 	return ChildrenToRasterize;
@@ -96,6 +99,7 @@ uint8 FRsapGenerator::GetChildrenToRasterizeAndUpdateEdges(rsap_direction& Edges
 void FRsapGenerator::ReRasterizeBounds(const UPrimitiveComponent* CollisionComponent)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Generator ::ReRasterizeBounds");
+	using namespace Rsap::Direction;
 	
 	// Get the bounds of this component.
 	const FGlobalBounds Bounds(CollisionComponent);
@@ -122,15 +126,15 @@ void FRsapGenerator::ReRasterizeBounds(const UPrimitiveComponent* CollisionCompo
 
 	// todo: try to unroll this loop into max of 27 different versions, and pick the right one based on dimensions. Leave this nested loop for objects larger than 3 chunks in any direction.
 	FGlobalVector NodeLocation;
-	for (NodeLocation.Z = RoundedBounds.Min.Z; NodeLocation.Z <= RoundedBounds.Max.Z; NodeLocation.Z += RsapStatic::NodeSizes[LayerIdx])
+	for (NodeLocation.Z = RoundedBounds.Min.Z; NodeLocation.Z <= RoundedBounds.Max.Z; NodeLocation.Z += Rsap::Node::Sizes[LayerIdx])
 	{
-		if(NodeLocation.Z == RoundedBounds.Max.Z) EdgesToCheck &= RsapDirection::Z_Negative;
-		for (NodeLocation.Y = RoundedBounds.Min.Y; NodeLocation.Y <= RoundedBounds.Max.Y; NodeLocation.Y += RsapStatic::NodeSizes[LayerIdx])
+		if(NodeLocation.Z == RoundedBounds.Max.Z) EdgesToCheck &= Negative::Z;
+		for (NodeLocation.Y = RoundedBounds.Min.Y; NodeLocation.Y <= RoundedBounds.Max.Y; NodeLocation.Y += Rsap::Node::Sizes[LayerIdx])
 		{
-			if(NodeLocation.Y == RoundedBounds.Max.Y) EdgesToCheck &= RsapDirection::Y_Negative;
-			for (NodeLocation.X = RoundedBounds.Min.X; NodeLocation.X <= RoundedBounds.Max.X; NodeLocation.X += RsapStatic::NodeSizes[LayerIdx])
+			if(NodeLocation.Y == RoundedBounds.Max.Y) EdgesToCheck &= Negative::Y;
+			for (NodeLocation.X = RoundedBounds.Min.X; NodeLocation.X <= RoundedBounds.Max.X; NodeLocation.X += Rsap::Node::Sizes[LayerIdx])
 			{
-				if(NodeLocation.X == RoundedBounds.Max.X) EdgesToCheck &= RsapDirection::X_Negative;
+				if(NodeLocation.X == RoundedBounds.Max.X) EdgesToCheck &= Negative::X;
 				
 				if(FNode::HasComponentOverlap(CollisionComponent, NodeLocation, LayerIdx))
 				{
@@ -140,13 +144,13 @@ void FRsapGenerator::ReRasterizeBounds(const UPrimitiveComponent* CollisionCompo
 					FNode& Node = CurrentChunk->TryInitNodeAndParents(NodeMC, LayerIdx, 0);
 
 					// Re-rasterize if we are not yet on the static-depth.
-					if(LayerIdx < RsapStatic::StaticDepth)
+					if(LayerIdx < Rsap::NavMesh::StaticDepth)
 					{
 						ReRasterizeNode(CurrentChunk, Node, NodeMC, NodeLocation, LayerIdx, EdgesToCheck, LayerSkipMasks, CollisionComponent);
 					}
 				}
 				
-				if(NodeLocation.X == RoundedBounds.Min.X) EdgesToCheck &= RsapDirection::NOT_X_Negative;
+				if(NodeLocation.X == RoundedBounds.Min.X) EdgesToCheck &= Negative::NOT_X;
 				if(NodeLocation.X == RoundedBounds.Max.X)
 				{
 					NodeMC = FMortonUtils::Node::CopyX(NodeMC, StartingNodeMC);
@@ -158,7 +162,7 @@ void FRsapGenerator::ReRasterizeBounds(const UPrimitiveComponent* CollisionCompo
 				if(FMortonUtils::Node::XEqualsZero(NodeMC)) ChunkMC = FMortonUtils::Chunk::IncrementX(ChunkMC);
 			}
 	
-			if(NodeLocation.Y == RoundedBounds.Min.Y) EdgesToCheck &= RsapDirection::NOT_Y_Negative;
+			if(NodeLocation.Y == RoundedBounds.Min.Y) EdgesToCheck &= Negative::NOT_Y;
 			if(NodeLocation.Y == RoundedBounds.Max.Y)
 			{
 				NodeMC = FMortonUtils::Node::CopyY(NodeMC, StartingNodeMC);
@@ -170,7 +174,7 @@ void FRsapGenerator::ReRasterizeBounds(const UPrimitiveComponent* CollisionCompo
 			if(FMortonUtils::Node::YEqualsZero(NodeMC)) ChunkMC = FMortonUtils::Chunk::IncrementY(ChunkMC);
 		}
 	
-		if(NodeLocation.Z == RoundedBounds.Min.Z) EdgesToCheck &= RsapDirection::NOT_Z_Negative;
+		if(NodeLocation.Z == RoundedBounds.Min.Z) EdgesToCheck &= Negative::NOT_Z;
 		if(NodeLocation.Z == RoundedBounds.Max.Z) continue; // Don't need to reset Z axis because this axis won't be repeated.
 		
 		NodeMC = FMortonUtils::Node::AddZ(NodeMC, LayerIdx);
@@ -204,7 +208,7 @@ void FRsapGenerator::ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_mort
 	for(child_idx ChildIdx = 0; ChildIdx < 8; ++ChildIdx)
 	{
 		// Skip if this one should not be re-rasterized.
-		if(!(ChildrenToRasterize & ChildIdxMasks::Masks[ChildIdx])) continue;
+		if(!(ChildrenToRasterize & Rsap::Node::Children::Masks[ChildIdx])) continue;
 		
 		// Skip if not overlapping.
 		const FGlobalVector ChildLocation = FNode::GetChildLocation(NodeLocation, ChildLayerIdx, ChildIdx);
@@ -218,7 +222,7 @@ void FRsapGenerator::ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_mort
 		Node.SetChildAlive(ChildIdx);
 
 		// Stop recursion if Static-Depth is reached.
-		if(ChildLayerIdx == RsapStatic::StaticDepth) continue;
+		if(ChildLayerIdx == Rsap::NavMesh::StaticDepth) continue;
 		ReRasterizeNode(Chunk, ChildNode, ChildNodeMC, ChildLocation, ChildLayerIdx, EdgesToCheck, LayerSkipMasks, CollisionComponent);
 	}
 }
@@ -244,7 +248,7 @@ void FRsapGenerator::ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_mort
 		Node.SetChildAlive(ChildIdx);
 
 		// Stop recursion if Static-Depth is reached.
-		if(ChildLayerIdx == RsapStatic::StaticDepth) continue;
+		if(ChildLayerIdx == Rsap::NavMesh::StaticDepth) continue;
 		ReRasterizeNode(Chunk, ChildNode, ChildNodeMC, ChildLocation, ChildLayerIdx, CollisionComponent);
 	}
 }

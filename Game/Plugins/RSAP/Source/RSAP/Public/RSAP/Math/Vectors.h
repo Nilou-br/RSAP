@@ -117,7 +117,7 @@ struct FGlobalVector // todo: FChunkVector with 21 bits per axis?
 
 	FORCEINLINE FGlobalVector RoundToChunk() const
 	{
-		return *this & RsapStatic::ChunkMask;
+		return *this & Rsap::Chunk::SizeMask;
 	}
 
 	FORCEINLINE FGlobalVector RoundToLayer(const layer_idx LayerIdx) const
@@ -217,7 +217,7 @@ struct FGlobalVector // todo: FChunkVector with 21 bits per axis?
 
 	static FGlobalVector FromNodeMorton(const node_morton NodeMorton, const FGlobalVector& ChunkLocation)
 	{
-		return ChunkLocation + (FGlobalVector(FNodeVector::FromNodeMorton(NodeMorton)) << RsapStatic::VoxelSizeExponent);
+		return ChunkLocation + (FGlobalVector(FNodeVector::FromNodeMorton(NodeMorton)) << Rsap::NavMesh::VoxelSizeExponent);
 	}
 	
 	// Make sure every axis value fits in 10 bits, unsigned.

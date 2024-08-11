@@ -8,14 +8,14 @@
 
 struct FRsapOverlap
 {
-	static inline FCollisionShape CollisionBoxes[RsapStatic::MaxDepth];
-	static inline FCollisionShape CollisionSpheres[RsapStatic::MaxDepth];
+	static inline FCollisionShape CollisionBoxes[Rsap::NavMesh::MaxDepth];
+	static inline FCollisionShape CollisionSpheres[Rsap::NavMesh::MaxDepth];
 	static void InitCollisionBoxes()
 	{
 		for (layer_idx LayerIdx = 0; LayerIdx < 10; ++LayerIdx)
 		{
-			CollisionBoxes[LayerIdx] = FCollisionShape::MakeBox(FVector(RsapStatic::NodeHalveSizes[LayerIdx]));
-			CollisionSpheres[LayerIdx] = FCollisionShape::MakeSphere(RsapStatic::NodeHalveSizes[LayerIdx]);
+			CollisionBoxes[LayerIdx] = FCollisionShape::MakeBox(FVector(Rsap::Node::HalveSizes[LayerIdx]));
+			CollisionSpheres[LayerIdx] = FCollisionShape::MakeSphere(Rsap::Node::HalveSizes[LayerIdx]);
 		}
 	}
 
@@ -28,7 +28,7 @@ struct FRsapOverlap
 		return FPhysicsInterface::GeomOverlapAnyTest(
 			World,
 			CollisionBoxes[LayerIdx],
-			*(NodeLocation + RsapStatic::NodeHalveSizes[LayerIdx]),
+			*(NodeLocation + Rsap::Node::HalveSizes[LayerIdx]),
 			FQuat::Identity,
 			ECollisionChannel::ECC_WorldStatic,
 			FCollisionQueryParams::DefaultQueryParam,
@@ -42,7 +42,7 @@ struct FRsapOverlap
 		TRACE_CPUPROFILER_EVENT_SCOPE_STR("Overlap ::Component");
 
 		// Note that OverlapTest_AssumesLocked is not thread safe.
-		return Component->GetBodyInstance()->OverlapTest_AssumesLocked(*(NodeLocation + RsapStatic::NodeHalveSizes[LayerIdx]), FQuat::Identity, CollisionBoxes[LayerIdx]);
+		return Component->GetBodyInstance()->OverlapTest_AssumesLocked(*(NodeLocation + Rsap::Node::HalveSizes[LayerIdx]), FQuat::Identity, CollisionBoxes[LayerIdx]);
 
 		// Thread safe example:
 		// bool bHasOverlap = false;
@@ -54,10 +54,3 @@ struct FRsapOverlap
 		// return bHasOverlap;
 	}
 };
-
-// FORCEINLINE void DrawNodeFromMorton(const UWorld* World, const FChunk* Chunk, const node_morton MortonCode, const uint8 LayerIdx, const FColor Color = FColor::Black)
-// {
-// 	const FGlobalVector GlobalNodeLocation = FGlobalVector::FromNodeMorton(MortonCode, Chunk->Location);
-// 	const FGlobalBounds NodeBoundaries(GlobalNodeLocation, GlobalNodeLocation+RsapStatic::NodeSizes[LayerIdx]);
-// 	NodeBoundaries.Draw(World, Color);
-// }

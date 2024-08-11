@@ -12,46 +12,48 @@ struct FGlobalVector;
 
 /**
  * Each side of a node holds a relation to another node. There is a relation for each side of a node, and it stores the layer and type of the node in this direction.
- * Used to efficiently find a path to other nodes. Relations are certain to be valid, meaning we won't have to check for this validity.
+ * Used for pathfinding. Relations are certain to be valid, meaning we won't have to check for this validity.
  */
 struct FNodeRelations
 {
-	rsap_direction X_Negative_LayerIdx: 4 = Layer_Idx_Invalid;
-	rsap_direction Y_Negative_LayerIdx: 4 = Layer_Idx_Invalid;
-	rsap_direction Z_Negative_LayerIdx: 4 = Layer_Idx_Invalid;
-	rsap_direction X_Positive_LayerIdx: 4 = Layer_Idx_Invalid;
-	rsap_direction Y_Positive_LayerIdx: 4 = Layer_Idx_Invalid;
-	rsap_direction Z_Positive_LayerIdx: 4 = Layer_Idx_Invalid;
-
-	node_state X_Negative_NodeState: 1 = NodeState::Static;
-	node_state Y_Negative_NodeState: 1 = NodeState::Static;
-	node_state Z_Negative_NodeState: 1 = NodeState::Static;
-	node_state X_Positive_NodeState: 1 = NodeState::Static;
-	node_state Y_Positive_NodeState: 1 = NodeState::Static;
-	node_state Z_Positive_NodeState: 1 = NodeState::Static;
+	rsap_direction LayerIdx_Negative_X: 4 = Rsap::NavMesh::Layer::Invalid;
+	rsap_direction LayerIdx_Negative_Y: 4 = Rsap::NavMesh::Layer::Invalid;
+	rsap_direction LayerIdx_Negative_Z: 4 = Rsap::NavMesh::Layer::Invalid;
+	rsap_direction LayerIdx_Positive_X: 4 = Rsap::NavMesh::Layer::Invalid;
+	rsap_direction LayerIdx_Positive_Y: 4 = Rsap::NavMesh::Layer::Invalid;
+	rsap_direction LayerIdx_Positive_Z: 4 = Rsap::NavMesh::Layer::Invalid;
+	
+	node_state NodeState_Negative_X: 1 = Rsap::Node::State::Static;
+	node_state NodeState_Negative_Y: 1 = Rsap::Node::State::Static;
+	node_state NodeState_Negative_Z: 1 = Rsap::Node::State::Static;
+	node_state NodeState_Positive_X: 1 = Rsap::Node::State::Static;
+	node_state NodeState_Positive_Y: 1 = Rsap::Node::State::Static;
+	node_state NodeState_Positive_Z: 1 = Rsap::Node::State::Static;
 
 	FORCEINLINE rsap_direction GetFromDirection(const rsap_direction Direction) const
 	{
+		using namespace Rsap::Direction;
 		switch (Direction) {
-			case RsapDirection::X_Negative: return X_Negative_LayerIdx;
-			case RsapDirection::Y_Negative: return Y_Negative_LayerIdx;
-			case RsapDirection::Z_Negative: return Z_Negative_LayerIdx;
-			case RsapDirection::X_Positive: return X_Positive_LayerIdx;
-			case RsapDirection::Y_Positive: return Y_Positive_LayerIdx;
-			case RsapDirection::Z_Positive: return Z_Positive_LayerIdx;
-			default: return Layer_Idx_Invalid;
+			case Negative::X: return LayerIdx_Negative_X;
+			case Negative::Y: return LayerIdx_Negative_Y;
+			case Negative::Z: return LayerIdx_Negative_Z;
+			case Positive::X: return LayerIdx_Positive_X;
+			case Positive::Y: return LayerIdx_Positive_Y;
+			case Positive::Z: return LayerIdx_Positive_Z;
+			default: return Rsap::NavMesh::Layer::Invalid;
 		}
 	}
 
 	FORCEINLINE void SetFromDirection(const rsap_direction Direction, const layer_idx LayerIdx)
 	{
+		using namespace Rsap::Direction;
 		switch (Direction) {
-			case RsapDirection::X_Negative: X_Negative_LayerIdx = LayerIdx; break;
-			case RsapDirection::Y_Negative: Y_Negative_LayerIdx = LayerIdx; break;
-			case RsapDirection::Z_Negative: Z_Negative_LayerIdx = LayerIdx; break;
-			case RsapDirection::X_Positive: X_Positive_LayerIdx = LayerIdx; break;
-			case RsapDirection::Y_Positive: Y_Positive_LayerIdx = LayerIdx; break;
-			case RsapDirection::Z_Positive: Z_Positive_LayerIdx = LayerIdx; break;
+			case Negative::X: LayerIdx_Negative_X = LayerIdx; break;
+			case Negative::Y: LayerIdx_Negative_Y = LayerIdx; break;
+			case Negative::Z: LayerIdx_Negative_Z = LayerIdx; break;
+			case Positive::X: LayerIdx_Positive_X = LayerIdx; break;
+			case Positive::Y: LayerIdx_Positive_Y = LayerIdx; break;
+			case Positive::Z: LayerIdx_Positive_Z = LayerIdx; break;
 			default: break;
 		}
 	}
@@ -59,60 +61,62 @@ struct FNodeRelations
 	// Same as SetFromDirection, but will set the opposite relation from the given direction.
 	FORCEINLINE void SetFromDirectionInverse(const rsap_direction Direction, const layer_idx LayerIdx)
 	{
+		using namespace Rsap::Direction;
 		switch (Direction) {
-			case RsapDirection::X_Negative: X_Positive_LayerIdx = LayerIdx; break;
-			case RsapDirection::Y_Negative: Y_Positive_LayerIdx = LayerIdx; break;
-			case RsapDirection::Z_Negative: Z_Positive_LayerIdx = LayerIdx; break;
-			case RsapDirection::X_Positive: X_Negative_LayerIdx = LayerIdx; break;
-			case RsapDirection::Y_Positive: Y_Negative_LayerIdx = LayerIdx; break;
-			case RsapDirection::Z_Positive: Z_Negative_LayerIdx = LayerIdx; break;
+			case Negative::X: LayerIdx_Negative_X = LayerIdx; break;
+			case Negative::Y: LayerIdx_Positive_Y = LayerIdx; break;
+			case Negative::Z: LayerIdx_Positive_Z = LayerIdx; break;
+			case Positive::X: LayerIdx_Negative_X = LayerIdx; break;
+			case Positive::Y: LayerIdx_Negative_Y = LayerIdx; break;
+			case Positive::Z: LayerIdx_Negative_Z = LayerIdx; break;
 			default: break;
 		}
 	}
 
 	FORCEINLINE bool IsRelationValid(const rsap_direction Direction) const
 	{
+		using namespace Rsap::Direction;
 		switch (Direction) {
-			case RsapDirection::X_Negative: return X_Negative_LayerIdx != Layer_Idx_Invalid;
-			case RsapDirection::Y_Negative: return Y_Negative_LayerIdx != Layer_Idx_Invalid;
-			case RsapDirection::Z_Negative: return Z_Negative_LayerIdx != Layer_Idx_Invalid;
-			case RsapDirection::X_Positive: return X_Positive_LayerIdx != Layer_Idx_Invalid;
-			case RsapDirection::Y_Positive: return Y_Positive_LayerIdx != Layer_Idx_Invalid;
-			case RsapDirection::Z_Positive: return Z_Positive_LayerIdx != Layer_Idx_Invalid;
+			case Negative::X: return LayerIdx_Negative_X != Rsap::NavMesh::Layer::Invalid;
+			case Negative::Y: return LayerIdx_Negative_Y != Rsap::NavMesh::Layer::Invalid;
+			case Negative::Z: return LayerIdx_Negative_Z != Rsap::NavMesh::Layer::Invalid;
+			case Positive::X: return LayerIdx_Positive_X != Rsap::NavMesh::Layer::Invalid;
+			case Positive::Y: return LayerIdx_Positive_Y != Rsap::NavMesh::Layer::Invalid;
+			case Positive::Z: return LayerIdx_Positive_Z != Rsap::NavMesh::Layer::Invalid;
 			default: return false;
 		}
 	}
 
 	uint32 Pack() const {
-		return static_cast<uint32>(X_Negative_LayerIdx)			|
-			   static_cast<uint32>(Y_Negative_LayerIdx << 4)	|
-			   static_cast<uint32>(Z_Negative_LayerIdx << 8)	|
-			   static_cast<uint32>(X_Positive_LayerIdx << 12)	|
-			   static_cast<uint32>(Y_Positive_LayerIdx << 16)	|
-			   static_cast<uint32>(Z_Positive_LayerIdx << 20)	|
+		return static_cast<uint32>(LayerIdx_Negative_X)			|
+			   static_cast<uint32>(LayerIdx_Negative_Y << 4)	|
+			   static_cast<uint32>(LayerIdx_Negative_Z << 8)	|
+			   static_cast<uint32>(LayerIdx_Positive_X << 12)	|
+			   static_cast<uint32>(LayerIdx_Positive_Y << 16)	|
+			   static_cast<uint32>(LayerIdx_Positive_Z << 20)	|
 			   	
-			   static_cast<uint32>(X_Negative_NodeState << 24)  |
-			   static_cast<uint32>(Y_Negative_NodeState << 25)  |
-			   static_cast<uint32>(Z_Negative_NodeState << 26)  |
-			   static_cast<uint32>(X_Positive_NodeState << 27)  |
-			   static_cast<uint32>(Y_Positive_NodeState << 28)  |
-			   static_cast<uint32>(Z_Positive_NodeState << 29);
+			   static_cast<uint32>(NodeState_Negative_X << 24)  |
+			   static_cast<uint32>(NodeState_Negative_Y << 25)  |
+			   static_cast<uint32>(NodeState_Negative_Z << 26)  |
+			   static_cast<uint32>(NodeState_Positive_X << 27)  |
+			   static_cast<uint32>(NodeState_Positive_Y << 28)  |
+			   static_cast<uint32>(NodeState_Positive_Z << 29);
 	}
 
 	void Unpack(const uint32 PackedData) {
-		X_Negative_LayerIdx  = PackedData;
-		Y_Negative_LayerIdx  = PackedData >> 4;
-		Z_Negative_LayerIdx  = PackedData >> 8;
-		X_Positive_LayerIdx  = PackedData >> 12;
-		Y_Positive_LayerIdx  = PackedData >> 16;
-		Z_Positive_LayerIdx  = PackedData >> 20;
+		LayerIdx_Negative_X  = PackedData;
+		LayerIdx_Negative_Y  = PackedData >> 4;
+		LayerIdx_Negative_Z  = PackedData >> 8;
+		LayerIdx_Positive_X  = PackedData >> 12;
+		LayerIdx_Positive_Y  = PackedData >> 16;
+		LayerIdx_Positive_Z  = PackedData >> 20;
 		
-		X_Negative_NodeState = PackedData >> 24;
-		Y_Negative_NodeState = PackedData >> 25;
-		Z_Negative_NodeState = PackedData >> 26;
-		X_Positive_NodeState = PackedData >> 27;
-		Y_Positive_NodeState = PackedData >> 28;
-		Z_Positive_NodeState = PackedData >> 29;
+		NodeState_Negative_X = PackedData >> 24;
+		NodeState_Negative_Y = PackedData >> 25;
+		NodeState_Negative_Z = PackedData >> 26;
+		NodeState_Positive_X = PackedData >> 27;
+		NodeState_Positive_Y = PackedData >> 28;
+		NodeState_Positive_Z = PackedData >> 29;
 	}
 };
 
@@ -152,7 +156,7 @@ struct FNode
 	// Sets the bit for this child to '1' to indicate it is alive and occluding.
 	FORCEINLINE void SetChildAlive(const child_idx ChildIdx)
 	{
-		Children |= ChildIdxMasks::Masks[ChildIdx];
+		Children |= Rsap::Node::Children::Masks[ChildIdx];
 	}
 
 	FORCEINLINE bool HasChildren() const {
@@ -162,32 +166,33 @@ struct FNode
 	std::array<layer_idx, 6> GetRelations() const
 	{
 		return {
-			Relations.X_Negative_LayerIdx,
-			Relations.Y_Negative_LayerIdx,
-			Relations.Z_Negative_LayerIdx,
-			Relations.X_Positive_LayerIdx,
-			Relations.Y_Positive_LayerIdx,
-			Relations.Z_Positive_LayerIdx
+			Relations.LayerIdx_Negative_X,
+			Relations.LayerIdx_Negative_Y,
+			Relations.LayerIdx_Negative_Z,
+			Relations.LayerIdx_Positive_X,
+			Relations.LayerIdx_Positive_Y,
+			Relations.LayerIdx_Positive_Z
 		};
 	}
 
 	FORCEINLINE bool DoesChildExist(const child_idx ChildIdx) const
 	{
-		return Children & ChildIdxMasks::Masks[ChildIdx];
+		return Children & Rsap::Node::Children::Masks[ChildIdx];
 	}
 
 	FORCEINLINE static FGlobalVector GetChildLocation(FGlobalVector ParentNodeLocation, const layer_idx ChildLayerIdx, const uint8 ChildIdx)
 	{
+		using namespace Rsap::Node;
 		switch (ChildIdx)
 		{
 			case 0: return ParentNodeLocation;
-			case 1: ParentNodeLocation.X += RsapStatic::NodeSizes[ChildLayerIdx]; break;
-			case 2: ParentNodeLocation.Y += RsapStatic::NodeSizes[ChildLayerIdx]; break;
-			case 3: ParentNodeLocation.X += RsapStatic::NodeSizes[ChildLayerIdx]; ParentNodeLocation.Y += RsapStatic::NodeSizes[ChildLayerIdx]; break;
-			case 4: ParentNodeLocation.Z += RsapStatic::NodeSizes[ChildLayerIdx]; break;
-			case 5: ParentNodeLocation.X += RsapStatic::NodeSizes[ChildLayerIdx]; ParentNodeLocation.Z += RsapStatic::NodeSizes[ChildLayerIdx]; break;
-			case 6: ParentNodeLocation.Y += RsapStatic::NodeSizes[ChildLayerIdx]; ParentNodeLocation.Z += RsapStatic::NodeSizes[ChildLayerIdx]; break;
-			case 7: return ParentNodeLocation + RsapStatic::NodeSizes[ChildLayerIdx];
+			case 1: ParentNodeLocation.X += Sizes[ChildLayerIdx]; break;
+			case 2: ParentNodeLocation.Y += Sizes[ChildLayerIdx]; break;
+			case 3: ParentNodeLocation.X += Sizes[ChildLayerIdx]; ParentNodeLocation.Y += Sizes[ChildLayerIdx]; break;
+			case 4: ParentNodeLocation.Z += Sizes[ChildLayerIdx]; break;
+			case 5: ParentNodeLocation.X += Sizes[ChildLayerIdx]; ParentNodeLocation.Z += Sizes[ChildLayerIdx]; break;
+			case 6: ParentNodeLocation.Y += Sizes[ChildLayerIdx]; ParentNodeLocation.Z += Sizes[ChildLayerIdx]; break;
+			case 7: return ParentNodeLocation + Sizes[ChildLayerIdx];
 			default: return ParentNodeLocation;
 		}
 		return ParentNodeLocation;
@@ -225,9 +230,8 @@ struct FNode
 	// Debug draw
 	FORCEINLINE void Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const node_morton MortonCode, const layer_idx LayerIdx, const FColor Color, const uint32 Thickness) const
 	{
-		const float NodeHalveSize = RsapStatic::NodeHalveSizes[LayerIdx];
-		const FVector GlobalCenter = GetGlobalLocation(ChunkLocation, MortonCode).ToVector() + NodeHalveSize;
-		const FVector Extent(NodeHalveSize);
+		const FVector GlobalCenter = GetGlobalLocation(ChunkLocation, MortonCode).ToVector() + Rsap::Node::HalveSizes[LayerIdx];
+		const FVector Extent(Rsap::Node::HalveSizes[LayerIdx]);
 		DrawDebugBox(World, GlobalCenter, Extent, Color, true, -1, 0, Thickness);
 	}
 
@@ -251,4 +255,4 @@ struct FNode
 };
 
 typedef std::pair<node_morton, FNode> FNodePair;
-typedef RSAP::ordered_map<node_morton, FNode> FOctreeLayer;
+typedef Rsap::Map::ordered_map<node_morton, FNode> FOctreeLayer;

@@ -12,7 +12,7 @@ class FRsapGenerator
 {
 	// Used to tell which nodes can be skipped during re-rasterization.
 	// Similar to TBounds, but offers better readability.
-	struct FLayerSkipMasks
+	struct FLayerSkipMasks // todo: refactor.
 	{
 		uint16 X_Negative: 10;
 		uint16 Y_Negative: 10;

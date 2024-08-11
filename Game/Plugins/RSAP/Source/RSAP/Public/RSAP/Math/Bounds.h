@@ -129,7 +129,7 @@ struct TBounds
 	{
 		auto Round = [LayerIdx](const int32 Value) -> int32 {
 			if (Value >= 0) return (Value >> LayerIdx) << LayerIdx;							// Positive numbers
-			return ((Value - RsapStatic::NodeSizes[LayerIdx] + 1) >> LayerIdx) << LayerIdx;	// Negative numbers
+			return ((Value - Rsap::Node::Sizes[LayerIdx] + 1) >> LayerIdx) << LayerIdx;	// Negative numbers
 		};
 		
 		FGlobalBounds Bounds = *this;
@@ -142,9 +142,9 @@ struct TBounds
 
 		// Round the Max bounds up, but only if it is smaller than the un-rounded bounds.
 		// Its possible for the un-rounded value to already equal the rounded to value, but we still want to round it a whole node-size upwards ( otherwise the Min axis would equal the Max and there is no width, thus no volume ).
-		if(Bounds.Max.X < Max.X) Bounds.Max.X += RsapStatic::NodeSizes[LayerIdx];
-		if(Bounds.Max.Y < Max.Y) Bounds.Max.Y += RsapStatic::NodeSizes[LayerIdx];
-		if(Bounds.Max.Z < Max.Z) Bounds.Max.Z += RsapStatic::NodeSizes[LayerIdx];
+		if(Bounds.Max.X < Max.X) Bounds.Max.X += Rsap::Node::Sizes[LayerIdx];
+		if(Bounds.Max.Y < Max.Y) Bounds.Max.Y += Rsap::Node::Sizes[LayerIdx];
+		if(Bounds.Max.Z < Max.Z) Bounds.Max.Z += Rsap::Node::Sizes[LayerIdx];
 		return Bounds;
 	}
 
@@ -152,19 +152,11 @@ struct TBounds
 	template<typename T = VectorType>
 	FORCEINLINE auto RoundToLayer(const layer_idx LayerIdx) const -> std::enable_if_t<std::is_same_v<T, FNodeVector>, FNodeBounds>
 	{
-		static constexpr uint16 LayerMasks[10] = {
-			static_cast<uint16>(~((1<<10)-1)), static_cast<uint16>(~((1<<9)-1)),
-			static_cast<uint16>(~((1<<8)-1)),  static_cast<uint16>(~((1<<7)-1)),
-			static_cast<uint16>(~((1<<6)-1)),  static_cast<uint16>(~((1<<5)-1)),
-			static_cast<uint16>(~((1<<4)-1)),  static_cast<uint16>(~((1<<3)-1)),
-			static_cast<uint16>(~((1<<2)-1)),  static_cast<uint16>(~((1<<1)-1))
-		};
-		
-		FNodeBounds Rounded = *this & LayerMasks[LayerIdx];
+		FNodeBounds Rounded = *this & Rsap::NavMesh::Layer::LocalMasks[LayerIdx];
 
 		// Round the max up.
 		// The '-1' is to adjust to nodes in morton-space. Because the origin of a node is at its negative most corner. So if Min/Max are equal, then they hold the same node. Min/Max just determine the 'first' and 'last' node in the bounds.
-		Rounded.Max = Rounded.Max + RsapStatic::MortonOffsets[LayerIdx] - 1;
+		Rounded.Max = Rounded.Max + Rsap::Node::MortonOffsets[LayerIdx] - 1;
 		return Rounded;
 	}
 
@@ -228,12 +220,12 @@ struct TBounds
 		if(!IsValid()) return ChunkKeys;
 
 		// Get the start/end axis of the chunks from the boundaries.
-		const FGlobalVector ChunkMin = Min & RsapStatic::ChunkMask;
-		const FGlobalVector ChunkMax = Max-1 & RsapStatic::ChunkMask;
+		const FGlobalVector ChunkMin = Min   & Rsap::Chunk::SizeMask;
+		const FGlobalVector ChunkMax = Max-1 & Rsap::Chunk::SizeMask;
 		
-		for (int32 GlobalX = ChunkMin.X; GlobalX <= ChunkMax.X; GlobalX+=RsapStatic::ChunkSize){
-			for (int32 GlobalY = ChunkMin.Y; GlobalY <= ChunkMax.Y; GlobalY+=RsapStatic::ChunkSize){
-				for (int32 GlobalZ = ChunkMin.Z; GlobalZ <= ChunkMax.Z; GlobalZ+=RsapStatic::ChunkSize){
+		for (int32 GlobalX = ChunkMin.X; GlobalX <= ChunkMax.X; GlobalX+=Rsap::Chunk::Size){
+			for (int32 GlobalY = ChunkMin.Y; GlobalY <= ChunkMax.Y; GlobalY+=Rsap::Chunk::Size){
+				for (int32 GlobalZ = ChunkMin.Z; GlobalZ <= ChunkMax.Z; GlobalZ+=Rsap::Chunk::Size){
 					const FGlobalVector ChunkLocation = FGlobalVector(GlobalX, GlobalY, GlobalZ);
 					ChunkKeys.insert(ChunkLocation.ToChunkMorton());
 				}
@@ -255,16 +247,16 @@ struct TBounds
 	template<typename T = VectorType>
 	FORCEINLINE auto ToNodeSpace(const FGlobalVector& ChunkLocation) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, FNodeBounds>
 	{
-		const FNodeVector LocalMin = ( Min-ChunkLocation << RsapStatic::VoxelSizeExponent).ToNodeVector();
-		const FNodeVector LocalMax = ((Max-ChunkLocation << RsapStatic::VoxelSizeExponent) - RsapStatic::SmallestNodeSize).ToNodeVector();
+		const FNodeVector LocalMin = ( Min-ChunkLocation << Rsap::NavMesh::VoxelSizeExponent).ToNodeVector();
+		const FNodeVector LocalMax = ((Max-ChunkLocation << Rsap::NavMesh::VoxelSizeExponent) - Rsap::Node::SmallestSize).ToNodeVector();
 		return FNodeBounds(LocalMin, LocalMax, IsValid());
 	}
 
 	template<typename T = VectorType>
 	FORCEINLINE auto ToGlobalSpace(const FGlobalVector& ChunkLocation) const -> std::enable_if_t<std::is_same_v<T, FNodeVector>, FGlobalBounds>
 	{
-		const FGlobalVector LocalMin = (FGlobalVector(Min) >> RsapStatic::VoxelSizeExponent) + ChunkLocation;
-		const FGlobalVector LocalMax = ((FGlobalVector(Max) + RsapStatic::SmallestNodeSize) >> RsapStatic::VoxelSizeExponent) + ChunkLocation;
+		const FGlobalVector LocalMin = (FGlobalVector(Min) >> Rsap::NavMesh::VoxelSizeExponent) + ChunkLocation;
+		const FGlobalVector LocalMax = ((FGlobalVector(Max) + Rsap::Node::SmallestSize) >> Rsap::NavMesh::VoxelSizeExponent) + ChunkLocation;
 		return FGlobalBounds(LocalMin, LocalMax, IsValid());
 	}
 
@@ -321,10 +313,10 @@ typedef TBounds<FNodeVector> FNodeBounds;
 // Will store all the previous known bounds of the actor since last update, paired with its current bounds.
 typedef std::pair<std::vector<FGlobalBounds>, FGlobalBounds> FNavMeshUpdateType;
 // Map holding FNavMeshUpdateType.
-typedef RSAP::flat_map<actor_key, std::pair<std::vector<FGlobalBounds>, FGlobalBounds>> FNavMeshUpdateMap;
+typedef Rsap::Map::flat_map<actor_key, std::pair<std::vector<FGlobalBounds>, FGlobalBounds>> FNavMeshUpdateMap;
 
 // Map holding actors and their boundaries.
-typedef RSAP::flat_map<actor_key, FGlobalBounds> FActorBoundsMap;
+typedef Rsap::Map::flat_map<actor_key, FGlobalBounds> FActorBoundsMap;
 
 /**
  * Pair of bounds for storing changes that have happened.
@@ -362,4 +354,4 @@ typedef TMovedBounds<FGlobalVector> FMovedBounds;
 typedef TMovedBounds<FNodeVector> FChangedMortonBounds;
 
 // Map associating an actor with changed boundaries. To hold changes that have happened for multiple actors.
-typedef RSAP::flat_map<actor_key, FMovedBounds> FMovedBoundsMap;
+typedef Rsap::Map::flat_map<actor_key, FMovedBounds> FMovedBoundsMap;

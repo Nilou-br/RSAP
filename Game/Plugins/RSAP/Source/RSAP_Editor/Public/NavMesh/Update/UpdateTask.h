@@ -62,14 +62,10 @@ public:
 	}
 
 private:
-	FORCEINLINE FChunk* TryInitChunk(const chunk_morton ChunkMC) const;
-	FORCEINLINE void InitParentsOfNode(const FChunk* Chunk, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState);
-	FORCEINLINE FNode& TryInitNodeAndParents(const FChunk* Chunk, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState);
 	FORCEINLINE static layer_idx CalculateOptimalStartingLayer(const FMovedBounds& MovedBounds);
 	FORCEINLINE static uint8 GetChildrenToRasterizeAndUpdateEdges(rsap_direction& EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks, const layer_idx LayerIdx, const layer_idx ChildLayerIdx);
 	
 	void ReRasterizeBounds(const UPrimitiveComponent* CollisionComponent);
-	FORCEINLINE void ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, rsap_direction EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks, const UPrimitiveComponent* CollisionComponent);
 	FORCEINLINE void ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent);
 
 protected:

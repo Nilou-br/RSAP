@@ -12,7 +12,7 @@
 /**
  * A Chunk stores two octrees.
  * The first octree at index 0 is static. The nodes are generated/updated within the editor, never during gameplay. Only the relations can be updated during gameplay to point to dynamic nodes, but these changes should not be serialized.
- * The second octree at index 1 is dynamic. The nodes are created from dynamic objects during gameplay, and are cleared when the level is closed. These will not be serialized.
+ * The second octree at index 1 is dynamic. The nodes are created from dynamic objects during gameplay. These will not be serialized.
  */
 class FChunk
 {
@@ -85,7 +85,7 @@ public:
 	}
 
 	// Returns a reference to this node. Will initialize one if it does not exist yet. Will also init any parents of this node that do not exist yet.
-	FNode& TryInitNodeAndParents(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState, const rsap_direction RelationsToSet = RsapDirection::XYZ_Negative)
+	FNode& TryInitNodeAndParents(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState, const rsap_direction RelationsToSet = Rsap::Direction::Negative::XYZ)
 	{
 		bool bWasInserted;
 		FNode& Node = TryInitNode(bWasInserted, NodeMC, LayerIdx, NodeState);
@@ -111,7 +111,7 @@ public:
 	{
 		// Find the the neighbour for this relation starting from the current LayerIdx.
 		node_morton NeighbourMC = FMortonUtils::Node::Move(NodeMC, LayerIdx, Relation);
-		for(layer_idx NeighbourLayerIdx = LayerIdx; NeighbourLayerIdx < RsapStatic::MaxDepth; --NeighbourLayerIdx)
+		for(layer_idx NeighbourLayerIdx = LayerIdx; NeighbourLayerIdx < Rsap::NavMesh::MaxDepth; --NeighbourLayerIdx)
 		{
 			if(FNode NeighbourNode; FindNode(NeighbourNode, NeighbourMC, LayerIdx, 0))
 			{
@@ -139,7 +139,7 @@ public:
 	// If there is no neighbour for any of the given relations, then it will be set to an invalid index.
 	void TrySetNodeRelations(FNode& Node, const node_morton NodeMC, const layer_idx LayerIdx, const rsap_direction Relations) const
 	{
-		for (const rsap_direction Direction : RsapStatic::Directions)
+		for (const rsap_direction Direction : Rsap::Direction::List)
 		{
 			if(const rsap_direction Relation = Relations & Direction; Relation) TrySetNodeRelation(Node, NodeMC, LayerIdx, Relation);
 		}
@@ -170,7 +170,7 @@ private:
 		if(bWasInserted)
 		{
 			// Just set all directions for the parent, this won't change performance noticeably because it's likely a parent already exists, and there aren't many iterations for the parents anyway.
-			TrySetNodeRelations(ParentNode, NodeMC, LayerIdx, RsapDirection::All);
+			TrySetNodeRelations(ParentNode, NodeMC, LayerIdx, Rsap::Direction::All);
 
 			// Continue if we're not on the root yet.
 			if(ParentLayerIdx > 0) InitParentsOfNode(ParentNodeMC, ParentLayerIdx, NodeState);

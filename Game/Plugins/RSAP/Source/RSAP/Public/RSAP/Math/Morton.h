@@ -22,7 +22,7 @@ struct FMortonUtils
 		static inline constexpr node_morton Mask_YZ = Mask_Y | Mask_Z;
 		
 		// Accessed using layer-index of the node you would like to get the parent of.
-		static inline constexpr node_morton LayerMasks[10] = {
+		static inline constexpr node_morton ParentMasks[10] = {
 			static_cast<node_morton>(~((1 << 30) - 1)),
 			static_cast<node_morton>(~((1 << 27) - 1)),
 			static_cast<node_morton>(~((1 << 24) - 1)),
@@ -71,7 +71,7 @@ struct FMortonUtils
 		// Get the parent's morton-code.
 		FORCEINLINE static node_morton GetParent(const node_morton MortonCode, const layer_idx ParentLayerIdx)
 		{
-			return MortonCode & LayerMasks[ParentLayerIdx];
+			return MortonCode & ParentMasks[ParentLayerIdx];
 		}
 
 		FORCEINLINE static child_idx GetChildIndex(const node_morton MortonCode, const layer_idx LayerIdx)
@@ -121,21 +121,22 @@ struct FMortonUtils
 		// Moves the morton-code in the given direction. The amount it moves is determined by the layer-index, which translates to the node-size for that layer.
 		FORCEINLINE static node_morton Move(const node_morton MortonCode, const layer_idx LayerIdx, const rsap_direction Direction)
 		{
+			using namespace Rsap::Direction;
 			switch (Direction) {
-				case RsapDirection::X_Negative: return SubtractX(MortonCode, LayerIdx);
-				case RsapDirection::Y_Negative: return SubtractY(MortonCode, LayerIdx);
-				case RsapDirection::Z_Negative: return SubtractZ(MortonCode, LayerIdx);
-				case RsapDirection::X_Positive: return AddX(MortonCode, LayerIdx);
-				case RsapDirection::Y_Positive: return AddY(MortonCode, LayerIdx);
-				case RsapDirection::Z_Positive: return AddZ(MortonCode, LayerIdx);
+				case Negative::X: return SubtractX(MortonCode, LayerIdx);
+				case Negative::Y: return SubtractY(MortonCode, LayerIdx);
+				case Negative::Z: return SubtractZ(MortonCode, LayerIdx);
+				case Positive::X: return AddX(MortonCode, LayerIdx);
+				case Positive::Y: return AddY(MortonCode, LayerIdx);
+				case Positive::Z: return AddZ(MortonCode, LayerIdx);
 				default: return MortonCode;
 			}
 		}
 
 		// Moves the morton-code in the direction, and also masks away the layers below the layer-index. Used to get the neighbour of a node in the given direction, which could also be in an upper layer.
-		FORCEINLINE static node_morton MoveAndMask(const node_morton MortonCode, const layer_idx LayerIdx, const rsap_direction Direction)
+		FORCEINLINE static node_morton MoveAndMask(const node_morton MortonCode, const layer_idx LayerIdx, const rsap_direction Direction) // todo: rename?
 		{
-			return Move(MortonCode, LayerIdx, Direction) & LayerMasks[LayerIdx];
+			return Move(MortonCode, LayerIdx, Direction) & ParentMasks[LayerIdx];
 		}
 
 		// Adds the node-size of the layer-index to the X-axis.
@@ -222,14 +223,15 @@ struct FMortonUtils
 
 		FORCEINLINE static bool HasMovedIntoNewChunk(const node_morton PrevMortonCode, const node_morton CurrMortonCode, const rsap_direction Direction)
 		{
+			using namespace Rsap::Direction;
 			switch (Direction) {
-				case RsapDirection::X_Negative: return XEqualsZero(PrevMortonCode);
-				case RsapDirection::Y_Negative: return YEqualsZero(PrevMortonCode);
-				case RsapDirection::Z_Negative: return ZEqualsZero(PrevMortonCode);
-				case RsapDirection::X_Positive: return XEqualsZero(CurrMortonCode);
-				case RsapDirection::Y_Positive: return YEqualsZero(CurrMortonCode);
-				case RsapDirection::Z_Positive: return ZEqualsZero(CurrMortonCode);
-				default:						return false;
+				case Negative::X: return XEqualsZero(PrevMortonCode);
+				case Negative::Y: return YEqualsZero(PrevMortonCode);
+				case Negative::Z: return ZEqualsZero(PrevMortonCode);
+				case Positive::X: return XEqualsZero(CurrMortonCode);
+				case Positive::Y: return YEqualsZero(CurrMortonCode);
+				case Positive::Z: return ZEqualsZero(CurrMortonCode);
+				default:						  return false;
 			}
 		}
 	};
@@ -254,9 +256,9 @@ struct FMortonUtils
 		{
 			// Apply offset to make the coordinates positive, and do a shift to compress the value.
 			// The last 10 bits will always be 0 because a chunk is 1024 units in size.
-			const uint_fast32_t InX = (X + EncodeDecodeOffset) >> RsapStatic::ChunkMortonShift;
-			const uint_fast32_t InY = (Y + EncodeDecodeOffset) >> RsapStatic::ChunkMortonShift;
-			const uint_fast32_t InZ = (Z + EncodeDecodeOffset) >> RsapStatic::ChunkMortonShift;
+			const uint_fast32_t InX = (X + EncodeDecodeOffset) >> Rsap::Chunk::SizeBits;
+			const uint_fast32_t InY = (Y + EncodeDecodeOffset) >> Rsap::Chunk::SizeBits;
+			const uint_fast32_t InZ = (Z + EncodeDecodeOffset) >> Rsap::Chunk::SizeBits;
 			
 			return libmorton::morton3D_64_encode(InX, InY, InZ);
 		}
@@ -267,21 +269,22 @@ struct FMortonUtils
 			uint_fast32_t X, Y, Z;
 			libmorton::morton3D_64_decode(ChunkMorton, X, Y, Z);
 			
-			OutX = (X << RsapStatic::ChunkMortonShift) - EncodeDecodeOffset;
-			OutY = (Y << RsapStatic::ChunkMortonShift) - EncodeDecodeOffset;
-			OutZ = (Z << RsapStatic::ChunkMortonShift) - EncodeDecodeOffset;
+			OutX = (X << Rsap::Chunk::SizeBits) - EncodeDecodeOffset;
+			OutY = (Y << Rsap::Chunk::SizeBits) - EncodeDecodeOffset;
+			OutZ = (Z << Rsap::Chunk::SizeBits) - EncodeDecodeOffset;
 		}
 		
 		// Moves the morton-code exactly one chunk in the given direction.
 		FORCEINLINE static chunk_morton Move(const chunk_morton MortonCode, const rsap_direction Direction)
 		{
+			using namespace Rsap::Direction;
 			switch (Direction) {
-				case RsapDirection::X_Negative: return DecrementX(MortonCode);
-				case RsapDirection::Y_Negative: return DecrementY(MortonCode);
-				case RsapDirection::Z_Negative: return DecrementZ(MortonCode);
-				case RsapDirection::X_Positive: return IncrementX(MortonCode);
-				case RsapDirection::Y_Positive: return IncrementY(MortonCode);
-				case RsapDirection::Z_Positive: return IncrementZ(MortonCode);
+				case Negative::X: return DecrementX(MortonCode);
+				case Negative::Y: return DecrementY(MortonCode);
+				case Negative::Z: return DecrementZ(MortonCode);
+				case Positive::X: return IncrementX(MortonCode);
+				case Positive::Y: return IncrementY(MortonCode);
+				case Positive::Z: return IncrementZ(MortonCode);
 				default: return MortonCode;
 			}
 		}
