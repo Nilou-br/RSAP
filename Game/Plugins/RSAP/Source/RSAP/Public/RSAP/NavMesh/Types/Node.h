@@ -63,7 +63,7 @@ struct FNodeRelations
 	{
 		using namespace Rsap::Direction;
 		switch (Direction) {
-			case Negative::X: LayerIdx_Negative_X = LayerIdx; break;
+			case Negative::X: LayerIdx_Positive_X = LayerIdx; break;
 			case Negative::Y: LayerIdx_Positive_Y = LayerIdx; break;
 			case Negative::Z: LayerIdx_Positive_Z = LayerIdx; break;
 			case Positive::X: LayerIdx_Negative_X = LayerIdx; break;

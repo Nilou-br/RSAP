@@ -1,5 +1,7 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
+#include "RSAP_Editor/Public/NavMesh/Debugger.h"
+
 #include <bitset>
 #include <string>
 
@@ -9,7 +11,6 @@
 #include "RSAP/NavMesh/Types/Chunk.h"
 #include "RSAP/NavMesh/Types/Node.h"
 #include "RSAP_Editor/Public/RsapEditorEvents.h"
-#include "RSAP_Editor/Public/NavMesh/Debugger.h"
 
 
 
@@ -59,7 +60,6 @@ void FRsapDebugger::Draw(const FNavMesh& NavMesh, const UWorld* World)
 void FRsapDebugger::Draw(const FNavMesh& NavMesh, const UWorld* World, const FVector& CameraLocation, const FRotator& CameraRotation)
 {
 	//if(!NavMesh || !DebugSettings.bEnabled) return;
-	// return;
 	if(!NavMesh || !World) return;
 	const FVector CameraForwardVector = FRotationMatrix(CameraRotation).GetUnitAxis(EAxis::X);
 
@@ -130,7 +130,7 @@ void FRsapDebugger::DrawNodes(const UWorld* World, const FChunk& Chunk, const ch
 	for (const rsap_direction Direction : Rsap::Direction::List)
 	{
 		const layer_idx NeighbourLayerIdx = Node.Relations.GetFromDirection(Direction);
-		if(NeighbourLayerIdx == Rsap::NavMesh::Layer::Invalid) continue;
+		if(NeighbourLayerIdx >= Rsap::NavMesh::Layer::Parent) continue;
 
 		// Draw line between node and neighbour.
 		const node_morton NeighbourMC = FMortonUtils::Node::Move(NodeMC, NeighbourLayerIdx, Direction);
@@ -138,8 +138,13 @@ void FRsapDebugger::DrawNodes(const UWorld* World, const FChunk& Chunk, const ch
 												   ? FGlobalVector::FromChunkMorton(FChunk::GetNeighbourMC(ChunkMC, Direction))
 												   : ChunkLocation;
 		const FGlobalVector NeighbourLocation = FGlobalVector::FromNodeMorton(NeighbourMC, NeighbourChunkLocation);
-		const FGlobalVector NeighbourCenter = NeighbourLocation+ Rsap::Node::HalveSizes[NeighbourLayerIdx];
+		const FGlobalVector NeighbourCenter = NeighbourLocation + Rsap::Node::HalveSizes[NeighbourLayerIdx];
 		DrawDebugLine(World, NodeCenter.ToVector(), NeighbourCenter.ToVector(), AdjustBrightness(LayerColors[LayerIdx], 0.8), true, -1, 11, 1);
+
+		if(FMortonUtils::Node::HasMovedIntoNewChunk(NodeMC, NeighbourMC, Direction))
+		{
+			DrawDebugLine(World, NodeCenter.ToVector(), NeighbourCenter.ToVector(), AdjustBrightness(LayerColors[LayerIdx], 0.8), true, -1, 11, 1);
+		}
 	}
 
 	Node.ForEachChild(NodeMC, LayerIdx, [&](const node_morton ChildMC)

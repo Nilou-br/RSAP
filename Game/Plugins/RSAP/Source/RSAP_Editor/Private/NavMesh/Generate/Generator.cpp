@@ -6,6 +6,7 @@
 #include "RSAP/NavMesh/Types/Chunk.h"
 #include "RSAP/NavMesh/Types/Node.h"
 #include "RSAP_Editor/Public/RsapEditorEvents.h"
+#include "RSAP_Editor/Public/NavMesh/Shared/NMShared.h"
 
 FNavMesh		FRsapGenerator::NavMesh;
 const UWorld*	FRsapGenerator::World;
@@ -138,15 +139,15 @@ void FRsapGenerator::ReRasterizeBounds(const UPrimitiveComponent* CollisionCompo
 				
 				if(FNode::HasComponentOverlap(CollisionComponent, NodeLocation, LayerIdx))
 				{
-					FChunk* CurrentChunk = FChunk::TryInit(NavMesh, ChunkMC);
+					FChunk& CurrentChunk = FChunk::TryInit(NavMesh, ChunkMC);
 					
 					// There is an overlap, so get/init the node, and also init/update any missing parent.
-					FNode& Node = CurrentChunk->TryInitNodeAndParents(NodeMC, LayerIdx, 0);
+					FNode& Node = FNmShared::InitNodeAndParents(NavMesh, CurrentChunk, ChunkMC, NodeMC, LayerIdx, 0, EdgesToCheck);
 
 					// Re-rasterize if we are not yet on the static-depth.
 					if(LayerIdx < Rsap::NavMesh::StaticDepth)
 					{
-						ReRasterizeNode(CurrentChunk, Node, NodeMC, NodeLocation, LayerIdx, EdgesToCheck, LayerSkipMasks, CollisionComponent);
+						FilteredReRasterize(CurrentChunk, Node, NodeMC, NodeLocation, LayerIdx, EdgesToCheck, LayerSkipMasks, CollisionComponent);
 					}
 				}
 				
@@ -183,17 +184,16 @@ void FRsapGenerator::ReRasterizeBounds(const UPrimitiveComponent* CollisionCompo
 }
 
 // todo: unroll this method along with ::GetChildRasterizeMask.
-// Re-rasterizes the node while filtering out children that are not intersecting with the actor's boundaries.
-// This method is recursive.
-void FRsapGenerator::ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, rsap_direction EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks, const UPrimitiveComponent* CollisionComponent)
+// Re-rasterizes the node while skipping children that are not intersecting with the actor's boundaries.
+void FRsapGenerator::FilteredReRasterize(FChunk& Chunk, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, rsap_direction EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks, const UPrimitiveComponent* CollisionComponent)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Generator ::ReRasterizeNode");
 	
-	// First check if we have any edges to check. If not, then do a full re-rasterization, which will check each child for occlusion.
+	// Do a normal re-rasterization when we arent on any edge.
 	if(!EdgesToCheck)
 	{
-		// Call the ReRasterizeNode overload that skips the filtering.
-		ReRasterizeNode(Chunk, Node, NodeMC, NodeLocation, LayerIdx, CollisionComponent);
+		// Continue doing a normal re-rasterization.
+		FNmShared::NormalReRasterize(Chunk, Node, NodeMC, NodeLocation, LayerIdx, CollisionComponent);
 		return;
 	}
 
@@ -216,51 +216,24 @@ void FRsapGenerator::ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_mort
 
 		// Create node
 		const node_morton ChildNodeMC = FMortonUtils::Node::GetChild(NodeMC, ChildLayerIdx, ChildIdx);
-		FNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk->GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk->TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
+		FNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk.GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk.TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
 
 		// Set child to be alive on parent.
 		Node.SetChildAlive(ChildIdx);
 
 		// Stop recursion if Static-Depth is reached.
 		if(ChildLayerIdx == Rsap::NavMesh::StaticDepth) continue;
-		ReRasterizeNode(Chunk, ChildNode, ChildNodeMC, ChildLocation, ChildLayerIdx, EdgesToCheck, LayerSkipMasks, CollisionComponent);
-	}
-}
-
-// Re-rasterizes the node normally without filtering.
-void FRsapGenerator::ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent)
-{
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Generator ::ReRasterizeNode");
-	
-	const layer_idx ChildLayerIdx = LayerIdx+1;
-	
-	// Create the children.
-	for(uint8 ChildIdx = 0; ChildIdx < 8; ++ChildIdx)
-	{
-		// Skip if not overlapping.
-		const FGlobalVector ChildLocation = FNode::GetChildLocation(NodeLocation, ChildLayerIdx, ChildIdx);
-		if(!FNode::HasComponentOverlap(CollisionComponent, ChildLocation, ChildLayerIdx)) continue;
-
-		const node_morton ChildNodeMC = FMortonUtils::Node::GetChild(NodeMC, ChildLayerIdx, ChildIdx);
-		FNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk->GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk->TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
-
-		// Set child to be alive on parent.
-		Node.SetChildAlive(ChildIdx);
-
-		// Stop recursion if Static-Depth is reached.
-		if(ChildLayerIdx == Rsap::NavMesh::StaticDepth) continue;
-		ReRasterizeNode(Chunk, ChildNode, ChildNodeMC, ChildLocation, ChildLayerIdx, CollisionComponent);
+		FilteredReRasterize(Chunk, ChildNode, ChildNodeMC, ChildLocation, ChildLayerIdx, EdgesToCheck, LayerSkipMasks, CollisionComponent);
 	}
 }
 
 void FRsapGenerator::Generate(const UWorld* InWorld, const FNavMesh& InNavMesh, const FActorMap& ActorMap)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Generator ::Run");
+	// const auto StartTime = std::chrono::high_resolution_clock::now();
 
 	World = InWorld;
 	NavMesh = InNavMesh;
-	
-	// const auto StartTime = std::chrono::high_resolution_clock::now();
 
 	FRsapOverlap::InitCollisionBoxes();
 	
