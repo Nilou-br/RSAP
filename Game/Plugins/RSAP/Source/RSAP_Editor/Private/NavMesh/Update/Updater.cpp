@@ -5,7 +5,6 @@
 #include "RSAP/Math/Bounds.h"
 #include <set>
 
-// Static definition
 FRsapUpdater::FOnUpdateComplete FRsapUpdater::OnUpdateComplete;
 
 

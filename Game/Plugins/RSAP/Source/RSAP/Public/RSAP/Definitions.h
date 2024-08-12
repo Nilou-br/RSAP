@@ -153,22 +153,3 @@ namespace Rsap::Map
 typedef Rsap::Map::ordered_map<chunk_morton, FChunk> FNavMeshType;
 typedef std::shared_ptr<FNavMeshType> FNavMesh;
 typedef Rsap::Map::flat_map<actor_key, TWeakObjectPtr<const AActor>> FActorMap;
-
-namespace Rsap::Debug
-{
-	static inline bool IsEnabled = false;
-
-	static inline bool ShouldDisplayChunks = false;
-	static inline bool ShouldDisplayNodes = false;
-	static inline bool ShouldDisplayRelations = false;
-
-	static void Set(
-		const bool Enabled = false, const bool DisplayChunks = false,
-		const bool DisplayNodes = false, const bool IDisplayRelations = false)
-	{
-		IsEnabled				= Enabled;
-		ShouldDisplayChunks		= DisplayChunks;
-		ShouldDisplayNodes		= DisplayNodes;
-		ShouldDisplayRelations	= IDisplayRelations;
-	}
-}

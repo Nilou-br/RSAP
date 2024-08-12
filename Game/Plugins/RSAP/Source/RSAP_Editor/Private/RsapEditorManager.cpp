@@ -15,7 +15,7 @@ void URsapEditorManager::Initialize(FSubsystemCollectionBase& Collection)
 	Super::Initialize(Collection);
 	
 	NavMesh = std::make_shared<FNavMeshType>();
-	NavMeshUpdater = new FRsapUpdater();
+	FRsapUpdater::GetInstance();
 
 	FRsapEditorEvents::OnMapOpened.BindUObject(this, &ThisClass::OnMapOpened);
 	FRsapEditorEvents::PreMapSaved.BindUObject(this, &ThisClass::PreMapSaved);
@@ -25,13 +25,11 @@ void URsapEditorManager::Initialize(FSubsystemCollectionBase& Collection)
 	FRsapEditorEvents::OnActorDeleted.BindUObject(this, &ThisClass::OnActorDeleted);
 
 	FRsapUpdater::OnUpdateComplete.AddUObject(this, &ThisClass::OnNavMeshUpdated);
-	FRsapEditorEvents::OnCameraMoved.BindUObject(this, &ThisClass::OnCameraMoved);
 }
 
 void URsapEditorManager::Deinitialize()
 {
 	NavMesh.reset();
-	delete NavMeshUpdater;
 	
 	FRsapEditorEvents::OnMapOpened.Unbind();
 	FRsapEditorEvents::PreMapSaved.Unbind();
@@ -41,7 +39,6 @@ void URsapEditorManager::Deinitialize()
 	FRsapEditorEvents::OnActorDeleted.Unbind();
 
 	FRsapUpdater::OnUpdateComplete.RemoveAll(this);
-	FRsapEditorEvents::OnCameraMoved.Unbind();
 	
 	Super::Deinitialize();
 }
@@ -80,19 +77,6 @@ void URsapEditorManager::Regenerate()
 	}
 }
 
-void URsapEditorManager::UpdateDebugSettings (
-	const bool bDebugEnabled, const bool bDisplayNodes,
-	const bool bDisplayNodeBorder, const bool bDisplayRelations,
-	const bool bDisplayPaths, const bool bDisplayChunks)
-{
-	FlushPersistentDebugLines(EditorWorld);
-	FlushDebugStrings(EditorWorld);
-	
-	// FNavMeshDebugSettings::Initialize(bDebugEnabled, bDisplayNodes, bDisplayNodeBorder, bDisplayRelations, bDisplayPaths, bDisplayChunks);
-	// RsapModule.InitializeDebugSettings(bDebugEnabled, bDisplayNodes, bDisplayNodeBorder, bDisplayRelations, bDisplayPaths, bDisplayChunks);
-	FRsapDebugger::Draw(NavMesh, EditorWorld);
-}
-
 void URsapEditorManager::OnMapOpened(const FActorBoundsMap& ActorBoundsMap)
 {
 	// Get the editor-world and load the settings stored on it.
@@ -125,8 +109,9 @@ void URsapEditorManager::OnMapOpened(const FActorBoundsMap& ActorBoundsMap)
 		}
 	}
 	
-	// Start the updater.
-	NavMeshUpdater->Start(EditorWorld, NavMesh);
+	// Start the updater/debugger. todo: stop before closing map.
+	FRsapUpdater::GetInstance().Start(EditorWorld, NavMesh);
+	FRsapDebugger::Start(EditorWorld, NavMesh);
 	
 	// Backup code to wait for update complete ( for PIE start during update scenario ):
 	// NavMeshUpdater->StageData(Data);
@@ -176,7 +161,7 @@ void URsapEditorManager::OnActorMoved(const actor_key ActorKey, const FMovedBoun
 {
 	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnActorMoved"))
 
-	NavMeshUpdater->StageData(ActorKey, MovedBounds);
+	FRsapUpdater::GetInstance().StageData(ActorKey, MovedBounds);
 }
 
 void URsapEditorManager::OnActorAdded(const actor_key ActorKey, const FGlobalBounds& Bounds)
@@ -184,7 +169,7 @@ void URsapEditorManager::OnActorAdded(const actor_key ActorKey, const FGlobalBou
 	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnActorAdded"))
 
 	// Leave 'from' empty because the actor did not exist before this operation.
-	NavMeshUpdater->StageData(ActorKey, FMovedBounds(FGlobalBounds::EmptyBounds(), Bounds));
+	FRsapUpdater::GetInstance().StageData(ActorKey, FMovedBounds(FGlobalBounds::EmptyBounds(), Bounds));
 }
 
 void URsapEditorManager::OnActorDeleted(const actor_key ActorKey, const FGlobalBounds& Bounds)
@@ -192,18 +177,10 @@ void URsapEditorManager::OnActorDeleted(const actor_key ActorKey, const FGlobalB
 	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnActorDeleted"))
 
 	// Leave 'to' empty because the actor does not exist anymore.
-	NavMeshUpdater->StageData(ActorKey, FMovedBounds(Bounds, FGlobalBounds::EmptyBounds()));
+	FRsapUpdater::GetInstance().StageData(ActorKey, FMovedBounds(Bounds, FGlobalBounds::EmptyBounds()));
 }
 
-void URsapEditorManager::OnNavMeshUpdated() const
-{
-	FRsapDebugger::Draw(NavMesh, EditorWorld);
-}
-
-void URsapEditorManager::OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation) const
-{
-	if(!NavMeshUpdater->IsRunningTask()) FRsapDebugger::Draw(NavMesh, EditorWorld, CameraLocation, CameraRotation);
-}
+void URsapEditorManager::OnNavMeshUpdated() const {}
 
 
 

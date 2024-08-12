@@ -3,36 +3,68 @@
 #pragma once
 
 #include "RSAP/Definitions.h"
+#include "RSAP_Editor/Public/RsapEditorEvents.h"
+#include "Update/Updater.h"
 
 
-
-struct FRsapDebugSettings
-{
-	bool bEnabled			= false;
-	bool bDisplayNodes		= false;
-	bool bDisplayNodeBorder	= false;
-	bool bDisplayRelations	= false;
-	bool bDisplayPaths		= false;
-	bool bDisplayChunks		= false;
-};
 
 class FRsapDebugger
 {
-	FRsapDebugSettings DebugSettings;
-
-	FORCEINLINE static void DrawNode(const UWorld* World, const FGlobalVector& NodeCenter, const layer_idx LayerIdx);
-	
 public:
 	explicit FRsapDebugger(){}
-	
-	static void Draw(const FNavMesh& NavMesh, const UWorld* World);
-	static void Draw(const FNavMesh& NavMesh, const UWorld* World, const FVector& CameraLocation, const FRotator& CameraRotation);
-	static void DrawNodes(const UWorld* World, const FChunk& Chunk, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector);
-	
-	// static void UpdateSettings(const FRsapDebugSettings InDebugSettings){ DebugSettings = InDebugSettings;	}
+
+	static void Start(const UWorld* InWorld, const FNavMesh& InNavMesh)
+	{
+		World = InWorld;
+		NavMesh = InNavMesh;
+
+		NavMeshUpdatedHandle = FRsapUpdater::OnUpdateComplete.AddStatic(&FRsapDebugger::OnNavMeshUpdated);
+		FRsapEditorEvents::OnCameraMoved.BindStatic(&FRsapDebugger::OnCameraMoved);
+	}
+	static void Stop()
+	{
+		World = nullptr;
+		NavMesh->clear();
+
+		FRsapUpdater::OnUpdateComplete.Remove(NavMeshUpdatedHandle); NavMeshUpdatedHandle.Reset();
+		FRsapEditorEvents::OnCameraMoved.Unbind();
+	}
 
 private:
-	static inline constexpr FColor LayerColors[10] = {
+	static void Draw();
+	static void Draw(const FVector& CameraLocation, const FRotator& CameraRotation);
+	
+	FORCEINLINE static void DrawNode(const FGlobalVector& NodeCenter, const layer_idx LayerIdx);
+	static void DrawNodes(const FChunk& Chunk, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector);
+	static void DrawRelations(const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const FNode& Node, const FGlobalVector& NodeLocation, const node_morton NodeMC, const layer_idx LayerIdx);
+
+	static void OnNavMeshUpdated() { Draw(); }
+	static void OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation)
+	{
+		if(!FRsapUpdater::GetInstance().IsRunningTask()) Draw(CameraLocation, CameraRotation);
+	}
+
+	static const UWorld* World;
+	static FNavMesh NavMesh;
+	static FDelegateHandle NavMeshUpdatedHandle;
+
+	inline static bool bEnabled				= false;
+	inline static bool bDrawRelations		= false;
+	inline static bool bDrawNavPaths		= false;
+	inline static bool bDrawChunks			= false;
+	inline static bool bDrawSpecificLayer	= false;
+	inline static layer_idx DrawLayerIdx	= 5;
+
+public:
+	static void SetEnabled(const bool Value)				{ bEnabled			 = Value; FlushDebug(); Draw(); }
+	static void ShouldDrawRelations(const bool Value)		{ bDrawRelations	 = Value; Draw(); }
+	static void ShouldDrawNavPaths(const bool Value)		{ bDrawNavPaths		 = Value; Draw(); }
+	static void ShouldDrawChunks(const bool Value)			{ bDrawChunks		 = Value; Draw(); }
+	static void ShouldDrawSpecificLayer(const bool Value)	{ bDrawSpecificLayer = Value; Draw(); }
+	static void SetDrawLayerIdx(const layer_idx Value)		{ DrawLayerIdx		 = Value; Draw(); }
+
+private:
+	inline static constexpr FColor LayerColors[10] = {
 		{255, 0, 0},       // Red
 		{0, 255, 0},       // Green
 		{0, 0, 255},       // Blue
@@ -45,9 +77,15 @@ private:
 		{128, 128, 0}      // Olive
 	};
 
-	static FORCEINLINE FColor AdjustBrightness(const FColor& Color, float Factor)
+	static FColor AdjustBrightness(const FColor& Color, float Factor)
 	{
 		Factor = std::clamp(Factor, 0.0f, 1.0f);
 		return FColor(Color.R * Factor, Color.G * Factor, Color.B * Factor, Color.A);
+	}
+
+	static void FlushDebug()
+	{
+		FlushPersistentDebugLines(World);
+		FlushDebugStrings(World);
 	}
 };

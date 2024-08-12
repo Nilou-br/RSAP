@@ -52,8 +52,8 @@ class FRsapGenerator
 									layer_idx LayerIdx, rsap_direction EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks,
 									const UPrimitiveComponent* CollisionComponent);
 
-	static FNavMesh NavMesh;
 	static const UWorld* World;
+	static FNavMesh NavMesh;
 
 public:
 	static void Generate(const UWorld* InWorld, const FNavMesh& InNavMesh, const FActorMap& ActorMap);

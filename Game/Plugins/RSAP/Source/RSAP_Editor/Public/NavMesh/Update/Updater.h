@@ -21,8 +21,16 @@ class FRsapUpdater final : public FTickableGameObject
 	
 public:
 	static FOnUpdateComplete OnUpdateComplete;
-	
-	explicit FRsapUpdater(){}
+
+	// Get singleton instance.
+	FORCEINLINE static FRsapUpdater& GetInstance()
+	{
+		static FRsapUpdater Instance;
+		return Instance;
+	}
+	// Delete constructor and copy operator.
+	FRsapUpdater(const FRsapUpdater&) = delete;
+	FRsapUpdater& operator=(const FRsapUpdater&) = delete;
 	
 	void Start(const UWorld* InWorld, const FNavMesh& InNavMesh) { World = InWorld; NavMesh = InNavMesh, bStarted = true; }
 	void Stop() { bStarted = false; NavMesh.reset(); }
@@ -34,6 +42,8 @@ public:
 	bool IsRunningTask() const { return bIsRunningTask; }
 
 private:
+	FRsapUpdater(){}
+	
 	void Update();
 	
 	FNavMesh NavMesh;

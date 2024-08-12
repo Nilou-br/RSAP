@@ -37,12 +37,6 @@ public:
 	void Regenerate();
 
 	UFUNCTION(BlueprintCallable, Category="Rsap | Navigation Mesh")
-	void UpdateDebugSettings(
-		const bool bDebugEnabled, const bool bDisplayNodes,
-		const bool bDisplayNodeBorder, const bool bDisplayRelations,
-		const bool bDisplayPaths, const bool bDisplayChunks);
-
-	UFUNCTION(BlueprintCallable, Category="Rsap | Navigation Mesh")
 	URsapLevelSettings* GetRsapLevelSettings() const { return LevelSettings; }
 
 private:
@@ -50,7 +44,6 @@ private:
 	UPROPERTY() URsapLevelSettings* LevelSettings;
 	
 	FNavMesh NavMesh;
-	FRsapUpdater* NavMeshUpdater;
 
 	void OnMapOpened(const FActorBoundsMap& ActorBoundsMap);
 	void PreMapSaved();
@@ -60,7 +53,6 @@ private:
 	void OnActorDeleted(const actor_key ActorKey, const FGlobalBounds& Bounds);
 
 	void OnNavMeshUpdated() const;
-	void OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation) const;
 
 public:
 	void ProfileGeneration() const;

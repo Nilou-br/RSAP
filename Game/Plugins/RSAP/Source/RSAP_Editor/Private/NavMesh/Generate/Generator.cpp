@@ -8,8 +8,8 @@
 #include "RSAP_Editor/Public/RsapEditorEvents.h"
 #include "RSAP_Editor/Public/NavMesh/Shared/NMShared.h"
 
-FNavMesh		FRsapGenerator::NavMesh;
 const UWorld*	FRsapGenerator::World;
+FNavMesh		FRsapGenerator::NavMesh;
 
 
 /**

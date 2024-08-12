@@ -5,6 +5,7 @@
 
 
 #define LOCTEXT_NAMESPACE "FRsapMenu"
+#include "RSAP_Editor/Public/NavMesh/Debugger.h"
 #include "Widgets/Input/SSlider.h"
 
 
@@ -36,7 +37,7 @@ public:
 			FUIAction(
 				FExecuteAction::CreateStatic(&FDebugSubMenu::HandleShowSingleLayerIdxChanged),
 				FCanExecuteAction(),
-				FIsActionChecked::CreateStatic([]() { return bShowSingleLayerIdx; })
+				FIsActionChecked::CreateStatic([]() { return bDrawSpecificLayerIdx; })
 			),
 			NAME_None,
 			EUserInterfaceActionType::ToggleButton
@@ -52,7 +53,7 @@ public:
 				.FillWidth(1.0f)
 				[
 					SNew(SSlider)
-					.Value(LayerIdxToShow)
+					.Value(LayerIdxToDraw)
 					.MinValue(0)
 					.MaxValue(9)
 					.StepSize(1)
@@ -75,28 +76,30 @@ public:
 	static void HandleEnableDebugChanged()
 	{
 		bEnabled = !bEnabled;
+		FRsapDebugger::SetEnabled(bEnabled);
 	}
 
 	static void HandleShowLayerSliderChanged(const float Value)
 	{
-		LayerIdxToShow = Value;
+		LayerIdxToDraw = Value;
+		FRsapDebugger::SetDrawLayerIdx(LayerIdxToDraw);
 	}
 
 	static void HandleShowSingleLayerIdxChanged()
 	{
-		bShowSingleLayerIdx = !bShowSingleLayerIdx;
+		bDrawSpecificLayerIdx = !bDrawSpecificLayerIdx;
 	}
 
 	static FText GetLayerIdxText()
 	{
-		return FText::AsNumber(FMath::RoundToInt(LayerIdxToShow));
+		return FText::AsNumber(LayerIdxToDraw);
 	}
 
 private:
 	inline static bool bEnabled = false;
 	
-	inline static bool bShowSingleLayerIdx = false;
-	inline static float LayerIdxToShow = 5;
+	inline static bool bDrawSpecificLayerIdx = false;
+	inline static layer_idx LayerIdxToDraw = 5;
 };
 
 

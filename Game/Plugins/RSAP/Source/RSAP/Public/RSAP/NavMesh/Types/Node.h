@@ -199,7 +199,8 @@ struct FNode
 	}
 
 	template <typename Func>
-	void ForEachChild(const node_morton NodeMC, const layer_idx LayerIdx, Func&& Callback) const {
+	void ForEachChild(const node_morton NodeMC, const layer_idx LayerIdx, Func&& Callback) const
+	{
 		if(!HasChildren()) return;
 
 		const layer_idx ChildLayerIdx = LayerIdx+1;
