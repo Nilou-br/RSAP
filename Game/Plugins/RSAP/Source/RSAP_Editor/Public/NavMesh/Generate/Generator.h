@@ -48,7 +48,7 @@ class FRsapGenerator
 	static layer_idx CalculateOptimalStartingLayer(const FGlobalBounds& Bounds);
 	static uint8 GetChildrenToRasterizeAndUpdateEdges(rsap_direction& EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks, layer_idx LayerIdx, layer_idx ChildLayerIdx);
 	static void ReRasterizeBounds(const UPrimitiveComponent* CollisionComponent);
-	static void FilteredReRasterize(FChunk& Chunk, FNode& Node, node_morton NodeMC, const FGlobalVector& NodeLocation,
+	static void FilteredReRasterize(FChunk& Chunk, const chunk_morton ChunkMC, FNode& Node, node_morton NodeMC, const FGlobalVector& NodeLocation,
 									layer_idx LayerIdx, rsap_direction EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks,
 									const UPrimitiveComponent* CollisionComponent);
 

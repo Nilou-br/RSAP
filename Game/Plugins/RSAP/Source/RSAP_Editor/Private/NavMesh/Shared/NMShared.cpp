@@ -104,7 +104,7 @@ void FNmShared::SetNodeRelations(const FNavMesh& NavMesh, const FChunk& Chunk, c
 }
 
 // Re-rasterizes the node normally without any specific filtering.
-void FNmShared::ReRasterize(FChunk& Chunk, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent)
+void FNmShared::ReRasterize(const FNavMesh& NavMesh, FChunk& Chunk, const chunk_morton ChunkMC, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("::NormalReRasterizeNode");
 	
@@ -120,11 +120,14 @@ void FNmShared::ReRasterize(FChunk& Chunk, FNode& Node, const node_morton NodeMC
 		const node_morton ChildNodeMC = FMortonUtils::Node::GetChild(NodeMC, ChildLayerIdx, ChildIdx);
 		FNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk.GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk.TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
 
+		// Set relations.
+		SetNodeRelations(NavMesh, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildLayerIdx, Rsap::Direction::Negative::XYZ);
+
 		// Set child to be alive on parent.
 		Node.SetChildActive(ChildIdx);
 
 		// Stop recursion if Static-Depth is reached.
 		if(ChildLayerIdx == Rsap::NavMesh::StaticDepth) continue;
-		ReRasterize(Chunk, ChildNode, ChildNodeMC, ChildLocation, ChildLayerIdx, CollisionComponent);
+		ReRasterize(NavMesh, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildLocation, ChildLayerIdx, CollisionComponent);
 	}
 }

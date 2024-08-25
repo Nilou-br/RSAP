@@ -168,11 +168,6 @@ void FRsapDebugger::DrawNodeRelations(const chunk_morton ChunkMC, const FGlobalV
 		const layer_idx NeighbourLayerIdx = Node.Relations.GetFromDirection(Direction);
 		if(NeighbourLayerIdx >= Rsap::NavMesh::Layer::Parent) continue;
 
-		if(LayerIdx == 8 && NeighbourLayerIdx == 8)
-		{
-			const FGlobalVector Test(0,0,0);
-		}
-
 		// Draw line between node and neighbour.
 		const node_morton NeighbourMC = FMortonUtils::Node::GetNeighbour(NodeMC, NeighbourLayerIdx, Direction);
 		const FGlobalVector NeighbourChunkLocation = FMortonUtils::Node::HasMovedIntoNewChunk(NodeMC, NeighbourMC, Direction)
@@ -180,7 +175,9 @@ void FRsapDebugger::DrawNodeRelations(const chunk_morton ChunkMC, const FGlobalV
 												   : ChunkLocation;
 		const FGlobalVector NeighbourLocation = FGlobalVector::FromNodeMorton(NeighbourMC, NeighbourChunkLocation);
 		const FGlobalVector NeighbourCenter = NeighbourLocation + Rsap::Node::HalveSizes[NeighbourLayerIdx];
-		DrawDebugLine(World, NodeCenter.ToVector(), NeighbourCenter.ToVector(), AdjustBrightness(LayerColors[LayerIdx], 0.8), true, -1, 100, 3);
+
+		FVector CenterOffset(1 + (10-LayerIdx));
+		DrawDebugLine(World, NodeCenter.ToVector() + CenterOffset, NeighbourCenter.ToVector() + CenterOffset, AdjustBrightness(LayerColors[LayerIdx], 0.8), true, -1, 100, 2.5 - (LayerIdx/3.5));
 	}
 }
 
