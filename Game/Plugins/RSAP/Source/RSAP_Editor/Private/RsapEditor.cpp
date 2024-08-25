@@ -45,11 +45,11 @@ void FRsapEditorModule::BindCommands() const
 	);
 	CommandList->MapAction(
 		FRsapCommands::Get().IncrementDrawLayerIdx,
-		FExecuteAction::CreateLambda([]() { if(FRsapDebugger::ShouldDrawSpecificLayer()) FRsapDebugger::SetDrawLayerIdx(FRsapDebugger::GetDrawLayerIdx()+1); })
+		FExecuteAction::CreateLambda([]() { if(FRsapDebugger::ShouldDrawSpecificLayer()) FRsapDebugger::IncrementDrawLayerIdx(); })
 	);
 	CommandList->MapAction(
 		FRsapCommands::Get().DecrementDrawLayerIdx,
-		FExecuteAction::CreateLambda([]() { if(FRsapDebugger::ShouldDrawSpecificLayer()) FRsapDebugger::SetDrawLayerIdx(FRsapDebugger::GetDrawLayerIdx()-1); })
+		FExecuteAction::CreateLambda([]() { if(FRsapDebugger::ShouldDrawSpecificLayer()) FRsapDebugger::DecrementDrawLayerIdx(); })
 	);
 }
 

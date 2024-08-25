@@ -117,10 +117,10 @@ void FRsapGenerator::ReRasterizeBounds(const UPrimitiveComponent* CollisionCompo
 	
 	// Get the morton-codes of the first node and chunk. Updating these directly when moving to another node/chunk is extremely fast compared to encoding a new morton-code everytime.
 	// Keep track of the starting node/chunk morton-code to reset the axis to on the morton-code.
-	const node_morton  StartingNodeMC  = RoundedBounds.Min.ToNodeMorton(); // todo: check if this works, otherwise convert value to local space.
+	const node_morton  StartingNodeMC  = RoundedBounds.Min.ToLocalVector(RoundedBounds.Min.RoundToChunk()).ToNodeMorton();
 	const chunk_morton StartingChunkMC = RoundedBounds.Min.ToChunkMorton();
 	node_morton  NodeMC  = StartingNodeMC;  // Will will be updated in every iteration.
-	chunk_morton ChunkMC = StartingChunkMC; // Will be updated when iterating into a new chunk. We know we are in a new chunk when the updated axis on the node's MC has overflown to 0.
+	chunk_morton ChunkMC = StartingChunkMC; // Will be updated when iterating into a new chunk.
 
 	// Keep track of the current chunk.
 	FChunk* CurrentChunk = FChunk::TryFind(NavMesh, ChunkMC);
@@ -165,7 +165,7 @@ void FRsapGenerator::ReRasterizeBounds(const UPrimitiveComponent* CollisionCompo
 			for (NodeLocation.X = RoundedBounds.Min.X; NodeLocation.X <= RoundedBounds.Max.X; NodeLocation.X += Rsap::Node::Sizes[LayerIdx])
 			{
 				if(NodeLocation.X == RoundedBounds.Max.X) EdgesToCheck &= Negative::X;
-
+					
 				if(!CurrentChunk)
 				{
 					if(!FChunk::HasComponentOverlap(CollisionComponent, NodeLocation.RoundToChunk()))

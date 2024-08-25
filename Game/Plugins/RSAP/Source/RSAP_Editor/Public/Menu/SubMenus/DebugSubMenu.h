@@ -43,6 +43,48 @@ public:
 			NAME_None,
 			EUserInterfaceActionType::ToggleButton
 		);
+
+		// Draw relations checkbox.
+		MenuBuilder.AddMenuEntry(
+			LOCTEXT("RsapDebugDrawRelationsCheckbox", "Draw node relations"),
+			LOCTEXT("RsapDebugDrawRelationsTooltip", "Draw the neighbour relations."),
+			FSlateIcon(),
+			FUIAction(
+				FExecuteAction::CreateStatic([]() { FRsapDebugger::ToggleDrawRelations(); }),
+				FCanExecuteAction(),
+				FIsActionChecked::CreateStatic([]() { return FRsapDebugger::ShouldDrawRelations(); })
+			),
+			NAME_None,
+			EUserInterfaceActionType::ToggleButton
+		);
+
+		// Draw navigation paths checkbox.
+		MenuBuilder.AddMenuEntry(
+			LOCTEXT("RsapDebugDrawNavPathsCheckbox", "Draw nav paths"),
+			LOCTEXT("RsapDebugDrawNavPathsTooltip", "Draw the navigation paths that are taken through the navigation mesh."),
+			FSlateIcon(),
+			FUIAction(
+				FExecuteAction::CreateStatic([]() { FRsapDebugger::ToggleDrawNavPaths(); }),
+				FCanExecuteAction(),
+				FIsActionChecked::CreateStatic([]() { return FRsapDebugger::ShouldDrawNavPaths(); })
+			),
+			NAME_None,
+			EUserInterfaceActionType::ToggleButton
+		);
+
+		// Draw chunks checkbox.
+		MenuBuilder.AddMenuEntry(
+			LOCTEXT("RsapDebugDrawChunksCheckbox", "Draw chunks"),
+			LOCTEXT("RsapDebugDrawChunksTooltip", "Draw the chunks."),
+			FSlateIcon(),
+			FUIAction(
+				FExecuteAction::CreateStatic([]() { FRsapDebugger::ToggleDrawChunks(); }),
+				FCanExecuteAction(),
+				FIsActionChecked::CreateStatic([]() { return FRsapDebugger::ShouldDrawChunks(); })
+			),
+			NAME_None,
+			EUserInterfaceActionType::ToggleButton
+		);
 		
 		MenuBuilder.EndSection();
 		MenuBuilder.BeginSection("RsapDebugExtraSection", LOCTEXT("RsapDebugExtraSectionLabel", "Extra"));

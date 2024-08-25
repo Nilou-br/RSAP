@@ -21,7 +21,7 @@ struct FMortonUtils
 		static inline constexpr node_morton Mask_XZ = Mask_X | Mask_Z;
 		static inline constexpr node_morton Mask_YZ = Mask_Y | Mask_Z;
 		
-		// Accessed using layer-index of the node you would like to get the parent of.
+		// Accessed using parent-layer-index of the node you would like to get the parent of.
 		static inline constexpr node_morton ParentMasks[11] = {
 			static_cast<node_morton>(~((1 << 30) - 1)),
 			static_cast<node_morton>(~((1 << 27) - 1)),
@@ -77,6 +77,7 @@ struct FMortonUtils
 			return MortonCode & ParentMasks[ParentLayerIdx];
 		}
 
+		// Get the child-idx of the node.
 		FORCEINLINE static child_idx GetChildIndex(const node_morton MortonCode, const layer_idx LayerIdx)
 		{
 			// Shift the MortonCode, and mask the last 3 bits.
@@ -234,7 +235,7 @@ struct FMortonUtils
 				case Positive::X: return XEqualsZero(CurrMortonCode);
 				case Positive::Y: return YEqualsZero(CurrMortonCode);
 				case Positive::Z: return ZEqualsZero(CurrMortonCode);
-				default:						  return false;
+				default: return false;
 			}
 		}
 	};
@@ -278,8 +279,23 @@ struct FMortonUtils
 			OutZ = (Z << Rsap::Chunk::SizeBits) - Rsap::Chunk::SignOffset;
 		}
 		
-		// Moves the morton-code exactly one chunk in the given direction.
+		// Moves the morton-code exactly one chunk in the given direction. todo: rename to GetNeighbour?
 		FORCEINLINE static chunk_morton Move(const chunk_morton MortonCode, const rsap_direction Direction)
+		{
+			using namespace Rsap::Direction;
+			switch (Direction) {
+				case Negative::X: return DecrementX(MortonCode);
+				case Negative::Y: return DecrementY(MortonCode);
+				case Negative::Z: return DecrementZ(MortonCode);
+				case Positive::X: return IncrementX(MortonCode);
+				case Positive::Y: return IncrementY(MortonCode);
+				case Positive::Z: return IncrementZ(MortonCode);
+				default: return MortonCode;
+			}
+		}
+
+		// Get the neighbouring chunk's morton-code in the given direction.
+		FORCEINLINE static chunk_morton GetNeighbour(const chunk_morton MortonCode, const rsap_direction Direction)
 		{
 			using namespace Rsap::Direction;
 			switch (Direction) {

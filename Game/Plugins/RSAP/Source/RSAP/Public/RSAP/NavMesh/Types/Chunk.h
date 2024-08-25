@@ -58,11 +58,11 @@ public:
 		return &Iterator->second;
 	}
 
-	// Returns the neighbour's morton-code in the given direction.
-	FORCEINLINE static chunk_morton GetNeighbourMC(const chunk_morton ChunkMC, const rsap_direction Direction)
-	{
-		return FMortonUtils::Chunk::Move(ChunkMC, Direction);
-	}
+	// // Returns the neighbour's morton-code in the given direction.
+	// FORCEINLINE static chunk_morton GetNeighbourMC(const chunk_morton ChunkMC, const rsap_direction Direction)
+	// {
+	// 	return FMortonUtils::Chunk::Move(ChunkMC, Direction);
+	// }
 
 	// Returns a reference to an existing node. Use only when you are certain it exists.
 	FORCEINLINE FNode& GetNode(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const

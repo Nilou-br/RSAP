@@ -18,10 +18,14 @@ FDelegateHandle FRsapDebugger::NavMeshUpdatedHandle;
 
 
 
-FString To6BitBinaryString(const uint8 Value) {
-	const std::bitset<8> Bits(Value);
-	const std::string BinaryString = Bits.to_string();
-	return FString(BinaryString.substr(2, 6).c_str());
+template <typename IntType>
+FString ToBinaryString(const IntType Value, const uint8 BitCount)
+{
+	const uint8 MaxBits = sizeof(IntType) * 8;
+	const uint8 ClampedBitCount = FMath::Clamp(BitCount, static_cast<uint8>(1), MaxBits);
+	std::bitset<sizeof(IntType) * 8> Bits(Value);
+	const std::string BinaryString = Bits.to_string().substr(MaxBits - ClampedBitCount, ClampedBitCount);
+	return FString(BinaryString.c_str());
 }
 
 void FRsapDebugger::Draw()
@@ -90,9 +94,6 @@ void FRsapDebugger::Draw(const FVector& CameraLocation, const FRotator& CameraRo
 						const FGlobalVector ChunkGlobalCenterLocation = ChunkLocation + Rsap::Node::HalveSizes[0];
 						DrawDebugBox(World, *ChunkGlobalCenterLocation, FVector(Rsap::Node::HalveSizes[0]), FColor::Black, true, -1, 11, 5);
 					}
-
-					// const FGlobalVector ChunkGlobalCenterLocation = ChunkLocation + Rsap::Node::HalveSizes[0];
-					// DrawDebugBox(World, *ChunkGlobalCenterLocation, FVector(Rsap::Node::HalveSizes[0]), FColor::Black, true, -1, 11, 5);
 					
 					DrawNodes(ChunkIterator->second, CurrentChunkMC, ChunkLocation, 0, 0, CameraLocation, CameraForwardVector);
 				}
@@ -121,12 +122,6 @@ void FRsapDebugger::Draw(const FVector& CameraLocation, const FRotator& CameraRo
 void FRsapDebugger::DrawNode(const FGlobalVector& NodeCenter, const layer_idx LayerIdx)
 {
 	DrawDebugBox(World, *NodeCenter, FVector(Rsap::Node::HalveSizes[LayerIdx]), LayerColors[LayerIdx], true, -1, 0, 2.5 - (LayerIdx/3.5));
-
-	// Draw debug strings ( only works in PIE ).
-	if(World->IsPlayInEditor() && bDrawNodeInfo)
-	{
-		
-	}
 }
 
 void FRsapDebugger::DrawNodes(const FChunk& Chunk, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector)
@@ -141,40 +136,51 @@ void FRsapDebugger::DrawNodes(const FChunk& Chunk, const chunk_morton ChunkMC, c
 	const auto Draw = [&]()
 	{
 		DrawNode(NodeCenter, LayerIdx);
-		if(bDrawRelations) DrawRelations(ChunkMC, ChunkLocation, Node, NodeLocation, NodeMC, LayerIdx);
+		if(World->IsPlayInEditor() && bDrawNodeInfo) DrawNodeInfo(NodeMC, NodeCenter, LayerIdx);
+		if(bDrawRelations) DrawNodeRelations(ChunkMC, ChunkLocation, Node, NodeMC, NodeCenter, LayerIdx);
 	};
 
 	// if(FVector::Dist(CameraLocation, *NodeCenter) > (RsapStatic::NodeSizes[LayerIdx] << 2)+300 - 24*LayerIdx) return;
 	if(!bDrawSpecificLayer) Draw();
-	else if(LayerIdx == DrawLayerIdx) DrawNode(NodeCenter, LayerIdx);
-
+	else if(LayerIdx == DrawLayerIdx) Draw();
+	
 	Node.ForEachChild(NodeMC, LayerIdx, [&](const node_morton ChildMC)
 	{
 		DrawNodes(Chunk, ChunkMC, ChunkLocation, ChildMC, LayerIdx+1, CameraLocation, CameraForwardVector);
 	});
 }
 
-void FRsapDebugger::DrawRelations(const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const FNode& Node, const FGlobalVector& NodeLocation, const node_morton NodeMC, const layer_idx LayerIdx)
+void FRsapDebugger::DrawNodeInfo(const node_morton NodeMC, const FGlobalVector& NodeCenter, const layer_idx LayerIdx)
 {
-	const FGlobalVector NodeCenter = NodeLocation + Rsap::Node::HalveSizes[LayerIdx];
+	const FString MortonString	 = ToBinaryString<node_morton>(NodeMC, 32);
+	const FString LayerIdxString = ToBinaryString<layer_idx>(LayerIdx, 8);
+	const FString ChildIdxString = ToBinaryString<child_idx>(FMortonUtils::Node::GetChildIndex(NodeMC, LayerIdx), 8);
+	
+	DrawDebugString(World, *(NodeCenter + FGlobalVector(0, 0, 40 - LayerIdx*3)),	MortonString, nullptr, FColor::Black, -1, false, 1 + (10-LayerIdx));
+	DrawDebugString(World, *(NodeCenter + FGlobalVector(0, 0, 0)),				MortonString, nullptr, FColor::Black, -1, false, 1 + (10-LayerIdx));
+	DrawDebugString(World, *(NodeCenter + FGlobalVector(0, 0, -40 + LayerIdx*3)), MortonString, nullptr, FColor::Black, -1, false, 1 + (10-LayerIdx));
+}
+
+void FRsapDebugger::DrawNodeRelations(const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeCenter, const layer_idx LayerIdx)
+{
 	for (const rsap_direction Direction : Rsap::Direction::List)
 	{
 		const layer_idx NeighbourLayerIdx = Node.Relations.GetFromDirection(Direction);
 		if(NeighbourLayerIdx >= Rsap::NavMesh::Layer::Parent) continue;
 
+		if(LayerIdx == 8 && NeighbourLayerIdx == 8)
+		{
+			const FGlobalVector Test(0,0,0);
+		}
+
 		// Draw line between node and neighbour.
-		const node_morton NeighbourMC = FMortonUtils::Node::Move(NodeMC, NeighbourLayerIdx, Direction);
+		const node_morton NeighbourMC = FMortonUtils::Node::GetNeighbour(NodeMC, NeighbourLayerIdx, Direction);
 		const FGlobalVector NeighbourChunkLocation = FMortonUtils::Node::HasMovedIntoNewChunk(NodeMC, NeighbourMC, Direction)
-												   ? FGlobalVector::FromChunkMorton(FChunk::GetNeighbourMC(ChunkMC, Direction))
+												   ? FGlobalVector::FromChunkMorton(FMortonUtils::Chunk::Move(ChunkMC, Direction))
 												   : ChunkLocation;
 		const FGlobalVector NeighbourLocation = FGlobalVector::FromNodeMorton(NeighbourMC, NeighbourChunkLocation);
 		const FGlobalVector NeighbourCenter = NeighbourLocation + Rsap::Node::HalveSizes[NeighbourLayerIdx];
-		DrawDebugLine(World, NodeCenter.ToVector(), NeighbourCenter.ToVector(), AdjustBrightness(LayerColors[LayerIdx], 0.8), true, -1, 11, 1);
-
-		if(FMortonUtils::Node::HasMovedIntoNewChunk(NodeMC, NeighbourMC, Direction))
-		{
-			DrawDebugLine(World, NodeCenter.ToVector(), NeighbourCenter.ToVector(), AdjustBrightness(LayerColors[LayerIdx], 0.8), true, -1, 11, 1);
-		}
+		DrawDebugLine(World, NodeCenter.ToVector(), NeighbourCenter.ToVector(), AdjustBrightness(LayerColors[LayerIdx], 0.8), true, -1, 100, 3);
 	}
 }
 

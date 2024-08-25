@@ -59,9 +59,9 @@ namespace Rsap::NavMesh
 	namespace Layer
 	{
 		static inline constexpr layer_idx Root = 0;
-		static inline constexpr layer_idx Parent = 11;
-		static inline constexpr layer_idx Empty = 12;
-		static inline constexpr layer_idx Invalid = 13;
+		static inline constexpr layer_idx Parent = 14;
+		static inline constexpr layer_idx Empty = 15;
+		static inline constexpr layer_idx Invalid = 16;
 
 		// static constexpr uint16 LocalMasks[10] = {
 		// 	static_cast<uint16>(~((1<<10)-1)), static_cast<uint16>(~((1<<9)-1)),

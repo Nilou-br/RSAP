@@ -49,30 +49,27 @@ void FNmShared::InitParentsOfNode(const FNavMesh& NavMesh, const FChunk& Chunk, 
 // If the neighbour is located within the same parent and does not exist, then the relation will be set to point to this node's parent.
 void FNmShared::SetNodeRelation(const FNavMesh& NavMesh, const FChunk& Chunk, const chunk_morton ChunkMC, FNode& Node, const node_morton NodeMC, const layer_idx LayerIdx, const rsap_direction Relation)
 {
-	// Find the the neighbour for this relation starting from the current LayerIdx.
+	// Get the neighbour's morton-code for this relation starting from the current layer.
 	node_morton NeighbourMC = FMortonUtils::Node::Move(NodeMC, LayerIdx, Relation);
 
-	// Get the neighbouring chunk by checking if this movement went into a new one.
+	// Get the neighbouring chunk.
 	const FChunk* NeighbourChunk;
-	if(FMortonUtils::Node::HasMovedIntoNewChunk(NodeMC, NeighbourMC, LayerIdx))
+	if(FMortonUtils::Node::HasMovedIntoNewChunk(NodeMC, NeighbourMC, Relation))
 	{
-		const auto& ChunkIterator = NavMesh->find(Chunk.GetNeighbourMC(ChunkMC, Relation));
+		const auto& ChunkIterator = NavMesh->find(FMortonUtils::Chunk::GetNeighbour(ChunkMC, Relation));
 		if(ChunkIterator == NavMesh->end())
 		{
 			// There is no chunk, so we can set the relation to 'empty'.
 			Node.Relations.SetFromDirection(Relation, Rsap::NavMesh::Layer::Empty);
 			return;
 		}
-
-		// This chunk exists.
 		NeighbourChunk = &ChunkIterator->second;
 	}
-	else
-	{
-		NeighbourChunk = &Chunk;
-	}
-	
-	for(layer_idx NeighbourLayerIdx = LayerIdx; NeighbourLayerIdx < Rsap::NavMesh::MaxDepth; --NeighbourLayerIdx)
+	else { NeighbourChunk = &Chunk; }
+
+	// Set the relation by trying to find the neighbour in this direction, starting from the given layer-index.
+	// If none is found for the layer, then we get it's parent. If this parent equals the node's parent, then we set the relation to a special 'parent' index.
+	for(layer_idx NeighbourLayerIdx = LayerIdx; NeighbourLayerIdx <= Rsap::NavMesh::MaxDepth; --NeighbourLayerIdx)
 	{
 		if(FNode NeighbourNode; NeighbourChunk->FindNode(NeighbourNode, NeighbourMC, NeighbourLayerIdx, 0))
 		{
@@ -82,7 +79,7 @@ void FNmShared::SetNodeRelation(const FNavMesh& NavMesh, const FChunk& Chunk, co
 			// Also update the relations of the neighbour's children that are against the node.
 			// todo: extra flag argument that tells us if we want to update any children BELOW the node's LayerIdx.
 			// RecursiveSetChildRelations
-			return;
+			break;
 		}
 
 		// Neighbour not found, so set the morton-code to it's parent, and try again if this is not the same parent as the node.

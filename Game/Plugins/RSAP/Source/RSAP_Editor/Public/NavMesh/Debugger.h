@@ -34,9 +34,10 @@ private:
 	static void Draw();
 	static void Draw(const FVector& CameraLocation, const FRotator& CameraRotation);
 	
-	FORCEINLINE static void DrawNode(const FGlobalVector& NodeCenter, const layer_idx LayerIdx);
 	static void DrawNodes(const FChunk& Chunk, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector);
-	static void DrawRelations(const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const FNode& Node, const FGlobalVector& NodeLocation, const node_morton NodeMC, const layer_idx LayerIdx);
+	static void DrawNode(const FGlobalVector& NodeCenter, const layer_idx LayerIdx);
+	static void DrawNodeInfo(const node_morton NodeMC, const FGlobalVector& NodeCenter, layer_idx LayerIdx);
+	static void DrawNodeRelations(const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeCenter, const layer_idx LayerIdx);
 
 	static void OnNavMeshUpdated() { Draw(); }
 	static void OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation)
@@ -52,7 +53,7 @@ private:
 	inline static bool bDrawNodeInfo		= false;
 	inline static bool bDrawRelations		= false;
 	inline static bool bDrawNavPaths		= false;
-	inline static bool bDrawChunks			= true;
+	inline static bool bDrawChunks			= false;
 	inline static bool bDrawSpecificLayer	= false;
 	inline static layer_idx DrawLayerIdx	= 5;
 
@@ -71,8 +72,10 @@ public:
 	static bool ShouldDrawChunks()			{ return bDrawChunks; }
 	static bool ShouldDrawSpecificLayer()	{ return bDrawSpecificLayer; }
 
+	static void DecrementDrawLayerIdx() { if(DrawLayerIdx > 0) --DrawLayerIdx; Draw(); }
+	static void IncrementDrawLayerIdx() { if(DrawLayerIdx < Rsap::NavMesh::MaxDepth) ++DrawLayerIdx; Draw(); }
 	static void SetDrawLayerIdx(const layer_idx Value) { DrawLayerIdx = FMath::Clamp(Value, 0, Rsap::NavMesh::MaxDepth); Draw(); }
-	static layer_idx GetDrawLayerIdx() { return DrawLayerIdx; }
+	static layer_idx GetDrawLayerIdx()	{ return DrawLayerIdx; }
 
 private:
 	inline static constexpr FColor LayerColors[11] = {

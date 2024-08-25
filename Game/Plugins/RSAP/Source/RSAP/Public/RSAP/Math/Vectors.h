@@ -41,6 +41,13 @@ struct FNodeVector
 	
 	FORCEINLINE node_morton ToNodeMorton() const
 	{
+		using namespace Rsap::NavMesh;
+		return FMortonUtils::Node::Encode(X, Y, Z);
+	}
+
+	static FORCEINLINE node_morton ToNodeMorton(const int32 X, const int32 Y, const int32 Z)
+	{
+		using namespace Rsap::NavMesh;
 		return FMortonUtils::Node::Encode(X, Y, Z);
 	}
 	
@@ -111,8 +118,6 @@ struct FNodeVector
 /**
  * Custom 32-bit vector type.
  * Used for global locations within the world.
- *
- * @note World-size range from -1073741312 to +1073741312.
  */
 struct FGlobalVector // todo: int64 to support SizeExponent >= 2 ?
 {
@@ -128,16 +133,14 @@ struct FGlobalVector // todo: int64 to support SizeExponent >= 2 ?
 		return FMortonUtils::Chunk::Encode(X, Y, Z);
 	}
 
-	FORCEINLINE node_morton ToNodeMorton() const
+	FORCEINLINE FNodeVector ToLocalVector(const FGlobalVector ChunkLocation) const
 	{
 		using namespace Rsap::NavMesh;
-		return FMortonUtils::Node::Encode(X >> SizeShift, Y >> SizeShift, Z >> SizeShift);
-	}
-
-	static FORCEINLINE node_morton ToNodeMorton(const int32 X, const int32 Y, const int32 Z)
-	{
-		using namespace Rsap::NavMesh;
-		return FMortonUtils::Node::Encode(X >> SizeShift, Y >> SizeShift, Z >> SizeShift);
+		return FNodeVector(
+			static_cast<uint16>((ChunkLocation.X + X) >> SizeShift),
+			static_cast<uint16>((ChunkLocation.Y + Y) >> SizeShift),
+			static_cast<uint16>((ChunkLocation.Z + Z) >> SizeShift)
+		);
 	}
 	
 	FORCEINLINE static FGlobalVector FromChunkMorton(const chunk_morton ChunkMorton)
