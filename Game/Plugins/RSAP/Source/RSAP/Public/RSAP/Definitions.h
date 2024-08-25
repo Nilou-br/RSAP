@@ -14,6 +14,7 @@ typedef uint32	actor_key;
 typedef uint8	child_idx;
 typedef uint8	layer_idx;
 typedef uint8	rsap_direction;
+typedef uint8	node_state;
 
 // Directions within the navmesh use 6 bits to represent '-XYZ +XYZ' values. For example, '0b001100' is negative on the Z, and positive on the X.
 namespace Rsap::Direction
@@ -42,42 +43,71 @@ namespace Rsap::Direction
 		static inline constexpr rsap_direction NOT_Z = 0b111110;
 	}
 	
-	static inline constexpr rsap_direction All			= 0b111111;
-	static inline constexpr rsap_direction None			= 0b000000;
+	static inline constexpr rsap_direction All	= 0b111111;
+	static inline constexpr rsap_direction None	= 0b000000;
 	static inline constexpr rsap_direction List[6] = {Negative::X, Negative::Y, Negative::Z, Positive::X, Positive::Y, Positive::Z};	
 }
 
 namespace Rsap::NavMesh
 {
-	static inline constexpr uint8 MaxDepth = 10;
-	static inline constexpr uint8 StaticDepth = 5;
-	static inline constexpr uint8 VoxelSizeExponent = 0;
+	static inline constexpr uint8 SizeExponent = 1;
+	static inline constexpr uint8 SizeShift = SizeExponent + 2; // SizeExponent + 2 leaf nodes.
+	static inline constexpr uint8 MaxDepth = 11;
+	static inline constexpr uint8 StaticDepth = 9;
 
 	// Root of the octree starts at layer 0 and ends at 9.
 	namespace Layer
 	{
-		static inline constexpr layer_idx Parent = 10;
-		static inline constexpr layer_idx Empty = 11;
-		static inline constexpr layer_idx Invalid = 12;
+		static inline constexpr layer_idx Root = 0;
+		static inline constexpr layer_idx Parent = 11;
+		static inline constexpr layer_idx Empty = 12;
+		static inline constexpr layer_idx Invalid = 13;
 
-		static constexpr uint16 LocalMasks[10] = {
-			static_cast<uint16>(~((1<<10)-1)), static_cast<uint16>(~((1<<9)-1)),
-			static_cast<uint16>(~((1<<8)-1)),  static_cast<uint16>(~((1<<7)-1)),
-			static_cast<uint16>(~((1<<6)-1)),  static_cast<uint16>(~((1<<5)-1)),
-			static_cast<uint16>(~((1<<4)-1)),  static_cast<uint16>(~((1<<3)-1)),
-			static_cast<uint16>(~((1<<2)-1)),  static_cast<uint16>(~((1<<1)-1))
-		};
+		// static constexpr uint16 LocalMasks[10] = {
+		// 	static_cast<uint16>(~((1<<10)-1)), static_cast<uint16>(~((1<<9)-1)),
+		// 	static_cast<uint16>(~((1<<8)-1)),  static_cast<uint16>(~((1<<7)-1)),
+		// 	static_cast<uint16>(~((1<<6)-1)),  static_cast<uint16>(~((1<<5)-1)),
+		// 	static_cast<uint16>(~((1<<4)-1)),  static_cast<uint16>(~((1<<3)-1)),
+		// 	static_cast<uint16>(~((1<<2)-1)),  static_cast<uint16>(~((1<<1)-1))
+		// };
 	}
 }
 
-// To indicate if the node is static or dynamic, 0 or 1 respectively.
-typedef uint8 node_state;
+namespace Rsap::Chunk
+{
+	static inline constexpr uint8  BaseSizeBits = 10;
+	static inline constexpr uint8  SizeBits		= BaseSizeBits + NavMesh::SizeShift;
+	static inline constexpr int32  Size			= 1 << SizeBits;
+	static inline constexpr uint32 SizeMask		= ~(Size - 1);
+
+	// To convert any global coordinates to positive values.
+	// Max coordinates: '21 bit + SizeBits' -> convert to decimal -> minus 'Size - 1'.
+	static inline constexpr uint64 SignOffset = ((1ULL << 21) - 1) << SizeBits;
+}
+
 namespace Rsap::Node
 {
-	static inline constexpr int32 Sizes[10] = {1024, 512, 256, 128, 64, 32, 16, 8, 4, 2};
-	static inline constexpr int32 HalveSizes[10] = {512, 256, 128, 64, 32, 16, 8, 4, 2, 1};
-	static inline constexpr uint8 SmallestSize = 2;
-	static inline constexpr uint16 MortonOffsets[10] = {1024, 512, 256, 128, 64, 32, 16, 8, 4, 2};
+	static inline constexpr int32 LeafSize	= 1 << NavMesh::SizeExponent;
+	static inline constexpr int32 Sizes[11]	= {
+		1 << (Chunk::SizeBits),
+		1 << (Chunk::SizeBits-1), 1 << (Chunk::SizeBits-2), 1 << (Chunk::SizeBits-3), 1 << (Chunk::SizeBits-4), 1 << (Chunk::SizeBits-5),
+		1 << (Chunk::SizeBits-6), 1 << (Chunk::SizeBits-7), 1 << (Chunk::SizeBits-8), 1 << (Chunk::SizeBits-9), 1 << (Chunk::SizeBits-10)
+	};
+	static inline constexpr int32 SizesMask[11] = {
+		~(Sizes[0]),
+		~(Sizes[0]-1), ~(Sizes[1]-1), ~(Sizes[2]-1), ~(Sizes[3]-1), ~(Sizes[4]-1),
+		~(Sizes[5]-1), ~(Sizes[6]-1), ~(Sizes[7]-1), ~(Sizes[8]-1), ~(Sizes[9]-1)
+	};
+	static inline constexpr int32 SizesBits[11] = {
+		Chunk::SizeBits,
+		Chunk::SizeBits-1, Chunk::SizeBits-2, Chunk::SizeBits-3, Chunk::SizeBits-4, Chunk::SizeBits-5,
+		Chunk::SizeBits-6, Chunk::SizeBits-7, Chunk::SizeBits-8, Chunk::SizeBits-9, Chunk::SizeBits-10
+	};
+	static inline constexpr int32 HalveSizes[11] = {
+		Sizes[0]/2,
+		Sizes[1]/2, Sizes[2]/2, Sizes[3]/2, Sizes[4]/2, Sizes[5]/2,
+		Sizes[6]/2, Sizes[7]/2, Sizes[8]/2, Sizes[9]/2, Sizes[10]/2
+	};
 
 	namespace Children
 	{
@@ -85,6 +115,10 @@ namespace Rsap::Node
 		static inline constexpr uint8 Masks[8] = {
 			0b00000001, 0b00000010, 0b00000100, 0b00001000,
 			0b00010000, 0b00100000, 0b01000000, 0b10000000
+		};
+		static inline constexpr uint8 MasksInverse[8] = {
+			0b11111110, 0b11111101, 0b11111011, 0b11110111,
+			0b11101111, 0b11011111, 0b10111111, 0b01111111
 		};
 
 		// For setting / clearing children against a specific side of a node.
@@ -127,14 +161,7 @@ namespace Rsap::Node
 	}
 }
 
-namespace Rsap::Chunk
-{
-	static inline constexpr int32 Size = 1024 << NavMesh::VoxelSizeExponent;
-	static inline constexpr uint8 SizeBits = 10 + NavMesh::VoxelSizeExponent;
-	static inline constexpr uint32 SizeMask = ~((1<<SizeBits)-1);
-}
-
-class FChunk;
+struct FChunk;
 struct FChunkVector;
 struct FNode;
 struct FNodeVector;
@@ -152,4 +179,9 @@ namespace Rsap::Map
 
 typedef Rsap::Map::ordered_map<chunk_morton, FChunk> FNavMeshType;
 typedef std::shared_ptr<FNavMeshType> FNavMesh;
+// typedef Rsap::Map::ordered_map<chunk_morton, FChunk> FNavMeshEditorType;
+// typedef std::shared_ptr<FNavMeshEditorType> FNavMeshEditor;
+// typedef Rsap::Map::flat_map<chunk_morton, FChunk> FNavMeshGameType;
+// typedef std::shared_ptr<FNavMeshGameType> FNavMeshGame;
+
 typedef Rsap::Map::flat_map<actor_key, TWeakObjectPtr<const AActor>> FActorMap;

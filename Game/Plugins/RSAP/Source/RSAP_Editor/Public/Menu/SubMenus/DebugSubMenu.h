@@ -2,11 +2,11 @@
 
 #pragma once
 
-
-
 #define LOCTEXT_NAMESPACE "FRsapMenu"
 #include "RSAP_Editor/Public/NavMesh/Debugger.h"
 #include "Widgets/Input/SSlider.h"
+#include "Framework/Application/SlateApplication.h"
+
 
 
 class FDebugSubMenu
@@ -15,34 +15,53 @@ public:
 	static void RegisterSubMenu(FMenuBuilder& MenuBuilder)
 	{
 		MenuBuilder.BeginSection("RsapDebugSection", LOCTEXT("RsapDebugSectionLabel", "Debug options"));
+
+		// Enable debugger checkbox.
 		MenuBuilder.AddMenuEntry(
 			LOCTEXT("RsapDebugEnabledCheckbox", "Enable"),
 			LOCTEXT("RsapDebugEnabledTooltip", "Enables/disable the debugger."),
 			FSlateIcon(),
 			FUIAction(
-				FExecuteAction::CreateStatic(&FDebugSubMenu::HandleEnableDebugChanged),
+				FExecuteAction::CreateStatic([]() { FRsapDebugger::ToggleEnabled(); }),
 				FCanExecuteAction(),
-				FIsActionChecked::CreateStatic([]() { return bEnabled; })
+				FIsActionChecked::CreateStatic([]() { return FRsapDebugger::IsEnabled(); })
 			),
 			NAME_None,
 			EUserInterfaceActionType::ToggleButton
 		);
-		MenuBuilder.EndSection();
 
+		// Draw node info checkbox.
+		MenuBuilder.AddMenuEntry(
+			LOCTEXT("RsapDebugDrawNodeInfoCheckbox", "Draw node info"),
+			LOCTEXT("RsapDebugDrawNodeInfoTooltip", "Draw specific node information like it's morton-code, local-location, global-location, layer-index and child-index."),
+			FSlateIcon(),
+			FUIAction(
+				FExecuteAction::CreateStatic([]() { FRsapDebugger::ToggleDrawNodeInfo(); }),
+				FCanExecuteAction(),
+				FIsActionChecked::CreateStatic([]() { return FRsapDebugger::ShouldDrawNodeInfo(); })
+			),
+			NAME_None,
+			EUserInterfaceActionType::ToggleButton
+		);
+		
+		MenuBuilder.EndSection();
 		MenuBuilder.BeginSection("RsapDebugExtraSection", LOCTEXT("RsapDebugExtraSectionLabel", "Extra"));
+
+		// Show specific layer checkbox.
 		MenuBuilder.AddMenuEntry(
 			LOCTEXT("RsapDebugShowLayerCheckbox", "Show specific layer"),
 			LOCTEXT("RsapDebugShowLayerTooltip", "Show a specific layer."),
 			FSlateIcon(),
 			FUIAction(
-				FExecuteAction::CreateStatic(&FDebugSubMenu::HandleShowSingleLayerIdxChanged),
+				FExecuteAction::CreateStatic([]() { FRsapDebugger::ToggleDrawSpecificLayer(); }),
 				FCanExecuteAction(),
-				FIsActionChecked::CreateStatic([]() { return bDrawSpecificLayerIdx; })
+				FIsActionChecked::CreateStatic([]() { return FRsapDebugger::ShouldDrawSpecificLayer(); })
 			),
 			NAME_None,
 			EUserInterfaceActionType::ToggleButton
 		);
-		// Adding slider with value display
+
+		// Show specific layer slider.
 		MenuBuilder.AddWidget(
 			SNew(SBox)
 			.WidthOverride(200)
@@ -53,53 +72,25 @@ public:
 				.FillWidth(1.0f)
 				[
 					SNew(SSlider)
-					.Value(LayerIdxToDraw)
+					.Value(FRsapDebugger::GetDrawLayerIdx())
 					.MinValue(0)
 					.MaxValue(9)
 					.StepSize(1)
 					.MouseUsesStep(true)
-					.OnValueChanged_Static(&FDebugSubMenu::HandleShowLayerSliderChanged)
+					.OnValueChanged_Static([](const float Value) { FRsapDebugger::SetDrawLayerIdx(static_cast<int32>(Value)); })
 				]
 				+ SHorizontalBox::Slot()
 				.AutoWidth()
 				.Padding(FMargin(5, 0, 0, 0))
 				[
 					SNew(STextBlock)
-					.Text_Static(&FDebugSubMenu::GetLayerIdxText)
+					.Text_Static([](){ return FText::AsNumber(FRsapDebugger::GetDrawLayerIdx()); })
 				]
 			],
 			LOCTEXT("RsapDebugShowLayerSliderLabel", "Layer")
 		);
 		MenuBuilder.EndSection();
 	}
-
-	static void HandleEnableDebugChanged()
-	{
-		bEnabled = !bEnabled;
-		FRsapDebugger::SetEnabled(bEnabled);
-	}
-
-	static void HandleShowLayerSliderChanged(const float Value)
-	{
-		LayerIdxToDraw = Value;
-		FRsapDebugger::SetDrawLayerIdx(LayerIdxToDraw);
-	}
-
-	static void HandleShowSingleLayerIdxChanged()
-	{
-		bDrawSpecificLayerIdx = !bDrawSpecificLayerIdx;
-	}
-
-	static FText GetLayerIdxText()
-	{
-		return FText::AsNumber(LayerIdxToDraw);
-	}
-
-private:
-	inline static bool bEnabled = false;
-	
-	inline static bool bDrawSpecificLayerIdx = false;
-	inline static layer_idx LayerIdxToDraw = 5;
 };
 
 

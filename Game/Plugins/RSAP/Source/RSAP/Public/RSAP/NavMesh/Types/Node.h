@@ -1,6 +1,7 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
+#include "Relations.h"
 #include "RSAP/Math/Morton.h"
 #include "RSAP/Math/Vectors.h"
 #include "RSAP/Definitions.h"
@@ -9,116 +10,6 @@
 struct FGlobalVector;
 
 
-
-/**
- * Each side of a node holds a relation to another node. There is a relation for each side of a node, and it stores the layer and type of the node in this direction.
- * Used for pathfinding. Relations are certain to be valid, meaning we won't have to check for this validity.
- */
-struct FNodeRelations
-{
-	rsap_direction LayerIdx_Negative_X: 4 = Rsap::NavMesh::Layer::Invalid;
-	rsap_direction LayerIdx_Negative_Y: 4 = Rsap::NavMesh::Layer::Invalid;
-	rsap_direction LayerIdx_Negative_Z: 4 = Rsap::NavMesh::Layer::Invalid;
-	rsap_direction LayerIdx_Positive_X: 4 = Rsap::NavMesh::Layer::Invalid;
-	rsap_direction LayerIdx_Positive_Y: 4 = Rsap::NavMesh::Layer::Invalid;
-	rsap_direction LayerIdx_Positive_Z: 4 = Rsap::NavMesh::Layer::Invalid;
-	
-	node_state NodeState_Negative_X: 1 = Rsap::Node::State::Static;
-	node_state NodeState_Negative_Y: 1 = Rsap::Node::State::Static;
-	node_state NodeState_Negative_Z: 1 = Rsap::Node::State::Static;
-	node_state NodeState_Positive_X: 1 = Rsap::Node::State::Static;
-	node_state NodeState_Positive_Y: 1 = Rsap::Node::State::Static;
-	node_state NodeState_Positive_Z: 1 = Rsap::Node::State::Static;
-
-	FORCEINLINE rsap_direction GetFromDirection(const rsap_direction Direction) const
-	{
-		using namespace Rsap::Direction;
-		switch (Direction) {
-			case Negative::X: return LayerIdx_Negative_X;
-			case Negative::Y: return LayerIdx_Negative_Y;
-			case Negative::Z: return LayerIdx_Negative_Z;
-			case Positive::X: return LayerIdx_Positive_X;
-			case Positive::Y: return LayerIdx_Positive_Y;
-			case Positive::Z: return LayerIdx_Positive_Z;
-			default: return Rsap::NavMesh::Layer::Invalid;
-		}
-	}
-
-	FORCEINLINE void SetFromDirection(const rsap_direction Direction, const layer_idx LayerIdx)
-	{
-		using namespace Rsap::Direction;
-		switch (Direction) {
-			case Negative::X: LayerIdx_Negative_X = LayerIdx; break;
-			case Negative::Y: LayerIdx_Negative_Y = LayerIdx; break;
-			case Negative::Z: LayerIdx_Negative_Z = LayerIdx; break;
-			case Positive::X: LayerIdx_Positive_X = LayerIdx; break;
-			case Positive::Y: LayerIdx_Positive_Y = LayerIdx; break;
-			case Positive::Z: LayerIdx_Positive_Z = LayerIdx; break;
-			default: break;
-		}
-	}
-
-	// Same as SetFromDirection, but will set the opposite relation from the given direction.
-	FORCEINLINE void SetFromDirectionInverse(const rsap_direction Direction, const layer_idx LayerIdx)
-	{
-		using namespace Rsap::Direction;
-		switch (Direction) {
-			case Negative::X: LayerIdx_Positive_X = LayerIdx; break;
-			case Negative::Y: LayerIdx_Positive_Y = LayerIdx; break;
-			case Negative::Z: LayerIdx_Positive_Z = LayerIdx; break;
-			case Positive::X: LayerIdx_Negative_X = LayerIdx; break;
-			case Positive::Y: LayerIdx_Negative_Y = LayerIdx; break;
-			case Positive::Z: LayerIdx_Negative_Z = LayerIdx; break;
-			default: break;
-		}
-	}
-
-	FORCEINLINE bool IsRelationValid(const rsap_direction Direction) const
-	{
-		using namespace Rsap::Direction;
-		switch (Direction) {
-			case Negative::X: return LayerIdx_Negative_X != Rsap::NavMesh::Layer::Invalid;
-			case Negative::Y: return LayerIdx_Negative_Y != Rsap::NavMesh::Layer::Invalid;
-			case Negative::Z: return LayerIdx_Negative_Z != Rsap::NavMesh::Layer::Invalid;
-			case Positive::X: return LayerIdx_Positive_X != Rsap::NavMesh::Layer::Invalid;
-			case Positive::Y: return LayerIdx_Positive_Y != Rsap::NavMesh::Layer::Invalid;
-			case Positive::Z: return LayerIdx_Positive_Z != Rsap::NavMesh::Layer::Invalid;
-			default: return false;
-		}
-	}
-
-	uint32 Pack() const {
-		return static_cast<uint32>(LayerIdx_Negative_X)			|
-			   static_cast<uint32>(LayerIdx_Negative_Y << 4)	|
-			   static_cast<uint32>(LayerIdx_Negative_Z << 8)	|
-			   static_cast<uint32>(LayerIdx_Positive_X << 12)	|
-			   static_cast<uint32>(LayerIdx_Positive_Y << 16)	|
-			   static_cast<uint32>(LayerIdx_Positive_Z << 20)	|
-			   	
-			   static_cast<uint32>(NodeState_Negative_X << 24)  |
-			   static_cast<uint32>(NodeState_Negative_Y << 25)  |
-			   static_cast<uint32>(NodeState_Negative_Z << 26)  |
-			   static_cast<uint32>(NodeState_Positive_X << 27)  |
-			   static_cast<uint32>(NodeState_Positive_Y << 28)  |
-			   static_cast<uint32>(NodeState_Positive_Z << 29);
-	}
-
-	void Unpack(const uint32 PackedData) {
-		LayerIdx_Negative_X  = PackedData;
-		LayerIdx_Negative_Y  = PackedData >> 4;
-		LayerIdx_Negative_Z  = PackedData >> 8;
-		LayerIdx_Positive_X  = PackedData >> 12;
-		LayerIdx_Positive_Y  = PackedData >> 16;
-		LayerIdx_Positive_Z  = PackedData >> 20;
-		
-		NodeState_Negative_X = PackedData >> 24;
-		NodeState_Negative_Y = PackedData >> 25;
-		NodeState_Negative_Z = PackedData >> 26;
-		NodeState_Positive_X = PackedData >> 27;
-		NodeState_Positive_Y = PackedData >> 28;
-		NodeState_Positive_Z = PackedData >> 29;
-	}
-};
 
 /**
  *   Octree node used in the navigation-mesh for pathfinding.
@@ -135,35 +26,40 @@ struct FNodeRelations
 struct FNode
 {
 	FNodeRelations Relations;
-	uint8 Children: 8 = 0b00000000;
-	uint8 ChildStates: 8 = 0b00000000;
+	uint8 Children: 8 = 0b00000000;			// Initialized/occluding (1) or not (0).
+	uint8 ChildrenTypes: 8 = 0b00000000;	// Static (0) or dynamic (1).
 	uint16 SoundPresetID = 0;
 
 	FNode() = default;
 
+	FORCEINLINE void SetChildActive(const child_idx ChildIdx)
+	{
+		Children |= Rsap::Node::Children::Masks[ChildIdx];
+	}
+	FORCEINLINE void ClearChild(const child_idx ChildIdx)
+	{
+		Children &= Rsap::Node::Children::MasksInverse[ChildIdx];
+	}
+	FORCEINLINE bool HasChildren() const {
+		return Children > 0;
+	}
+	FORCEINLINE bool DoesChildExist(const child_idx ChildIdx) const
+	{
+		return Children & Rsap::Node::Children::Masks[ChildIdx];
+	}
+	
 	FORCEINLINE static FNodeVector GetMortonLocation(const node_morton MortonCode)
 	{
 		uint16 X, Y, Z;
 		FMortonUtils::Node::Decode(MortonCode, X, Y, Z);
 		return FNodeVector(X, Y, Z);
 	}
-	
 	FORCEINLINE static FGlobalVector GetGlobalLocation(const FGlobalVector& ChunkLocation, const node_morton MortonCode)
 	{
 		return ChunkLocation + GetMortonLocation(MortonCode);
 	}
 
-	// Sets the bit for this child to '1' to indicate it is alive and occluding.
-	FORCEINLINE void SetChildAlive(const child_idx ChildIdx)
-	{
-		Children |= Rsap::Node::Children::Masks[ChildIdx];
-	}
-
-	FORCEINLINE bool HasChildren() const {
-		return Children > 0;
-	}
-
-	std::array<layer_idx, 6> GetRelations() const
+	FORCEINLINE std::array<layer_idx, 6> GetRelations() const
 	{
 		return {
 			Relations.LayerIdx_Negative_X,
@@ -173,11 +69,6 @@ struct FNode
 			Relations.LayerIdx_Positive_Y,
 			Relations.LayerIdx_Positive_Z
 		};
-	}
-
-	FORCEINLINE bool DoesChildExist(const child_idx ChildIdx) const
-	{
-		return Children & Rsap::Node::Children::Masks[ChildIdx];
 	}
 
 	FORCEINLINE static FGlobalVector GetChildLocation(FGlobalVector ParentNodeLocation, const layer_idx ChildLayerIdx, const uint8 ChildIdx)
@@ -199,7 +90,7 @@ struct FNode
 	}
 
 	template <typename Func>
-	void ForEachChild(const node_morton NodeMC, const layer_idx LayerIdx, Func&& Callback) const
+	FORCEINLINE void ForEachChild(const node_morton NodeMC, const layer_idx LayerIdx, Func&& Callback) const
 	{
 		if(!HasChildren()) return;
 
@@ -240,7 +131,7 @@ struct FNode
 	FORCEINLINE uint64 Pack() const {
 		uint64 PackedData = 0;
 		PackedData |= static_cast<uint64>(Children);
-		PackedData |= static_cast<uint64>(ChildStates) << 8;
+		PackedData |= static_cast<uint64>(ChildrenTypes) << 8;
 		PackedData |= static_cast<uint64>(SoundPresetID) << 16;
 		PackedData |= static_cast<uint64>(Relations.Pack()) << 32;
 		return PackedData;
@@ -249,7 +140,7 @@ struct FNode
 	// This overload is meant for initializing a node from serialized data that was packed.
 	explicit FNode(const uint64 PackedData) {
 		Children		= PackedData;
-		ChildStates		= PackedData >> 8;
+		ChildrenTypes	= PackedData >> 8;
 		SoundPresetID	= PackedData >> 16;
 		Relations.Unpack(PackedData  >> 32);
 	}

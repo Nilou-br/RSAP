@@ -48,33 +48,45 @@ private:
 	static FNavMesh NavMesh;
 	static FDelegateHandle NavMeshUpdatedHandle;
 
-	inline static bool bEnabled				= false;
+	inline static bool bEnabled				= true;
+	inline static bool bDrawNodeInfo		= false;
 	inline static bool bDrawRelations		= false;
 	inline static bool bDrawNavPaths		= false;
-	inline static bool bDrawChunks			= false;
+	inline static bool bDrawChunks			= true;
 	inline static bool bDrawSpecificLayer	= false;
 	inline static layer_idx DrawLayerIdx	= 5;
 
 public:
-	static void SetEnabled(const bool Value)				{ bEnabled			 = Value; FlushDebug(); Draw(); }
-	static void ShouldDrawRelations(const bool Value)		{ bDrawRelations	 = Value; Draw(); }
-	static void ShouldDrawNavPaths(const bool Value)		{ bDrawNavPaths		 = Value; Draw(); }
-	static void ShouldDrawChunks(const bool Value)			{ bDrawChunks		 = Value; Draw(); }
-	static void ShouldDrawSpecificLayer(const bool Value)	{ bDrawSpecificLayer = Value; Draw(); }
-	static void SetDrawLayerIdx(const layer_idx Value)		{ DrawLayerIdx		 = Value; Draw(); }
+	static void ToggleEnabled()				{ bEnabled			 = !bEnabled;			FlushDebug(); Draw(); }
+	static void ToggleDrawNodeInfo()		{ bDrawNodeInfo		 = !bDrawNodeInfo;		Draw(); }
+	static void ToggleDrawRelations()		{ bDrawRelations	 = !bDrawRelations;		Draw(); }
+	static void ToggleDrawNavPaths()		{ bDrawNavPaths		 = !bDrawNavPaths;		Draw(); }
+	static void ToggleDrawChunks()			{ bDrawChunks		 = !bDrawChunks;		Draw(); }
+	static void ToggleDrawSpecificLayer()	{ bDrawSpecificLayer = !bDrawSpecificLayer; Draw(); }
+
+	static bool IsEnabled()					{ return bEnabled; }
+	static bool ShouldDrawNodeInfo()		{ return bDrawNodeInfo; }
+	static bool ShouldDrawRelations()		{ return bDrawRelations; }
+	static bool ShouldDrawNavPaths()		{ return bDrawNavPaths; }
+	static bool ShouldDrawChunks()			{ return bDrawChunks; }
+	static bool ShouldDrawSpecificLayer()	{ return bDrawSpecificLayer; }
+
+	static void SetDrawLayerIdx(const layer_idx Value) { DrawLayerIdx = FMath::Clamp(Value, 0, Rsap::NavMesh::MaxDepth); Draw(); }
+	static layer_idx GetDrawLayerIdx() { return DrawLayerIdx; }
 
 private:
-	inline static constexpr FColor LayerColors[10] = {
-		{255, 0, 0},       // Red
-		{0, 255, 0},       // Green
-		{0, 0, 255},       // Blue
-		{255, 255, 0},     // Yellow
-		{0, 255, 255},     // Cyan
-		{255, 0, 255},     // Magenta
-		{255, 128, 0},     // Orange
-		{128, 0, 255},     // Purple
-		{0, 128, 128},     // Teal
-		{128, 128, 0}      // Olive
+	inline static constexpr FColor LayerColors[11] = {
+		{255, 0, 0},				  // Red
+		{0, 255, 0},				 // Green
+		{0, 0, 255},				// Blue
+		{255, 255, 0},		   // Yellow
+		{0, 255, 255},		  // Cyan
+		{255, 0, 255},		 // Magenta
+		{255, 128, 0},		// Orange
+		{128, 0, 255},       // Purple
+		{0, 128, 128},      // Teal
+		{128, 128, 0},	 // Olive
+		{255, 255, 255}	// White
 	};
 
 	static FColor AdjustBrightness(const FColor& Color, float Factor)

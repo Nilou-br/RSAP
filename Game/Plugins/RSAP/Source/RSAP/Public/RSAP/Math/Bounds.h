@@ -95,6 +95,16 @@ struct TBounds
 		return TBounds(Min - Vector, Max - Vector, bIsValid);
 	}
 
+	FORCEINLINE TBounds operator+(const uint64 Value) const
+	{
+		return TBounds(Min + Value, Max + Value, bIsValid);
+	}
+
+	FORCEINLINE TBounds operator-(const uint64 Value) const
+	{
+		return TBounds(Min - Value, Max - Value, bIsValid);
+	}
+
 	FORCEINLINE TBounds operator<<(const uint8 Value) const
 	{
 		return TBounds(Min << Value, Max << Value, bIsValid);
@@ -122,24 +132,13 @@ struct TBounds
 		return	Max.X == 0 && Max.Y == 0 && Max.Z == 0 &&
 				Min.X == 0 && Min.Y == 0 && Min.Z == 0;
 	}
-
+	
 	// Rounds the bounds to the layer's node-size in global-space. Min will be rounded down, Max will be rounded up.
 	template<typename T = VectorType>
 	FORCEINLINE auto RoundToLayer(const layer_idx LayerIdx) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, FGlobalBounds>
 	{
-		auto Round = [LayerIdx](const int32 Value) -> int32 {
-			if (Value >= 0) return (Value >> LayerIdx) << LayerIdx;							// Positive numbers
-			return ((Value - Rsap::Node::Sizes[LayerIdx] + 1) >> LayerIdx) << LayerIdx;	// Negative numbers
-		};
+		FGlobalBounds Bounds = FGlobalBounds(FGlobalVector(Min + Rsap::Chunk::SignOffset).RoundToLayer(LayerIdx) - Rsap::Chunk::SignOffset, FGlobalVector(Max + Rsap::Chunk::SignOffset).RoundToLayer(LayerIdx) - Rsap::Chunk::SignOffset);
 		
-		FGlobalBounds Bounds = *this;
-		Bounds.Max.X = Round(Bounds.Max.X);
-		Bounds.Max.Y = Round(Bounds.Max.Y);
-		Bounds.Max.Z = Round(Bounds.Max.Z);
-		Bounds.Min.X = Round(Bounds.Min.X);
-		Bounds.Min.Y = Round(Bounds.Min.Y);
-		Bounds.Min.Z = Round(Bounds.Min.Z);
-
 		// Round the Max bounds up, but only if it is smaller than the un-rounded bounds.
 		// Its possible for the un-rounded value to already equal the rounded to value, but we still want to round it a whole node-size upwards ( otherwise the Min axis would equal the Max and there is no width, thus no volume ).
 		if(Bounds.Max.X < Max.X) Bounds.Max.X += Rsap::Node::Sizes[LayerIdx];
@@ -148,17 +147,17 @@ struct TBounds
 		return Bounds;
 	}
 
-	// Rounds the bounds to the layer's node-size in morton-space. Min will be rounded down, Max will be rounded up.
-	template<typename T = VectorType>
-	FORCEINLINE auto RoundToLayer(const layer_idx LayerIdx) const -> std::enable_if_t<std::is_same_v<T, FNodeVector>, FNodeBounds>
-	{
-		FNodeBounds Rounded = *this & Rsap::NavMesh::Layer::LocalMasks[LayerIdx];
-
-		// Round the max up.
-		// The '-1' is to adjust to nodes in morton-space. Because the origin of a node is at its negative most corner. So if Min/Max are equal, then they hold the same node. Min/Max just determine the 'first' and 'last' node in the bounds.
-		Rounded.Max = Rounded.Max + Rsap::Node::MortonOffsets[LayerIdx] - 1;
-		return Rounded;
-	}
+	// // Rounds the bounds to the layer's node-size in morton-space. Min will be rounded down, Max will be rounded up.
+	// template<typename T = VectorType>
+	// FORCEINLINE auto RoundToLayer(const layer_idx LayerIdx) const -> std::enable_if_t<std::is_same_v<T, FNodeVector>, FNodeBounds>
+	// {
+	// 	FNodeBounds Rounded = *this & Rsap::NavMesh::Layer::LocalMasks[LayerIdx];
+	//
+	// 	// Round the max up.
+	// 	// The '-1' is to adjust to nodes in morton-space. Because the origin of a node is at its negative most corner. So if Min/Max are equal, then they hold the same node. Min/Max just determine the 'first' and 'last' node in the bounds.
+	// 	Rounded.Max = Rounded.Max + Rsap::Node::MortonOffsets[LayerIdx] - 1;
+	// 	return Rounded;
+	// }
 
 	// Returns the part of the bounds that intersects with the other.
 	FORCEINLINE TBounds GetIntersection(const TBounds& Other) const
@@ -247,16 +246,16 @@ struct TBounds
 	template<typename T = VectorType>
 	FORCEINLINE auto ToNodeSpace(const FGlobalVector& ChunkLocation) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, FNodeBounds>
 	{
-		const FNodeVector LocalMin = ( Min-ChunkLocation << Rsap::NavMesh::VoxelSizeExponent).ToNodeVector();
-		const FNodeVector LocalMax = ((Max-ChunkLocation << Rsap::NavMesh::VoxelSizeExponent) - Rsap::Node::SmallestSize).ToNodeVector();
+		const FNodeVector LocalMin = ( Min-ChunkLocation << Rsap::NavMesh::SizeExponent).ToNodeVector();
+		const FNodeVector LocalMax = ((Max-ChunkLocation << Rsap::NavMesh::SizeExponent) - Rsap::Node::LeafSize).ToNodeVector();
 		return FNodeBounds(LocalMin, LocalMax, IsValid());
 	}
 
 	template<typename T = VectorType>
 	FORCEINLINE auto ToGlobalSpace(const FGlobalVector& ChunkLocation) const -> std::enable_if_t<std::is_same_v<T, FNodeVector>, FGlobalBounds>
 	{
-		const FGlobalVector LocalMin = (FGlobalVector(Min) >> Rsap::NavMesh::VoxelSizeExponent) + ChunkLocation;
-		const FGlobalVector LocalMax = ((FGlobalVector(Max) + Rsap::Node::SmallestSize) >> Rsap::NavMesh::VoxelSizeExponent) + ChunkLocation;
+		const FGlobalVector LocalMin = (FGlobalVector(Min) >> Rsap::NavMesh::SizeExponent) + ChunkLocation;
+		const FGlobalVector LocalMax = ((FGlobalVector(Max) + Rsap::Node::LeafSize) >> Rsap::NavMesh::SizeExponent) + ChunkLocation;
 		return FGlobalBounds(LocalMin, LocalMax, IsValid());
 	}
 

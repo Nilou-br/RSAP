@@ -14,8 +14,9 @@
  * The first octree at index 0 is static. The nodes are generated/updated within the editor, never during gameplay. Only the relations can be updated during gameplay to point to dynamic nodes, but these changes should not be serialized.
  * The second octree at index 1 is dynamic. The nodes are created from dynamic objects during gameplay. These will not be serialized.
  */
-class FChunk
+struct FChunk
 {
+private:
 	struct FOctree
 	{
 		std::array<std::unique_ptr<FOctreeLayer>, 10> Layers;
@@ -47,6 +48,14 @@ public:
 	FORCEINLINE static FChunk& TryInit(const FNavMesh& NavMesh, const chunk_morton ChunkMC)
 	{
 		return NavMesh->try_emplace(ChunkMC).first->second;
+	}
+
+	// Tries to find a chunk with this morton-code. Will be nullptr if it does not exist.
+	FORCEINLINE static FChunk* TryFind(const FNavMesh& NavMesh, const chunk_morton ChunkMC)
+	{
+		const auto Iterator = NavMesh->find(ChunkMC);
+		if(Iterator == NavMesh->end()) return nullptr;
+		return &Iterator->second;
 	}
 
 	// Returns the neighbour's morton-code in the given direction.
@@ -96,17 +105,14 @@ public:
 		DrawDebugBox(World, *ChunkGlobalCenterLocation, FVector(Rsap::Node::HalveSizes[0]), FColor::Black, true, -1, 11, 5);	
 	}
 
-	// Overlap checks
 	FORCEINLINE static bool HasAnyOverlap(const UWorld* World, const FGlobalVector& ChunkLocation)
 	{
 		return FRsapOverlap::Any(World, ChunkLocation, 0);
 	}
-	FORCEINLINE static bool HasComponentOverlap(const UWorld* World, const UPrimitiveComponent* Component, const FGlobalVector& ChunkLocation)
+	FORCEINLINE static bool HasComponentOverlap(const UPrimitiveComponent* Component, const FGlobalVector& ChunkLocation)
 	{
 		return FRsapOverlap::Component(Component, ChunkLocation, 0);
 	}
-
-private:
 };
 
 typedef std::pair<chunk_morton, FChunk> FChunkPair;

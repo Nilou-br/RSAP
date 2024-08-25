@@ -22,7 +22,7 @@ struct FMortonUtils
 		static inline constexpr node_morton Mask_YZ = Mask_Y | Mask_Z;
 		
 		// Accessed using layer-index of the node you would like to get the parent of.
-		static inline constexpr node_morton ParentMasks[10] = {
+		static inline constexpr node_morton ParentMasks[11] = {
 			static_cast<node_morton>(~((1 << 30) - 1)),
 			static_cast<node_morton>(~((1 << 27) - 1)),
 			static_cast<node_morton>(~((1 << 24) - 1)),
@@ -32,11 +32,12 @@ struct FMortonUtils
 			static_cast<node_morton>(~((1 << 12) - 1)),
 			static_cast<node_morton>(~((1 << 9)  - 1)),
 			static_cast<node_morton>(~((1 << 6)  - 1)),
-			static_cast<node_morton>(~((1 << 3)  - 1))
+			static_cast<node_morton>(~((1 << 3)  - 1)),
+			static_cast<node_morton>(~0)
 		};
 		
-		// The offsets are: 1024, 512, 256, 128, 64, 32, 16, 8, 4, 2.
-		static inline constexpr node_morton LayerOffsets[10] = {
+		// The offsets by index are: 1024, 512, 256, 128, 64, 32, 16, 8, 4, 2.
+		static inline constexpr node_morton LayerOffsets[11] = {
 			
 			// These are used to offset a single axis on the morton code by a specific node-size.
 			// This only works with values that are a powers of 2. Only a single bit can be set to '1' as the offset.
@@ -48,21 +49,23 @@ struct FMortonUtils
 			// The reason why this only works for powers of 2 is because the Y and Z axis will flip to '0' when a single bit on 'X' flows to the left.
 			
 			1 << 30, 1 << 27, 1 << 24, 1 << 21, 1 << 18,
-			1 << 15, 1 << 12, 1 << 9,  1 << 6,  1 << 3
+			1 << 15, 1 << 12, 1 << 9,  1 << 6,  1 << 3,
+			1
 		};
 		
-		// Encode the local node coordinates into a node morton-code.
+		// Encode the node's local coordinates into a node-morton-code.
 		FORCEINLINE static node_morton Encode(const uint_fast16_t X, const uint_fast16_t Y, const uint_fast16_t Z)
 		{
+			using namespace Rsap::NavMesh;
 			return libmorton::morton3D_32_encode(X, Y, Z);
 		}
 
-		// Decode a node's morton-code back into local node coordinates.
-		FORCEINLINE static void Decode(const node_morton NodeMorton, uint16& OutX, uint16& OutY, uint16& OutZ)
+		// Decode a node-morton-code back into local node coordinates.
+		FORCEINLINE static void Decode(const node_morton MortonCode, uint16& OutX, uint16& OutY, uint16& OutZ)
 		{
+			using namespace Rsap::NavMesh;
 			uint_fast16_t X, Y, Z;
-			libmorton::morton3D_32_decode(NodeMorton, X, Y, Z);
-			
+			libmorton::morton3D_32_decode(MortonCode, X, Y, Z);
 			OutX = X;
 			OutY = Y;
 			OutZ = Z;
@@ -79,7 +82,7 @@ struct FMortonUtils
 			// Shift the MortonCode, and mask the last 3 bits.
 			// The remainder evaluates directly to the node's index in it's parent.
 			static constexpr node_morton ChildIdxMask = 0b00000000000000000000000000000111;
-			static constexpr uint8 Shifts[10] = {30, 27, 24, 21, 18, 15, 12, 9, 6, 3}; // todo: update when changing root node to be 8 nodes instead of one, which makes the smallest node 1cm which needs 0 as the lst shift here.
+			static constexpr uint8 Shifts[10] = {30, 27, 24, 21, 18, 15, 12, 9, 6, 3};
 			return (MortonCode >> Shifts[LayerIdx]) & ChildIdxMask;
 		}
 
@@ -133,10 +136,10 @@ struct FMortonUtils
 			}
 		}
 
-		// Moves the morton-code in the direction, and also masks away the layers below the layer-index. Used to get the neighbour of a node in the given direction, which could also be in an upper layer.
-		FORCEINLINE static node_morton MoveAndMask(const node_morton MortonCode, const layer_idx LayerIdx, const rsap_direction Direction) // todo: rename?
+		// Gets the neighbour's morton-code of a node in the given direction, which could also be in an upper layer.
+		FORCEINLINE static node_morton GetNeighbour(const node_morton MortonCode, const layer_idx NeighbourLayerIdx, const rsap_direction Direction)
 		{
-			return Move(MortonCode, LayerIdx, Direction) & ParentMasks[LayerIdx];
+			return Move(MortonCode, NeighbourLayerIdx, Direction) & ParentMasks[NeighbourLayerIdx];
 		}
 
 		// Adds the node-size of the layer-index to the X-axis.
@@ -249,16 +252,17 @@ struct FMortonUtils
 		static inline constexpr chunk_morton Mask_YZ = Mask_Y | Mask_Z;
 
 		// Used to convert the chunk's global coordinates into positive values.
-		static inline constexpr uint32 EncodeDecodeOffset = 0b00111111111111111111110000000000; // '1073740800'.
+		// static inline constexpr uint32 EncodeDecodeOffset = 0b00111111111111111111110000000000; // '1073740800' at SizeExponent of 
+		// static inline constexpr uint32 EncodeDecodeOffset = 0b00111111111111111111111111111111 & Rsap::Chunk::SizeMask;
 		
 		// Encode the global world coordinates into a chunk morton-code. Max range from -1073741312 to +1073741312.
 		FORCEINLINE static chunk_morton Encode(const int32 X, const int32 Y, const int32 Z) // todo: test these
 		{
 			// Apply offset to make the coordinates positive, and do a shift to compress the value.
 			// The last 10 bits will always be 0 because a chunk is 1024 units in size.
-			const uint_fast32_t InX = (X + EncodeDecodeOffset) >> Rsap::Chunk::SizeBits;
-			const uint_fast32_t InY = (Y + EncodeDecodeOffset) >> Rsap::Chunk::SizeBits;
-			const uint_fast32_t InZ = (Z + EncodeDecodeOffset) >> Rsap::Chunk::SizeBits;
+			const uint_fast32_t InX = (X + Rsap::Chunk::SignOffset) >> Rsap::Chunk::SizeBits;
+			const uint_fast32_t InY = (Y + Rsap::Chunk::SignOffset) >> Rsap::Chunk::SizeBits;
+			const uint_fast32_t InZ = (Z + Rsap::Chunk::SignOffset) >> Rsap::Chunk::SizeBits;
 			
 			return libmorton::morton3D_64_encode(InX, InY, InZ);
 		}
@@ -269,9 +273,9 @@ struct FMortonUtils
 			uint_fast32_t X, Y, Z;
 			libmorton::morton3D_64_decode(ChunkMorton, X, Y, Z);
 			
-			OutX = (X << Rsap::Chunk::SizeBits) - EncodeDecodeOffset;
-			OutY = (Y << Rsap::Chunk::SizeBits) - EncodeDecodeOffset;
-			OutZ = (Z << Rsap::Chunk::SizeBits) - EncodeDecodeOffset;
+			OutX = (X << Rsap::Chunk::SizeBits) - Rsap::Chunk::SignOffset;
+			OutY = (Y << Rsap::Chunk::SizeBits) - Rsap::Chunk::SignOffset;
+			OutZ = (Z << Rsap::Chunk::SizeBits) - Rsap::Chunk::SignOffset;
 		}
 		
 		// Moves the morton-code exactly one chunk in the given direction.

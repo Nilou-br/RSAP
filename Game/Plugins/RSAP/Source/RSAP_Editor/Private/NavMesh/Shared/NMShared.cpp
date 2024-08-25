@@ -41,7 +41,7 @@ void FNmShared::InitParentsOfNode(const FNavMesh& NavMesh, const FChunk& Chunk, 
 
 	// Update the Children mask on the parent to know this child exists and is occluding.
 	const child_idx ChildIdx = FMortonUtils::Node::GetChildIndex(NodeMC, LayerIdx);
-	ParentNode.SetChildAlive(ChildIdx);
+	ParentNode.SetChildActive(ChildIdx);
 }
 
 // Tries to set the given relation for this node.
@@ -107,7 +107,7 @@ void FNmShared::SetNodeRelations(const FNavMesh& NavMesh, const FChunk& Chunk, c
 }
 
 // Re-rasterizes the node normally without any specific filtering.
-void FNmShared::NormalReRasterize(FChunk& Chunk, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent)
+void FNmShared::ReRasterize(FChunk& Chunk, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("::NormalReRasterizeNode");
 	
@@ -124,10 +124,10 @@ void FNmShared::NormalReRasterize(FChunk& Chunk, FNode& Node, const node_morton 
 		FNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk.GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk.TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
 
 		// Set child to be alive on parent.
-		Node.SetChildAlive(ChildIdx);
+		Node.SetChildActive(ChildIdx);
 
 		// Stop recursion if Static-Depth is reached.
 		if(ChildLayerIdx == Rsap::NavMesh::StaticDepth) continue;
-		NormalReRasterize(Chunk, ChildNode, ChildNodeMC, ChildLocation, ChildLayerIdx, CollisionComponent);
+		ReRasterize(Chunk, ChildNode, ChildNodeMC, ChildLocation, ChildLayerIdx, CollisionComponent);
 	}
 }

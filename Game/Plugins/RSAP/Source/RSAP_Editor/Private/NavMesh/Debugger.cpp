@@ -90,6 +90,9 @@ void FRsapDebugger::Draw(const FVector& CameraLocation, const FRotator& CameraRo
 						const FGlobalVector ChunkGlobalCenterLocation = ChunkLocation + Rsap::Node::HalveSizes[0];
 						DrawDebugBox(World, *ChunkGlobalCenterLocation, FVector(Rsap::Node::HalveSizes[0]), FColor::Black, true, -1, 11, 5);
 					}
+
+					// const FGlobalVector ChunkGlobalCenterLocation = ChunkLocation + Rsap::Node::HalveSizes[0];
+					// DrawDebugBox(World, *ChunkGlobalCenterLocation, FVector(Rsap::Node::HalveSizes[0]), FColor::Black, true, -1, 11, 5);
 					
 					DrawNodes(ChunkIterator->second, CurrentChunkMC, ChunkLocation, 0, 0, CameraLocation, CameraForwardVector);
 				}
@@ -118,6 +121,12 @@ void FRsapDebugger::Draw(const FVector& CameraLocation, const FRotator& CameraRo
 void FRsapDebugger::DrawNode(const FGlobalVector& NodeCenter, const layer_idx LayerIdx)
 {
 	DrawDebugBox(World, *NodeCenter, FVector(Rsap::Node::HalveSizes[LayerIdx]), LayerColors[LayerIdx], true, -1, 0, 2.5 - (LayerIdx/3.5));
+
+	// Draw debug strings ( only works in PIE ).
+	if(World->IsPlayInEditor() && bDrawNodeInfo)
+	{
+		
+	}
 }
 
 void FRsapDebugger::DrawNodes(const FChunk& Chunk, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector)
@@ -128,11 +137,16 @@ void FRsapDebugger::DrawNodes(const FChunk& Chunk, const chunk_morton ChunkMC, c
 	const FNode& Node = NodeIterator->second;
 	const FGlobalVector NodeLocation = FGlobalVector::FromNodeMorton(NodeMC, ChunkLocation);
 	const FGlobalVector NodeCenter = NodeLocation + Rsap::Node::HalveSizes[LayerIdx];
-	
-	// if(FVector::Dist(CameraLocation, *NodeCenter) > (RsapStatic::NodeSizes[LayerIdx] << 2)+300 - 24*LayerIdx) return;
-	DrawNode(NodeCenter, LayerIdx);
 
-	if(bDrawRelations) DrawRelations(ChunkMC, ChunkLocation, Node, NodeLocation, NodeMC, LayerIdx);
+	const auto Draw = [&]()
+	{
+		DrawNode(NodeCenter, LayerIdx);
+		if(bDrawRelations) DrawRelations(ChunkMC, ChunkLocation, Node, NodeLocation, NodeMC, LayerIdx);
+	};
+
+	// if(FVector::Dist(CameraLocation, *NodeCenter) > (RsapStatic::NodeSizes[LayerIdx] << 2)+300 - 24*LayerIdx) return;
+	if(!bDrawSpecificLayer) Draw();
+	else if(LayerIdx == DrawLayerIdx) DrawNode(NodeCenter, LayerIdx);
 
 	Node.ForEachChild(NodeMC, LayerIdx, [&](const node_morton ChildMC)
 	{

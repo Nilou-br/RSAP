@@ -19,14 +19,16 @@ public class RSAP_Editor : ModuleRules
 			{
 				"CoreUObject",
 				"Engine",
+				"InputCore",
 				"Slate",
 				"SlateCore",
+				"ToolMenus",
+				"LevelEditor",
 				"UMG",
 				"Blutility",
 				"UnrealEd",
 				"LevelEditor",
 				"Projects",
-				"ToolMenus",
 				"EditorStyle",
 				"EditorSubsystem",
 				"RSAP"

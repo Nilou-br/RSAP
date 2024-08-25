@@ -1,7 +1,7 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #include "RSAP/GameManager.h"
-#include "RSAP/NavMesh/Types/Serialize.h"
+#include "RSAP/NavMesh/Serialize.h"
 
 
 

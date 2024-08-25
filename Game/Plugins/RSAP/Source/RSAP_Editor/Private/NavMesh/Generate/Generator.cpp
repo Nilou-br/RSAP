@@ -117,13 +117,42 @@ void FRsapGenerator::ReRasterizeBounds(const UPrimitiveComponent* CollisionCompo
 	
 	// Get the morton-codes of the first node and chunk. Updating these directly when moving to another node/chunk is extremely fast compared to encoding a new morton-code everytime.
 	// Keep track of the starting node/chunk morton-code to reset the axis to on the morton-code.
-	const node_morton StartingNodeMC = RoundedBounds.Min.ToNodeVector().ToNodeMorton();
+	const node_morton  StartingNodeMC  = RoundedBounds.Min.ToNodeMorton(); // todo: check if this works, otherwise convert value to local space.
 	const chunk_morton StartingChunkMC = RoundedBounds.Min.ToChunkMorton();
-	node_morton NodeMC = StartingNodeMC; // Will will be updated in every iteration.
+	node_morton  NodeMC  = StartingNodeMC;  // Will will be updated in every iteration.
 	chunk_morton ChunkMC = StartingChunkMC; // Will be updated when iterating into a new chunk. We know we are in a new chunk when the updated axis on the node's MC has overflown to 0.
+
+	// Keep track of the current chunk.
+	FChunk* CurrentChunk = FChunk::TryFind(NavMesh, ChunkMC);
 
 	// This mask represents the edges that have nodes that can be skipped. When we are at an edge in a certain direction, then that direction will certainly have nodes that can be skipped.
 	rsap_direction EdgesToCheck = 0b111000; // Initially set to be on the negative edge in every direction.
+
+	// Lambda that checks if the given chunk-morton-code differs from what is currently cached.
+	// Will reset it to nullptr if true.
+	const auto HandleNewChunkMC = [&](const chunk_morton NewChunkMC)
+	{
+		if(ChunkMC != NewChunkMC)
+		{
+			ChunkMC = NewChunkMC;
+			CurrentChunk = FChunk::TryFind(NavMesh, ChunkMC);
+		}
+	};
+
+	// Should be called before continuing the loop to update the node's / chunk's morton-code. Updating these is much faster then encoding new morton-codes from a vector.
+	const auto HandleIterateX = [&](const FGlobalVector& NodeLocation)
+	{
+		if(NodeLocation.X == RoundedBounds.Min.X) EdgesToCheck &= Negative::NOT_X;
+		if(NodeLocation.X == RoundedBounds.Max.X)
+		{
+			NodeMC = FMortonUtils::Node::CopyX(NodeMC, StartingNodeMC);
+			HandleNewChunkMC(FMortonUtils::Chunk::CopyX(ChunkMC, StartingChunkMC));
+			return;
+		}
+				
+		NodeMC = FMortonUtils::Node::AddX(NodeMC, LayerIdx);
+		if(FMortonUtils::Node::XEqualsZero(NodeMC)) HandleNewChunkMC(FMortonUtils::Chunk::IncrementX(ChunkMC));
+	};
 
 	// todo: try to unroll this loop into max of 27 different versions, and pick the right one based on dimensions. Leave this nested loop for objects larger than 3 chunks in any direction.
 	FGlobalVector NodeLocation;
@@ -136,50 +165,56 @@ void FRsapGenerator::ReRasterizeBounds(const UPrimitiveComponent* CollisionCompo
 			for (NodeLocation.X = RoundedBounds.Min.X; NodeLocation.X <= RoundedBounds.Max.X; NodeLocation.X += Rsap::Node::Sizes[LayerIdx])
 			{
 				if(NodeLocation.X == RoundedBounds.Max.X) EdgesToCheck &= Negative::X;
-				
-				if(FNode::HasComponentOverlap(CollisionComponent, NodeLocation, LayerIdx))
-				{
-					FChunk& CurrentChunk = FChunk::TryInit(NavMesh, ChunkMC);
-					
-					// There is an overlap, so get/init the node, and also init/update any missing parent.
-					FNode& Node = FNmShared::InitNodeAndParents(NavMesh, CurrentChunk, ChunkMC, NodeMC, LayerIdx, 0, EdgesToCheck);
 
-					// Re-rasterize if we are not yet on the static-depth.
-					if(LayerIdx < Rsap::NavMesh::StaticDepth)
-					{
-						FilteredReRasterize(CurrentChunk, Node, NodeMC, NodeLocation, LayerIdx, EdgesToCheck, LayerSkipMasks, CollisionComponent);
-					}
-				}
-				
-				if(NodeLocation.X == RoundedBounds.Min.X) EdgesToCheck &= Negative::NOT_X;
-				if(NodeLocation.X == RoundedBounds.Max.X)
+				if(!CurrentChunk)
 				{
-					NodeMC = FMortonUtils::Node::CopyX(NodeMC, StartingNodeMC);
-					ChunkMC = FMortonUtils::Chunk::CopyX(ChunkMC, StartingChunkMC);
+					if(!FChunk::HasComponentOverlap(CollisionComponent, NodeLocation.RoundToChunk()))
+					{
+						// Will very likely be a corner of an AABB that slightly intersects with this new chunk. Otherwise large geometry like terrain which has a large starting layer.
+						HandleIterateX(NodeLocation);
+						continue;
+					}
+					CurrentChunk = &FChunk::TryInit(NavMesh, ChunkMC);
+				}
+
+				// todo: when creating updater, try to find a node first, then if nullptr check if collision, and if collision true then init node.
+				// First check if there is any overlap.
+				if(!FNode::HasComponentOverlap(CollisionComponent, NodeLocation, LayerIdx))
+				{
+					HandleIterateX(NodeLocation);
 					continue;
 				}
+					
+				// There is an overlap, so get/init the node, and also init/update any missing parent.
+				FNode& Node = FNmShared::InitNodeAndParents(NavMesh, *CurrentChunk, ChunkMC, NodeMC, LayerIdx, 0, EdgesToCheck);
+
+				// Re-rasterize if we are not yet on the static-depth.
+				if(LayerIdx < Rsap::NavMesh::StaticDepth)
+				{
+					FilteredReRasterize(*CurrentChunk, Node, NodeMC, NodeLocation, LayerIdx, EdgesToCheck, LayerSkipMasks, CollisionComponent);
+					// FNmShared::ReRasterize(*CurrentChunk, Node, NodeMC, NodeLocation, LayerIdx, CollisionComponent);
+				}
 				
-				NodeMC = FMortonUtils::Node::AddX(NodeMC, LayerIdx);
-				if(FMortonUtils::Node::XEqualsZero(NodeMC)) ChunkMC = FMortonUtils::Chunk::IncrementX(ChunkMC);
+				HandleIterateX(NodeLocation);
 			}
 	
 			if(NodeLocation.Y == RoundedBounds.Min.Y) EdgesToCheck &= Negative::NOT_Y;
 			if(NodeLocation.Y == RoundedBounds.Max.Y)
 			{
 				NodeMC = FMortonUtils::Node::CopyY(NodeMC, StartingNodeMC);
-				ChunkMC = FMortonUtils::Chunk::CopyY(ChunkMC, StartingChunkMC);
+				HandleNewChunkMC(FMortonUtils::Chunk::CopyY(ChunkMC, StartingChunkMC));
 				continue;
 			}
 
 			NodeMC = FMortonUtils::Node::AddY(NodeMC, LayerIdx);
-			if(FMortonUtils::Node::YEqualsZero(NodeMC)) ChunkMC = FMortonUtils::Chunk::IncrementY(ChunkMC);
+			if(FMortonUtils::Node::YEqualsZero(NodeMC)) HandleNewChunkMC(FMortonUtils::Chunk::IncrementY(ChunkMC));
 		}
 	
 		if(NodeLocation.Z == RoundedBounds.Min.Z) EdgesToCheck &= Negative::NOT_Z;
 		if(NodeLocation.Z == RoundedBounds.Max.Z) continue; // Don't need to reset Z axis because this axis won't be repeated.
 		
 		NodeMC = FMortonUtils::Node::AddZ(NodeMC, LayerIdx);
-		if(FMortonUtils::Node::ZEqualsZero(NodeMC)) ChunkMC = FMortonUtils::Chunk::IncrementZ(ChunkMC);
+		if(FMortonUtils::Node::ZEqualsZero(NodeMC)) HandleNewChunkMC(FMortonUtils::Chunk::IncrementZ(ChunkMC));
 	}
 }
 
@@ -193,7 +228,7 @@ void FRsapGenerator::FilteredReRasterize(FChunk& Chunk, FNode& Node, const node_
 	if(!EdgesToCheck)
 	{
 		// Continue doing a normal re-rasterization.
-		FNmShared::NormalReRasterize(Chunk, Node, NodeMC, NodeLocation, LayerIdx, CollisionComponent);
+		FNmShared::ReRasterize(Chunk, Node, NodeMC, NodeLocation, LayerIdx, CollisionComponent);
 		return;
 	}
 
@@ -214,12 +249,12 @@ void FRsapGenerator::FilteredReRasterize(FChunk& Chunk, FNode& Node, const node_
 		const FGlobalVector ChildLocation = FNode::GetChildLocation(NodeLocation, ChildLayerIdx, ChildIdx);
 		if(!FNode::HasComponentOverlap(CollisionComponent, ChildLocation, ChildLayerIdx)) continue;
 
-		// Create node
+		// Get / init node.
 		const node_morton ChildNodeMC = FMortonUtils::Node::GetChild(NodeMC, ChildLayerIdx, ChildIdx);
 		FNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk.GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk.TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
 
 		// Set child to be alive on parent.
-		Node.SetChildAlive(ChildIdx);
+		Node.SetChildActive(ChildIdx);
 
 		// Stop recursion if Static-Depth is reached.
 		if(ChildLayerIdx == Rsap::NavMesh::StaticDepth) continue;
@@ -254,6 +289,7 @@ void FRsapGenerator::Generate(const UWorld* InWorld, const FNavMesh& InNavMesh, 
 
 		for (const UPrimitiveComponent* CollisionComponent : CollisionComponents)
 		{
+			// todo: move this to start of method. Different ExecuteRead overload.
 			FPhysicsCommand::ExecuteRead(CollisionComponent->BodyInstance.ActorHandle, [&](const FPhysicsActorHandle& Actor)
 			{
 				ReRasterizeBounds(CollisionComponent);

@@ -1,9 +1,8 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-#include "Chunk.h"
-#include "Node.h"
-#include <ranges>
+#include "Types/Chunk.h"
+#include "Types/Node.h"
 
 
 

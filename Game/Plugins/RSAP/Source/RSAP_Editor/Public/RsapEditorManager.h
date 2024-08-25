@@ -40,7 +40,7 @@ public:
 	URsapLevelSettings* GetRsapLevelSettings() const { return LevelSettings; }
 
 private:
-	UPROPERTY() const UWorld* EditorWorld;
+	UPROPERTY() UWorld* EditorWorld;
 	UPROPERTY() URsapLevelSettings* LevelSettings;
 	
 	FNavMesh NavMesh;

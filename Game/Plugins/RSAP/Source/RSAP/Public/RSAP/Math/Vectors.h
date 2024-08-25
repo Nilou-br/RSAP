@@ -6,28 +6,48 @@
 
 
 
+// todo: this type:
+template <typename IntType, uint8 NumBits>
+struct TRsapVector
+{
+	IntType X : NumBits;
+	IntType Y : NumBits;
+	IntType Z : NumBits;
+};
+
+// typedef TRsapVector<uint16, 10> FNodeVector;
+// typedef TRsapVector<uint16, 16> FLocalVector;
+// typedef TRsapVector<int64,  64>	FGlobalVector;
+
+// struct FLocalVector : TRsapVector<uint16, 16>
+// {
+// 	FNodeVector ToNodeVector()
+// 	{
+// 		// ...
+// 	}
+// };
+
+
+
+
+
 /**
  * Used for local-locations within a chunk, and can be converted to morton-codes directly.
  * Each axis has 10 bit allocated, which fits inside a 32-bit morton-code used for the nodes in the octree.
  */
-struct FNodeVector // todo: rename to FNodeVector?
+struct FNodeVector
 {
 	uint16 X, Y, Z: 10;
 	
 	FORCEINLINE node_morton ToNodeMorton() const
 	{
-		return libmorton::morton3D_32_encode(X, Y, Z); // todo: morton-utils
-	}
-
-	static FORCEINLINE node_morton ToNodeMorton(const uint_fast16_t X, const uint_fast16_t Y, const uint_fast16_t Z)
-	{
-		return libmorton::morton3D_32_encode(X, Y, Z);
+		return FMortonUtils::Node::Encode(X, Y, Z);
 	}
 	
 	FORCEINLINE static FNodeVector FromNodeMorton(const node_morton MortonCode)
 	{
-		uint_fast16_t OutX, OutY, OutZ;
-		libmorton::morton3D_32_decode(MortonCode, OutX, OutY, OutZ);
+		uint16 OutX, OutY, OutZ;
+		FMortonUtils::Node::Decode(MortonCode, OutX, OutY, OutZ);
 		return FNodeVector(OutX, OutY, OutZ);
 	}
 
@@ -89,12 +109,12 @@ struct FNodeVector // todo: rename to FNodeVector?
 };
 
 /**
- * Custom 32-bit vector type optimized for my navmesh.
+ * Custom 32-bit vector type.
  * Used for global locations within the world.
  *
  * @note World-size range from -1073741312 to +1073741312.
  */
-struct FGlobalVector // todo: FChunkVector with 21 bits per axis?
+struct FGlobalVector // todo: int64 to support SizeExponent >= 2 ?
 {
 	int32 X, Y, Z;
 
@@ -107,12 +127,29 @@ struct FGlobalVector // todo: FChunkVector with 21 bits per axis?
 	{
 		return FMortonUtils::Chunk::Encode(X, Y, Z);
 	}
+
+	FORCEINLINE node_morton ToNodeMorton() const
+	{
+		using namespace Rsap::NavMesh;
+		return FMortonUtils::Node::Encode(X >> SizeShift, Y >> SizeShift, Z >> SizeShift);
+	}
+
+	static FORCEINLINE node_morton ToNodeMorton(const int32 X, const int32 Y, const int32 Z)
+	{
+		using namespace Rsap::NavMesh;
+		return FMortonUtils::Node::Encode(X >> SizeShift, Y >> SizeShift, Z >> SizeShift);
+	}
 	
 	FORCEINLINE static FGlobalVector FromChunkMorton(const chunk_morton ChunkMorton)
 	{
 		int32 OutX, OutY, OutZ;
 		FMortonUtils::Chunk::Decode(ChunkMorton, OutX, OutY, OutZ);
 		return FGlobalVector(OutX, OutY, OutZ);
+	}
+
+	static FGlobalVector FromNodeMorton(const node_morton NodeMorton, const FGlobalVector& ChunkLocation)
+	{
+		return ChunkLocation + FNodeVector::FromNodeMorton(NodeMorton);
 	}
 
 	FORCEINLINE FGlobalVector RoundToChunk() const
@@ -122,12 +159,7 @@ struct FGlobalVector // todo: FChunkVector with 21 bits per axis?
 
 	FORCEINLINE FGlobalVector RoundToLayer(const layer_idx LayerIdx) const
 	{
-		static constexpr uint32 LayerMasks[10] = {
-			static_cast<uint32>(~((1<<10)-1)), static_cast<uint32>(~((1<<9)-1)), static_cast<uint32>(~((1<<8)-1)), static_cast<uint32>(~((1<<7)-1)), static_cast<uint32>(~((1<<6)-1)),
-			static_cast<uint32>(~((1<<5)-1)),  static_cast<uint32>(~((1<<4)-1)), static_cast<uint32>(~((1<<3)-1)), static_cast<uint32>(~((1<<2)-1)), static_cast<uint32>(~((1<<1)-1))
-		};
-		
-		return *this & LayerMasks[LayerIdx];
+		return *this & Rsap::Node::SizesMask[LayerIdx];
 	}
 
 	FORCEINLINE FGlobalVector ComponentMin(const FGlobalVector& Other) const
@@ -150,14 +182,26 @@ struct FGlobalVector // todo: FChunkVector with 21 bits per axis?
 		return FGlobalVector(X - Value, Y - Value, Z - Value);
 	}
 
+	FORCEINLINE FGlobalVector operator+(const uint64 Value) const
+	{
+		return FGlobalVector(X + Value, Y + Value, Z + Value);
+	}
+
+	FORCEINLINE FGlobalVector operator-(const uint64 Value) const
+	{
+		return FGlobalVector(X - Value, Y - Value, Z - Value);
+	}
+
 	FORCEINLINE FGlobalVector operator+(const FNodeVector& MortonVector) const
 	{
-		return FGlobalVector(X + MortonVector.X, Y + MortonVector.Y, Z + MortonVector.Z);
+		const FGlobalVector NodeGlobal(MortonVector);
+		return FGlobalVector(X + NodeGlobal.X, Y + NodeGlobal.Y, Z + NodeGlobal.Z);
 	}
 
 	FORCEINLINE FGlobalVector operator-(const FNodeVector& MortonVector) const
 	{
-		return FGlobalVector(X - MortonVector.X, Y - MortonVector.Y, Z - MortonVector.Z);
+		const FGlobalVector NodeGlobal(MortonVector);
+		return FGlobalVector(X - NodeGlobal.X, Y - NodeGlobal.Y, Z - NodeGlobal.Z);
 	}
 
 	FORCEINLINE FGlobalVector operator+(const FGlobalVector& Other) const
@@ -215,17 +259,6 @@ struct FGlobalVector // todo: FChunkVector with 21 bits per axis?
 		return FVector(X, Y, Z);
 	}
 
-	static FGlobalVector FromNodeMorton(const node_morton NodeMorton, const FGlobalVector& ChunkLocation)
-	{
-		return ChunkLocation + (FGlobalVector(FNodeVector::FromNodeMorton(NodeMorton)) << Rsap::NavMesh::VoxelSizeExponent);
-	}
-	
-	// Make sure every axis value fits in 10 bits, unsigned.
-	FORCEINLINE FNodeVector ToNodeVector() const
-	{
-		return FNodeVector(static_cast<uint16>(X), static_cast<uint16>(Y), static_cast<uint16>(Z));
-	}
-
 	FORCEINLINE int32 GetLargestAxis() const
 	{
 		return FMath::Max(FMath::Max(X,Y), Z);
@@ -240,9 +273,10 @@ struct FGlobalVector // todo: FChunkVector with 21 bits per axis?
 
 	explicit FGlobalVector(const FNodeVector &InVector)
 	{
-		X = static_cast<int32>(InVector.X);
-		Y = static_cast<int32>(InVector.Y);
-		Z = static_cast<int32>(InVector.Z);
+		// Convert morton space to local.
+		X = static_cast<int32>(InVector.X) << Rsap::NavMesh::SizeShift;
+		Y = static_cast<int32>(InVector.Y) << Rsap::NavMesh::SizeShift;
+		Z = static_cast<int32>(InVector.Z) << Rsap::NavMesh::SizeShift;
 	}
 
 	explicit FGlobalVector(const int32 InValue)
