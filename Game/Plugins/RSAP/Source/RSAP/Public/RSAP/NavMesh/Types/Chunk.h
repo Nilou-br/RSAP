@@ -3,9 +3,10 @@
 #pragma once
 #include "Node.h"
 #include "RSAP/Math/Vectors.h"
-#include "RSAP/Math/Morton.h"
 #include "RSAP/Definitions.h"
 #include "RSAP/Math/Overlap.h"
+
+using namespace Rsap::NavMesh;
 
 
 
@@ -58,12 +59,6 @@ public:
 		return &Iterator->second;
 	}
 
-	// // Returns the neighbour's morton-code in the given direction.
-	// FORCEINLINE static chunk_morton GetNeighbourMC(const chunk_morton ChunkMC, const rsap_direction Direction)
-	// {
-	// 	return FMortonUtils::Chunk::Move(ChunkMC, Direction);
-	// }
-
 	// Returns a reference to an existing node. Use only when you are certain it exists.
 	FORCEINLINE FNode& GetNode(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
 	{
@@ -101,8 +96,8 @@ public:
 
 	FORCEINLINE static void Draw(const UWorld* World, const chunk_morton ChunkMC)
 	{
-		const FGlobalVector ChunkGlobalCenterLocation = FGlobalVector::FromChunkMorton(ChunkMC) + Rsap::Node::HalveSizes[0];
-		DrawDebugBox(World, *ChunkGlobalCenterLocation, FVector(Rsap::Node::HalveSizes[0]), FColor::Black, true, -1, 11, 5);	
+		const FGlobalVector ChunkGlobalCenterLocation = FGlobalVector::FromChunkMorton(ChunkMC) + Node::HalveSizes[0];
+		DrawDebugBox(World, *ChunkGlobalCenterLocation, FVector(Node::HalveSizes[0]), FColor::Black, true, -1, 11, 5);	
 	}
 
 	FORCEINLINE static bool HasAnyOverlap(const UWorld* World, const FGlobalVector& ChunkLocation)

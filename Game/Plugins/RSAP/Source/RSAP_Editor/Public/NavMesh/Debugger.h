@@ -73,8 +73,8 @@ public:
 	static bool ShouldDrawSpecificLayer()	{ return bDrawSpecificLayer; }
 
 	static void DecrementDrawLayerIdx() { if(DrawLayerIdx > 0) --DrawLayerIdx; Draw(); }
-	static void IncrementDrawLayerIdx() { if(DrawLayerIdx < Rsap::NavMesh::MaxDepth) ++DrawLayerIdx; Draw(); }
-	static void SetDrawLayerIdx(const layer_idx Value) { DrawLayerIdx = FMath::Clamp(Value, 0, Rsap::NavMesh::MaxDepth); Draw(); }
+	static void IncrementDrawLayerIdx() { if(DrawLayerIdx < Layer::MaxDepth) ++DrawLayerIdx; Draw(); }
+	static void SetDrawLayerIdx(const layer_idx Value) { DrawLayerIdx = FMath::Clamp(Value, 0, Layer::MaxDepth); Draw(); }
 	static layer_idx GetDrawLayerIdx()	{ return DrawLayerIdx; }
 
 private:

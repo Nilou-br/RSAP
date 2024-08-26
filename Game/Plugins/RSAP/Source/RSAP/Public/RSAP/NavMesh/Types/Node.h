@@ -7,6 +7,8 @@
 #include "RSAP/Definitions.h"
 #include "RSAP/Math/Overlap.h"
 
+using namespace Rsap::NavMesh;
+
 struct FGlobalVector;
 
 
@@ -34,18 +36,18 @@ struct FNode
 
 	FORCEINLINE void SetChildActive(const child_idx ChildIdx)
 	{
-		Children |= Rsap::Node::Children::Masks[ChildIdx];
+		Children |= Node::Children::Masks[ChildIdx];
 	}
 	FORCEINLINE void ClearChild(const child_idx ChildIdx)
 	{
-		Children &= Rsap::Node::Children::MasksInverse[ChildIdx];
+		Children &= Node::Children::MasksInverse[ChildIdx];
 	}
 	FORCEINLINE bool HasChildren() const {
 		return Children > 0;
 	}
 	FORCEINLINE bool DoesChildExist(const child_idx ChildIdx) const
 	{
-		return Children & Rsap::Node::Children::Masks[ChildIdx];
+		return Children & Node::Children::Masks[ChildIdx];
 	}
 	
 	FORCEINLINE static FNodeVector GetMortonLocation(const node_morton MortonCode)
@@ -73,7 +75,7 @@ struct FNode
 
 	FORCEINLINE static FGlobalVector GetChildLocation(FGlobalVector ParentNodeLocation, const layer_idx ChildLayerIdx, const uint8 ChildIdx)
 	{
-		using namespace Rsap::Node;
+		using namespace Node;
 		switch (ChildIdx)
 		{
 			case 0: return ParentNodeLocation;
@@ -122,8 +124,8 @@ struct FNode
 	// Debug draw
 	FORCEINLINE void Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const node_morton MortonCode, const layer_idx LayerIdx, const FColor Color, const uint32 Thickness) const
 	{
-		const FVector GlobalCenter = GetGlobalLocation(ChunkLocation, MortonCode).ToVector() + Rsap::Node::HalveSizes[LayerIdx];
-		const FVector Extent(Rsap::Node::HalveSizes[LayerIdx]);
+		const FVector GlobalCenter = GetGlobalLocation(ChunkLocation, MortonCode).ToVector() + Node::HalveSizes[LayerIdx];
+		const FVector Extent(Node::HalveSizes[LayerIdx]);
 		DrawDebugBox(World, GlobalCenter, Extent, Color, true, -1, 0, Thickness);
 	}
 

@@ -157,12 +157,12 @@ struct FGlobalVector // todo: int64 to support SizeExponent >= 2 ?
 
 	FORCEINLINE FGlobalVector RoundToChunk() const
 	{
-		return *this & Rsap::Chunk::SizeMask;
+		return *this & Rsap::NavMesh::Chunk::SizeMask;
 	}
 
 	FORCEINLINE FGlobalVector RoundToLayer(const layer_idx LayerIdx) const
 	{
-		return *this & Rsap::Node::SizesMask[LayerIdx];
+		return *this & Rsap::NavMesh::Node::SizesMask[LayerIdx];
 	}
 
 	FORCEINLINE FGlobalVector ComponentMin(const FGlobalVector& Other) const

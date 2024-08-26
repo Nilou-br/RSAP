@@ -125,7 +125,7 @@ struct FMortonUtils
 		// Moves the morton-code in the given direction. The amount it moves is determined by the layer-index, which translates to the node-size for that layer.
 		FORCEINLINE static node_morton Move(const node_morton MortonCode, const layer_idx LayerIdx, const rsap_direction Direction)
 		{
-			using namespace Rsap::Direction;
+			using namespace Rsap::NavMesh::Direction;
 			switch (Direction) {
 				case Negative::X: return SubtractX(MortonCode, LayerIdx);
 				case Negative::Y: return SubtractY(MortonCode, LayerIdx);
@@ -227,7 +227,7 @@ struct FMortonUtils
 
 		FORCEINLINE static bool HasMovedIntoNewChunk(const node_morton PrevMortonCode, const node_morton CurrMortonCode, const rsap_direction Direction)
 		{
-			using namespace Rsap::Direction;
+			using namespace Rsap::NavMesh::Direction;
 			switch (Direction) {
 				case Negative::X: return XEqualsZero(PrevMortonCode);
 				case Negative::Y: return YEqualsZero(PrevMortonCode);
@@ -259,11 +259,13 @@ struct FMortonUtils
 		// Encode the global world coordinates into a chunk morton-code. Max range from -1073741312 to +1073741312.
 		FORCEINLINE static chunk_morton Encode(const int32 X, const int32 Y, const int32 Z) // todo: test these
 		{
+			using namespace Rsap::NavMesh;
+			
 			// Apply offset to make the coordinates positive, and do a shift to compress the value.
 			// The last 10 bits will always be 0 because a chunk is 1024 units in size.
-			const uint_fast32_t InX = (X + Rsap::Chunk::SignOffset) >> Rsap::Chunk::SizeBits;
-			const uint_fast32_t InY = (Y + Rsap::Chunk::SignOffset) >> Rsap::Chunk::SizeBits;
-			const uint_fast32_t InZ = (Z + Rsap::Chunk::SignOffset) >> Rsap::Chunk::SizeBits;
+			const uint_fast32_t InX = (X + Rsap::NavMesh::Chunk::SignOffset) >> Rsap::NavMesh::Chunk::SizeBits;
+			const uint_fast32_t InY = (Y + Rsap::NavMesh::Chunk::SignOffset) >> Rsap::NavMesh::Chunk::SizeBits;
+			const uint_fast32_t InZ = (Z + Rsap::NavMesh::Chunk::SignOffset) >> Rsap::NavMesh::Chunk::SizeBits;
 			
 			return libmorton::morton3D_64_encode(InX, InY, InZ);
 		}
@@ -274,15 +276,15 @@ struct FMortonUtils
 			uint_fast32_t X, Y, Z;
 			libmorton::morton3D_64_decode(ChunkMorton, X, Y, Z);
 			
-			OutX = (X << Rsap::Chunk::SizeBits) - Rsap::Chunk::SignOffset;
-			OutY = (Y << Rsap::Chunk::SizeBits) - Rsap::Chunk::SignOffset;
-			OutZ = (Z << Rsap::Chunk::SizeBits) - Rsap::Chunk::SignOffset;
+			OutX = (X << Rsap::NavMesh::Chunk::SizeBits) - Rsap::NavMesh::Chunk::SignOffset;
+			OutY = (Y << Rsap::NavMesh::Chunk::SizeBits) - Rsap::NavMesh::Chunk::SignOffset;
+			OutZ = (Z << Rsap::NavMesh::Chunk::SizeBits) - Rsap::NavMesh::Chunk::SignOffset;
 		}
 		
 		// Moves the morton-code exactly one chunk in the given direction. todo: rename to GetNeighbour?
 		FORCEINLINE static chunk_morton Move(const chunk_morton MortonCode, const rsap_direction Direction)
 		{
-			using namespace Rsap::Direction;
+			using namespace Rsap::NavMesh::Direction;
 			switch (Direction) {
 				case Negative::X: return DecrementX(MortonCode);
 				case Negative::Y: return DecrementY(MortonCode);
@@ -297,7 +299,7 @@ struct FMortonUtils
 		// Get the neighbouring chunk's morton-code in the given direction.
 		FORCEINLINE static chunk_morton GetNeighbour(const chunk_morton MortonCode, const rsap_direction Direction)
 		{
-			using namespace Rsap::Direction;
+			using namespace Rsap::NavMesh::Direction;
 			switch (Direction) {
 				case Negative::X: return DecrementX(MortonCode);
 				case Negative::Y: return DecrementY(MortonCode);

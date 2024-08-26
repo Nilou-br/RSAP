@@ -15,16 +15,16 @@
  */
 layer_idx FRsapUpdateTask::CalculateOptimalStartingLayer(const FMovedBounds& MovedBounds)
 {
-	layer_idx StartingLayer = Rsap::NavMesh::StaticDepth;
+	layer_idx StartingLayer = Layer::StaticDepth;
 
 	// Get the largest side of the bounds-pair. One of the bounds could be invalid when undo/redoing to a state where the actor does not exist.
 	const int32 MaxSide = MovedBounds.To.IsValid()
 		? MovedBounds.To.GetLengths().GetLargestAxis() : MovedBounds.From.GetLengths().GetLargestAxis();
 
 	// Get the first layer where the node-size fits at-least 3 times in any side of the bounds of the object.
-	for (layer_idx LayerIndex = 0; LayerIndex<Rsap::NavMesh::StaticDepth; ++LayerIndex)
+	for (layer_idx LayerIndex = 0; LayerIndex< Layer::StaticDepth; ++LayerIndex)
 	{
-		if(MaxSide / Rsap::Node::Sizes[LayerIndex] <= 1) continue;
+		if(MaxSide / Node::Sizes[LayerIndex] <= 1) continue;
 		StartingLayer = LayerIndex;
 		break;
 	}
@@ -35,8 +35,8 @@ layer_idx FRsapUpdateTask::CalculateOptimalStartingLayer(const FMovedBounds& Mov
 uint8 FRsapUpdateTask::GetChildrenToRasterizeAndUpdateEdges(rsap_direction& EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks, const layer_idx LayerIdx, const layer_idx ChildLayerIdx)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Updater ::GetChildrenToRasterizeAndUpdateEdges");
-	using namespace Rsap::Node;
-	using namespace Rsap::Direction;
+	using namespace Node;
+	using namespace Direction;
 	
 	const uint16 ClearParentMask = FLayerSkipMasks::ClearParentMasks[LayerIdx];
 	uint8 ChildrenToRasterize = 0b11111111;

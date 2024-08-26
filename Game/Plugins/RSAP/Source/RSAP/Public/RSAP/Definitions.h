@@ -16,67 +16,28 @@ typedef uint8	layer_idx;
 typedef uint8	rsap_direction;
 typedef uint8	node_state;
 
-// Directions within the navmesh use 6 bits to represent '-XYZ +XYZ' values. For example, '0b001100' is negative on the Z, and positive on the X.
-namespace Rsap::Direction
-{
-	namespace Negative
-	{
-		static inline constexpr rsap_direction X	 = 0b100000;
-		static inline constexpr rsap_direction Y	 = 0b010000;
-		static inline constexpr rsap_direction Z	 = 0b001000;
-		static inline constexpr rsap_direction XYZ   = 0b111000;
-
-		static inline constexpr rsap_direction NOT_X = 0b011111;
-		static inline constexpr rsap_direction NOT_Y = 0b101111;
-		static inline constexpr rsap_direction NOT_Z = 0b110111;
-	}
-
-	namespace Positive
-	{
-		static inline constexpr rsap_direction X	 = 0b000100;
-		static inline constexpr rsap_direction Y	 = 0b000010;
-		static inline constexpr rsap_direction Z	 = 0b000001;
-		static inline constexpr rsap_direction XYZ	 = 0b000111;
-
-		static inline constexpr rsap_direction NOT_X = 0b111011;
-		static inline constexpr rsap_direction NOT_Y = 0b111101;
-		static inline constexpr rsap_direction NOT_Z = 0b111110;
-	}
-	
-	static inline constexpr rsap_direction All	= 0b111111;
-	static inline constexpr rsap_direction None	= 0b000000;
-	static inline constexpr rsap_direction List[6] = {Negative::X, Negative::Y, Negative::Z, Positive::X, Positive::Y, Positive::Z};	
-}
-
 namespace Rsap::NavMesh
 {
 	static inline constexpr uint8 SizeExponent = 1;
 	static inline constexpr uint8 SizeShift = SizeExponent + 2; // SizeExponent + 2 leaf nodes.
-	static inline constexpr uint8 MaxDepth = 11;
-	static inline constexpr uint8 StaticDepth = 9;
-
-	// Root of the octree starts at layer 0 and ends at 9.
-	namespace Layer
-	{
-		static inline constexpr layer_idx Root = 0;
-		static inline constexpr layer_idx Parent = 13;
-		static inline constexpr layer_idx Empty = 14;
-		static inline constexpr layer_idx Invalid = 15;
-
-		// static constexpr uint16 LocalMasks[10] = {
-		// 	static_cast<uint16>(~((1<<10)-1)), static_cast<uint16>(~((1<<9)-1)),
-		// 	static_cast<uint16>(~((1<<8)-1)),  static_cast<uint16>(~((1<<7)-1)),
-		// 	static_cast<uint16>(~((1<<6)-1)),  static_cast<uint16>(~((1<<5)-1)),
-		// 	static_cast<uint16>(~((1<<4)-1)),  static_cast<uint16>(~((1<<3)-1)),
-		// 	static_cast<uint16>(~((1<<2)-1)),  static_cast<uint16>(~((1<<1)-1))
-		// };
-	}
 }
 
-namespace Rsap::Chunk
+namespace Rsap::NavMesh::Layer
+{
+	static inline constexpr layer_idx Root			= 0;
+	static inline constexpr layer_idx StaticDepth	= 9;
+	static inline constexpr layer_idx MaxDepth		= 10;
+	static inline constexpr layer_idx LeafOne		= 11;
+	static inline constexpr layer_idx LeafTwo		= 12;
+	static inline constexpr layer_idx LeafThree		= 13;
+	static inline constexpr layer_idx Parent		= 14;
+	static inline constexpr layer_idx Empty			= 15;
+}
+
+namespace Rsap::NavMesh::Chunk
 {
 	static inline constexpr uint8  BaseSizeBits = 10;
-	static inline constexpr uint8  SizeBits		= BaseSizeBits + NavMesh::SizeShift;
+	static inline constexpr uint8  SizeBits		= BaseSizeBits + SizeShift;
 	static inline constexpr int32  Size			= 1 << SizeBits;
 	static inline constexpr uint32 SizeMask		= ~(Size - 1);
 
@@ -85,9 +46,9 @@ namespace Rsap::Chunk
 	static inline constexpr uint64 SignOffset = ((1ULL << 21) - 1) << SizeBits;
 }
 
-namespace Rsap::Node
+namespace Rsap::NavMesh::Node
 {
-	static inline constexpr int32 LeafSize	= 1 << NavMesh::SizeExponent;
+	static inline constexpr int32 LeafSize	= 1 << SizeExponent;
 	static inline constexpr int32 Sizes[11]	= {
 		1 << (Chunk::SizeBits),
 		1 << (Chunk::SizeBits-1), 1 << (Chunk::SizeBits-2), 1 << (Chunk::SizeBits-3), 1 << (Chunk::SizeBits-4), 1 << (Chunk::SizeBits-5),
@@ -159,6 +120,38 @@ namespace Rsap::Node
 		static inline constexpr node_state Static  = 0;
 		static inline constexpr node_state Dynamic = 1;
 	}
+}
+
+// Directions within the navmesh use 6 bits to represent '-XYZ +XYZ' values. For example, '0b001100' is negative on the Z, and positive on the X.
+namespace Rsap::NavMesh::Direction
+{
+	namespace Negative
+	{
+		static inline constexpr rsap_direction X	 = 0b100000;
+		static inline constexpr rsap_direction Y	 = 0b010000;
+		static inline constexpr rsap_direction Z	 = 0b001000;
+		static inline constexpr rsap_direction XYZ   = 0b111000;
+
+		static inline constexpr rsap_direction NOT_X = 0b011111;
+		static inline constexpr rsap_direction NOT_Y = 0b101111;
+		static inline constexpr rsap_direction NOT_Z = 0b110111;
+	}
+
+	namespace Positive
+	{
+		static inline constexpr rsap_direction X	 = 0b000100;
+		static inline constexpr rsap_direction Y	 = 0b000010;
+		static inline constexpr rsap_direction Z	 = 0b000001;
+		static inline constexpr rsap_direction XYZ	 = 0b000111;
+
+		static inline constexpr rsap_direction NOT_X = 0b111011;
+		static inline constexpr rsap_direction NOT_Y = 0b111101;
+		static inline constexpr rsap_direction NOT_Z = 0b111110;
+	}
+	
+	static inline constexpr rsap_direction All	= 0b111111;
+	static inline constexpr rsap_direction None	= 0b000000;
+	static inline constexpr rsap_direction List[6] = {Negative::X, Negative::Y, Negative::Z, Positive::X, Positive::Y, Positive::Z};	
 }
 
 struct FChunk;

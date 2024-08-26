@@ -8,14 +8,14 @@
 
 struct FRsapOverlap
 {
-	static inline FCollisionShape CollisionBoxes[Rsap::NavMesh::MaxDepth];
-	static inline FCollisionShape CollisionSpheres[Rsap::NavMesh::MaxDepth];
+	static inline FCollisionShape CollisionBoxes[Layer::MaxDepth];
+	static inline FCollisionShape CollisionSpheres[Layer::MaxDepth];
 	static void InitCollisionBoxes()
 	{
-		for (layer_idx LayerIdx = 0; LayerIdx < Rsap::NavMesh::MaxDepth; ++LayerIdx)
+		for (layer_idx LayerIdx = 0; LayerIdx < Layer::MaxDepth; ++LayerIdx)
 		{
-			CollisionBoxes[LayerIdx] = FCollisionShape::MakeBox(FVector(Rsap::Node::HalveSizes[LayerIdx]));
-			CollisionSpheres[LayerIdx] = FCollisionShape::MakeSphere(Rsap::Node::HalveSizes[LayerIdx]);
+			CollisionBoxes[LayerIdx] = FCollisionShape::MakeBox(FVector(Node::HalveSizes[LayerIdx]));
+			CollisionSpheres[LayerIdx] = FCollisionShape::MakeSphere(Node::HalveSizes[LayerIdx]);
 		}
 	}
 
@@ -28,7 +28,7 @@ struct FRsapOverlap
 		return FPhysicsInterface::GeomOverlapAnyTest(
 			World,
 			CollisionBoxes[LayerIdx],
-			*(VoxelLocation + Rsap::Node::HalveSizes[LayerIdx]),
+			*(VoxelLocation + Node::HalveSizes[LayerIdx]),
 			FQuat::Identity,
 			ECollisionChannel::ECC_WorldStatic,
 			FCollisionQueryParams::DefaultQueryParam,
@@ -42,6 +42,6 @@ struct FRsapOverlap
 		TRACE_CPUPROFILER_EVENT_SCOPE_STR("Overlap ::Component");
 
 		// Note that OverlapTest_AssumesLocked is not thread safe, run within the physics-thread using 'FPhysicsCommand::ExecuteRead'.
-		return Component->GetBodyInstance()->OverlapTest_AssumesLocked(*(VoxelLocation + Rsap::Node::HalveSizes[LayerIdx]), FQuat::Identity, CollisionBoxes[LayerIdx]);
+		return Component->GetBodyInstance()->OverlapTest_AssumesLocked(*(VoxelLocation + Node::HalveSizes[LayerIdx]), FQuat::Identity, CollisionBoxes[LayerIdx]);
 	}
 };

@@ -42,7 +42,7 @@ RSAP_API inline FArchive& operator<<(FArchive& Ar, FOctreeLayer& Layer)
 RSAP_API inline FArchive& operator<<(FArchive& Ar, const FChunk& Chunk){
 
 	// Only serialize the static-octree.
-	for (layer_idx LayerIdx = 0; LayerIdx <= Rsap::NavMesh::StaticDepth; ++LayerIdx)
+	for (layer_idx LayerIdx = 0; LayerIdx <= Layer::StaticDepth; ++LayerIdx)
 	{
 		Ar << *Chunk.Octrees[0]->Layers[LayerIdx];
 	}

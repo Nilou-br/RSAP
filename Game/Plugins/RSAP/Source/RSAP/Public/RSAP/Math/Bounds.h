@@ -3,6 +3,8 @@
 #pragma once
 #include "RSAP/Math/Vectors.h"
 
+using namespace Rsap::NavMesh;
+
 
 
 /**
@@ -68,10 +70,10 @@ struct TBounds
 		if(Max.Z == Min.Z) ++Max.Z;
 	}
 
-	// Returns a bounds object that has no dimensions and is set to be invalid. Used within the TMovedBounds type to know it will be ignored.
-	static TBounds<VectorType> EmptyBounds()
+	// Returns a bounds object that has no dimensions and is set to be invalid.
+	static TBounds EmptyBounds()
 	{
-		return TBounds<VectorType>();
+		return TBounds();
 	}
 	
 	FORCEINLINE bool Equals(const TBounds& Other) const
@@ -137,13 +139,13 @@ struct TBounds
 	template<typename T = VectorType>
 	FORCEINLINE auto RoundToLayer(const layer_idx LayerIdx) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, FGlobalBounds>
 	{
-		FGlobalBounds Bounds = FGlobalBounds(FGlobalVector(Min + Rsap::Chunk::SignOffset).RoundToLayer(LayerIdx) - Rsap::Chunk::SignOffset, FGlobalVector(Max + Rsap::Chunk::SignOffset).RoundToLayer(LayerIdx) - Rsap::Chunk::SignOffset);
+		FGlobalBounds Bounds = FGlobalBounds(FGlobalVector(Min + Chunk::SignOffset).RoundToLayer(LayerIdx) - Chunk::SignOffset, FGlobalVector(Max + Chunk::SignOffset).RoundToLayer(LayerIdx) - Chunk::SignOffset);
 		
 		// Round the Max bounds up, but only if it is smaller than the un-rounded bounds.
 		// Its possible for the un-rounded value to already equal the rounded to value, but we still want to round it a whole node-size upwards ( otherwise the Min axis would equal the Max and there is no width, thus no volume ).
-		if(Bounds.Max.X < Max.X) Bounds.Max.X += Rsap::Node::Sizes[LayerIdx];
-		if(Bounds.Max.Y < Max.Y) Bounds.Max.Y += Rsap::Node::Sizes[LayerIdx];
-		if(Bounds.Max.Z < Max.Z) Bounds.Max.Z += Rsap::Node::Sizes[LayerIdx];
+		if(Bounds.Max.X < Max.X) Bounds.Max.X += Node::Sizes[LayerIdx];
+		if(Bounds.Max.Y < Max.Y) Bounds.Max.Y += Node::Sizes[LayerIdx];
+		if(Bounds.Max.Z < Max.Z) Bounds.Max.Z += Node::Sizes[LayerIdx];
 		return Bounds;
 	}
 
@@ -219,12 +221,12 @@ struct TBounds
 		if(!IsValid()) return ChunkKeys;
 
 		// Get the start/end axis of the chunks from the boundaries.
-		const FGlobalVector ChunkMin = Min   & Rsap::Chunk::SizeMask;
-		const FGlobalVector ChunkMax = Max-1 & Rsap::Chunk::SizeMask;
+		const FGlobalVector ChunkMin = Min   & Chunk::SizeMask;
+		const FGlobalVector ChunkMax = Max-1 & Chunk::SizeMask;
 		
-		for (int32 GlobalX = ChunkMin.X; GlobalX <= ChunkMax.X; GlobalX+=Rsap::Chunk::Size){
-			for (int32 GlobalY = ChunkMin.Y; GlobalY <= ChunkMax.Y; GlobalY+=Rsap::Chunk::Size){
-				for (int32 GlobalZ = ChunkMin.Z; GlobalZ <= ChunkMax.Z; GlobalZ+=Rsap::Chunk::Size){
+		for (int32 GlobalX = ChunkMin.X; GlobalX <= ChunkMax.X; GlobalX+=Chunk::Size){
+			for (int32 GlobalY = ChunkMin.Y; GlobalY <= ChunkMax.Y; GlobalY+=Chunk::Size){
+				for (int32 GlobalZ = ChunkMin.Z; GlobalZ <= ChunkMax.Z; GlobalZ+=Chunk::Size){
 					const FGlobalVector ChunkLocation = FGlobalVector(GlobalX, GlobalY, GlobalZ);
 					ChunkKeys.insert(ChunkLocation.ToChunkMorton());
 				}
@@ -246,16 +248,16 @@ struct TBounds
 	template<typename T = VectorType>
 	FORCEINLINE auto ToNodeSpace(const FGlobalVector& ChunkLocation) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, FNodeBounds>
 	{
-		const FNodeVector LocalMin = ( Min-ChunkLocation << Rsap::NavMesh::SizeExponent).ToNodeVector();
-		const FNodeVector LocalMax = ((Max-ChunkLocation << Rsap::NavMesh::SizeExponent) - Rsap::Node::LeafSize).ToNodeVector();
+		const FNodeVector LocalMin = ( Min-ChunkLocation << SizeExponent).ToNodeVector();
+		const FNodeVector LocalMax = ((Max-ChunkLocation << SizeExponent) - Node::LeafSize).ToNodeVector();
 		return FNodeBounds(LocalMin, LocalMax, IsValid());
 	}
 
 	template<typename T = VectorType>
 	FORCEINLINE auto ToGlobalSpace(const FGlobalVector& ChunkLocation) const -> std::enable_if_t<std::is_same_v<T, FNodeVector>, FGlobalBounds>
 	{
-		const FGlobalVector LocalMin = (FGlobalVector(Min) >> Rsap::NavMesh::SizeExponent) + ChunkLocation;
-		const FGlobalVector LocalMax = ((FGlobalVector(Max) + Rsap::Node::LeafSize) >> Rsap::NavMesh::SizeExponent) + ChunkLocation;
+		const FGlobalVector LocalMin = (FGlobalVector(Min) >> SizeExponent) + ChunkLocation;
+		const FGlobalVector LocalMax = ((FGlobalVector(Max) + Node::LeafSize) >> SizeExponent) + ChunkLocation;
 		return FGlobalBounds(LocalMin, LocalMax, IsValid());
 	}
 
@@ -311,11 +313,12 @@ typedef TBounds<FNodeVector> FNodeBounds;
 // Type used for updating the navmesh.
 // Will store all the previous known bounds of the actor since last update, paired with its current bounds.
 typedef std::pair<std::vector<FGlobalBounds>, FGlobalBounds> FNavMeshUpdateType;
-// Map holding FNavMeshUpdateType.
-typedef Rsap::Map::flat_map<actor_key, std::pair<std::vector<FGlobalBounds>, FGlobalBounds>> FNavMeshUpdateMap;
+typedef Rsap::Map::flat_map<actor_key, std::pair<std::vector<FGlobalBounds>, FGlobalBounds>> FNavMeshUpdateMap; // todo: rename both.
 
 // Map holding actors and their boundaries.
 typedef Rsap::Map::flat_map<actor_key, FGlobalBounds> FActorBoundsMap;
+
+
 
 /**
  * Pair of bounds for storing changes that have happened.
@@ -323,7 +326,7 @@ typedef Rsap::Map::flat_map<actor_key, FGlobalBounds> FActorBoundsMap;
  * @tparam VectorType FGlobalVector or FNodeVector
  */
 template<typename VectorType>
-struct TMovedBounds // todo: rename to pair?
+struct TMovedBounds
 {
 	static_assert(std::is_same_v<VectorType, FGlobalVector> || std::is_same_v<VectorType, FNodeVector>, "TMovedBounds can only be instantiated with FGlobalVector or FNodeVector");
 

@@ -25,10 +25,10 @@ layer_idx FRsapGenerator::CalculateOptimalStartingLayer(const FGlobalBounds& Bou
 	const int32 LargestSide = Bounds.GetLengths().GetLargestAxis();
 
 	// Get the first layer where at-least 3 nodes are required to fill the side.
-	layer_idx CurrentLayer = Rsap::NavMesh::StaticDepth; // Start at the static-depth because most meshes will be around 1 meter in average.
-	for (layer_idx LayerIdx = 0; LayerIdx < Rsap::NavMesh::StaticDepth; ++LayerIdx)
+	layer_idx CurrentLayer = Layer::StaticDepth; // Start at the static-depth because most meshes will be around 1 meter in average.
+	for (layer_idx LayerIdx = 0; LayerIdx < Layer::StaticDepth; ++LayerIdx)
 	{
-		if(LargestSide / Rsap::Node::Sizes[LayerIdx] <= 1) continue;
+		if(LargestSide / Node::Sizes[LayerIdx] <= 1) continue;
 		CurrentLayer = LayerIdx;
 		break;
 	}
@@ -43,8 +43,8 @@ uint8 FRsapGenerator::GetChildrenToRasterizeAndUpdateEdges(rsap_direction& Edges
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Generator ::GetChildrenToRasterizeAndUpdateEdges");
 	
-	using namespace Rsap::Node;
-	using namespace Rsap::Direction;
+	using namespace Node;
+	using namespace Direction;
 	
 	const uint16 ClearParentMask = FLayerSkipMasks::ClearParentMasks[LayerIdx];
 	uint8 ChildrenToRasterize = 0b11111111;
@@ -96,11 +96,11 @@ uint8 FRsapGenerator::GetChildrenToRasterizeAndUpdateEdges(rsap_direction& Edges
 	return ChildrenToRasterize;
 }
 
-// todo: this method can be made a template to take in a callback, where the callback is the generate/update specific code.
+// todo: this method can be made a template?
 void FRsapGenerator::ReRasterizeBounds(const UPrimitiveComponent* CollisionComponent)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Generator ::ReRasterizeBounds");
-	using namespace Rsap::Direction;
+	using namespace Direction;
 	
 	// Get the bounds of this component.
 	const FGlobalBounds Bounds(CollisionComponent);
@@ -156,13 +156,13 @@ void FRsapGenerator::ReRasterizeBounds(const UPrimitiveComponent* CollisionCompo
 
 	// todo: try to unroll this loop into max of 27 different versions, and pick the right one based on dimensions. Leave this nested loop for objects larger than 3 chunks in any direction.
 	FGlobalVector NodeLocation;
-	for (NodeLocation.Z = RoundedBounds.Min.Z; NodeLocation.Z <= RoundedBounds.Max.Z; NodeLocation.Z += Rsap::Node::Sizes[LayerIdx])
+	for (NodeLocation.Z = RoundedBounds.Min.Z; NodeLocation.Z <= RoundedBounds.Max.Z; NodeLocation.Z += Node::Sizes[LayerIdx])
 	{
 		if(NodeLocation.Z == RoundedBounds.Max.Z) EdgesToCheck &= Negative::Z;
-		for (NodeLocation.Y = RoundedBounds.Min.Y; NodeLocation.Y <= RoundedBounds.Max.Y; NodeLocation.Y += Rsap::Node::Sizes[LayerIdx])
+		for (NodeLocation.Y = RoundedBounds.Min.Y; NodeLocation.Y <= RoundedBounds.Max.Y; NodeLocation.Y += Node::Sizes[LayerIdx])
 		{
 			if(NodeLocation.Y == RoundedBounds.Max.Y) EdgesToCheck &= Negative::Y;
-			for (NodeLocation.X = RoundedBounds.Min.X; NodeLocation.X <= RoundedBounds.Max.X; NodeLocation.X += Rsap::Node::Sizes[LayerIdx])
+			for (NodeLocation.X = RoundedBounds.Min.X; NodeLocation.X <= RoundedBounds.Max.X; NodeLocation.X += Node::Sizes[LayerIdx])
 			{
 				if(NodeLocation.X == RoundedBounds.Max.X) EdgesToCheck &= Negative::X;
 					
@@ -189,7 +189,7 @@ void FRsapGenerator::ReRasterizeBounds(const UPrimitiveComponent* CollisionCompo
 				FNode& Node = FNmShared::InitNodeAndParents(NavMesh, *CurrentChunk, ChunkMC, NodeMC, LayerIdx, 0, Negative::XYZ);
 
 				// Re-rasterize if we are not yet on the static-depth.
-				if(LayerIdx < Rsap::NavMesh::StaticDepth)
+				if(LayerIdx < Layer::StaticDepth)
 				{
 					FilteredReRasterize(*CurrentChunk, ChunkMC, Node, NodeMC, NodeLocation, LayerIdx, EdgesToCheck, LayerSkipMasks, CollisionComponent);
 					// FNmShared::ReRasterize(*CurrentChunk, Node, NodeMC, NodeLocation, LayerIdx, CollisionComponent);
@@ -243,7 +243,7 @@ void FRsapGenerator::FilteredReRasterize(FChunk& Chunk, const chunk_morton Chunk
 	for(child_idx ChildIdx = 0; ChildIdx < 8; ++ChildIdx)
 	{
 		// Skip if this one should not be re-rasterized.
-		if(!(ChildrenToRasterize & Rsap::Node::Children::Masks[ChildIdx])) continue;
+		if(!(ChildrenToRasterize & Node::Children::Masks[ChildIdx])) continue;
 		
 		// Skip if not overlapping.
 		const FGlobalVector ChildLocation = FNode::GetChildLocation(NodeLocation, ChildLayerIdx, ChildIdx);
@@ -254,13 +254,13 @@ void FRsapGenerator::FilteredReRasterize(FChunk& Chunk, const chunk_morton Chunk
 		FNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk.GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk.TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
 
 		// Set relations.
-		FNmShared::SetNodeRelations(NavMesh, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildLayerIdx, Rsap::Direction::Negative::XYZ);
+		FNmShared::SetNodeRelations(NavMesh, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildLayerIdx, Direction::Negative::XYZ);
 
 		// Set child to be alive on parent.
 		Node.SetChildActive(ChildIdx);
 
 		// Stop recursion if Static-Depth is reached.
-		if(ChildLayerIdx == Rsap::NavMesh::StaticDepth) continue;
+		if(ChildLayerIdx == Layer::StaticDepth) continue;
 		FilteredReRasterize(Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildLocation, ChildLayerIdx, EdgesToCheck, LayerSkipMasks, CollisionComponent);
 	}
 }

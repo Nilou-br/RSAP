@@ -7,7 +7,7 @@
 
 
 // Returns a reference to this node. Will initialize one if it does not exist yet. Will also init any parents of this node that do not exist yet.
-FNode& FNmShared::InitNodeAndParents(const FNavMesh& NavMesh, const FChunk& Chunk, const chunk_morton ChunkMC, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState, const rsap_direction RelationsToSet = Rsap::Direction::Negative::XYZ)
+FNode& FNmShared::InitNodeAndParents(const FNavMesh& NavMesh, const FChunk& Chunk, const chunk_morton ChunkMC, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState, const rsap_direction RelationsToSet = Direction::Negative::XYZ)
 {
 	bool bWasInserted;
 	FNode& Node = Chunk.TryInitNode(bWasInserted, NodeMC, LayerIdx, NodeState);
@@ -33,7 +33,7 @@ void FNmShared::InitParentsOfNode(const FNavMesh& NavMesh, const FChunk& Chunk, 
 	if(bWasInserted)
 	{
 		// Just set all directions for the parent, this won't change performance noticeably because it's likely a parent already exists, and there aren't many iterations for the parents anyway.
-		SetNodeRelations(NavMesh, Chunk, ChunkMC, ParentNode, ParentNodeMC, ParentLayerIdx, Rsap::Direction::All);
+		SetNodeRelations(NavMesh, Chunk, ChunkMC, ParentNode, ParentNodeMC, ParentLayerIdx, Direction::All);
 
 		// Continue if we're not on the root yet.
 		if(ParentLayerIdx > 0) InitParentsOfNode(NavMesh, Chunk, ChunkMC, ParentNodeMC, ParentLayerIdx, NodeState);
@@ -60,7 +60,7 @@ void FNmShared::SetNodeRelation(const FNavMesh& NavMesh, const FChunk& Chunk, co
 		if(ChunkIterator == NavMesh->end())
 		{
 			// There is no chunk, so we can set the relation to 'empty'.
-			Node.Relations.SetFromDirection(Relation, Rsap::NavMesh::Layer::Empty);
+			Node.Relations.SetFromDirection(Relation, Layer::Empty);
 			return;
 		}
 		NeighbourChunk = &ChunkIterator->second;
@@ -69,7 +69,7 @@ void FNmShared::SetNodeRelation(const FNavMesh& NavMesh, const FChunk& Chunk, co
 
 	// Set the relation by trying to find the neighbour in this direction, starting from the given layer-index.
 	// If none is found for the layer, then we get it's parent. If this parent equals the node's parent, then we set the relation to a special 'parent' index.
-	for(layer_idx NeighbourLayerIdx = LayerIdx; NeighbourLayerIdx <= Rsap::NavMesh::MaxDepth; --NeighbourLayerIdx)
+	for(layer_idx NeighbourLayerIdx = LayerIdx; NeighbourLayerIdx <= Layer::MaxDepth; --NeighbourLayerIdx)
 	{
 		if(FNode NeighbourNode; NeighbourChunk->FindNode(NeighbourNode, NeighbourMC, NeighbourLayerIdx, 0))
 		{
@@ -88,7 +88,7 @@ void FNmShared::SetNodeRelation(const FNavMesh& NavMesh, const FChunk& Chunk, co
 		if(NeighbourMC != FMortonUtils::Node::GetParent(NodeMC, ParentLayerIdx)) continue;
 
 		// Same parent, so set the layer-index to the value indicating that this relation points to out parent.
-		Node.Relations.SetFromDirection(Relation, Rsap::NavMesh::Layer::Parent);
+		Node.Relations.SetFromDirection(Relation, Layer::Parent);
 		break;
 	}
 }
@@ -97,7 +97,7 @@ void FNmShared::SetNodeRelation(const FNavMesh& NavMesh, const FChunk& Chunk, co
 void FNmShared::SetNodeRelations(const FNavMesh& NavMesh, const FChunk& Chunk, const chunk_morton ChunkMC, FNode& Node, const node_morton NodeMC, const layer_idx LayerIdx, const rsap_direction Relations)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("::SetNodeRelations");
-	for (const rsap_direction Direction : Rsap::Direction::List)
+	for (const rsap_direction Direction : Direction::List)
 	{
 		if(const rsap_direction Relation = Relations & Direction; Relation) SetNodeRelation(NavMesh, Chunk, ChunkMC, Node, NodeMC, LayerIdx, Relation);
 	}
@@ -121,13 +121,13 @@ void FNmShared::ReRasterize(const FNavMesh& NavMesh, FChunk& Chunk, const chunk_
 		FNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk.GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk.TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
 
 		// Set relations.
-		SetNodeRelations(NavMesh, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildLayerIdx, Rsap::Direction::Negative::XYZ);
+		SetNodeRelations(NavMesh, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildLayerIdx, Direction::Negative::XYZ);
 
 		// Set child to be alive on parent.
 		Node.SetChildActive(ChildIdx);
 
 		// Stop recursion if Static-Depth is reached.
-		if(ChildLayerIdx == Rsap::NavMesh::StaticDepth) continue;
+		if(ChildLayerIdx == Layer::StaticDepth) continue;
 		ReRasterize(NavMesh, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildLocation, ChildLayerIdx, CollisionComponent);
 	}
 }
