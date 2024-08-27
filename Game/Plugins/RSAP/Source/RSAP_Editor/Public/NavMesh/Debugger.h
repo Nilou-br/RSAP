@@ -33,9 +33,10 @@ public:
 private:
 	static void Draw();
 	static void Draw(const FVector& CameraLocation, const FRotator& CameraRotation);
-	
-	static void DrawNodes(const FChunk& Chunk, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector);
+
 	static void DrawNode(const FGlobalVector& NodeCenter, const layer_idx LayerIdx);
+	static void DrawLeafNode(const FChunk& Chunk, FGlobalVector ChunkLocation, node_morton NodeMC, layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector);
+	static void DrawNodes(const FChunk& Chunk, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector);
 	static void DrawNodeInfo(const node_morton NodeMC, const FGlobalVector& NodeCenter, layer_idx LayerIdx);
 	static void DrawNodeRelations(const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeCenter, const layer_idx LayerIdx);
 

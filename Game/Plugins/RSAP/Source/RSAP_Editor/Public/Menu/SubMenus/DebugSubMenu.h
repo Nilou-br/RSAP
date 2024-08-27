@@ -116,7 +116,7 @@ public:
 					SNew(SSlider)
 					.Value(FRsapDebugger::GetDrawLayerIdx())
 					.MinValue(0)
-					.MaxValue(9)
+					.MaxValue(Layer::MaxDepth)
 					.StepSize(1)
 					.MouseUsesStep(true)
 					.OnValueChanged_Static([](const float Value) { FRsapDebugger::SetDrawLayerIdx(static_cast<int32>(Value)); })

@@ -124,12 +124,23 @@ void FRsapDebugger::DrawNode(const FGlobalVector& NodeCenter, const layer_idx La
 	DrawDebugBox(World, *NodeCenter, FVector(Node::HalveSizes[LayerIdx]), LayerColors[LayerIdx], true, -1, 0, 2.5 - (LayerIdx/3.5));
 }
 
+void FRsapDebugger::DrawLeafNode(const FChunk& Chunk, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector)
+{
+	const FGlobalVector NodeLocation = FGlobalVector::FromNodeMorton(NodeMC, ChunkLocation);
+	const FGlobalVector NodeCenter = NodeLocation + Node::HalveSizes[LayerIdx];
+	DrawNode(NodeCenter, LayerIdx);
+
+	const FLeafNode& LeafNode = Chunk.GetLeafNode(NodeMC, 0);
+	const uint64 Leafs = LeafNode.Leafs;
+}
+
 void FRsapDebugger::DrawNodes(const FChunk& Chunk, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector)
 {
-	const auto NodeIterator = Chunk.Octrees[0]->Layers[LayerIdx]->find(NodeMC);
-	if(NodeIterator == Chunk.Octrees[0]->Layers[LayerIdx]->end()) return;
+	// const auto NodeIterator = Chunk.Octrees[0]->Layers[LayerIdx]->find(NodeMC);
+	// if(NodeIterator == Chunk.Octrees[0]->Layers[LayerIdx]->end()) return;
+	// const FNode& Node = NodeIterator->second;
+	const FNode& Node = Chunk.GetNode(NodeMC, LayerIdx, 0);
 	
-	const FNode& Node = NodeIterator->second;
 	const FGlobalVector NodeLocation = FGlobalVector::FromNodeMorton(NodeMC, ChunkLocation);
 	const FGlobalVector NodeCenter = NodeLocation + Node::HalveSizes[LayerIdx];
 
@@ -143,10 +154,12 @@ void FRsapDebugger::DrawNodes(const FChunk& Chunk, const chunk_morton ChunkMC, c
 	// if(FVector::Dist(CameraLocation, *NodeCenter) > (RsapStatic::NodeSizes[LayerIdx] << 2)+300 - 24*LayerIdx) return;
 	if(!bDrawSpecificLayer) Draw();
 	else if(LayerIdx == DrawLayerIdx) Draw();
-	
+
+	const layer_idx ChildLayerIdx = LayerIdx+1;
 	Node.ForEachChild(NodeMC, LayerIdx, [&](const node_morton ChildMC)
 	{
-		DrawNodes(Chunk, ChunkMC, ChunkLocation, ChildMC, LayerIdx+1, CameraLocation, CameraForwardVector);
+		if(ChildLayerIdx <= Layer::NodeDepth) DrawNodes(Chunk, ChunkMC, ChunkLocation, ChildMC, ChildLayerIdx, CameraLocation, CameraForwardVector);
+		else DrawLeafNode(Chunk, ChunkLocation, ChildMC, ChildLayerIdx, CameraLocation, CameraForwardVector);
 	});
 }
 

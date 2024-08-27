@@ -21,6 +21,7 @@ private:
 	struct FOctree
 	{
 		std::array<std::unique_ptr<FOctreeLayer>, 10> Layers;
+		std::unique_ptr<FOctreeLeafNodes> LeafNodes;
 
 		FOctree()
 		{
@@ -28,6 +29,7 @@ private:
 			{
 				Layers[LayerIdx] = std::make_unique<FOctreeLayer>();
 			}
+			LeafNodes = std::make_unique<FOctreeLeafNodes>();
 		}
 	};
 	
@@ -59,18 +61,31 @@ public:
 		return &Iterator->second;
 	}
 
-	// Returns a reference to an existing node. Use only when you are certain it exists.
+	// Use only when you are certain it exists.
 	FORCEINLINE FNode& GetNode(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
 	{
 		return Octrees[NodeState]->Layers[LayerIdx]->find(NodeMC)->second;
 	}
+	// Use only when you are certain it exists.
+	FORCEINLINE FLeafNode& GetLeafNode(const node_morton NodeMC, const node_state NodeState) const
+	{
+		return Octrees[NodeState]->LeafNodes->find(NodeMC)->second;
+	}
 	
-	// Tries to find a node. Returns true if the node exists.
+	// Returns true if the node exists.
 	FORCEINLINE bool FindNode(FNode& OutNode, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
 	{
 		const auto& Iterator = Octrees[NodeState]->Layers[LayerIdx]->find(NodeMC);
 		if(Iterator == Octrees[NodeState]->Layers[LayerIdx]->end()) return false;
 		OutNode = Iterator->second;
+		return true;
+	}
+	// Returns true if the leaf node exists.
+	FORCEINLINE bool FindLeafNode(FLeafNode& OutLeafNode, const node_morton NodeMC, const node_state NodeState) const
+	{
+		const auto& Iterator = Octrees[NodeState]->LeafNodes->find(NodeMC);
+		if(Iterator == Octrees[NodeState]->LeafNodes->end()) return false;
+		OutLeafNode = Iterator->second;
 		return true;
 	}
 	
@@ -79,11 +94,22 @@ public:
 	{
 		return Octrees[NodeState]->Layers[LayerIdx]->try_emplace(NodeMC).first->second;
 	}
-	
-	// Returns a reference to this node. Will initialize one if it does not exist yet.
+	// Returns a reference to this node. Will initialize one if it does not exist yet. Has additional boolean for checking insertion.
 	FORCEINLINE FNode& TryInitNode(bool& bOutInserted, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
 	{
 		const auto [NodePair, bInserted] = Octrees[NodeState]->Layers[LayerIdx]->try_emplace(NodeMC);
+		bOutInserted = bInserted;
+		return NodePair->second;
+	}
+	// Returns a reference to this leaf node. Will initialize one if it does not exist yet.
+	FORCEINLINE FLeafNode& TryInitLeafNode(const node_morton NodeMC, const node_state NodeState) const
+	{
+		return Octrees[NodeState]->LeafNodes->try_emplace(NodeMC).first->second;
+	}
+	// Returns a reference to this leaf node. Will initialize one if it does not exist yet. Has additional boolean for checking insertion.
+	FORCEINLINE FLeafNode& TryInitLeafNode(bool& bOutInserted, const node_morton NodeMC, const node_state NodeState) const
+	{
+		const auto [NodePair, bInserted] = Octrees[NodeState]->LeafNodes->try_emplace(NodeMC);
 		bOutInserted = bInserted;
 		return NodePair->second;
 	}
@@ -92,6 +118,11 @@ public:
 	FORCEINLINE void EraseNode(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
 	{
 		Octrees[NodeState]->Layers[LayerIdx]->erase(NodeMC);
+	}
+	// Remove this leaf node from the chunk.
+	FORCEINLINE void EraseLeafNode(const node_morton NodeMC, const node_state NodeState) const
+	{
+		Octrees[NodeState]->LeafNodes->erase(NodeMC);
 	}
 
 	FORCEINLINE static void Draw(const UWorld* World, const chunk_morton ChunkMC)

@@ -148,5 +148,11 @@ struct FNode
 	}
 };
 
+struct FLeafNode
+{
+	uint64 Leafs;
+};
+
 typedef std::pair<node_morton, FNode> FNodePair;
 typedef Rsap::Map::ordered_map<node_morton, FNode> FOctreeLayer;
+typedef Rsap::Map::ordered_map<node_morton, FLeafNode> FOctreeLeafNodes;

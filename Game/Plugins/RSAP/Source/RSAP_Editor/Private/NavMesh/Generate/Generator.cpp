@@ -25,15 +25,13 @@ layer_idx FRsapGenerator::CalculateOptimalStartingLayer(const FGlobalBounds& Bou
 	const int32 LargestSide = Bounds.GetLengths().GetLargestAxis();
 
 	// Get the first layer where at-least 3 nodes are required to fill the side.
-	layer_idx CurrentLayer = Layer::StaticDepth; // Start at the static-depth because most meshes will be around 1 meter in average.
-	for (layer_idx LayerIdx = 0; LayerIdx < Layer::StaticDepth; ++LayerIdx)
+	for (layer_idx LayerIdx = Layer::Root; LayerIdx <= Layer::MaxDepth; ++LayerIdx)
 	{
 		if(LargestSide / Node::Sizes[LayerIdx] <= 1) continue;
-		CurrentLayer = LayerIdx;
-		break;
+		return LayerIdx;
 	}
 	
-	return CurrentLayer;
+	return Layer::MaxDepth;
 }
 
 // Returns a bit-mask that represents the children that should be re-rasterized. 
@@ -184,15 +182,19 @@ void FRsapGenerator::ReRasterizeBounds(const UPrimitiveComponent* CollisionCompo
 					HandleIterateX(NodeLocation);
 					continue;
 				}
-					
-				// There is an overlap, so get/init the node, and also init/update any missing parent.
-				FNode& Node = FNmShared::InitNodeAndParents(NavMesh, *CurrentChunk, ChunkMC, NodeMC, LayerIdx, 0, Negative::XYZ);
 
-				// Re-rasterize if we are not yet on the static-depth.
-				if(LayerIdx < Layer::StaticDepth)
+				// todo: change back to normal-nodes only after test is done.
+				// There is an overlap, so get/init the node or leaf-node, and also init/update any missing parent.
+				if(LayerIdx <= Layer::NodeDepth)
 				{
-					FilteredReRasterize(*CurrentChunk, ChunkMC, Node, NodeMC, NodeLocation, LayerIdx, EdgesToCheck, LayerSkipMasks, CollisionComponent);
+					FNode& Node = FNmShared::InitNodeAndParents(NavMesh, *CurrentChunk, ChunkMC, NodeMC, LayerIdx, 0, Negative::XYZ);
+					FilteredRasterize(*CurrentChunk, ChunkMC, Node, NodeMC, NodeLocation, LayerIdx, EdgesToCheck, LayerSkipMasks, CollisionComponent);
 					// FNmShared::ReRasterize(*CurrentChunk, Node, NodeMC, NodeLocation, LayerIdx, CollisionComponent);
+				}
+				else
+				{
+					FLeafNode& LeafNode = FNmShared::InitLeafNodeAndParents(NavMesh, *CurrentChunk, ChunkMC, NodeMC, 0);
+					RasterizeLeafNode(*CurrentChunk, ChunkMC, LeafNode, NodeMC, NodeLocation, LayerIdx);
 				}
 				
 				HandleIterateX(NodeLocation);
@@ -220,7 +222,7 @@ void FRsapGenerator::ReRasterizeBounds(const UPrimitiveComponent* CollisionCompo
 
 // todo: unroll this method along with ::GetChildRasterizeMask.
 // Re-rasterizes the node while skipping children that are not intersecting with the actor's boundaries.
-void FRsapGenerator::FilteredReRasterize(FChunk& Chunk, const chunk_morton ChunkMC, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, rsap_direction EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks, const UPrimitiveComponent* CollisionComponent)
+void FRsapGenerator::FilteredRasterize(FChunk& Chunk, const chunk_morton ChunkMC, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, rsap_direction EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks, const UPrimitiveComponent* CollisionComponent)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Generator ::ReRasterizeNode");
 	
@@ -228,8 +230,8 @@ void FRsapGenerator::FilteredReRasterize(FChunk& Chunk, const chunk_morton Chunk
 	if(!EdgesToCheck)
 	{
 		// Continue doing a normal re-rasterization.
-		FNmShared::ReRasterize(NavMesh, Chunk, ChunkMC, Node, NodeMC, NodeLocation, LayerIdx, CollisionComponent);
-		return;
+		// FNmShared::ReRasterize(NavMesh, Chunk, ChunkMC, Node, NodeMC, NodeLocation, LayerIdx, CollisionComponent);
+		// return;
 	}
 
 	const layer_idx ChildLayerIdx = LayerIdx+1;
@@ -246,23 +248,38 @@ void FRsapGenerator::FilteredReRasterize(FChunk& Chunk, const chunk_morton Chunk
 		if(!(ChildrenToRasterize & Node::Children::Masks[ChildIdx])) continue;
 		
 		// Skip if not overlapping.
-		const FGlobalVector ChildLocation = FNode::GetChildLocation(NodeLocation, ChildLayerIdx, ChildIdx);
-		if(!FNode::HasComponentOverlap(CollisionComponent, ChildLocation, ChildLayerIdx)) continue;
+		const FGlobalVector ChildNodeLocation = FNode::GetChildLocation(NodeLocation, ChildLayerIdx, ChildIdx);
+		if(!FNode::HasComponentOverlap(CollisionComponent, ChildNodeLocation, ChildLayerIdx)) continue;
 
-		// Get / init node.
 		const node_morton ChildNodeMC = FMortonUtils::Node::GetChild(NodeMC, ChildLayerIdx, ChildIdx);
-		FNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk.GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk.TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
 
-		// Set relations.
-		FNmShared::SetNodeRelations(NavMesh, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildLayerIdx, Direction::Negative::XYZ);
+		// FNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk.GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk.TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
+		// FNmShared::SetNodeRelations(NavMesh, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildLayerIdx, Direction::Negative::XYZ);
+		// Node.SetChildActive(ChildIdx);
+		// if(ChildLayerIdx < Layer::StaticDepth) FilteredRasterize(Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildNodeLocation, ChildLayerIdx, EdgesToCheck, LayerSkipMasks, CollisionComponent);;
+
+		// Start test
+		if(ChildLayerIdx < Layer::LeafDepth) // todo: remove and uncomment above code when done testing leaf nodes.
+		{
+			FNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk.GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk.TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
+			FilteredRasterize(Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildNodeLocation, ChildLayerIdx, EdgesToCheck, LayerSkipMasks, CollisionComponent);
+			FNmShared::SetNodeRelations(NavMesh, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildLayerIdx, Direction::Negative::XYZ);
+		}
+		else
+		{
+			FLeafNode& LeafNode = Node.DoesChildExist(ChildIdx) ? Chunk.GetLeafNode(ChildNodeMC, 0) : Chunk.TryInitLeafNode(ChildNodeMC, 0);
+			RasterizeLeafNode(Chunk, ChunkMC, LeafNode, ChildNodeMC, ChildNodeLocation, LayerIdx);
+		}
 
 		// Set child to be alive on parent.
 		Node.SetChildActive(ChildIdx);
-
-		// Stop recursion if Static-Depth is reached.
-		if(ChildLayerIdx == Layer::StaticDepth) continue;
-		FilteredReRasterize(Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildLocation, ChildLayerIdx, EdgesToCheck, LayerSkipMasks, CollisionComponent);
+		// End test.
 	}
+}
+
+void FRsapGenerator::RasterizeLeafNode(FChunk& Chunk, const chunk_morton ChunkMC, FLeafNode& LeafNode, node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
+{
+	
 }
 
 void FRsapGenerator::Generate(const UWorld* InWorld, const FNavMesh& InNavMesh, const FActorMap& ActorMap)

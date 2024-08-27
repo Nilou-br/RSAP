@@ -24,14 +24,16 @@ namespace Rsap::NavMesh
 
 namespace Rsap::NavMesh::Layer
 {
-	static inline constexpr layer_idx Root			= 0;
-	static inline constexpr layer_idx StaticDepth	= 9;
-	static inline constexpr layer_idx MaxDepth		= 10;
-	static inline constexpr layer_idx LeafOne		= 11;
-	static inline constexpr layer_idx LeafTwo		= 12;
-	static inline constexpr layer_idx LeafThree		= 13;
-	static inline constexpr layer_idx Parent		= 14;
-	static inline constexpr layer_idx Empty			= 15;
+	static inline constexpr layer_idx Root			 = 0;
+	static inline constexpr layer_idx StaticDepth	 = 8;
+	static inline constexpr layer_idx NodeDepth		 = 9;
+	static inline constexpr layer_idx LeafDepth		 = 10;
+	static inline constexpr layer_idx LeafDepthTwo	 = 11;
+	static inline constexpr layer_idx LeafDepthThree = 12;
+	static inline constexpr layer_idx Parent		 = 14;
+	static inline constexpr layer_idx Empty			 = 15;
+
+	static inline constexpr layer_idx MaxDepth		 = 12;
 }
 
 namespace Rsap::NavMesh::Chunk

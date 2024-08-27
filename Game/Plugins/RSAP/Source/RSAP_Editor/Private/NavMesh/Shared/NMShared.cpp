@@ -6,7 +6,7 @@
 
 
 
-// Returns a reference to this node. Will initialize one if it does not exist yet. Will also init any parents of this node that do not exist yet.
+// Returns a reference to this node. Will initialize one if it does not exist yet. Will also init any parents of this node that do not exist yet, and set it's relations.
 FNode& FNmShared::InitNodeAndParents(const FNavMesh& NavMesh, const FChunk& Chunk, const chunk_morton ChunkMC, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState, const rsap_direction RelationsToSet = Direction::Negative::XYZ)
 {
 	bool bWasInserted;
@@ -19,6 +19,21 @@ FNode& FNmShared::InitNodeAndParents(const FNavMesh& NavMesh, const FChunk& Chun
 		InitParentsOfNode(NavMesh, Chunk, ChunkMC, NodeMC, LayerIdx, NodeState);
 	}
 	return Node;
+}
+
+// Returns a reference to this leaf-node. Will initialize one if it does not exist yet. Will also init any parents of this node that do not exist yet.
+FLeafNode& FNmShared::InitLeafNodeAndParents(const FNavMesh& NavMesh, const FChunk& Chunk, const chunk_morton ChunkMC, const node_morton NodeMC, const node_state NodeState)
+{
+	bool bWasInserted;
+	FLeafNode& LeafNode = Chunk.TryInitLeafNode(bWasInserted, NodeMC, NodeState);
+
+	// If the node was inserted, so initialize any missing parents.
+	if(bWasInserted)
+	{
+		// This is a leaf-node, so the parent-layer will be the max-depth of the normal nodes.
+		InitParentsOfNode(NavMesh, Chunk, ChunkMC, NodeMC, Layer::NodeDepth, NodeState);
+	}
+	return LeafNode;
 }
 
 // Recursively inits the parents of the node until an existing one is found. All parents will have their Children mask updated correctly.
