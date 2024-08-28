@@ -6,10 +6,9 @@
 #include "RSAP/Math/Vectors.h"
 #include "RSAP/Definitions.h"
 #include "RSAP/Math/Overlap.h"
+#include "RSAP/Math/Bounds.h"
 
 using namespace Rsap::NavMesh;
-
-struct FGlobalVector;
 
 
 
@@ -112,13 +111,23 @@ struct FNode
 	{
 		return FRsapOverlap::Any(World, NodeLocation, LayerIdx);
 	}
-	FORCEINLINE static bool HasComponentOverlap(const UPrimitiveComponent* Component, const FGlobalVector& ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx)
+	// FORCEINLINE static bool HasComponentOverlap(const UPrimitiveComponent* Component, const FGlobalVector& ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx)
+	// {
+	// 	return FRsapOverlap::Component(Component, GetGlobalLocation(ChunkLocation, NodeMC), LayerIdx);
+	// }
+	FORCEINLINE static bool HasComponentOverlap(const UPrimitiveComponent* Component, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, const bool bComplex)
 	{
-		return FRsapOverlap::Component(Component, GetGlobalLocation(ChunkLocation, NodeMC), LayerIdx);
+		return FRsapOverlap::Component(Component, NodeLocation, LayerIdx, bComplex);
 	}
-	FORCEINLINE static bool HasComponentOverlap(const UPrimitiveComponent* Component, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
+	FORCEINLINE static bool HasAABBOverlap(const FGlobalBounds& AABB, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
 	{
-		return FRsapOverlap::Component(Component, NodeLocation, LayerIdx);
+		const FGlobalBounds NodeBounds(NodeLocation, NodeLocation + Node::Sizes[LayerIdx]);
+		return AABB.HasAABBOverlap(NodeBounds);
+	}
+	FORCEINLINE static EAABBOverlapResult HasAABBIntersection(const FGlobalBounds& AABB, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
+	{
+		const FGlobalBounds NodeBounds(NodeLocation, NodeLocation + Node::Sizes[LayerIdx]);
+		return AABB.HasAABBIntersection(NodeBounds);
 	}
 
 	// Debug draw

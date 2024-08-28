@@ -40,7 +40,10 @@ private:
 	static void DrawNodeInfo(const node_morton NodeMC, const FGlobalVector& NodeCenter, layer_idx LayerIdx);
 	static void DrawNodeRelations(const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeCenter, const layer_idx LayerIdx);
 
-	static void OnNavMeshUpdated() { Draw(); }
+	static void OnNavMeshUpdated()
+	{
+		Draw();
+	}
 	static void OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation)
 	{
 		if(!FRsapUpdater::GetInstance().IsRunningTask()) Draw(CameraLocation, CameraRotation);

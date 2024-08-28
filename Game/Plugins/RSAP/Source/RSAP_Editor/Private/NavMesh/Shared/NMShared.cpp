@@ -111,7 +111,6 @@ void FNmShared::SetNodeRelation(const FNavMesh& NavMesh, const FChunk& Chunk, co
 // Tries to set the given relations for this node.
 void FNmShared::SetNodeRelations(const FNavMesh& NavMesh, const FChunk& Chunk, const chunk_morton ChunkMC, FNode& Node, const node_morton NodeMC, const layer_idx LayerIdx, const rsap_direction Relations)
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("::SetNodeRelations");
 	for (const rsap_direction Direction : Direction::List)
 	{
 		if(const rsap_direction Relation = Relations & Direction; Relation) SetNodeRelation(NavMesh, Chunk, ChunkMC, Node, NodeMC, LayerIdx, Relation);
@@ -121,8 +120,6 @@ void FNmShared::SetNodeRelations(const FNavMesh& NavMesh, const FChunk& Chunk, c
 // Re-rasterizes the node normally without any specific filtering.
 void FNmShared::ReRasterize(const FNavMesh& NavMesh, FChunk& Chunk, const chunk_morton ChunkMC, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent)
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("::NormalReRasterizeNode");
-	
 	const layer_idx ChildLayerIdx = LayerIdx+1;
 	
 	// Create the children.
@@ -130,7 +127,7 @@ void FNmShared::ReRasterize(const FNavMesh& NavMesh, FChunk& Chunk, const chunk_
 	{
 		// Skip if not overlapping.
 		const FGlobalVector ChildLocation = FNode::GetChildLocation(NodeLocation, ChildLayerIdx, ChildIdx);
-		if(!FNode::HasComponentOverlap(CollisionComponent, ChildLocation, ChildLayerIdx)) continue;
+		if(!FNode::HasComponentOverlap(CollisionComponent, ChildLocation, ChildLayerIdx, false)) continue;
 
 		const node_morton ChildNodeMC = FMortonUtils::Node::GetChild(NodeMC, ChildLayerIdx, ChildIdx);
 		FNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk.GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk.TryInitNode(ChildNodeMC, ChildLayerIdx, 0);

@@ -34,7 +34,6 @@ layer_idx FRsapUpdateTask::CalculateOptimalStartingLayer(const FMovedBounds& Mov
 
 uint8 FRsapUpdateTask::GetChildrenToRasterizeAndUpdateEdges(rsap_direction& EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks, const layer_idx LayerIdx, const layer_idx ChildLayerIdx)
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Updater ::GetChildrenToRasterizeAndUpdateEdges");
 	using namespace Node;
 	using namespace Direction;
 	
@@ -91,7 +90,6 @@ uint8 FRsapUpdateTask::GetChildrenToRasterizeAndUpdateEdges(rsap_direction& Edge
 // todo: this method can be made a template to take in a callback, where the callback is the generate/update specific code.
 void FRsapUpdateTask::ReRasterizeBounds(const UPrimitiveComponent* CollisionComponent)
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Updater ::ReRasterizeBounds");
 	
 }
 
@@ -103,7 +101,6 @@ void FRsapUpdateTask::ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_mor
 
 uint32 FRsapUpdateTask::Run() // todo: runs on startup
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("Updater ::Run");
 	const auto StartTime = std::chrono::high_resolution_clock::now();
 	FRsapOverlap::InitCollisionBoxes();
 

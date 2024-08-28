@@ -7,6 +7,14 @@ using namespace Rsap::NavMesh;
 
 
 
+// AABB overlap check result.
+enum class EAABBOverlapResult
+{
+	NoOverlap,	// No overlap at all
+	Intersect,	// AABBs are intersecting, but not fully contained
+	Contained	// Fully contained
+};
+
 /**
  * Lightweight AABB.
  */
@@ -180,7 +188,7 @@ struct TBounds
 	auto Cut(const FGlobalBounds& Other) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, std::vector<FGlobalBounds>>
 	{
 		if(!IsValid()) return { Other };
-		if(!Other.IsValid() || !HasSimpleOverlap(Other)) return { Other }; // Return the whole instance when there is no overlap between the two bounds.
+		if(!Other.IsValid() || !HasAABBOverlap(Other)) return { Other }; // Return the whole instance when there is no overlap between the two bounds.
 		
 		std::vector<TBounds> BoundsList;
 		TBounds RemainingBounds = Other;
@@ -236,13 +244,38 @@ struct TBounds
 		return ChunkKeys;
 	}
 
-	// Used to check if these bounds are overlapping with another.
+	// Returns true if the AABB overlap with the other.
 	template<typename T = VectorType>
-	FORCEINLINE auto HasSimpleOverlap(const FGlobalBounds& Other) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, bool>
+	FORCEINLINE auto HasAABBOverlap(const FGlobalBounds& Other) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, bool>
 	{
 		return	Max.X > Other.Min.X && Min.X < Other.Max.X &&
 				Max.Y > Other.Min.Y && Min.Y < Other.Max.Y &&
 				Max.Z > Other.Min.Z && Min.Z < Other.Max.Z;
+	}
+
+	// Returns true if the AABB intersects with the other.
+	template<typename T = VectorType>
+	FORCEINLINE auto HasAABBIntersection(const FGlobalBounds& Other) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, EAABBOverlapResult>
+	{
+		if(!HasAABBOverlap(Other)) return EAABBOverlapResult::NoOverlap;
+
+		// Check that the AABBs are not fully contained in each other, meaning
+		// they should touch on one of the faces but not be completely inside.
+
+		const bool bXContained = (Min.X >= Other.Min.X && Max.X <= Other.Max.X) ||
+								 (Other.Min.X >= Min.X && Other.Max.X <= Max.X);
+                       
+		const bool bYContained = (Min.Y >= Other.Min.Y && Max.Y <= Other.Max.Y) ||
+								 (Other.Min.Y >= Min.Y && Other.Max.Y <= Max.Y);
+                       
+		const bool bZContained = (Min.Z >= Other.Min.Z && Max.Z <= Other.Max.Z) ||
+								 (Other.Min.Z >= Min.Z && Other.Max.Z <= Max.Z);
+
+		// If all axes are contained, it means one AABB is fully within the other, so return false
+		if (bXContained && bYContained && bZContained) return EAABBOverlapResult::Contained;
+
+		// Otherwise, return true as they are intersecting.
+		return EAABBOverlapResult::Intersect;
 	}
 
 	template<typename T = VectorType>
@@ -280,9 +313,8 @@ struct TBounds
 	FORCEINLINE FGlobalVector GetLengths() const { return FGlobalVector(Max.X - Min.X, Max.Y - Min.Y, Max.Z - Min.Z); }
 
 	template<typename T = VectorType>
-	FORCEINLINE auto HasOverlap(const UWorld* World) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, bool>
+	FORCEINLINE auto HasWorldOverlap(const UWorld* World) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, bool>
 	{
-		TRACE_CPUPROFILER_EVENT_SCOPE_STR("TBounds Has-Overlap");
 		return FPhysicsInterface::GeomOverlapBlockingTest(
 			World,
 			FCollisionShape::MakeBox(GetExtents().ToVector() - 0.1f), // Decrease by small amount to avoid floating-point inaccuracy.

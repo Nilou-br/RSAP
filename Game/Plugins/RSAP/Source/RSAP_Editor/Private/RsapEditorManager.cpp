@@ -188,12 +188,11 @@ void URsapEditorManager::OnNavMeshUpdated() const {}
 
 void URsapEditorManager::ProfileGeneration() const
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("RSAP ProfileGeneration");
 	const auto StartTime = std::chrono::high_resolution_clock::now();
 
 	const FNavMesh ProfileNavMesh = std::make_shared<FNavMeshType>();
 	const FActorMap& ActorMap = FRsapEditorEvents::GetActors();
-	for (int i = 0; i < 50000; ++i)
+	for (int i = 0; i < 1000; ++i)
 	{
 		FRsapGenerator::Generate(GEngine->GetWorld(), ProfileNavMesh, ActorMap);
 	}
@@ -206,7 +205,6 @@ void URsapEditorManager::ProfileGeneration() const
 
 void URsapEditorManager::ProfileIteration() const
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR("RSAP ProfileIteration");
 	const auto StartTime = std::chrono::high_resolution_clock::now();
 	
 	uint64 Total = 0;
