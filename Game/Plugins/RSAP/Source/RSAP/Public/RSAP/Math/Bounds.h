@@ -282,7 +282,7 @@ struct TBounds
 	FORCEINLINE auto ToNodeSpace(const FGlobalVector& ChunkLocation) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, FNodeBounds>
 	{
 		const FNodeVector LocalMin = ( Min-ChunkLocation << SizeExponent).ToNodeVector();
-		const FNodeVector LocalMax = ((Max-ChunkLocation << SizeExponent) - Node::LeafSize).ToNodeVector();
+		const FNodeVector LocalMax = ((Max-ChunkLocation << SizeExponent) - Leaf::Size).ToNodeVector();
 		return FNodeBounds(LocalMin, LocalMax, IsValid());
 	}
 
@@ -290,7 +290,7 @@ struct TBounds
 	FORCEINLINE auto ToGlobalSpace(const FGlobalVector& ChunkLocation) const -> std::enable_if_t<std::is_same_v<T, FNodeVector>, FGlobalBounds>
 	{
 		const FGlobalVector LocalMin = (FGlobalVector(Min) >> SizeExponent) + ChunkLocation;
-		const FGlobalVector LocalMax = ((FGlobalVector(Max) + Node::LeafSize) >> SizeExponent) + ChunkLocation;
+		const FGlobalVector LocalMax = ((FGlobalVector(Max) + Leaf::Size) >> SizeExponent) + ChunkLocation;
 		return FGlobalBounds(LocalMin, LocalMax, IsValid());
 	}
 

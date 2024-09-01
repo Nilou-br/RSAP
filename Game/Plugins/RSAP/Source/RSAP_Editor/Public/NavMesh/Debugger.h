@@ -77,23 +77,24 @@ public:
 	static bool ShouldDrawSpecificLayer()	{ return bDrawSpecificLayer; }
 
 	static void DecrementDrawLayerIdx() { if(DrawLayerIdx > 0) --DrawLayerIdx; Draw(); }
-	static void IncrementDrawLayerIdx() { if(DrawLayerIdx < Layer::MaxDepth) ++DrawLayerIdx; Draw(); }
-	static void SetDrawLayerIdx(const layer_idx Value) { DrawLayerIdx = FMath::Clamp(Value, 0, Layer::MaxDepth); Draw(); }
+	static void IncrementDrawLayerIdx() { if(DrawLayerIdx < Layer::LeafEnd) ++DrawLayerIdx; Draw(); }
+	static void SetDrawLayerIdx(const layer_idx Value) { DrawLayerIdx = FMath::Clamp(Value, 0, Layer::LeafEnd); Draw(); }
 	static layer_idx GetDrawLayerIdx()	{ return DrawLayerIdx; }
 
 private:
-	inline static constexpr FColor LayerColors[11] = {
-		{255, 0, 0},				  // Red
-		{0, 255, 0},				 // Green
-		{0, 0, 255},				// Blue
-		{255, 255, 0},		   // Yellow
-		{0, 255, 255},		  // Cyan
-		{255, 0, 255},		 // Magenta
-		{255, 128, 0},		// Orange
+	inline static constexpr FColor LayerColors[Layer::Total] = {
+		{255, 0, 0},                // Red
+		{0, 255, 0},               // Green
+		{0, 0, 255},              // Blue
+		{255, 255, 0},           // Yellow
+		{0, 255, 255},          // Cyan
+		{255, 0, 255},         // Magenta
+		{255, 128, 0},        // Orange
 		{128, 0, 255},       // Purple
-		{0, 128, 128},      // Teal
+		{0, 128, 128},	  // Teal
 		{128, 128, 0},	 // Olive
-		{255, 255, 255}	// White
+		{255, 255, 255},	// White
+		{0, 0, 0}		   // Black
 	};
 
 	static FColor AdjustBrightness(const FColor& Color, float Factor)

@@ -8,11 +8,11 @@
 
 struct FRsapOverlap
 {
-	static inline FCollisionShape CollisionBoxes[Layer::MaxDepth];
-	static inline FCollisionShape CollisionSpheres[Layer::MaxDepth];
+	static inline FCollisionShape CollisionBoxes[Layer::Total];
+	static inline FCollisionShape CollisionSpheres[Layer::Total];
 	static void InitCollisionBoxes()
 	{
-		for (layer_idx LayerIdx = 0; LayerIdx < Layer::MaxDepth; ++LayerIdx)
+		for (layer_idx LayerIdx = 0; LayerIdx < Layer::Total; ++LayerIdx)
 		{
 			CollisionBoxes[LayerIdx] = FCollisionShape::MakeBox(FVector(Node::HalveSizes[LayerIdx]));
 			CollisionSpheres[LayerIdx] = FCollisionShape::MakeSphere(Node::HalveSizes[LayerIdx]);
@@ -37,6 +37,7 @@ struct FRsapOverlap
 	// Does a trace against a specific component's geometry to check if this node overlaps it. Faster than a world trace.
 	FORCEINLINE static bool Component(const UPrimitiveComponent* Component, const FGlobalVector& VoxelLocation, const layer_idx LayerIdx, const bool bComplex)
 	{
+		
 		// Note that OverlapTest_AssumesLocked is not thread safe, run within the physics-thread using 'FPhysicsCommand::ExecuteRead'.
 		return Component->GetBodyInstance()->OverlapTest_AssumesLocked(*(VoxelLocation + Node::HalveSizes[LayerIdx]), FQuat::Identity, CollisionBoxes[LayerIdx], nullptr, bComplex);
 	}

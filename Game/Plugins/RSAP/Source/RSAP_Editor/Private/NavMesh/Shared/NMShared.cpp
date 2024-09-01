@@ -84,7 +84,7 @@ void FNmShared::SetNodeRelation(const FNavMesh& NavMesh, const FChunk& Chunk, co
 
 	// Set the relation by trying to find the neighbour in this direction, starting from the given layer-index.
 	// If none is found for the layer, then we get it's parent. If this parent equals the node's parent, then we set the relation to a special 'parent' index.
-	for(layer_idx NeighbourLayerIdx = LayerIdx; NeighbourLayerIdx <= Layer::MaxDepth; --NeighbourLayerIdx)
+	for(layer_idx NeighbourLayerIdx = LayerIdx; NeighbourLayerIdx < Layer::Total; --NeighbourLayerIdx)
 	{
 		if(FNode NeighbourNode; NeighbourChunk->FindNode(NeighbourNode, NeighbourMC, NeighbourLayerIdx, 0))
 		{

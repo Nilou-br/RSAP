@@ -27,13 +27,12 @@ namespace Rsap::NavMesh::Layer
 	static inline constexpr layer_idx Root			 = 0;
 	static inline constexpr layer_idx StaticDepth	 = 8;
 	static inline constexpr layer_idx NodeDepth		 = 9;
-	static inline constexpr layer_idx LeafDepth		 = 10;
-	static inline constexpr layer_idx LeafDepthTwo	 = 11;
-	static inline constexpr layer_idx LeafDepthThree = 12;
+	static inline constexpr layer_idx LeafStart		 = 10;
+	static inline constexpr layer_idx LeafEnd		 = 11;
 	static inline constexpr layer_idx Parent		 = 14;
 	static inline constexpr layer_idx Empty			 = 15;
 
-	static inline constexpr layer_idx MaxDepth		 = 12;
+	static inline constexpr layer_idx Total			 = 12;
 }
 
 namespace Rsap::NavMesh::Chunk
@@ -50,26 +49,25 @@ namespace Rsap::NavMesh::Chunk
 
 namespace Rsap::NavMesh::Node
 {
-	static inline constexpr int32 LeafSize	= 1 << SizeExponent;
-	static inline constexpr int32 Sizes[11]	= {
-		1 << (Chunk::SizeBits),
-		1 << (Chunk::SizeBits-1), 1 << (Chunk::SizeBits-2), 1 << (Chunk::SizeBits-3), 1 << (Chunk::SizeBits-4), 1 << (Chunk::SizeBits-5),
-		1 << (Chunk::SizeBits-6), 1 << (Chunk::SizeBits-7), 1 << (Chunk::SizeBits-8), 1 << (Chunk::SizeBits-9), 1 << (Chunk::SizeBits-10)
+	static inline constexpr int32 Sizes[Layer::Total]	= {
+		1 << (Chunk::SizeBits),	  1 << (Chunk::SizeBits-1), 1 << (Chunk::SizeBits-2),  1 << (Chunk::SizeBits-3),
+		1 << (Chunk::SizeBits-4), 1 << (Chunk::SizeBits-5), 1 << (Chunk::SizeBits-6),  1 << (Chunk::SizeBits-7),
+		1 << (Chunk::SizeBits-8), 1 << (Chunk::SizeBits-9), 1 << (Chunk::SizeBits-10), 1 << (Chunk::SizeBits-11)
 	};
-	static inline constexpr int32 SizesMask[11] = {
-		~(Sizes[0]),
-		~(Sizes[0]-1), ~(Sizes[1]-1), ~(Sizes[2]-1), ~(Sizes[3]-1), ~(Sizes[4]-1),
-		~(Sizes[5]-1), ~(Sizes[6]-1), ~(Sizes[7]-1), ~(Sizes[8]-1), ~(Sizes[9]-1)
+	static inline constexpr int32 SizesMask[Layer::Total] = {
+		~(Sizes[0]-1), ~(Sizes[1]-1), ~(Sizes[2]-1),  ~(Sizes[3]-1),
+		~(Sizes[4]-1), ~(Sizes[5]-1), ~(Sizes[6]-1),  ~(Sizes[7]-1),
+		~(Sizes[8]-1), ~(Sizes[9]-1), ~(Sizes[10]-1), ~(Sizes[11]-1)
 	};
-	static inline constexpr int32 SizesBits[11] = {
-		Chunk::SizeBits,
-		Chunk::SizeBits-1, Chunk::SizeBits-2, Chunk::SizeBits-3, Chunk::SizeBits-4, Chunk::SizeBits-5,
-		Chunk::SizeBits-6, Chunk::SizeBits-7, Chunk::SizeBits-8, Chunk::SizeBits-9, Chunk::SizeBits-10
+	static inline constexpr int32 SizesBits[Layer::Total] = {
+		Chunk::SizeBits,   Chunk::SizeBits-1, Chunk::SizeBits-2,  Chunk::SizeBits-3,
+		Chunk::SizeBits-4, Chunk::SizeBits-5, Chunk::SizeBits-6,  Chunk::SizeBits-7,
+		Chunk::SizeBits-8, Chunk::SizeBits-9, Chunk::SizeBits-10, Chunk::SizeBits-11
 	};
-	static inline constexpr int32 HalveSizes[11] = {
-		Sizes[0]/2,
-		Sizes[1]/2, Sizes[2]/2, Sizes[3]/2, Sizes[4]/2, Sizes[5]/2,
-		Sizes[6]/2, Sizes[7]/2, Sizes[8]/2, Sizes[9]/2, Sizes[10]/2
+	static inline constexpr int32 HalveSizes[Layer::Total] = {
+		Sizes[0]/2, Sizes[1]/2, Sizes[2]/2,  Sizes[3]/2,
+		Sizes[4]/2, Sizes[5]/2, Sizes[6]/2,  Sizes[7]/2,
+		Sizes[8]/2, Sizes[9]/2, Sizes[10]/2, Sizes[11]/2
 	};
 
 	namespace Children
@@ -121,6 +119,32 @@ namespace Rsap::NavMesh::Node
 	{
 		static inline constexpr node_state Static  = 0;
 		static inline constexpr node_state Dynamic = 1;
+	}
+}
+
+namespace Rsap::NavMesh::Leaf
+{
+	static inline constexpr int32 Size = 1 << SizeExponent;
+
+	namespace Children
+	{
+		static inline constexpr uint64 BaseMask = 0b11111111;
+
+		// Shift to get the first depth of the leafs.
+		static inline constexpr uint64 MasksShift[8] = {
+			0, 8, 16, 24, 32, 40, 48, 56
+		};
+
+		// To mask the first depth of the leafs.
+		static inline constexpr uint64 Masks[8] = {
+			BaseMask,		BaseMask << 8,  BaseMask << 16, BaseMask << 24,
+			BaseMask << 32, BaseMask << 40, BaseMask << 48, BaseMask << 56
+		};
+	}
+
+	namespace Depth::Two::Children
+	{
+		
 	}
 }
 

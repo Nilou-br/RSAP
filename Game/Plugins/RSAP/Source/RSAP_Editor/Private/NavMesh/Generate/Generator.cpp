@@ -26,13 +26,14 @@ layer_idx FRsapGenerator::CalculateOptimalStartingLayer(const FGlobalBounds& Bou
 	const int32 LargestSide = Bounds.GetLengths().GetLargestAxis();
 
 	// Get the first layer where at-least 3 nodes are required to fill the side.
-	for (layer_idx LayerIdx = Layer::Root; LayerIdx <= Layer::MaxDepth; ++LayerIdx)
+	for (layer_idx LayerIdx = Layer::Root; LayerIdx < Layer::Total; ++LayerIdx)
 	{
 		if(LargestSide / Node::Sizes[LayerIdx] <= 1) continue;
 		return LayerIdx;
 	}
-	
-	return Layer::MaxDepth;
+
+	// Very small object, so just use the deepest layer.
+	return Layer::LeafEnd;
 }
 
 // Returns a bit-mask that represents the children that should be re-rasterized. 
@@ -183,7 +184,7 @@ void FRsapGenerator::ReRasterizeBounds(const UPrimitiveComponent* CollisionCompo
 
 				// todo: change back to normal-nodes only after test is done.
 				// There is an overlap, so get/init the node or leaf-node, and also init/update any missing parent.
-				if(LayerIdx <= Layer::NodeDepth)
+				if(LayerIdx < Layer::LeafStart)
 				{
 					FNode& Node = FNmShared::InitNodeAndParents(NavMesh, *CurrentChunk, ChunkMC, NodeMC, LayerIdx, 0, Negative::XYZ);
 					FilteredRasterize(AABB, *CurrentChunk, ChunkMC, Node, NodeMC, NodeLocation, LayerIdx, CollisionComponent, false);
@@ -192,7 +193,7 @@ void FRsapGenerator::ReRasterizeBounds(const UPrimitiveComponent* CollisionCompo
 				else
 				{
 					FLeafNode& LeafNode = FNmShared::InitLeafNodeAndParents(NavMesh, *CurrentChunk, ChunkMC, NodeMC, 0);
-					RasterizeLeafNode(AABB, *CurrentChunk, ChunkMC, LeafNode, NodeMC, NodeLocation, LayerIdx);
+					RasterizeLeafNode(AABB, *CurrentChunk, ChunkMC, LeafNode, NodeMC, NodeLocation, CollisionComponent, false);
 				}
 				
 				HandleIterateX(NodeLocation);
@@ -229,6 +230,8 @@ void FRsapGenerator::FilteredRasterize(const FGlobalBounds& AABB, FChunk& Chunk,
 		bool bIsChildContained = bIsAABBContained;
 		const FGlobalVector ChildNodeLocation = FNode::GetChildLocation(NodeLocation, ChildLayerIdx, ChildIdx);
 
+		// Skip if not overlapping.
+		// Do a simple trace if the node is intersecting with the AABB.
 		// Do a complex trace if the node for this child is fully contained within the AABB.
 		if(!bIsAABBContained)
 		{
@@ -246,8 +249,6 @@ void FRsapGenerator::FilteredRasterize(const FGlobalBounds& AABB, FChunk& Chunk,
 			}
 		}
 		else if(!FNode::HasComponentOverlap(CollisionComponent, ChildNodeLocation, ChildLayerIdx, true)) continue;
-
-		//DrawDebugBox(World, *(ChildNodeLocation + Node::HalveSizes[ChildLayerIdx]), FVector(Node::HalveSizes[ChildLayerIdx]), FColor::Red, true, -1, 0, .3);
 		
 		const node_morton ChildNodeMC = FMortonUtils::Node::GetChild(NodeMC, ChildLayerIdx, ChildIdx);
 
@@ -257,7 +258,7 @@ void FRsapGenerator::FilteredRasterize(const FGlobalBounds& AABB, FChunk& Chunk,
 		// if(ChildLayerIdx < Layer::StaticDepth) FilteredRasterize(Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildNodeLocation, ChildLayerIdx, EdgesToCheck, LayerSkipMasks, CollisionComponent);;
 
 		// Start test
-		if(ChildLayerIdx < Layer::LeafDepth) // todo: remove and uncomment above code when done testing leaf nodes.
+		if(ChildLayerIdx < Layer::LeafStart) // todo: remove and uncomment above code when done testing leaf nodes.
 		{
 			FNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk.GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk.TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
 			FilteredRasterize(AABB, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildNodeLocation, ChildLayerIdx, CollisionComponent, bIsChildContained);
@@ -266,7 +267,7 @@ void FRsapGenerator::FilteredRasterize(const FGlobalBounds& AABB, FChunk& Chunk,
 		else
 		{
 			FLeafNode& LeafNode = Node.DoesChildExist(ChildIdx) ? Chunk.GetLeafNode(ChildNodeMC, 0) : Chunk.TryInitLeafNode(ChildNodeMC, 0);
-			RasterizeLeafNode(AABB, Chunk, ChunkMC, LeafNode, ChildNodeMC, ChildNodeLocation, ChildLayerIdx);
+			RasterizeLeafNode(AABB, Chunk, ChunkMC, LeafNode, ChildNodeMC, ChildNodeLocation, CollisionComponent, bIsChildContained);
 		}
 
 		// Set child to be alive on parent.
@@ -275,9 +276,42 @@ void FRsapGenerator::FilteredRasterize(const FGlobalBounds& AABB, FChunk& Chunk,
 	}
 }
 
-void FRsapGenerator::RasterizeLeafNode(const FGlobalBounds& AABB,  FChunk& Chunk, const chunk_morton ChunkMC, FLeafNode& LeafNode, node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
+void FRsapGenerator::RasterizeLeafNode(const FGlobalBounds& AABB, FChunk& Chunk, const chunk_morton ChunkMC, FLeafNode& LeafNode, node_morton NodeMC, const FGlobalVector& NodeLocation, const UPrimitiveComponent* CollisionComponent, const bool bIsAABBContained)
 {
 	//DrawDebugBox(World, *(NodeLocation + Node::HalveSizes[LayerIdx]), FVector(Node::HalveSizes[LayerIdx]), FColor::Red, true, -1, 0, 2.5 - (LayerIdx/3.5));
+
+	// Rasterize the 64 leafs the same way as the octree, so dividing it per 8, and only rasterize individual leafs if a group of 8 is occluding.
+
+	// Rasterize leaf layer-one.
+	for(child_idx LeafOneChildIdx = 0; LeafOneChildIdx < 8; ++LeafOneChildIdx)
+	{
+		const FGlobalVector LeafOneLocation = FNode::GetChildLocation(NodeLocation, Layer::LeafStart, LeafOneChildIdx);
+		if(!FNode::HasComponentOverlap(CollisionComponent, LeafOneLocation, Layer::LeafStart, true))
+		{
+			// todo: for updater, clear these 8 bits.
+			continue;
+		}
+		
+		// Get these 8 leafs.
+		uint8 LeafDepthOneMask = LeafNode.Leafs >> Leaf::Children::MasksShift[LeafOneChildIdx];
+
+		// Rasterize individual leafs.
+		child_idx LeafTwoChildIdx = 0;
+		for(const uint8 Leaf : Node::Children::Masks)
+		{
+			const FGlobalVector LeafTwoLocation = FNode::GetChildLocation(LeafOneLocation, Layer::LeafEnd, LeafTwoChildIdx++);
+			if(!FNode::HasComponentOverlap(CollisionComponent, LeafTwoLocation, Layer::LeafEnd, true))
+			{
+				// todo: for updater, clear this single bit.
+				continue;
+			}
+
+			LeafDepthOneMask |= Leaf;
+		}
+
+		// Update the leafs with the new mask.
+		LeafNode.Leafs |= static_cast<uint64>(LeafDepthOneMask) << Leaf::Children::MasksShift[LeafOneChildIdx];
+	}
 }
 
 void FRsapGenerator::Generate(const UWorld* InWorld, const FNavMesh& InNavMesh, const FActorMap& ActorMap)
