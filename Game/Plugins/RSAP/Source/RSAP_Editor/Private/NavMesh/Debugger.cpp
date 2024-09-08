@@ -28,6 +28,16 @@ FString ToBinaryString(const IntType Value, const uint8 BitCount)
 	return FString(BinaryString.c_str());
 }
 
+static bool InDistance(const FVector& CameraLocation, const FGlobalVector& NodeCenter, const layer_idx LayerIdx)
+{
+	// const uint8 Mult = 3;
+	const int64 LayerRenderDistances[Layer::Total] = {
+		16000, 8000, 4000, 2000, 1000, 900, 800, 640, 320, 160, 80, 40
+	};
+
+	return FVector::Dist(CameraLocation, *NodeCenter) < LayerRenderDistances[LayerIdx];
+}
+
 void FRsapDebugger::Draw()
 {
 	if(!bEnabled || !World || !NavMesh) return;
@@ -95,7 +105,7 @@ void FRsapDebugger::Draw(const FVector& CameraLocation, const FRotator& CameraRo
 						DrawDebugBox(World, *ChunkGlobalCenterLocation, FVector(Node::HalveSizes[0]), FColor::Black, true, -1, 11, 5);
 					}
 					
-					DrawNodes(ChunkIterator->second, CurrentChunkMC, ChunkLocation, 0, 0, CameraLocation, CameraForwardVector);
+					DrawNodes(ChunkIterator->second, CurrentChunkMC, ChunkLocation, 0, 0, CameraLocation);
 				}
 
 				if(ChunkLocation.X == RenderBoundaries.Max.X)
@@ -121,26 +131,52 @@ void FRsapDebugger::Draw(const FVector& CameraLocation, const FRotator& CameraRo
 
 void FRsapDebugger::DrawNode(const FGlobalVector& NodeCenter, const layer_idx LayerIdx)
 {
-	DrawDebugBox(World, *NodeCenter, FVector(Node::HalveSizes[LayerIdx]), LayerColors[LayerIdx], true, -1, 0, 2.5 - (LayerIdx/3.5));
+	constexpr float Thickness[Layer::Total] = {
+		3, 2, 1.5, 1, .9, .8, .7, .6, .5, .4, .3, .2
+	};
+	DrawDebugBox(World, *NodeCenter, FVector(Node::HalveSizes[LayerIdx]), LayerColors[LayerIdx], true, -1, 0, Thickness[LayerIdx]);
 }
 
-void FRsapDebugger::DrawLeafNode(const FChunk& Chunk, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector)
+void FRsapDebugger::DrawLeafNode(const FChunk& Chunk, const FGlobalVector ChunkLocation, const node_morton NodeMC, const FVector& CameraLocation)
 {
 	const FGlobalVector NodeLocation = FGlobalVector::FromNodeMorton(NodeMC, ChunkLocation);
-	const FGlobalVector NodeCenter = NodeLocation + Node::HalveSizes[LayerIdx];
-	DrawNode(NodeCenter, LayerIdx);
+	if(!InDistance(CameraLocation, NodeLocation + Node::HalveSizes[Layer::NodeDepth], Layer::NodeDepth)) return;
+	DrawNode(NodeLocation + Node::HalveSizes[Layer::NodeDepth], Layer::NodeDepth);
+	
+	const FLeafNode LeafNode = Chunk.GetLeafNode(NodeMC, 0);
 
-	const FLeafNode& LeafNode = Chunk.GetLeafNode(NodeMC, 0);
-	const uint64 Leafs = LeafNode.Leafs;
+	// Separate the 64 leafs into groups of 8 to simulate octree behavior.
+	for(child_idx LeafGroupIdx = 0; LeafGroupIdx < 8; ++LeafGroupIdx)
+	{
+		const uint8 GroupedLeafs = LeafNode.Leafs >> Leaf::Children::MasksShift[LeafGroupIdx];
+		if(!GroupedLeafs) continue;
+
+		const FGlobalVector GroupLocation = FNode::GetChildLocation(NodeLocation, Layer::GroupedLeaf, LeafGroupIdx);
+		if(InDistance(CameraLocation, GroupLocation + Node::HalveSizes[Layer::GroupedLeaf], Layer::GroupedLeaf))
+		{
+			DrawNode(GroupLocation + Node::HalveSizes[Layer::GroupedLeaf], Layer::GroupedLeaf);
+		}
+		
+		child_idx LeafIdx = 0;
+		for(const uint8 LeafMask : Node::Children::Masks)
+		{
+			if(GroupedLeafs & LeafMask)
+			{
+				const FGlobalVector LeafLocation = FNode::GetChildLocation(GroupLocation, Layer::Leaf, LeafIdx);
+				if(InDistance(CameraLocation, LeafLocation + Node::HalveSizes[Layer::Leaf], Layer::Leaf))
+				{
+					DrawNode(LeafLocation + Node::HalveSizes[Layer::Leaf], Layer::Leaf);
+				}
+				
+			}
+			++LeafIdx;
+		}
+	}
 }
 
-void FRsapDebugger::DrawNodes(const FChunk& Chunk, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector)
+void FRsapDebugger::DrawNodes(const FChunk& Chunk, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation)
 {
-	// const auto NodeIterator = Chunk.Octrees[0]->Layers[LayerIdx]->find(NodeMC);
-	// if(NodeIterator == Chunk.Octrees[0]->Layers[LayerIdx]->end()) return;
-	// const FNode& Node = NodeIterator->second;
 	const FNode& Node = Chunk.GetNode(NodeMC, LayerIdx, 0);
-	
 	const FGlobalVector NodeLocation = FGlobalVector::FromNodeMorton(NodeMC, ChunkLocation);
 	const FGlobalVector NodeCenter = NodeLocation + Node::HalveSizes[LayerIdx];
 
@@ -151,15 +187,15 @@ void FRsapDebugger::DrawNodes(const FChunk& Chunk, const chunk_morton ChunkMC, c
 		if(bDrawRelations) DrawNodeRelations(ChunkMC, ChunkLocation, Node, NodeMC, NodeCenter, LayerIdx);
 	};
 
-	// if(FVector::Dist(CameraLocation, *NodeCenter) > (RsapStatic::NodeSizes[LayerIdx] << 2)+300 - 24*LayerIdx) return;
+	if(!InDistance(CameraLocation, NodeCenter, LayerIdx)) return;
 	if(!bDrawSpecificLayer) Draw();
 	else if(LayerIdx == DrawLayerIdx) Draw();
 
 	const layer_idx ChildLayerIdx = LayerIdx+1;
 	Node.ForEachChild(NodeMC, LayerIdx, [&](const node_morton ChildMC)
 	{
-		if(ChildLayerIdx <= Layer::NodeDepth) DrawNodes(Chunk, ChunkMC, ChunkLocation, ChildMC, ChildLayerIdx, CameraLocation, CameraForwardVector);
-		else DrawLeafNode(Chunk, ChunkLocation, ChildMC, ChildLayerIdx, CameraLocation, CameraForwardVector);
+		if(ChildLayerIdx < Layer::NodeDepth) DrawNodes(Chunk, ChunkMC, ChunkLocation, ChildMC, ChildLayerIdx, CameraLocation);
+		else DrawLeafNode(Chunk, ChunkLocation, ChildMC, CameraLocation);
 	});
 }
 
@@ -193,93 +229,3 @@ void FRsapDebugger::DrawNodeRelations(const chunk_morton ChunkMC, const FGlobalV
 		DrawDebugLine(World, NodeCenter.ToVector() + CenterOffset, NeighbourCenter.ToVector() + CenterOffset, AdjustBrightness(LayerColors[LayerIdx], 0.8), true, -1, 100, 2.5 - (LayerIdx/3.5));
 	}
 }
-
-// void FRsapDebugger::OldRecursiveDrawNodes(const UWorld* World, const FChunk* Chunk, const node_morton MortonCode, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector) const
-// {
-// 	 const auto NodeIterator = Chunk->Octrees[0]->Layers[LayerIdx]->find(MortonCode);
-// 	 if(NodeIterator == Chunk->Octrees[0]->Layers[LayerIdx]->end()) return;
-// 	 const FNode& Node = NodeIterator->second;
-//
-// 	 // if(!Node->IsOccluded()) return;
-// 	 const FVector NodeGlobalCenterLocation = (Node.GetGlobalLocation(Chunk->Location, MortonCode) + RsapStatic::NodeHalveSizes[LayerIdx]).ToVector();
-//
-// 	 // Return if distance between camera and node is larger than the calculated distance for this specific node's layer.
-// 	 if(FVector::Dist(CameraLocation, NodeGlobalCenterLocation) > (RsapStatic::NodeSizes[LayerIdx] << 2)+300 - 24*LayerIdx) return;
-//
-// 	 if(DebugSettings.bDisplayNodes)
-// 	 {
-// 		if(const FVector DirectionToTarget = (NodeGlobalCenterLocation - CameraLocation).GetSafeNormal();
-// 	 		FVector::DotProduct(CameraForwardVector, DirectionToTarget))
-// 		{
-// 	 		DrawDebugBox(World, NodeGlobalCenterLocation, FVector(RsapStatic::NodeHalveSizes[LayerIdx]), LayerColors[LayerIdx], true, -1, 0, 2.5 - (LayerIdx/3.5));
-// 		}
-// 	 }
-//
-// 	 if(DebugSettings.bDisplayNodeBorder && World->IsPlayInEditor())
-// 	 {
-// 		// const FString BitString = To6BitBinaryString(Node.ChunkBorder);
-// 		// DrawDebugString(World, NodeGlobalCenterLocation, BitString, nullptr, FColor::Red, -1, false, 1);
-// 		
-// 		for (const rsap_direction Direction : RsapStatic::Directions)
-// 		{
-// 	 		FGlobalVector CenterOffset;
-// 	 		switch (Direction) {
-// 	 			case RsapDirection::X_Negative: CenterOffset = FGlobalVector(-RsapStatic::NodeHalveSizes[LayerIdx] + 5, 0, 0); break;
-// 	 			case RsapDirection::Y_Negative: CenterOffset = FGlobalVector(0, -RsapStatic::NodeHalveSizes[LayerIdx] + 5, 0); break;
-// 	 			case RsapDirection::Z_Negative: CenterOffset = FGlobalVector(0, 0, -RsapStatic::NodeHalveSizes[LayerIdx] + 5); break;
-// 	 			case RsapDirection::X_Positive: CenterOffset = FGlobalVector(RsapStatic::NodeHalveSizes[LayerIdx] - 5, 0, 0);  break;
-// 	 			case RsapDirection::Y_Positive: CenterOffset = FGlobalVector(0, RsapStatic::NodeHalveSizes[LayerIdx] - 5, 0);  break;
-// 	 			case RsapDirection::Z_Positive: CenterOffset = FGlobalVector(0, 0, RsapStatic::NodeHalveSizes[LayerIdx] - 5);  break;
-// 	 			default: break;
-// 	 		}
-// 	 		if(FVector::Dist(CameraLocation, NodeGlobalCenterLocation + CenterOffset.ToVector()) > 600) continue;
-//
-// 	 		const layer_idx NeighbourLayerIdx = Node.Relations.GetFromDirection(Direction);
-// 	 		FString LayerString = NeighbourLayerIdx != Layer_Idx_Invalid ? FString::FromInt(NeighbourLayerIdx) : FString("None");
-// 	 		DrawDebugString(World, NodeGlobalCenterLocation + CenterOffset.ToVector(), LayerString, nullptr, FColor::White, -1, false, 1);
-// 		}
-// 	 }
-//
-// 	 if(DebugSettings.bDisplayRelations)
-// 	 {
-// 		for (const rsap_direction Direction : RsapStatic::Directions)
-// 		{
-// 	 		const layer_idx NeighbourLayerIdx = Node.Relations.GetFromDirection(Direction);
-// 	 		if(NeighbourLayerIdx == Layer_Idx_Invalid) continue;
-//
-// 	 		// Get node center.
-// 	 		FGlobalVector NodeLocation = Node.GetGlobalLocation(Chunk->Location, MortonCode);
-// 	 		FGlobalVector NodeCenter = NodeLocation + RsapStatic::NodeHalveSizes[LayerIdx];
-//
-// 	 		// Get neighbour center.
-// 	 		const node_morton NeighbourMortonCode = FMortonUtils::Node::MoveAndMask(MortonCode, NeighbourLayerIdx, Direction);
-// 	 		// const FGlobalVector NeighbourChunkLocation = Node.ChunkBorder & Direction ? Chunk->GetNeighbourLocation(Direction) : Chunk->Location;
-// 	 		// FGlobalVector NeighbourLocation = FGlobalVector::FromNodeMorton(NeighbourMortonCode, NeighbourChunkLocation);
-// 	 		// FGlobalVector NeighbourCenter = NeighbourLocation + RsapStatic::NodeHalveSizes[NeighbourLayerIdx];
-// 	 		//
-// 	 		// // Draw line between both.
-// 	 		// DrawDebugLine(World, NodeCenter.ToVector(), NeighbourCenter.ToVector(), AdjustBrightness(LayerColors[LayerIdx], 0.8), true, -1, 11, 1);
-// 		}
-// 	 }
-//
-// 	 if(DebugSettings.bDisplayPaths && World->IsPlayInEditor())
-// 	 {
-// 		if(FVector::Dist(CameraLocation, NodeGlobalCenterLocation) < 50)
-// 		{
-// 	 		DrawDebugString(World, NodeGlobalCenterLocation, FString::Printf(TEXT("%i"), MortonCode), nullptr, LayerColors[LayerIdx], -1, false, 1);
-// 		}
-// 	 }
-//
-// 	 // Continue drawing the children if the node has any.
-// 	 if(!Node.HasChildren()) return;
-// 	 const FNodeVector NodeMortonLocation = FNodeVector::FromNodeMorton(MortonCode);
-// 	 const layer_idx ChildLayerIndex = LayerIdx+1;
-// 	 const int_fast16_t ChildMortonOffset = RsapStatic::MortonOffsets[ChildLayerIndex];
-// 	 for (uint8 ChildIdx = 0; ChildIdx < 8; ++ChildIdx)
-// 	 { // todo: GetChildLocation / GetChildMorton
-// 		const uint_fast16_t ChildX = NodeMortonLocation.X + (ChildIdx & 1 ? ChildMortonOffset : 0);
-// 		const uint_fast16_t ChildY = NodeMortonLocation.Y + (ChildIdx & 2 ? ChildMortonOffset : 0);
-// 		const uint_fast16_t ChildZ = NodeMortonLocation.Z + (ChildIdx & 4 ? ChildMortonOffset : 0);
-// 		OldRecursiveDrawNodes(World, Chunk, FNodeVector::ToNodeMorton(ChildX, ChildY, ChildZ), ChildLayerIndex, CameraLocation, CameraForwardVector);
-// 	 }
-// }

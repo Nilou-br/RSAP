@@ -35,8 +35,8 @@ private:
 	static void Draw(const FVector& CameraLocation, const FRotator& CameraRotation);
 
 	static void DrawNode(const FGlobalVector& NodeCenter, const layer_idx LayerIdx);
-	static void DrawLeafNode(const FChunk& Chunk, FGlobalVector ChunkLocation, node_morton NodeMC, layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector);
-	static void DrawNodes(const FChunk& Chunk, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation, const FVector& CameraForwardVector);
+	static void DrawLeafNode(const FChunk& Chunk, FGlobalVector ChunkLocation, node_morton NodeMC, const FVector& CameraLocation);
+	static void DrawNodes(const FChunk& Chunk, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation);
 	static void DrawNodeInfo(const node_morton NodeMC, const FGlobalVector& NodeCenter, layer_idx LayerIdx);
 	static void DrawNodeRelations(const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeCenter, const layer_idx LayerIdx);
 
@@ -77,24 +77,24 @@ public:
 	static bool ShouldDrawSpecificLayer()	{ return bDrawSpecificLayer; }
 
 	static void DecrementDrawLayerIdx() { if(DrawLayerIdx > 0) --DrawLayerIdx; Draw(); }
-	static void IncrementDrawLayerIdx() { if(DrawLayerIdx < Layer::LeafEnd) ++DrawLayerIdx; Draw(); }
-	static void SetDrawLayerIdx(const layer_idx Value) { DrawLayerIdx = FMath::Clamp(Value, 0, Layer::LeafEnd); Draw(); }
+	static void IncrementDrawLayerIdx() { if(DrawLayerIdx < Layer::Leaf) ++DrawLayerIdx; Draw(); }
+	static void SetDrawLayerIdx(const layer_idx Value) { DrawLayerIdx = FMath::Clamp(Value, 0, Layer::Leaf); Draw(); }
 	static layer_idx GetDrawLayerIdx()	{ return DrawLayerIdx; }
 
 private:
 	inline static constexpr FColor LayerColors[Layer::Total] = {
-		{255, 0, 0},                // Red
-		{0, 255, 0},               // Green
-		{0, 0, 255},              // Blue
-		{255, 255, 0},           // Yellow
-		{0, 255, 255},          // Cyan
-		{255, 0, 255},         // Magenta
-		{255, 128, 0},        // Orange
-		{128, 0, 255},       // Purple
-		{0, 128, 128},	  // Teal
-		{128, 128, 0},	 // Olive
-		{255, 255, 255},	// White
-		{0, 0, 0}		   // Black
+		{255, 102, 102},  // Light Red
+		{102, 255, 102},  // Light Green
+		{102, 102, 255},  // Light Blue
+		{255, 255, 153},  // Light Yellow
+		{153, 255, 255},  // Light Cyan
+		{255, 153, 255},  // Light Magenta
+		{255, 178, 102},  // Light Orange
+		{178, 153, 255},  // Light Purple
+		{153, 204, 204},  // Light Teal
+		{204, 204, 153},  // Light Olive
+		{224, 224, 224},  // Light Gray (for better contrast than pure white)
+		{64, 64, 64}      // Dark Gray (instead of pure black for visibility)
 	};
 
 	static FColor AdjustBrightness(const FColor& Color, float Factor)

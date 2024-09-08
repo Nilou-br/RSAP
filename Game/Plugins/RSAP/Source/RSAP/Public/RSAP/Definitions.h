@@ -27,8 +27,8 @@ namespace Rsap::NavMesh::Layer
 	static inline constexpr layer_idx Root			 = 0;
 	static inline constexpr layer_idx StaticDepth	 = 8;
 	static inline constexpr layer_idx NodeDepth		 = 9;
-	static inline constexpr layer_idx LeafStart		 = 10;
-	static inline constexpr layer_idx LeafEnd		 = 11;
+	static inline constexpr layer_idx GroupedLeaf	 = 10;
+	static inline constexpr layer_idx Leaf			 = 11;
 	static inline constexpr layer_idx Parent		 = 14;
 	static inline constexpr layer_idx Empty			 = 15;
 
@@ -130,21 +130,16 @@ namespace Rsap::NavMesh::Leaf
 	{
 		static inline constexpr uint64 BaseMask = 0b11111111;
 
-		// Shift to get the first depth of the leafs.
+		// Shift to get grouped leafs.
 		static inline constexpr uint64 MasksShift[8] = {
 			0, 8, 16, 24, 32, 40, 48, 56
 		};
 
-		// To mask the first depth of the leafs.
+		// To mask the grouped leafs.
 		static inline constexpr uint64 Masks[8] = {
 			BaseMask,		BaseMask << 8,  BaseMask << 16, BaseMask << 24,
 			BaseMask << 32, BaseMask << 40, BaseMask << 48, BaseMask << 56
 		};
-	}
-
-	namespace Depth::Two::Children
-	{
-		
 	}
 }
 
