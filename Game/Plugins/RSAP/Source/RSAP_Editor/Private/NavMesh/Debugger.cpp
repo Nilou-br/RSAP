@@ -32,7 +32,7 @@ static bool InDistance(const FVector& CameraLocation, const FGlobalVector& NodeC
 {
 	// const uint8 Mult = 3;
 	const int64 LayerRenderDistances[Layer::Total] = {
-		16000, 8000, 4000, 2000, 1000, 900, 800, 640, 320, 160, 80, 40
+		16000, 8000, 4000, 2000, 1000, 900, 800, 640, 320, 160, 80, 40, 30
 	};
 
 	return FVector::Dist(CameraLocation, *NodeCenter) < LayerRenderDistances[LayerIdx];
@@ -132,7 +132,7 @@ void FRsapDebugger::Draw(const FVector& CameraLocation, const FRotator& CameraRo
 void FRsapDebugger::DrawNode(const FGlobalVector& NodeCenter, const layer_idx LayerIdx)
 {
 	constexpr float Thickness[Layer::Total] = {
-		3, 2, 1.5, 1, .9, .8, .7, .6, .5, .4, .3, .2
+		3, 2, 1.5, 1, .9, .8, .7, .6, .5, .4, .3, .2, .1
 	};
 	DrawDebugBox(World, *NodeCenter, FVector(Node::HalveSizes[LayerIdx]), LayerColors[LayerIdx], true, -1, 0, Thickness[LayerIdx]);
 }

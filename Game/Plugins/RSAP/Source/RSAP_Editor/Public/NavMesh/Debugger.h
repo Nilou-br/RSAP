@@ -94,7 +94,8 @@ private:
 		{153, 204, 204},  // Light Teal
 		{204, 204, 153},  // Light Olive
 		{224, 224, 224},  // Light Gray (for better contrast than pure white)
-		{64, 64, 64}      // Dark Gray (instead of pure black for visibility)
+		{64, 64, 64},     // Dark Gray (instead of pure black for visibility)
+		{0, 0, 0}         // Black
 	};
 
 	static FColor AdjustBrightness(const FColor& Color, float Factor)
