@@ -251,18 +251,14 @@ struct FMortonUtils
 		static inline constexpr chunk_morton Mask_XY = Mask_X | Mask_Y;
 		static inline constexpr chunk_morton Mask_XZ = Mask_X | Mask_Z;
 		static inline constexpr chunk_morton Mask_YZ = Mask_Y | Mask_Z;
-
-		// Used to convert the chunk's global coordinates into positive values.
-		// static inline constexpr uint32 EncodeDecodeOffset = 0b00111111111111111111110000000000; // '1073740800' at SizeExponent of 
-		// static inline constexpr uint32 EncodeDecodeOffset = 0b00111111111111111111111111111111 & Rsap::Chunk::SizeMask;
 		
-		// Encode the global world coordinates into a chunk morton-code. Max range from -1073741312 to +1073741312.
-		FORCEINLINE static chunk_morton Encode(const int32 X, const int32 Y, const int32 Z) // todo: test these
+		// Encode the global world coordinates into a chunk morton-code.
+		static chunk_morton Encode(const int32 X, const int32 Y, const int32 Z) // todo: test these: todo: add FORCEINLINE
 		{
 			using namespace Rsap::NavMesh;
 			
 			// Apply offset to make the coordinates positive, and do a shift to compress the value.
-			// The last 10 bits will always be 0 because a chunk is 1024 units in size.
+			// The last 'SizeBits' amount of bits will always be set to '0'.
 			const uint_fast32_t InX = (X + Rsap::NavMesh::Chunk::SignOffset) >> Rsap::NavMesh::Chunk::SizeBits;
 			const uint_fast32_t InY = (Y + Rsap::NavMesh::Chunk::SignOffset) >> Rsap::NavMesh::Chunk::SizeBits;
 			const uint_fast32_t InZ = (Z + Rsap::NavMesh::Chunk::SignOffset) >> Rsap::NavMesh::Chunk::SizeBits;
@@ -271,7 +267,7 @@ struct FMortonUtils
 		}
 
 		// Decode a chunk's morton-code back into global world coordinates.
-		FORCEINLINE static void Decode(const chunk_morton ChunkMorton, int32& OutX, int32& OutY, int32& OutZ)
+		static void Decode(const chunk_morton ChunkMorton, int32& OutX, int32& OutY, int32& OutZ)
 		{
 			uint_fast32_t X, Y, Z;
 			libmorton::morton3D_64_decode(ChunkMorton, X, Y, Z);

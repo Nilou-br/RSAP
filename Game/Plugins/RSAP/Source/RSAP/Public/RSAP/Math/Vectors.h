@@ -143,7 +143,7 @@ struct FGlobalVector // todo: int64 to support SizeExponent >= 2 ?
 		);
 	}
 	
-	FORCEINLINE static FGlobalVector FromChunkMorton(const chunk_morton ChunkMorton)
+	static FGlobalVector FromChunkMorton(const chunk_morton ChunkMorton)
 	{
 		int32 OutX, OutY, OutZ;
 		FMortonUtils::Chunk::Decode(ChunkMorton, OutX, OutY, OutZ);

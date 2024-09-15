@@ -43,8 +43,7 @@ namespace Rsap::NavMesh::Chunk
 	static inline constexpr uint32 SizeMask		= ~(Size - 1);
 
 	// To convert any global coordinates to positive values.
-	// Max coordinates: '21 bit + SizeBits' -> convert to decimal -> minus 'Size - 1'.
-	static inline constexpr uint64 SignOffset = ((1ULL << 21) - 1) << SizeBits;
+	static inline constexpr uint64 SignOffset = ((1ULL << 20) - 1) << SizeBits;
 }
 
 namespace Rsap::NavMesh::Node
