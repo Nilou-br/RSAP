@@ -16,21 +16,23 @@ FActorMap							FRsapEditorEvents::CachedActors;
 FActorBoundsMap						FRsapEditorEvents::CachedActorBounds;
 std::vector<actor_key>				FRsapEditorEvents::SelectedActors;
 
+
 // Delegates
 
-FRsapEditorEvents::FOnMapOpened		FRsapEditorEvents::OnMapOpened;
-FRsapEditorEvents::FPreMapSaved		FRsapEditorEvents::PreMapSaved;
-FRsapEditorEvents::FPostMapSaved	FRsapEditorEvents::PostMapSaved;
+FRsapEditorEvents::FOnWorldInitialized	FRsapEditorEvents::OnWorldInitialized;
+FRsapEditorEvents::FPreMapSaved			FRsapEditorEvents::PreMapSaved;
+FRsapEditorEvents::FPostMapSaved		FRsapEditorEvents::PostMapSaved;
 
-FRsapEditorEvents::FOnActorMoved	FRsapEditorEvents::OnActorMoved;
-FRsapEditorEvents::FOnActorAdded	FRsapEditorEvents::OnActorAdded;
-FRsapEditorEvents::FOnActorDeleted	FRsapEditorEvents::OnActorDeleted;
+FRsapEditorEvents::FOnActorMoved		FRsapEditorEvents::OnActorMoved;
+FRsapEditorEvents::FOnActorAdded		FRsapEditorEvents::OnActorAdded;
+FRsapEditorEvents::FOnActorDeleted		FRsapEditorEvents::OnActorDeleted;
 
-FRsapEditorEvents::FOnCameraMoved	FRsapEditorEvents::OnCameraMoved;
+FRsapEditorEvents::FOnCameraMoved		FRsapEditorEvents::OnCameraMoved;
+
 
 // Delegate handles:
 
-FDelegateHandle FRsapEditorEvents::MapOpenedHandle;
+FDelegateHandle FRsapEditorEvents::WorldInitializedHandle;
 FDelegateHandle FRsapEditorEvents::PreMapSavedHandle;
 FDelegateHandle FRsapEditorEvents::PostMapSavedHandle;
 
@@ -58,7 +60,7 @@ bool FRsapEditorEvents::ActorHasCollisionComponent(const AActor* Actor)
 
 void FRsapEditorEvents::Initialize()
 {
-	MapOpenedHandle = FEditorDelegates::OnMapOpened.AddStatic(&FRsapEditorEvents::HandleMapOpened);
+	FWorldDelegates::OnPostWorldInitialization.AddStatic(&FRsapEditorEvents::HandleWorldInitialized);
 	PreMapSavedHandle = FEditorDelegates::PreSaveWorldWithContext.AddStatic(&FRsapEditorEvents::HandlePreMapSaved);
 	PostMapSavedHandle = FEditorDelegates::PostSaveWorldWithContext.AddStatic(&FRsapEditorEvents::HandlePostMapSaved);
 	
@@ -70,7 +72,12 @@ void FRsapEditorEvents::Initialize()
 
 void FRsapEditorEvents::Deinitialize()
 {
-	FEditorDelegates::OnMapOpened.Remove(MapOpenedHandle); MapOpenedHandle.Reset();
+	// todo: try these.
+	//FEditorDelegates::OnMapLoad
+	//FWorldDelegates::OnWorldBeginTearDown;
+	//FWorldDelegates::OnWorldInitializedActors;
+	
+	FWorldDelegates::OnPostWorldInitialization.Remove(WorldInitializedHandle); WorldInitializedHandle.Reset();
 	FEditorDelegates::PreSaveWorldWithContext.Remove(PreMapSavedHandle); PreMapSavedHandle.Reset();
 	FEditorDelegates::PostSaveWorldWithContext.Remove(PostMapSavedHandle); PostMapSavedHandle.Reset();
 	
@@ -80,33 +87,31 @@ void FRsapEditorEvents::Deinitialize()
 	FEditorDelegates::OnEditorCameraMoved.Remove(OnCameraMovedHandle); OnCameraMovedHandle.Reset();
 }
 
-void FRsapEditorEvents::HandleMapOpened(const FString& Filename, bool bAsTemplate)
+void FRsapEditorEvents::HandleWorldInitialized(UWorld* World, const UWorld::InitializationValues IVS)
 {
-	// Static-mesh actors are initialized next frame. ( FWorldDelegates::OnWorldInitializedActors event doesn't have them initialized for some reason. )
-	GEditor->GetEditorWorldContext().World()->GetTimerManager().SetTimerForNextTick([&]()
+	if (!IsValid(World) || World->WorldType != EWorldType::Editor)
 	{
-		// For some reason, we need to get a new world from the editor-context because the previous one used for the Next-Tick is a different world?
-		const UWorld* EditorWorld = GEditor->GetEditorWorldContext().World();
-		
-		// Get all the static-mesh actors.
-		TArray<AActor*> FoundActors; UGameplayStatics::GetAllActorsOfClass(EditorWorld, AStaticMeshActor::StaticClass(), FoundActors);
+		return;
+	}
 
-		// Cache all of their boundaries.
-		for (AActor* Actor : FoundActors)
-		{
-			// Skip the actors that don't have any collision.
-			if (!ActorHasCollisionComponent(Actor)) continue;
+	// Get all the static-mesh actors.
+	TArray<AActor*> FoundActors; UGameplayStatics::GetAllActorsOfClass(World, AStaticMeshActor::StaticClass(), FoundActors);
+
+	// Cache all of their boundaries.
+	for (AActor* Actor : FoundActors)
+	{
+		// Skip the actors that don't have any collision.
+		if (!ActorHasCollisionComponent(Actor)) continue;
 			
-			const actor_key ActorID = GetTypeHash(Actor->GetActorGuid());
-			const FGlobalBounds Bounds(Actor);
+		const actor_key ActorID = GetTypeHash(Actor->GetActorGuid());
+		const FGlobalBounds Bounds(Actor);
 
-			CachedActorBounds.emplace(ActorID, Bounds);
-			CachedActors.emplace(ActorID, Actor);
-		}
+		CachedActorBounds.emplace(ActorID, Bounds);
+		CachedActors.emplace(ActorID, Actor);
+	}
 
-		// Notify that the actors are ready.
-		if(OnMapOpened.IsBound()) OnMapOpened.Execute(CachedActorBounds);
-	});
+	// Notify that the actors are ready.
+	if(OnWorldInitialized.IsBound()) OnWorldInitialized.Execute(World, CachedActorBounds);
 }
 
 void FRsapEditorEvents::HandlePreMapSaved(UWorld* World, FObjectPreSaveContext PreSaveContext)

@@ -18,7 +18,8 @@ class FRsapEditorEvents
 		TWeakObjectPtr<const AActor> ActorPtr;
 		FGlobalBounds Bounds;
 	};
-	
+
+	DECLARE_DELEGATE_TwoParams(FOnWorldInitialized, UWorld*, const FActorBoundsMap&);
 	DECLARE_DELEGATE_OneParam(FOnMapOpened, const FActorBoundsMap&);
 	DECLARE_DELEGATE(FPreMapSaved);
 	DECLARE_DELEGATE_OneParam(FPostMapSaved, const bool bSuccess);
@@ -33,15 +34,15 @@ public:
 	static void Initialize();
 	static void Deinitialize();
 
-	static FOnMapOpened		OnMapOpened;
-	static FPreMapSaved		PreMapSaved;
-	static FPostMapSaved	PostMapSaved;
+	static FOnWorldInitialized	OnWorldInitialized;
+	static FPreMapSaved			PreMapSaved;
+	static FPostMapSaved		PostMapSaved;
 	
-	static FOnActorMoved	OnActorMoved;
-	static FOnActorAdded	OnActorAdded;
-	static FOnActorDeleted	OnActorDeleted;
+	static FOnActorMoved		OnActorMoved;
+	static FOnActorAdded		OnActorAdded;
+	static FOnActorDeleted		OnActorDeleted;
 
-	static FOnCameraMoved	OnCameraMoved;
+	static FOnCameraMoved		OnCameraMoved;
 	
 	FORCEINLINE static FActorBoundsMap& GetLevelActorBounds(){ return CachedActorBounds; }
 	FORCEINLINE static const AActor* GetActor(const actor_key Key) { return CachedActors.find(Key)->second.Get(); }
@@ -53,10 +54,10 @@ private:
 	static FActorMap CachedActors;
 	static FActorBoundsMap CachedActorBounds; // Easier to manage when stored separately.
 	static std::vector<actor_key> SelectedActors;
-	
-	static FDelegateHandle MapOpenedHandle;		static void HandleMapOpened(const FString& Filename, bool bAsTemplate);
-	static FDelegateHandle PreMapSavedHandle;	static void HandlePreMapSaved(UWorld* World, FObjectPreSaveContext PreSaveContext);
-	static FDelegateHandle PostMapSavedHandle;	static void HandlePostMapSaved(UWorld* World, FObjectPostSaveContext PostSaveContext);
+
+	static FDelegateHandle WorldInitializedHandle;		static void HandleWorldInitialized(UWorld* World, const UWorld::InitializationValues IVS);
+	static FDelegateHandle PreMapSavedHandle;			static void HandlePreMapSaved(UWorld* World, FObjectPreSaveContext PreSaveContext);
+	static FDelegateHandle PostMapSavedHandle;			static void HandlePostMapSaved(UWorld* World, FObjectPostSaveContext PostSaveContext);
 	
 	static FDelegateHandle ActorSelectionChangedHandle; static void HandleActorSelectionChanged(const TArray<UObject*>& Objects, bool);
 	static FDelegateHandle ObjectPropertyChangedHandle; static void HandleObjectPropertyChanged(UObject* Object, FPropertyChangedEvent& PropertyChangedEvent);

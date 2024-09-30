@@ -3,12 +3,12 @@
 #pragma once
 
 #include "Engine/AssetUserData.h"
-#include "LevelSettings.generated.h"
+#include "LevelMetadata.generated.h"
 
 
 
 UCLASS()
-class RSAP_API URsapLevelSettings : public UAssetUserData
+class RSAP_API URsapLevelMetadata : public UAssetUserData
 {
 	GENERATED_BODY()
 

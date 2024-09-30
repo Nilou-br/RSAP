@@ -84,7 +84,7 @@ private:
 	static void OnRegenerateButtonClicked()
 	{
 		URsapEditorManager* EditorManager = GEditor->GetEditorSubsystem<URsapEditorManager>();
-		EditorManager->Regenerate();
+		EditorManager->Regenerate(GEditor->GetWorld());
 	}
 };
 

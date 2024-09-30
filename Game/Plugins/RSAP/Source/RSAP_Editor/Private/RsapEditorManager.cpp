@@ -19,7 +19,9 @@ void URsapEditorManager::Initialize(FSubsystemCollectionBase& Collection)
 	NavMesh = std::make_shared<FNavMeshType>();
 	FRsapUpdater::GetInstance();
 
-	FRsapEditorEvents::OnMapOpened.BindUObject(this, &ThisClass::OnMapOpened);
+	FRsapEditorEvents::OnWorldInitialized.BindUObject(this, &ThisClass::OnEditorWorldInitialized);
+
+	return;
 	FRsapEditorEvents::PreMapSaved.BindUObject(this, &ThisClass::PreMapSaved);
 
 	FRsapEditorEvents::OnActorMoved.BindUObject(this, &ThisClass::OnActorMoved);
@@ -33,7 +35,7 @@ void URsapEditorManager::Deinitialize()
 {
 	NavMesh.reset();
 	
-	FRsapEditorEvents::OnMapOpened.Unbind();
+	FRsapEditorEvents::OnWorldInitialized.Unbind();
 	FRsapEditorEvents::PreMapSaved.Unbind();
 
 	FRsapEditorEvents::OnActorMoved.Unbind();
@@ -45,21 +47,23 @@ void URsapEditorManager::Deinitialize()
 	Super::Deinitialize();
 }
 
-void URsapEditorManager::LoadLevelSettings()
+URsapLevelMetadata* URsapEditorManager::LoadLevelSettings(const UWorld* World)
 {
-	LevelSettings = EditorWorld->PersistentLevel->GetAssetUserData<URsapLevelSettings>();
+	URsapLevelMetadata* LevelMetadata = World->PersistentLevel->GetAssetUserData<URsapLevelMetadata>();
 
 	// Create new settings if this level doesn't have any yet.
-	if(!LevelSettings)
+	if(!LevelMetadata)
 	{
-		LevelSettings = NewObject<URsapLevelSettings>(EditorWorld->PersistentLevel, URsapLevelSettings::StaticClass());
-		EditorWorld->PersistentLevel->AddAssetUserData(LevelSettings);
+		LevelMetadata = NewObject<URsapLevelMetadata>(World->PersistentLevel, URsapLevelMetadata::StaticClass());
+		World->PersistentLevel->AddAssetUserData(LevelMetadata);
 	}
+
+	return LevelMetadata;
 }
 
-void URsapEditorManager::Regenerate()
+void URsapEditorManager::Regenerate(const UWorld* World)
 {
-	if(!EditorWorld)
+	if(!World)
 	{
 		UE_LOG(LogRsap, Warning, TEXT("Cannot regenerate the navmesh without an active world."));
 		return;
@@ -72,18 +76,17 @@ void URsapEditorManager::Regenerate()
 	// Call generate on generator.
 
 	NavMesh->clear();
-	FRsapGenerator::Generate(EditorWorld, NavMesh, FRsapEditorEvents::GetActors());
-	if(EditorWorld->GetOuter()->MarkPackageDirty())
+	FRsapGenerator::Generate(World, NavMesh, FRsapEditorEvents::GetActors());
+	if(World->GetOuter()->MarkPackageDirty())
 	{
 		UE_LOG(LogRsap, Log, TEXT("Regeneration complete. The sound-navigation-mesh will be cached when you save the map."))
 	}
 }
 
-void URsapEditorManager::OnMapOpened(const FActorBoundsMap& ActorBoundsMap)
+void URsapEditorManager::OnEditorWorldInitialized(UWorld* World, const FActorBoundsMap& ActorBoundsMap)
 {
 	// Get the editor-world and load the settings stored on it.
-	EditorWorld = GEditor->GetEditorWorldContext().World();
-	LoadLevelSettings();
+	const URsapLevelMetadata* LevelMetadata = LoadLevelSettings(World);
 
 	// Get the cached navmesh for this world.
 	bool bRegenerate = false;
@@ -94,7 +97,7 @@ void URsapEditorManager::OnMapOpened(const FActorBoundsMap& ActorBoundsMap)
 		UE_LOG(LogRsap, Log, TEXT("Generating the sound-navigation-mesh for this world..."));
 		bRegenerate = true;
 	}
-	else if(LevelSettings->NavMeshID != CachedNavMeshID)
+	else if(LevelMetadata->NavMeshID != CachedNavMeshID)
 	{
 		// If the cached ID differs from what is stored on the level's asset-data, then the navmesh is not in-sync.
 		UE_LOG(LogRsap, Log, TEXT("The sound-navigation-mesh is not in-sync with the world. Starting regeneration..."));
@@ -104,16 +107,17 @@ void URsapEditorManager::OnMapOpened(const FActorBoundsMap& ActorBoundsMap)
 	if(bRegenerate)
 	{
 		UE_LOG(LogRsap, Log, TEXT("This can take a moment depending on the amount of actors in the world. The map will be marked 'dirty' when complete."));
-		FRsapGenerator::Generate(EditorWorld, NavMesh, FRsapEditorEvents::GetActors());
-		if(EditorWorld->GetOuter()->MarkPackageDirty())
+		FRsapGenerator::Generate(World, NavMesh, FRsapEditorEvents::GetActors());
+		if(World->GetOuter()->MarkPackageDirty())
 		{
 			UE_LOG(LogRsap, Log, TEXT("Generation complete. The sound-navigation-mesh will be cached when you save the map."))
 		}
 	}
-	
+
+	return;
 	// Start the updater/debugger. todo: stop before closing map.
-	FRsapUpdater::GetInstance().Start(EditorWorld, NavMesh);
-	FRsapDebugger::Start(EditorWorld, NavMesh);
+	FRsapUpdater::GetInstance().Start(World, NavMesh);
+	FRsapDebugger::Start(World, NavMesh);
 	
 	// Backup code to wait for update complete ( for PIE start during update scenario ):
 	// NavMeshUpdater->StageData(Data);
@@ -132,9 +136,10 @@ void URsapEditorManager::OnMapOpened(const FActorBoundsMap& ActorBoundsMap)
 void URsapEditorManager::PreMapSaved()
 {
 	// Update the navmesh-ID on the level-settings asset-data, and add it to the level before the save occurs.
-	const FGuid PrevID = LevelSettings->NavMeshID;
-	LevelSettings->NavMeshID = FGuid::NewGuid();
-	EditorWorld->PersistentLevel->AddAssetUserData(LevelSettings);
+	URsapLevelMetadata* LevelMetadata = LoadLevelSettings(GEditor->GetWorld());
+	const FGuid PrevID = LevelMetadata->NavMeshID;
+	LevelMetadata->NavMeshID = FGuid::NewGuid();
+	GEditor->GetWorld()->PersistentLevel->AddAssetUserData(LevelMetadata);
 	
 	FRsapEditorEvents::PostMapSaved.BindLambda([&, PrevID](const bool bSuccess)
 	{
@@ -143,12 +148,12 @@ void URsapEditorManager::PreMapSaved()
 		if(!bSuccess)
 		{
 			// Save not successful, so revert back to old ID.
-			LevelSettings->NavMeshID = PrevID;
+			LevelMetadata->NavMeshID = PrevID;
 			UE_LOG(LogRsap, Warning, TEXT("The map has failed to save. Rsap's sound navmesh will not be saved as a result."));
 			return;
 		}
 
-		SerializeNavMesh(*NavMesh, LevelSettings->NavMeshID);
+		SerializeNavMesh(*NavMesh, *LevelMetadata, GEditor->GetWorld()->PersistentLevel);
 	});
 }
 

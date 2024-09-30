@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "RSAP/LevelSettings.h"
+#include "..\..\RSAP\Public\RSAP\LevelMetadata.h"
 #include "RSAP/Math/Bounds.h"
 #include "RSAP/NavMesh/Types/Chunk.h"
 #include "RsapEditorManager.generated.h"
@@ -30,22 +30,21 @@ protected:
 	virtual void Deinitialize() override;
 
 private:
-	void LoadLevelSettings();
+	static URsapLevelMetadata* LoadLevelSettings(const UWorld* World);
 	
 public:
 	UFUNCTION(BlueprintCallable, Category="Rsap | Navigation Mesh")
-	void Regenerate();
+	void Regenerate(const UWorld* World);
 
-	UFUNCTION(BlueprintCallable, Category="Rsap | Navigation Mesh")
-	URsapLevelSettings* GetRsapLevelSettings() const { return LevelSettings; }
+	// UFUNCTION(BlueprintCallable, Category="Rsap | Navigation Mesh")
+	// URsapLevelMetadata* GetRsapLevelMetadata() const { return LevelMetadata; }
 
 private:
-	UPROPERTY() UWorld* EditorWorld;
-	UPROPERTY() URsapLevelSettings* LevelSettings;
+	// UPROPERTY() URsapLevelMetadata* LevelMetadata;
 	
 	FNavMesh NavMesh;
 
-	void OnMapOpened(const FActorBoundsMap& ActorBoundsMap);
+	void OnEditorWorldInitialized(UWorld* World, const FActorBoundsMap& ActorBoundsMap);
 	void PreMapSaved();
 	
 	void OnActorMoved(const actor_key ActorKey, const FMovedBounds& MovedBounds);

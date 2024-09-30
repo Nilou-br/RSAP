@@ -3,6 +3,7 @@
 #pragma once
 #include <ranges>
 
+#include "..\LevelMetadata.h"
 #include "Types/Chunk.h"
 #include "Types/Node.h"
 
@@ -81,13 +82,10 @@ RSAP_API inline FArchive& operator<<(FArchive& Ar, FNavMeshType& NavMesh){
 	return Ar;
 }
 
-RSAP_API inline FString GetChunkDirectory(const chunk_morton ChunkMC) // todo: profile
+RSAP_API inline FString GetChunkDirectory(const FString& LevelPath, const chunk_morton ChunkMC) // todo: profile
 {
-	const FString BasePath = FPaths::ProjectDir() / TEXT("Rsap"); // todo: level directory
-	
-	// Preallocate string builder (estimate length based on depth, e.g., 21 levels)
 	FStringBuilderBase PathBuilder;
-	PathBuilder << BasePath;
+	PathBuilder << LevelPath;
 
 	// Iterate over Morton code, extracting x bits at a time. This splits the chunks into multiple directories.
 	for (int32 i = 60; i >= 3; i -= 3)
@@ -100,19 +98,20 @@ RSAP_API inline FString GetChunkDirectory(const chunk_morton ChunkMC) // todo: p
 }
 
 // Serialize all chunks within the navmesh.
-RSAP_API inline void SerializeNavMesh(FNavMeshType& NavMesh, FGuid& ID) // todo: Clear chunks that should not exist anymore.
+RSAP_API inline void SerializeNavMesh(FNavMeshType& NavMesh, URsapLevelMetadata& Metadata, TObjectPtr<ULevel>& Level) // todo: Clear chunks that should not exist anymore.
 {
 	const FString BasePath = FPaths::ProjectSavedDir() / TEXT("Rsap");
-    
-	// Serialize Metadata.
-	const FString MetaDataPath = BasePath / TEXT("Metadata.bin");
+	const FString LevelName = FString::FromInt(GetTypeHash(Level.GetFullName()));
+	const FString LevelPath = BasePath / LevelName;
+	const FString MetaDataPath = LevelPath / TEXT("Metadata.bin");
+	
 	FArchive* MetaDataArchive = IFileManager::Get().CreateFileWriter(*MetaDataPath);
 	if (!MetaDataArchive)
 	{
-		UE_LOG(LogRsap, Error, TEXT("Failed to save the main navmesh data. Please contact plugin author if this keeps occurring."));
+		UE_LOG(LogRsap, Error, TEXT("Failed to get the level's navmesh metadata. Please contact plugin author if this keeps occurring."));
 		return;
 	}
-	*MetaDataArchive << ID;
+	*MetaDataArchive << Metadata.NavMeshID;
 	MetaDataArchive->Close();
 	delete MetaDataArchive;
 
@@ -120,7 +119,7 @@ RSAP_API inline void SerializeNavMesh(FNavMeshType& NavMesh, FGuid& ID) // todo:
 	for (const auto& [ChunkMC, ChunkData] : NavMesh)
 	{
 		// Get the path for the current chunk based on Morton code
-		FString ChunkPath = GetChunkDirectory(ChunkMC);
+		FString ChunkPath = GetChunkDirectory(LevelPath, ChunkMC);
         
 		// Ensure the directory exists, create if necessary
 		if (!IFileManager::Get().DirectoryExists(*ChunkPath))
@@ -138,13 +137,10 @@ RSAP_API inline void SerializeNavMesh(FNavMeshType& NavMesh, FGuid& ID) // todo:
 			continue;
 		}
 
-		// Serialize the chunk data (adjust this part to match your chunk serialization logic)
+		// Serialize the chunk.
 		*ChunkFileArchive << ChunkData;
-
 		ChunkFileArchive->Close();
 		delete ChunkFileArchive;
-
-		UE_LOG(LogRsap, Log, TEXT("Serialized chunk, Path: '%s'"), *ChunkFilePath);
 	}
 }
 
@@ -152,12 +148,12 @@ RSAP_API inline void SerializeNavMesh(FNavMeshType& NavMesh, FGuid& ID) // todo:
 RSAP_API inline void SerializeChunks(FNavMeshType& NavMesh, FGuid& ID, const std::unordered_set<chunk_morton>& ChunkMCList)
 {
 	
-	for (const chunk_morton ChunkMC : ChunkMCList)
-	{
-		const FChunk& Chunk = NavMesh.find(ChunkMC)->second;
-		FString ChunkPath = GetChunkDirectory(ChunkMC);
-		UE_LOG(LogRsap, Log, TEXT("SerializeChunks, Path: '%s'"), *ChunkPath);
-	}
+	// for (const chunk_morton ChunkMC : ChunkMCList)
+	// {
+	// 	const FChunk& Chunk = NavMesh.find(ChunkMC)->second;
+	// 	FString ChunkPath = GetChunkDirectory(ChunkMC);
+	// 	UE_LOG(LogRsap, Log, TEXT("SerializeChunks, Path: '%s'"), *ChunkPath);
+	// }
 }
 
 RSAP_API inline bool DeserializeNavMesh(FNavMeshType& OutNavMesh, FGuid& OutID)
