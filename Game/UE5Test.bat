@@ -1,1 +1,0 @@
-start "" "C:\Program Files\Epic Games\UE_5.3\Engine\Binaries\Win64\UnrealEditor.exe" "C:\Projects\UE5MBHorror\Game\UE5MBHorror.uproject" -game -ResX=1920 -ResY=1080 -WinX=500 -WinY=200 -log

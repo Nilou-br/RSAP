@@ -1,10 +1,8 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 using UnrealBuildTool;
 
-public class UE5MBHorror : ModuleRules
+public class RSAP_Project : ModuleRules
 {
-	public UE5MBHorror(ReadOnlyTargetRules Target) : base(Target)
+	public RSAP_Project(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	

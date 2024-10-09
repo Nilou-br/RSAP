@@ -16,7 +16,7 @@
 	"Installed": false,
 	"Modules": [
 		{
-			"Name": "RSAP",
+			"Name": "RSAP_Game",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
 		},

@@ -1,9 +1,9 @@
 using System.IO;
 using UnrealBuildTool;
 
-public class RSAP : ModuleRules
+public class RSAP_Game : ModuleRules
 {
-	public RSAP(ReadOnlyTargetRules Target) : base(Target)
+	public RSAP_Game(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
         
