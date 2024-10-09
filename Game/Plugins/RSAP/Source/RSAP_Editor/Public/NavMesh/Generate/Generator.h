@@ -48,8 +48,8 @@ class FRsapGenerator
 
 	static layer_idx CalculateOptimalStartingLayer(const FGlobalBounds& Bounds);
 	static uint8 GetChildrenToRasterizeAndUpdateEdges(rsap_direction& EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks, layer_idx LayerIdx, layer_idx ChildLayerIdx);
-	static void RasterizeBounds(const UPrimitiveComponent* CollisionComponent);
-	static void Rasterize(const FGlobalBounds& AABB, FChunk& Chunk, const chunk_morton ChunkMC, FNode& Node, node_morton NodeMC, const FGlobalVector& NodeLocation, layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent, const bool bIsAABBContained);
+	static void RasterizeChunks(const UPrimitiveComponent* CollisionComponent);
+	static void RasterizeNode(const FGlobalBounds& AABB, FChunk& Chunk, const chunk_morton ChunkMC, FNode& Node, node_morton NodeMC, const FGlobalVector& NodeLocation, layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent, const bool bIsAABBContained);
 	static void RasterizeLeafNode(const FGlobalBounds& AABB, FLeafNode& LeafNode, const FGlobalVector& NodeLocation, const UPrimitiveComponent* CollisionComponent, const bool bIsAABBContained);
 
 	static const UWorld* World;
@@ -57,4 +57,5 @@ class FRsapGenerator
 
 public:
 	static void Generate(const UWorld* InWorld, const FNavMesh& InNavMesh, const FActorMap& ActorMap);
+	static void RegenerateChunks(const UWorld* InWorld, const FNavMesh& InNavMesh, const std::vector<chunk_morton>& ChunkMCs);
 };

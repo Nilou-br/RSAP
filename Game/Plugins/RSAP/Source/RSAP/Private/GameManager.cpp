@@ -43,9 +43,9 @@ void URsapGameManager::Tick(float DeltaTime)
 
 void URsapGameManager::OnWorldInitializedActors(const FActorsInitializedParams& ActorsInitializedParams)
 {
-	World = GetWorld();
-	if(!World || World->WorldType == EWorldType::Editor) return;
-	if(FGuid ID; !DeserializeNavMesh(*NavMesh, ID)) return;
-	
-	bWorldReady = true;
+	// World = GetWorld();
+	// if(!World || World->WorldType == EWorldType::Editor) return;
+	// if(FGuid ID; !DeserializeNavMesh(*NavMesh, ID)) return;
+	//
+	// bWorldReady = true;
 }

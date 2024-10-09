@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include "..\..\RSAP\Public\RSAP\LevelMetadata.h"
 #include "RSAP/Math/Bounds.h"
 #include "RSAP/NavMesh/Types/Chunk.h"
 #include "RsapEditorManager.generated.h"
@@ -28,24 +27,19 @@ class URsapEditorManager final : public UEditorSubsystem
 protected:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
-
-private:
-	static URsapLevelMetadata* LoadLevelSettings(const UWorld* World);
 	
 public:
 	UFUNCTION(BlueprintCallable, Category="Rsap | Navigation Mesh")
 	void Regenerate(const UWorld* World);
 
-	// UFUNCTION(BlueprintCallable, Category="Rsap | Navigation Mesh")
-	// URsapLevelMetadata* GetRsapLevelMetadata() const { return LevelMetadata; }
-
 private:
-	// UPROPERTY() URsapLevelMetadata* LevelMetadata;
-	
 	FNavMesh NavMesh;
+	bool bFullyRegenerated = false;
+	std::unordered_set<chunk_morton> ChunksToSerialize; // New/updated chunks pending to be serialized.
 
 	void OnEditorWorldInitialized(UWorld* World, const FActorBoundsMap& ActorBoundsMap);
 	void PreMapSaved();
+	void PostMapSaved(const bool bSuccess);
 	
 	void OnActorMoved(const actor_key ActorKey, const FMovedBounds& MovedBounds);
 	void OnActorAdded(const actor_key ActorKey, const FGlobalBounds& Bounds);

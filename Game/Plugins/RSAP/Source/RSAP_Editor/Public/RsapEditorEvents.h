@@ -9,7 +9,7 @@
 
 
 /**
- * Provides easy to read events to be used by the editor manager.
+ * Provides easy to read events to be used by the editor manager. todo: split getters to FRsapEditorUtils?
  */
 class FRsapEditorEvents
 {

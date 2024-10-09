@@ -89,29 +89,32 @@ void FRsapEditorEvents::Deinitialize()
 
 void FRsapEditorEvents::HandleWorldInitialized(UWorld* World, const UWorld::InitializationValues IVS)
 {
-	if (!IsValid(World) || World->WorldType != EWorldType::Editor)
+	World->GetTimerManager().SetTimerForNextTick([&]()
 	{
-		return;
-	}
+		if (!IsValid(World) || World->WorldType != EWorldType::Editor)
+		{
+			return;
+		}
 
-	// Get all the static-mesh actors.
-	TArray<AActor*> FoundActors; UGameplayStatics::GetAllActorsOfClass(World, AStaticMeshActor::StaticClass(), FoundActors);
+		// Get all the static-mesh actors.
+		TArray<AActor*> FoundActors; UGameplayStatics::GetAllActorsOfClass(World, AStaticMeshActor::StaticClass(), FoundActors);
 
-	// Cache all of their boundaries.
-	for (AActor* Actor : FoundActors)
-	{
-		// Skip the actors that don't have any collision.
-		if (!ActorHasCollisionComponent(Actor)) continue;
+		// Cache all of their boundaries.
+		for (AActor* Actor : FoundActors)
+		{
+			// Skip the actors that don't have any collision.
+			if (!ActorHasCollisionComponent(Actor)) continue;
 			
-		const actor_key ActorID = GetTypeHash(Actor->GetActorGuid());
-		const FGlobalBounds Bounds(Actor);
+			const actor_key ActorID = GetTypeHash(Actor->GetActorGuid());
+			const FGlobalBounds Bounds(Actor);
 
-		CachedActorBounds.emplace(ActorID, Bounds);
-		CachedActors.emplace(ActorID, Actor);
-	}
+			CachedActorBounds.emplace(ActorID, Bounds);
+			CachedActors.emplace(ActorID, Actor);
+		}
 
-	// Notify that the actors are ready.
-	if(OnWorldInitialized.IsBound()) OnWorldInitialized.Execute(World, CachedActorBounds);
+		// Notify that the actors are ready.
+		if(OnWorldInitialized.IsBound()) OnWorldInitialized.Execute(World, CachedActorBounds);
+	});
 }
 
 void FRsapEditorEvents::HandlePreMapSaved(UWorld* World, FObjectPreSaveContext PreSaveContext)
