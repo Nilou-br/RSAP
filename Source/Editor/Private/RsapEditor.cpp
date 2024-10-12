@@ -1,12 +1,12 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-#include "RSAP_Editor/Public/RsapEditor.h"
+#include "Rsap/RsapEditor.h"
 
 #include "LevelEditor.h"
-#include "RSAP_Editor/Public/RsapEditorEvents.h"
-#include "RSAP_Editor/Public/Menu/RsapMenu.h"
-#include "RSAP_Editor/Public/Menu/RsapStyle.h"
+#include "Rsap/RsapEditorEvents.h"
+#include "Rsap/Menu/RsapMenu.h"
+#include "Rsap/Menu/RsapStyle.h"
 
 #define LOCTEXT_NAMESPACE "RsapEditorModule"
 

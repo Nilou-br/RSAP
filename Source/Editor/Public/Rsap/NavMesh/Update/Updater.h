@@ -1,9 +1,9 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-#include "RSAP_Editor/Public/NavMesh/Update/UpdateTask.h"
-#include "RSAP/Definitions.h"
-#include "RSAP/Math/Bounds.h"
+#include "Rsap/NavMesh/Update/UpdateTask.h"
+#include "Rsap/Definitions.h"
+#include "Rsap/Math/Bounds.h"
 
 
 

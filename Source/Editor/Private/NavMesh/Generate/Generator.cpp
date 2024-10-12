@@ -1,12 +1,12 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-#include "RSAP_Editor/Public/NavMesh/Generate/Generator.h"
+#include "Rsap/NavMesh/Generate/Generator.h"
 #include <ranges>
 #include "RSAP/Math/Bounds.h"
 #include "RSAP/NavMesh/Types/Chunk.h"
 #include "RSAP/NavMesh/Types/Node.h"
-#include "RSAP_Editor/Public/RsapEditorEvents.h"
-#include "RSAP_Editor/Public/NavMesh/Shared/NMShared.h"
+#include "Rsap/RsapEditorEvents.h"
+#include "Rsap/NavMesh/Shared/NMShared.h"
 
 const UWorld*	FRsapGenerator::World;
 FNavMesh		FRsapGenerator::NavMesh;

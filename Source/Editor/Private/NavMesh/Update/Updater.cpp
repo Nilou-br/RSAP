@@ -1,6 +1,6 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-#include "RSAP_Editor/Public/NavMesh/Update/Updater.h"
+#include "Rsap/NavMesh/Update/Updater.h"
 #include "RSAP/Definitions.h"
 #include "RSAP/Math/Bounds.h"
 #include <set>

@@ -1,12 +1,12 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-#include "RSAP_Editor/Public/RsapEditorManager.h"
+#include "Rsap/RsapEditorManager.h"
 
 #include <ranges>
-#include "RSAP_Editor/Public/RsapEditorEvents.h"
-#include "RSAP_Editor/Public/NavMesh/Debugger.h"
-#include "RSAP_Editor/Public/NavMesh/Update/Updater.h"
-#include "RSAP_Editor/Public/NavMesh/Generate/Generator.h"
+#include "Rsap/RsapEditorEvents.h"
+#include "Rsap/NavMesh/Debugger.h"
+#include "Rsap/NavMesh/Update/Updater.h"
+#include "Rsap/NavMesh/Generate/Generator.h"
 #include "RSAP/NavMesh/Serialize.h"
 #include "Engine/World.h"
 #include "Editor.h"

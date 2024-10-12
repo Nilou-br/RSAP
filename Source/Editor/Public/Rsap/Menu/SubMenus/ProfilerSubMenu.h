@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "RSAP_Editor/Public/RsapEditorManager.h"
+#include "Rsap/RsapEditorManager.h"
 
 #define LOCTEXT_NAMESPACE "FRsapMenu"
 

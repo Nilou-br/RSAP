@@ -1,7 +1,7 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-#include "RSAP/Definitions.h"
+#include "Rsap/Definitions.h"
 
 using namespace Rsap::NavMesh;
 

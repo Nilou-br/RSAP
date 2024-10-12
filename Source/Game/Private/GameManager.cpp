@@ -1,12 +1,7 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-#include ""
-#include "RSAP/GameManager.h"
-#include "RSAP/Definitions.h"
-#include "Engine/World.h"
-#include "memory"
-#include "Camera/PlayerCameraManager.h"
-#include "GameFramework/PlayerController.h"
+#include "Rsap/GameManager.h"
+
 
 
 void URsapGameManager::Initialize(FSubsystemCollectionBase& Collection)

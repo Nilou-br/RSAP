@@ -3,7 +3,7 @@
 #pragma once
 
 #define LOCTEXT_NAMESPACE "FRsapMenu"
-#include "RSAP_Editor/Public/NavMesh/Debugger.h"
+#include "Rsap/NavMesh/Debugger.h"
 #include "Widgets/Input/SSlider.h"
 #include "Framework/Application/SlateApplication.h"
 

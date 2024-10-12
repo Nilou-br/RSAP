@@ -1,6 +1,8 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
+#include <unordered_set>
+
 #include "RSAP/Math/Vectors.h"
 
 using namespace Rsap::NavMesh;

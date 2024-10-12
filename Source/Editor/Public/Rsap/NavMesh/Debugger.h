@@ -2,9 +2,9 @@
 
 #pragma once
 
-#include "RSAP/Definitions.h"
-#include "RSAP_Editor/Public/RsapEditorEvents.h"
-#include "Update/Updater.h"
+#include "Rsap/Definitions.h"
+#include "Rsap/RsapEditorEvents.h"
+#include "Rsap/NavMesh/Update/Updater.h"
 
 
 

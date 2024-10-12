@@ -1,7 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
-#include "RSAP/Rsap.h"
-#include "RSAP/Definitions.h"
+#include "Rsap/Rsap.h"
+#include "Rsap/Definitions.h"
 
 #define LOCTEXT_NAMESPACE "FRsapModule"
 

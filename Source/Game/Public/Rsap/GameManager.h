@@ -1,13 +1,13 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-#include "NavMesh/Types/Chunk.h"
+#include "Rsap/NavMesh/Types/Chunk.h"
 #include "GameManager.generated.h"
 
 
 
 UCLASS()
-class RSAP_API URsapGameManager : public UWorldSubsystem, public FTickableGameObject
+class RSAPGAME_API URsapGameManager : public UWorldSubsystem, public FTickableGameObject
 {
 	GENERATED_BODY()
 
@@ -29,5 +29,4 @@ private:
 	bool bWorldReady;
 	FVector LastCameraLocation;
 	FRotator LastCameraRotation;
-	
 };

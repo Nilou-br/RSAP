@@ -1,6 +1,6 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-#include "RSAP_Editor/Public/NavMesh/Shared/NMShared.h"
+#include "Rsap/NavMesh/Shared/NMShared.h"
 #include "RSAP/Definitions.h"
 #include "RSAP/NavMesh/Types/Chunk.h"
 

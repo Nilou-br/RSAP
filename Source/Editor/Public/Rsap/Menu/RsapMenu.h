@@ -4,7 +4,7 @@
 
 #include "RsapStyle.h"
 #include "RSAP/Definitions.h"
-#include "RSAP_Editor/Public/RsapEditorManager.h"
+#include "Rsap/RsapEditorManager.h"
 #include "SubMenus/DebugSubMenu.h"
 #include "Submenus/ProfilerSubMenu.h"
 

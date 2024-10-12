@@ -16,12 +16,12 @@
 	"Installed": false,
 	"Modules": [
 		{
-			"Name": "RSAP_Game",
+			"Name": "RsapGame",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
 		},
 		{
-			"Name": "RSAP_Editor",
+			"Name": "RsapEditor",
 			"Type": "Editor",
 			"LoadingPhase": "Default"
 		}

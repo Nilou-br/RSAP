@@ -2,9 +2,8 @@
 
 #pragma once
 
-#include "Math/Bounds.h"
-#include "rsap"
-#include "NavMesh/Types/Chunk.h"
+#include "Rsap/Math/Bounds.h"
+#include "Rsap/NavMesh/Types/Chunk.h"
 #include "RsapEditorManager.generated.h"
 
 class FRsapUpdater;

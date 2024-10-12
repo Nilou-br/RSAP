@@ -2,13 +2,15 @@
 
 #pragma once
 
+#include <unordered_set>
+
 #include "../LevelMetadata.h"
 #include "Types/Chunk.h"
 #include "Types/Node.h"
 
 
 
-RSAP_API inline FArchive& operator<<(FArchive& Ar, FOctreeLayer& Layer)
+inline FArchive& operator<<(FArchive& Ar, FOctreeLayer& Layer)
 {
 	size_t Size = Layer.size();
 	Ar << Size;
@@ -41,7 +43,7 @@ RSAP_API inline FArchive& operator<<(FArchive& Ar, FOctreeLayer& Layer)
 	return Ar;
 }
 
-RSAP_API inline FArchive& operator<<(FArchive& Ar, const FChunk& Chunk){
+inline FArchive& operator<<(FArchive& Ar, const FChunk& Chunk){
 
 	// Only serialize the static-octree.
 	for (layer_idx LayerIdx = 0; LayerIdx <= Layer::NodeDepth; ++LayerIdx)
@@ -52,7 +54,7 @@ RSAP_API inline FArchive& operator<<(FArchive& Ar, const FChunk& Chunk){
 	return Ar;
 }
 
-RSAP_API inline FArchive& operator<<(FArchive& Ar, FNavMeshType& NavMesh){
+inline FArchive& operator<<(FArchive& Ar, FNavMeshType& NavMesh){
 	size_t Size = NavMesh.size();
 	Ar << Size;
 	if(Ar.IsSaving())
@@ -82,7 +84,7 @@ RSAP_API inline FArchive& operator<<(FArchive& Ar, FNavMeshType& NavMesh){
 }
 
 // Returns the directory the chunk should be stored in.
-RSAP_API inline FString GetChunkDirectory(const FString& LevelPath, const chunk_morton ChunkMC) // todo: profile
+inline FString GetChunkDirectory(const FString& LevelPath, const chunk_morton ChunkMC) // todo: profile
 {
 	FStringBuilderBase PathBuilder;
 	const uint64 GroupDirectory = ChunkMC >> 6;	// Group by certain amount of chunks. ChunkSize^3.
@@ -90,7 +92,7 @@ RSAP_API inline FString GetChunkDirectory(const FString& LevelPath, const chunk_
 	return PathBuilder.ToString();
 }
 
-RSAP_API inline void SerializeChunk(const FChunk& Chunk, const chunk_morton ChunkMC, const FString& NavmeshFolderPath)
+inline void SerializeChunk(const FChunk& Chunk, const chunk_morton ChunkMC, const FString& NavmeshFolderPath)
 {
 	const FString ChunkDirectory = GetChunkDirectory(NavmeshFolderPath, ChunkMC);
 	if (!IFileManager::Get().DirectoryExists(*ChunkDirectory)) IFileManager::Get().MakeDirectory(*ChunkDirectory, true);
@@ -110,7 +112,7 @@ RSAP_API inline void SerializeChunk(const FChunk& Chunk, const chunk_morton Chun
 }
 
 // Serialize all chunks within the navmesh.
-RSAP_API inline void SerializeNavMesh(const UWorld* World, FNavMeshType& NavMesh) // todo: Clear chunks that should not exist anymore.
+inline void SerializeNavMesh(const UWorld* World, FNavMeshType& NavMesh) // todo: Clear chunks that should not exist anymore.
 {
 	URsapLevelMetadata* Metadata = URsapLevelMetadata::Load(World);
 	Metadata->SavedChunkIDs.Empty();
@@ -126,7 +128,7 @@ RSAP_API inline void SerializeNavMesh(const UWorld* World, FNavMeshType& NavMesh
 }
 
 // Serialize certain chunks within the navmesh.
-RSAP_API inline void SerializeNavMesh(const UWorld* World, const FNavMeshType& NavMesh, const std::unordered_set<chunk_morton>& ChunksToSave, const std::unordered_set<chunk_morton>& ChunksToDelete = std::unordered_set<chunk_morton>())
+inline void SerializeNavMesh(const UWorld* World, const FNavMeshType& NavMesh, const std::unordered_set<chunk_morton>& ChunksToSave, const std::unordered_set<chunk_morton>& ChunksToDelete = std::unordered_set<chunk_morton>())
 {
 	URsapLevelMetadata* Metadata = URsapLevelMetadata::Load(World);
 	const FString BasePath = FPaths::ProjectDir() / TEXT("Rsap");
@@ -156,7 +158,7 @@ enum class EDeserializeResult
 	ChunkMisMatch	// Navmesh is found, but one or more chunks are out-of-sync.
 };
 
-RSAP_API inline EDeserializeResult DeserializeNavMesh(const UWorld* World, FNavMeshType& OutNavMesh, std::vector<chunk_morton>& OutMismatchedChunks)
+inline EDeserializeResult DeserializeNavMesh(const UWorld* World, FNavMeshType& OutNavMesh, std::vector<chunk_morton>& OutMismatchedChunks)
 {
 	const URsapLevelMetadata* LevelMetadata = URsapLevelMetadata::Load(World);
 	const FString BasePath = FPaths::ProjectDir() / TEXT("Rsap");

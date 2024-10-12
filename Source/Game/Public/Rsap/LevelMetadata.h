@@ -8,7 +8,7 @@
 
 
 UCLASS()
-class RSAP_API URsapLevelMetadata : public UAssetUserData
+class RSAPGAME_API URsapLevelMetadata : public UAssetUserData
 {
 	GENERATED_BODY()
 

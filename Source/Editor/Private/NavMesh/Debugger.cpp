@@ -1,16 +1,14 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-#include "RSAP_Editor/Public/NavMesh/Debugger.h"
+#include "Rsap/NavMesh/Debugger.h"
 
 #include <bitset>
 #include <string>
 
-#include "RSAP/Math/Bounds.h"
-#include "RSAP/Math/Morton.h"
-#include "RSAP/Math/Vectors.h"
-#include "RSAP/NavMesh/Types/Chunk.h"
-#include "RSAP/NavMesh/Types/Node.h"
-#include "RSAP_Editor/Public/RsapEditorEvents.h"
+#include "Rsap/Math/Morton.h"
+#include "Rsap/Math/Vectors.h"
+#include "Rsap/NavMesh/Types/Chunk.h"
+#include "Rsap/NavMesh/Types/Node.h"
 
 const UWorld*	FRsapDebugger::World;
 FNavMesh		FRsapDebugger::NavMesh;
