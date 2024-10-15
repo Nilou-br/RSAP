@@ -19,8 +19,7 @@ class FRsapEditorEvents
 		FGlobalBounds Bounds;
 	};
 
-	DECLARE_DELEGATE_TwoParams(FOnWorldInitialized, UWorld*, const FActorBoundsMap&);
-	DECLARE_DELEGATE_OneParam(FOnMapOpened, const FActorBoundsMap&);
+	DECLARE_DELEGATE_TwoParams(FOnMapOpened, UWorld* EditorWorld, const FActorBoundsMap&);
 	DECLARE_DELEGATE(FPreMapSaved);
 	DECLARE_DELEGATE_OneParam(FPostMapSaved, const bool bSuccess);
 	
@@ -34,7 +33,7 @@ public:
 	static void Initialize();
 	static void Deinitialize();
 
-	static FOnWorldInitialized	OnWorldInitialized;
+	static FOnMapOpened			OnMapOpened;
 	static FPreMapSaved			PreMapSaved;
 	static FPostMapSaved		PostMapSaved;
 	
@@ -55,7 +54,7 @@ private:
 	static FActorBoundsMap CachedActorBounds; // Easier to manage when stored separately.
 	static std::vector<actor_key> SelectedActors;
 
-	static FDelegateHandle WorldInitializedHandle;		static void HandleWorldInitialized(UWorld* World, const UWorld::InitializationValues IVS);
+	static FDelegateHandle MapOpenedHandle;				static void HandleMapOpened(const FString& Filename, bool bAsTemplate);
 	static FDelegateHandle PreMapSavedHandle;			static void HandlePreMapSaved(UWorld* World, FObjectPreSaveContext PreSaveContext);
 	static FDelegateHandle PostMapSavedHandle;			static void HandlePostMapSaved(UWorld* World, FObjectPostSaveContext PostSaveContext);
 	

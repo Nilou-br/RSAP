@@ -19,7 +19,7 @@ std::vector<actor_key>				FRsapEditorEvents::SelectedActors;
 
 // Delegates
 
-FRsapEditorEvents::FOnWorldInitialized	FRsapEditorEvents::OnWorldInitialized;
+FRsapEditorEvents::FOnMapOpened			FRsapEditorEvents::OnMapOpened;
 FRsapEditorEvents::FPreMapSaved			FRsapEditorEvents::PreMapSaved;
 FRsapEditorEvents::FPostMapSaved		FRsapEditorEvents::PostMapSaved;
 
@@ -32,7 +32,7 @@ FRsapEditorEvents::FOnCameraMoved		FRsapEditorEvents::OnCameraMoved;
 
 // Delegate handles:
 
-FDelegateHandle FRsapEditorEvents::WorldInitializedHandle;
+FDelegateHandle FRsapEditorEvents::MapOpenedHandle;
 FDelegateHandle FRsapEditorEvents::PreMapSavedHandle;
 FDelegateHandle FRsapEditorEvents::PostMapSavedHandle;
 
@@ -60,7 +60,7 @@ bool FRsapEditorEvents::ActorHasCollisionComponent(const AActor* Actor)
 
 void FRsapEditorEvents::Initialize()
 {
-	FWorldDelegates::OnPostWorldInitialization.AddStatic(&FRsapEditorEvents::HandleWorldInitialized);
+	MapOpenedHandle = FEditorDelegates::OnMapOpened.AddStatic(&FRsapEditorEvents::HandleMapOpened);
 	PreMapSavedHandle = FEditorDelegates::PreSaveWorldWithContext.AddStatic(&FRsapEditorEvents::HandlePreMapSaved);
 	PostMapSavedHandle = FEditorDelegates::PostSaveWorldWithContext.AddStatic(&FRsapEditorEvents::HandlePostMapSaved);
 	
@@ -76,8 +76,8 @@ void FRsapEditorEvents::Deinitialize()
 	//FEditorDelegates::OnMapLoad
 	//FWorldDelegates::OnWorldBeginTearDown;
 	//FWorldDelegates::OnWorldInitializedActors;
-	
-	FWorldDelegates::OnPostWorldInitialization.Remove(WorldInitializedHandle); WorldInitializedHandle.Reset();
+
+	FEditorDelegates::OnMapOpened.Remove(MapOpenedHandle); MapOpenedHandle.Reset();
 	FEditorDelegates::PreSaveWorldWithContext.Remove(PreMapSavedHandle); PreMapSavedHandle.Reset();
 	FEditorDelegates::PostSaveWorldWithContext.Remove(PostMapSavedHandle); PostMapSavedHandle.Reset();
 	
@@ -87,14 +87,13 @@ void FRsapEditorEvents::Deinitialize()
 	FEditorDelegates::OnEditorCameraMoved.Remove(OnCameraMovedHandle); OnCameraMovedHandle.Reset();
 }
 
-void FRsapEditorEvents::HandleWorldInitialized(UWorld* World, const UWorld::InitializationValues IVS)
+void FRsapEditorEvents::HandleMapOpened(const FString& Filename, bool bAsTemplate)
 {
-	World->GetTimerManager().SetTimerForNextTick([&]()
+	// Static-mesh actors are initialized next frame. ( FWorldDelegates::OnWorldInitializedActors event doesn't have them initialized for some reason. )
+	GEditor->GetEditorWorldContext().World()->GetTimerManager().SetTimerForNextTick([&]()
 	{
-		if (!IsValid(World) || World->WorldType != EWorldType::Editor)
-		{
-			return;
-		}
+		UWorld* World = GEditor->GetEditorWorldContext().World();
+		if (!IsValid(World) || World->WorldType != EWorldType::Editor) return;
 
 		// Get all the static-mesh actors.
 		TArray<AActor*> FoundActors; UGameplayStatics::GetAllActorsOfClass(World, AStaticMeshActor::StaticClass(), FoundActors);
@@ -113,7 +112,7 @@ void FRsapEditorEvents::HandleWorldInitialized(UWorld* World, const UWorld::Init
 		}
 
 		// Notify that the actors are ready.
-		if(OnWorldInitialized.IsBound()) OnWorldInitialized.Execute(World, CachedActorBounds);
+		if(OnMapOpened.IsBound()) OnMapOpened.Execute(World, CachedActorBounds);
 	});
 }
 

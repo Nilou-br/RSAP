@@ -19,7 +19,7 @@ void URsapEditorManager::Initialize(FSubsystemCollectionBase& Collection)
 	NavMesh = std::make_shared<FNavMeshType>();
 	FRsapUpdater::GetInstance();
 
-	FRsapEditorEvents::OnWorldInitialized.BindUObject(this, &ThisClass::OnEditorWorldInitialized);
+	FRsapEditorEvents::OnMapOpened.BindUObject(this, &ThisClass::OnEditorWorldInitialized);
 	FRsapEditorEvents::PreMapSaved.BindUObject(this, &ThisClass::PreMapSaved);
 	FRsapEditorEvents::PostMapSaved.BindUObject(this, &ThisClass::PostMapSaved);
 
@@ -34,7 +34,7 @@ void URsapEditorManager::Deinitialize()
 {
 	NavMesh.reset();
 	
-	FRsapEditorEvents::OnWorldInitialized.Unbind();
+	FRsapEditorEvents::OnMapOpened.Unbind();
 	FRsapEditorEvents::PreMapSaved.Unbind();
 	FRsapEditorEvents::PostMapSaved.Unbind();
 
