@@ -87,11 +87,13 @@ void URsapEditorManager::OnEditorWorldInitialized(UWorld* World, const FActorBou
 			if(World->GetOuter()->MarkPackageDirty()) UE_LOG(LogRsap, Log, TEXT("Generation complete. The sound-navigation-mesh will be cached when you save the map."));
 			break;
 	}
+	
+	FRsapDebugger::Start(NavMesh);
 
 	return;
+
 	// Start the updater/debugger. todo: stop before closing map.
 	FRsapUpdater::GetInstance().Start(World, NavMesh);
-	FRsapDebugger::Start(World, NavMesh);
 	
 	// Backup code to wait for update complete ( for PIE start during update scenario ):
 	// NavMeshUpdater->StageData(Data);

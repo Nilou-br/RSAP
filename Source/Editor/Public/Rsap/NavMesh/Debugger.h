@@ -13,9 +13,8 @@ class FRsapDebugger
 public:
 	explicit FRsapDebugger(){}
 
-	static void Start(const UWorld* InWorld, const FNavMesh& InNavMesh)
+	static void Start(const FNavMesh& InNavMesh)
 	{
-		World = InWorld;
 		NavMesh = InNavMesh;
 
 		NavMeshUpdatedHandle = FRsapUpdater::OnUpdateComplete.AddStatic(&FRsapDebugger::OnNavMeshUpdated);
@@ -23,7 +22,6 @@ public:
 	}
 	static void Stop()
 	{
-		World = nullptr;
 		NavMesh->clear();
 
 		FRsapUpdater::OnUpdateComplete.Remove(NavMeshUpdatedHandle); NavMeshUpdatedHandle.Reset();
@@ -34,11 +32,11 @@ private:
 	static void Draw();
 	static void Draw(const FVector& CameraLocation, const FRotator& CameraRotation);
 
-	static void DrawNode(const FGlobalVector& NodeCenter, const layer_idx LayerIdx);
-	static void DrawLeafNode(const FChunk& Chunk, FGlobalVector ChunkLocation, node_morton NodeMC, const FVector& CameraLocation);
-	static void DrawNodes(const FChunk& Chunk, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation);
-	static void DrawNodeInfo(const node_morton NodeMC, const FGlobalVector& NodeCenter, layer_idx LayerIdx);
-	static void DrawNodeRelations(const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeCenter, const layer_idx LayerIdx);
+	static void DrawNode(const UWorld* World, const FGlobalVector& NodeCenter, const layer_idx LayerIdx);
+	static void DrawLeafNode(const UWorld* World, const FChunk& Chunk, FGlobalVector ChunkLocation, node_morton NodeMC, const FVector& CameraLocation);
+	static void DrawNodes(const UWorld* World, const FChunk& Chunk, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation);
+	static void DrawNodeInfo(const UWorld* World, const node_morton NodeMC, const FGlobalVector& NodeCenter, layer_idx LayerIdx);
+	static void DrawNodeRelations(const UWorld* World, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeCenter, const layer_idx LayerIdx);
 
 	static void OnNavMeshUpdated()
 	{
@@ -49,7 +47,6 @@ private:
 		if(!FRsapUpdater::GetInstance().IsRunningTask()) Draw(CameraLocation, CameraRotation);
 	}
 
-	static const UWorld* World;
 	static FNavMesh NavMesh;
 	static FDelegateHandle NavMeshUpdatedHandle;
 
@@ -106,6 +103,7 @@ private:
 
 	static void FlushDebug()
 	{
+		const UWorld* World = GEditor->GetEditorWorldContext().World();
 		FlushPersistentDebugLines(World);
 		FlushDebugStrings(World);
 	}
