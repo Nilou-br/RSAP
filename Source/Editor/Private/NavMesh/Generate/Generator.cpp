@@ -120,7 +120,7 @@ void FRsapGenerator::RasterizeChunks(const UPrimitiveComponent* CollisionCompone
 	chunk_morton ChunkMC = StartingChunkMC; // Will be updated when iterating into a new chunk.
 
 	// Keep track of the current chunk.
-	FChunk* CurrentChunk = FChunk::TryFind(NavMesh, ChunkMC);
+	FRsapChunk* CurrentChunk = FRsapChunk::TryFind(NavMesh, ChunkMC);
 
 	// This mask represents the edges that have nodes that can be skipped. When we are at an edge in a certain direction, then that direction will certainly have nodes that can be skipped.
 	rsap_direction EdgesToCheck = 0b111000; // Initially set to be on the negative edge in every direction.
@@ -132,7 +132,7 @@ void FRsapGenerator::RasterizeChunks(const UPrimitiveComponent* CollisionCompone
 		if(ChunkMC != NewChunkMC)
 		{
 			ChunkMC = NewChunkMC;
-			CurrentChunk = FChunk::TryFind(NavMesh, ChunkMC);
+			CurrentChunk = FRsapChunk::TryFind(NavMesh, ChunkMC);
 		}
 	};
 
@@ -165,18 +165,18 @@ void FRsapGenerator::RasterizeChunks(const UPrimitiveComponent* CollisionCompone
 					
 				if(!CurrentChunk)
 				{
-					if(!FChunk::HasComponentOverlap(CollisionComponent, NodeLocation.RoundToChunk()))
+					if(!FRsapChunk::HasComponentOverlap(CollisionComponent, NodeLocation.RoundToChunk()))
 					{
 						// Will very likely be a corner of an AABB that slightly intersects with this new chunk. Otherwise large geometry like terrain which has a large starting layer.
 						HandleIterateX(NodeLocation);
 						continue;
 					}
-					CurrentChunk = &FChunk::TryInit(NavMesh, ChunkMC);
+					CurrentChunk = &FRsapChunk::TryInit(NavMesh, ChunkMC);
 				}
 
 				// todo: when creating updater, try to find a node first, then if nullptr check if collision, and if collision true then init node.
 				// First check if there is any overlap.
-				if(!FNode::HasComponentOverlap(CollisionComponent, NodeLocation, LayerIdx, true))
+				if(!FRsapNode::HasComponentOverlap(CollisionComponent, NodeLocation, LayerIdx, true))
 				{
 					HandleIterateX(NodeLocation);
 					continue;
@@ -186,12 +186,12 @@ void FRsapGenerator::RasterizeChunks(const UPrimitiveComponent* CollisionCompone
 				// There is an overlap, so get/init the node or leaf-node, and also init/update any missing parent.
 				if(LayerIdx < Layer::NodeDepth)
 				{
-					FNode& Node = FNmShared::InitNodeAndParents(NavMesh, *CurrentChunk, ChunkMC, NodeMC, LayerIdx, 0, Negative::XYZ);
+					FRsapNode& Node = FNmShared::InitNodeAndParents(NavMesh, *CurrentChunk, ChunkMC, NodeMC, LayerIdx, 0, Negative::XYZ);
 					RasterizeNode(AABB, *CurrentChunk, ChunkMC, Node, NodeMC, NodeLocation, LayerIdx, CollisionComponent, false);
 				}
 				else
 				{
-					FLeafNode& LeafNode = FNmShared::InitLeafNodeAndParents(NavMesh, *CurrentChunk, ChunkMC, NodeMC, 0);
+					FRsapLeaf& LeafNode = FNmShared::InitLeafNodeAndParents(NavMesh, *CurrentChunk, ChunkMC, NodeMC, 0);
 					RasterizeLeafNode(AABB, LeafNode, NodeLocation, CollisionComponent, false);
 				}
 				
@@ -220,14 +220,14 @@ void FRsapGenerator::RasterizeChunks(const UPrimitiveComponent* CollisionCompone
 
 // todo: unroll this method along with ::GetChildRasterizeMask.
 // Re-rasterizes the node while skipping children that are not intersecting with the actor's boundaries.
-void FRsapGenerator::RasterizeNode(const FGlobalBounds& AABB, FChunk& Chunk, const chunk_morton ChunkMC, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent, const bool bIsAABBContained)
+void FRsapGenerator::RasterizeNode(const FGlobalBounds& AABB, FRsapChunk& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent, const bool bIsAABBContained)
 {
 	// Create the children.
 	const layer_idx ChildLayerIdx = LayerIdx+1;
 	for(child_idx ChildIdx = 0; ChildIdx < 8; ++ChildIdx)
 	{
 		bool bIsChildContained = bIsAABBContained;
-		const FGlobalVector ChildNodeLocation = FNode::GetChildLocation(NodeLocation, ChildLayerIdx, ChildIdx);
+		const FGlobalVector ChildNodeLocation = FRsapNode::GetChildLocation(NodeLocation, ChildLayerIdx, ChildIdx);
 
 		// Skip if not overlapping.
 		// Do a simple trace if the node is intersecting with the AABB.
@@ -235,23 +235,23 @@ void FRsapGenerator::RasterizeNode(const FGlobalBounds& AABB, FChunk& Chunk, con
 		if(!bIsAABBContained)
 		{
 			// Not contained, so do a fast AABB intersection check, and do the actual trace when overlapping. Complex only when contained.
-			switch (FNode::HasAABBIntersection(AABB, ChildNodeLocation, ChildLayerIdx))
+			switch (FRsapNode::HasAABBIntersection(AABB, ChildNodeLocation, ChildLayerIdx))
 			{
 				case EAABBOverlapResult::NoOverlap: continue;
 				case EAABBOverlapResult::Intersect:
-					if(!FNode::HasComponentOverlap(CollisionComponent, ChildNodeLocation, ChildLayerIdx, false)) continue;
+					if(!FRsapNode::HasComponentOverlap(CollisionComponent, ChildNodeLocation, ChildLayerIdx, false)) continue;
 					break;
 				case EAABBOverlapResult::Contained:
-					if(!FNode::HasComponentOverlap(CollisionComponent, ChildNodeLocation, ChildLayerIdx, true )) continue;
+					if(!FRsapNode::HasComponentOverlap(CollisionComponent, ChildNodeLocation, ChildLayerIdx, true )) continue;
 					bIsChildContained = true;
 					break;
 			}
 		}
-		else if(!FNode::HasComponentOverlap(CollisionComponent, ChildNodeLocation, ChildLayerIdx, true)) continue;
+		else if(!FRsapNode::HasComponentOverlap(CollisionComponent, ChildNodeLocation, ChildLayerIdx, true)) continue;
 		
 		const node_morton ChildNodeMC = FMortonUtils::Node::GetChild(NodeMC, ChildLayerIdx, ChildIdx);
 
-		// FNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk.GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk.TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
+		// FRsapNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk.GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk.TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
 		// FNmShared::SetNodeRelations(NavMesh, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildLayerIdx, Direction::Negative::XYZ);
 		// Node.SetChildActive(ChildIdx);
 		// if(ChildLayerIdx < Layer::StaticDepth) FilteredRasterize(Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildNodeLocation, ChildLayerIdx, EdgesToCheck, LayerSkipMasks, CollisionComponent);;
@@ -259,13 +259,13 @@ void FRsapGenerator::RasterizeNode(const FGlobalBounds& AABB, FChunk& Chunk, con
 		// Start test
 		if(ChildLayerIdx < Layer::NodeDepth) // todo: remove and uncomment above code when done testing leaf nodes.
 		{
-			FNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk.GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk.TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
+			FRsapNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk.GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk.TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
 			RasterizeNode(AABB, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildNodeLocation, ChildLayerIdx, CollisionComponent, bIsChildContained);
 			FNmShared::SetNodeRelations(NavMesh, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildLayerIdx, Direction::Negative::XYZ);
 		}
 		else
 		{
-			FLeafNode& LeafNode = Node.DoesChildExist(ChildIdx) ? Chunk.GetLeafNode(ChildNodeMC, 0) : Chunk.TryInitLeafNode(ChildNodeMC, 0);
+			FRsapLeaf& LeafNode = Node.DoesChildExist(ChildIdx) ? Chunk.GetLeafNode(ChildNodeMC, 0) : Chunk.TryInitLeafNode(ChildNodeMC, 0);
 			RasterizeLeafNode(AABB, LeafNode, ChildNodeLocation, CollisionComponent, bIsChildContained);
 		}
 
@@ -274,7 +274,7 @@ void FRsapGenerator::RasterizeNode(const FGlobalBounds& AABB, FChunk& Chunk, con
 	}
 }
 
-void FRsapGenerator::RasterizeLeafNode(const FGlobalBounds& AABB, FLeafNode& LeafNode, const FGlobalVector& NodeLocation, const UPrimitiveComponent* CollisionComponent, const bool bIsAABBContained)
+void FRsapGenerator::RasterizeLeafNode(const FGlobalBounds& AABB, FRsapLeaf& LeafNode, const FGlobalVector& NodeLocation, const UPrimitiveComponent* CollisionComponent, const bool bIsAABBContained)
 {
 	// DrawDebugBox(World, *(NodeLocation + Node::HalveSizes[Layer::NodeDepth]), FVector(Node::HalveSizes[Layer::NodeDepth]), FColor::Red, true, -1, 0, .1);
 
@@ -282,8 +282,8 @@ void FRsapGenerator::RasterizeLeafNode(const FGlobalBounds& AABB, FLeafNode& Lea
 	
 	for(child_idx LeafGroupIdx = 0; LeafGroupIdx < 8; ++LeafGroupIdx)
 	{
-		const FGlobalVector GroupLocation = FNode::GetChildLocation(NodeLocation, Layer::GroupedLeaf, LeafGroupIdx);
-		if(!FNode::HasComponentOverlap(CollisionComponent, GroupLocation, Layer::GroupedLeaf, true))
+		const FGlobalVector GroupLocation = FRsapNode::GetChildLocation(NodeLocation, Layer::GroupedLeaf, LeafGroupIdx);
+		if(!FRsapNode::HasComponentOverlap(CollisionComponent, GroupLocation, Layer::GroupedLeaf, true))
 		{
 			// todo: for updater, clear these 8 bits.
 			continue;
@@ -296,7 +296,7 @@ void FRsapGenerator::RasterizeLeafNode(const FGlobalBounds& AABB, FLeafNode& Lea
 		child_idx LeafIdx = 0;
 		for(const uint8 Leaf : Node::Children::Masks)
 		{
-			if(!FNode::HasComponentOverlap(CollisionComponent, FNode::GetChildLocation(GroupLocation, Layer::Leaf, LeafIdx++), Layer::Leaf, true))
+			if(!FRsapNode::HasComponentOverlap(CollisionComponent, FRsapNode::GetChildLocation(GroupLocation, Layer::Leaf, LeafIdx++), Layer::Leaf, true))
 			{
 				// todo: for updater, clear this single bit.
 				continue;

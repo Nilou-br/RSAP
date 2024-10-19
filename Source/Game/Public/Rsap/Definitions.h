@@ -174,9 +174,9 @@ namespace Rsap::NavMesh::Direction
 	static inline constexpr rsap_direction List[6] = {Negative::X, Negative::Y, Negative::Z, Positive::X, Positive::Y, Positive::Z};	
 }
 
-struct FChunk;
-struct FNode;
-struct FNodeVector;
+struct FRsapChunk;
+struct FRsapNode;
+struct FLocalVector;
 struct FGlobalVector;
 
 // Used map types.
@@ -189,11 +189,11 @@ namespace Rsap::Map
 	using ordered_map = std::map<Key, T, Compare, Allocator>;
 }
 
-typedef Rsap::Map::ordered_map<chunk_morton, FChunk> FNavMeshType;
+typedef Rsap::Map::ordered_map<chunk_morton, FRsapChunk> FNavMeshType;
 typedef std::shared_ptr<FNavMeshType> FNavMesh;
-// typedef Rsap::Map::ordered_map<chunk_morton, FChunk> FNavMeshEditorType;
+// typedef Rsap::Map::ordered_map<chunk_morton, FRsapChunk> FNavMeshEditorType;
 // typedef std::shared_ptr<FNavMeshEditorType> FNavMeshEditor;
-// typedef Rsap::Map::flat_map<chunk_morton, FChunk> FNavMeshGameType;
+// typedef Rsap::Map::flat_map<chunk_morton, FRsapChunk> FNavMeshGameType;
 // typedef std::shared_ptr<FNavMeshGameType> FNavMeshGame;
 
 typedef Rsap::Map::flat_map<actor_key, TWeakObjectPtr<const AActor>> FActorMap;

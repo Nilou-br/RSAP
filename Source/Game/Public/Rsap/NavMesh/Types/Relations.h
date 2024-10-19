@@ -11,9 +11,8 @@ using namespace Rsap::NavMesh;
  * Each side of a node holds a relation to another node. There is a relation for each side of a node, and it stores the layer and type of the node in this direction.
  * Used for pathfinding. Relations are certain to be valid, meaning we won't have to check for this validity.
  */
-struct FNodeRelations
+struct FRsapRelations 
 {
-	
 	rsap_direction LayerIdx_Negative_X: 4 = Layer::Empty;
 	rsap_direction LayerIdx_Negative_Y: 4 = Layer::Empty;
 	rsap_direction LayerIdx_Negative_Z: 4 = Layer::Empty;

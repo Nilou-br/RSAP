@@ -66,7 +66,7 @@ private:
 	FORCEINLINE static uint8 GetChildrenToRasterizeAndUpdateEdges(rsap_direction& EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks, const layer_idx LayerIdx, const layer_idx ChildLayerIdx);
 	
 	void ReRasterizeBounds(const UPrimitiveComponent* CollisionComponent);
-	FORCEINLINE void ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent);
+	FORCEINLINE void ReRasterizeNode(FRsapChunk* Chunk, FRsapNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent);
 
 protected:
 	virtual bool Init() override { return true; }

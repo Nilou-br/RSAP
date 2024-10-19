@@ -23,10 +23,10 @@ enum class EAABBOverlapResult
 template<typename VectorType>
 struct TBounds
 {
-	static_assert(std::is_same_v<VectorType, FGlobalVector> || std::is_same_v<VectorType, FNodeVector>, "TBounds can only be instantiated with FGlobalVector or FNodeVector");
+	static_assert(std::is_same_v<VectorType, FGlobalVector> || std::is_same_v<VectorType, FLocalVector>, "TBounds can only be instantiated with FGlobalVector or FLocalVector");
 
 	using FGlobalBounds = TBounds<FGlobalVector>;
-	using FNodeBounds = TBounds<FNodeVector>;
+	using FRsapNodeBounds = TBounds<FLocalVector>;
 	
 	VectorType Min;
 	VectorType Max;
@@ -134,9 +134,9 @@ struct TBounds
 	}
 
 	template<typename T = VectorType>
-	FORCEINLINE auto operator&(const uint16 Mask) const -> std::enable_if_t<std::is_same_v<T, FNodeVector>, FNodeBounds>
+	FORCEINLINE auto operator&(const uint16 Mask) const -> std::enable_if_t<std::is_same_v<T, FLocalVector>, FRsapNodeBounds>
 	{
-		return FNodeBounds(Min & Mask, Max & Mask, bIsValid);
+		return FRsapNodeBounds(Min & Mask, Max & Mask, bIsValid);
 	}
 
 	FORCEINLINE bool operator!() const
@@ -161,9 +161,9 @@ struct TBounds
 
 	// // Rounds the bounds to the layer's node-size in morton-space. Min will be rounded down, Max will be rounded up.
 	// template<typename T = VectorType>
-	// FORCEINLINE auto RoundToLayer(const layer_idx LayerIdx) const -> std::enable_if_t<std::is_same_v<T, FNodeVector>, FNodeBounds>
+	// FORCEINLINE auto RoundToLayer(const layer_idx LayerIdx) const -> std::enable_if_t<std::is_same_v<T, FLocalVector>, FRsapNodeBounds>
 	// {
-	// 	FNodeBounds Rounded = *this & Rsap::NavMesh::Layer::LocalMasks[LayerIdx];
+	// 	FRsapNodeBounds Rounded = *this & Rsap::NavMesh::Layer::LocalMasks[LayerIdx];
 	//
 	// 	// Round the max up.
 	// 	// The '-1' is to adjust to nodes in morton-space. Because the origin of a node is at its negative most corner. So if Min/Max are equal, then they hold the same node. Min/Max just determine the 'first' and 'last' node in the bounds.
@@ -281,15 +281,15 @@ struct TBounds
 	}
 
 	template<typename T = VectorType>
-	FORCEINLINE auto ToNodeSpace(const FGlobalVector& ChunkLocation) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, FNodeBounds>
+	FORCEINLINE auto ToNodeSpace(const FGlobalVector& ChunkLocation) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, FRsapNodeBounds>
 	{
-		const FNodeVector LocalMin = ( Min-ChunkLocation << SizeExponent).ToNodeVector();
-		const FNodeVector LocalMax = ((Max-ChunkLocation << SizeExponent) - Leaf::Size).ToNodeVector();
-		return FNodeBounds(LocalMin, LocalMax, IsValid());
+		const FLocalVector LocalMin = ( Min-ChunkLocation << SizeExponent).ToNodeVector();
+		const FLocalVector LocalMax = ((Max-ChunkLocation << SizeExponent) - Leaf::Size).ToNodeVector();
+		return FRsapNodeBounds(LocalMin, LocalMax, IsValid());
 	}
 
 	template<typename T = VectorType>
-	FORCEINLINE auto ToGlobalSpace(const FGlobalVector& ChunkLocation) const -> std::enable_if_t<std::is_same_v<T, FNodeVector>, FGlobalBounds>
+	FORCEINLINE auto ToGlobalSpace(const FGlobalVector& ChunkLocation) const -> std::enable_if_t<std::is_same_v<T, FLocalVector>, FGlobalBounds>
 	{
 		const FGlobalVector LocalMin = (FGlobalVector(Min) >> SizeExponent) + ChunkLocation;
 		const FGlobalVector LocalMax = ((FGlobalVector(Max) + Leaf::Size) >> SizeExponent) + ChunkLocation;
@@ -305,7 +305,7 @@ struct TBounds
 	}
 
 	template<typename T = VectorType>
-	FORCEINLINE auto Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const FColor Color = FColor::Black) const -> std::enable_if_t<std::is_same_v<T, FNodeVector>, void>
+	FORCEINLINE auto Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const FColor Color = FColor::Black) const -> std::enable_if_t<std::is_same_v<T, FLocalVector>, void>
 	{
 		ToGlobalSpace(ChunkLocation).Draw(World, Color);
 	}
@@ -342,7 +342,7 @@ struct TBounds
 };
 
 typedef TBounds<FGlobalVector> FGlobalBounds;
-typedef TBounds<FNodeVector> FNodeBounds;
+typedef TBounds<FLocalVector> FRsapNodeBounds;
 
 // Type used for updating the navmesh.
 // Will store all the previous known bounds of the actor since last update, paired with its current bounds.
@@ -357,12 +357,12 @@ typedef Rsap::Map::flat_map<actor_key, FGlobalBounds> FActorBoundsMap;
 /**
  * Pair of bounds for storing changes that have happened.
  * 
- * @tparam VectorType FGlobalVector or FNodeVector
+ * @tparam VectorType FGlobalVector or FLocalVector
  */
 template<typename VectorType>
 struct TMovedBounds
 {
-	static_assert(std::is_same_v<VectorType, FGlobalVector> || std::is_same_v<VectorType, FNodeVector>, "TMovedBounds can only be instantiated with FGlobalVector or FNodeVector");
+	static_assert(std::is_same_v<VectorType, FGlobalVector> || std::is_same_v<VectorType, FLocalVector>, "TMovedBounds can only be instantiated with FGlobalVector or FLocalVector");
 
 	using FBounds = TBounds<VectorType>;
 	
@@ -387,7 +387,7 @@ struct TMovedBounds
 };
 
 typedef TMovedBounds<FGlobalVector> FMovedBounds;
-typedef TMovedBounds<FNodeVector> FChangedMortonBounds;
+typedef TMovedBounds<FLocalVector> FChangedMortonBounds;
 
 // Map associating an actor with changed boundaries. To hold changes that have happened for multiple actors.
 typedef Rsap::Map::flat_map<actor_key, FMovedBounds> FMovedBoundsMap;

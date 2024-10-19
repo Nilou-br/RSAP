@@ -3,7 +3,7 @@
 #pragma once
 
 #include "Rsap/Definitions.h"
-#include "..\EditorWorld.h"
+#include "Rsap/EditorWorld.h"
 #include "Rsap/NavMesh/Update/Updater.h"
 
 
@@ -33,10 +33,10 @@ private:
 	static void Draw(const FVector& CameraLocation, const FRotator& CameraRotation);
 
 	static void DrawNode(const UWorld* World, const FGlobalVector& NodeCenter, const layer_idx LayerIdx);
-	static void DrawLeafNode(const UWorld* World, const FChunk& Chunk, FGlobalVector ChunkLocation, node_morton NodeMC, const FVector& CameraLocation);
-	static void DrawNodes(const UWorld* World, const FChunk& Chunk, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation);
+	static void DrawLeafNode(const UWorld* World, const FRsapChunk& Chunk, FGlobalVector ChunkLocation, node_morton NodeMC, const FVector& CameraLocation);
+	static void DrawNodes(const UWorld* World, const FRsapChunk& Chunk, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation);
 	static void DrawNodeInfo(const UWorld* World, const node_morton NodeMC, const FGlobalVector& NodeCenter, layer_idx LayerIdx);
-	static void DrawNodeRelations(const UWorld* World, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeCenter, const layer_idx LayerIdx);
+	static void DrawNodeRelations(const UWorld* World, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const FRsapNode& Node, const node_morton NodeMC, const FGlobalVector& NodeCenter, const layer_idx LayerIdx);
 
 	static void OnNavMeshUpdated()
 	{

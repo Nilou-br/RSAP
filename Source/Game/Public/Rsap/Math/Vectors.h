@@ -15,13 +15,13 @@ struct TRsapVector
 	IntType Z : NumBits;
 };
 
-// typedef TRsapVector<uint16, 10> FNodeVector;
+// typedef TRsapVector<uint16, 10> FLocalVector;
 // typedef TRsapVector<uint16, 16> FLocalVector;
 // typedef TRsapVector<int64,  64>	FGlobalVector;
 
 // struct FLocalVector : TRsapVector<uint16, 16>
 // {
-// 	FNodeVector ToNodeVector()
+// 	FLocalVector ToNodeVector()
 // 	{
 // 		// ...
 // 	}
@@ -35,7 +35,7 @@ struct TRsapVector
  * Used for local-locations within a chunk, and can be converted to morton-codes directly.
  * Each axis has 10 bit allocated, which fits inside a 32-bit morton-code used for the nodes in the octree.
  */
-struct FNodeVector
+struct FLocalVector
 {
 	uint16 X, Y, Z: 10;
 	
@@ -51,54 +51,54 @@ struct FNodeVector
 		return FMortonUtils::Node::Encode(X, Y, Z);
 	}
 	
-	FORCEINLINE static FNodeVector FromNodeMorton(const node_morton MortonCode)
+	FORCEINLINE static FLocalVector FromNodeMorton(const node_morton MortonCode)
 	{
 		uint16 OutX, OutY, OutZ;
 		FMortonUtils::Node::Decode(MortonCode, OutX, OutY, OutZ);
-		return FNodeVector(OutX, OutY, OutZ);
+		return FLocalVector(OutX, OutY, OutZ);
 	}
 
-	FORCEINLINE FNodeVector operator+(const uint16 Value) const
+	FORCEINLINE FLocalVector operator+(const uint16 Value) const
 	{
-		return FNodeVector(X + Value, Y + Value, Z + Value);
+		return FLocalVector(X + Value, Y + Value, Z + Value);
 	}
 
-	FORCEINLINE FNodeVector operator+(const FNodeVector& Other) const
+	FORCEINLINE FLocalVector operator+(const FLocalVector& Other) const
 	{
-		return FNodeVector(X + Other.X, Y + Other.Y, Z + Other.Z);
+		return FLocalVector(X + Other.X, Y + Other.Y, Z + Other.Z);
 	}
 
-	FORCEINLINE FNodeVector operator-(const uint16 Value) const
+	FORCEINLINE FLocalVector operator-(const uint16 Value) const
 	{
-		return FNodeVector(X - Value, Y - Value, Z - Value);
+		return FLocalVector(X - Value, Y - Value, Z - Value);
 	}
 
-	FORCEINLINE FNodeVector operator-(const FNodeVector& Other) const
+	FORCEINLINE FLocalVector operator-(const FLocalVector& Other) const
 	{
-		return FNodeVector(X - Other.X, Y - Other.Y, Z - Other.Z);
+		return FLocalVector(X - Other.X, Y - Other.Y, Z - Other.Z);
 	}
 
-	FORCEINLINE FNodeVector operator<<(const uint8 Value) const
+	FORCEINLINE FLocalVector operator<<(const uint8 Value) const
 	{
-		return FNodeVector(X << Value, Y << Value, Z << Value);
+		return FLocalVector(X << Value, Y << Value, Z << Value);
 	}
 
-	FORCEINLINE FNodeVector operator*(const uint8 Value) const
+	FORCEINLINE FLocalVector operator*(const uint8 Value) const
 	{
-		return FNodeVector(X * Value, Y * Value, Z * Value);
+		return FLocalVector(X * Value, Y * Value, Z * Value);
 	}
 
-	FORCEINLINE FNodeVector operator>>(const uint8 Value) const
+	FORCEINLINE FLocalVector operator>>(const uint8 Value) const
 	{
-		return FNodeVector(X >> Value, Y >> Value, Z >> Value);
+		return FLocalVector(X >> Value, Y >> Value, Z >> Value);
 	}
 
-	FORCEINLINE FNodeVector operator&(const uint16 Mask) const
+	FORCEINLINE FLocalVector operator&(const uint16 Mask) const
 	{
-		return FNodeVector(X & Mask, Y & Mask, Z & Mask);
+		return FLocalVector(X & Mask, Y & Mask, Z & Mask);
 	}
 
-	FORCEINLINE bool operator==(const FNodeVector& Other) const {
+	FORCEINLINE bool operator==(const FLocalVector& Other) const {
 		return X == Other.X && Y == Other.Y && Z == Other.Z;
 	}
 
@@ -107,10 +107,10 @@ struct FNodeVector
 		return FVector(X, Y, Z);
 	}
 
-	explicit FNodeVector(const uint16 InX, const uint16 InY, const uint16 InZ)
+	explicit FLocalVector(const uint16 InX, const uint16 InY, const uint16 InZ)
 		: X(InX), Y(InY), Z(InZ) {}
 
-	FNodeVector()
+	FLocalVector()
 		:X(0), Y(0), Z(0)
 	{}
 };
@@ -133,10 +133,10 @@ struct FGlobalVector // todo: int64 to support SizeExponent >= 2 ?
 		return FMortonUtils::Chunk::Encode(X, Y, Z);
 	}
 
-	FORCEINLINE FNodeVector ToLocalVector(const FGlobalVector ChunkLocation) const
+	FORCEINLINE FLocalVector ToLocalVector(const FGlobalVector ChunkLocation) const
 	{
 		using namespace Rsap::NavMesh;
-		return FNodeVector(
+		return FLocalVector(
 			static_cast<uint16>((ChunkLocation.X + X) >> SizeShift),
 			static_cast<uint16>((ChunkLocation.Y + Y) >> SizeShift),
 			static_cast<uint16>((ChunkLocation.Z + Z) >> SizeShift)
@@ -152,7 +152,7 @@ struct FGlobalVector // todo: int64 to support SizeExponent >= 2 ?
 
 	static FGlobalVector FromNodeMorton(const node_morton NodeMorton, const FGlobalVector& ChunkLocation)
 	{
-		return ChunkLocation + FNodeVector::FromNodeMorton(NodeMorton);
+		return ChunkLocation + FLocalVector::FromNodeMorton(NodeMorton);
 	}
 
 	FORCEINLINE FGlobalVector RoundToChunk() const
@@ -195,13 +195,13 @@ struct FGlobalVector // todo: int64 to support SizeExponent >= 2 ?
 		return FGlobalVector(X - Value, Y - Value, Z - Value);
 	}
 
-	FORCEINLINE FGlobalVector operator+(const FNodeVector& MortonVector) const
+	FORCEINLINE FGlobalVector operator+(const FLocalVector& MortonVector) const
 	{
 		const FGlobalVector NodeGlobal(MortonVector);
 		return FGlobalVector(X + NodeGlobal.X, Y + NodeGlobal.Y, Z + NodeGlobal.Z);
 	}
 
-	FORCEINLINE FGlobalVector operator-(const FNodeVector& MortonVector) const
+	FORCEINLINE FGlobalVector operator-(const FLocalVector& MortonVector) const
 	{
 		const FGlobalVector NodeGlobal(MortonVector);
 		return FGlobalVector(X - NodeGlobal.X, Y - NodeGlobal.Y, Z - NodeGlobal.Z);
@@ -274,7 +274,7 @@ struct FGlobalVector // todo: int64 to support SizeExponent >= 2 ?
 		Z = static_cast<int32>(std::round(InVector.Z));
 	}
 
-	explicit FGlobalVector(const FNodeVector &InVector)
+	explicit FGlobalVector(const FLocalVector &InVector)
 	{
 		// Convert morton space to local.
 		X = static_cast<int32>(InVector.X) << Rsap::NavMesh::SizeShift;

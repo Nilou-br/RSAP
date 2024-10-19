@@ -15,7 +15,7 @@ using namespace Rsap::NavMesh;
  * The first octree at index 0 is static. The nodes are generated/updated within the editor, never during gameplay. Only the relations can be updated during gameplay to point to dynamic nodes, but these changes should not be serialized.
  * The second octree at index 1 is dynamic. The nodes are created from dynamic objects during gameplay. These will not be serialized.
  */
-struct FChunk
+struct FRsapChunk
 {
 private:
 	struct FOctree
@@ -42,19 +42,19 @@ private:
 public:
 	std::array<std::unique_ptr<FOctree>, 2> Octrees; // Accessed using a node-state, 0 static, 1 dynamic.
 
-	FChunk()
+	FRsapChunk()
 	{
 		Initialize();
 	}
 
 	// Returns reference to the chunk with this morton-code. New chunk will be initialized if it does not exist yet.
-	FORCEINLINE static FChunk& TryInit(const FNavMesh& NavMesh, const chunk_morton ChunkMC)
+	FORCEINLINE static FRsapChunk& TryInit(const FNavMesh& NavMesh, const chunk_morton ChunkMC)
 	{
 		return NavMesh->try_emplace(ChunkMC).first->second;
 	}
 
 	// Tries to find a chunk with this morton-code. Will be nullptr if it does not exist.
-	FORCEINLINE static FChunk* TryFind(const FNavMesh& NavMesh, const chunk_morton ChunkMC)
+	FORCEINLINE static FRsapChunk* TryFind(const FNavMesh& NavMesh, const chunk_morton ChunkMC)
 	{
 		const auto Iterator = NavMesh->find(ChunkMC);
 		if(Iterator == NavMesh->end()) return nullptr;
@@ -62,18 +62,18 @@ public:
 	}
 
 	// Use only when you are certain it exists.
-	FORCEINLINE FNode& GetNode(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
+	FORCEINLINE FRsapNode& GetNode(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
 	{
 		return Octrees[NodeState]->Layers[LayerIdx]->find(NodeMC)->second;
 	}
 	// Use only when you are certain it exists.
-	FORCEINLINE FLeafNode& GetLeafNode(const node_morton NodeMC, const node_state NodeState) const
+	FORCEINLINE FRsapLeaf& GetLeafNode(const node_morton NodeMC, const node_state NodeState) const
 	{
 		return Octrees[NodeState]->LeafNodes->find(NodeMC)->second;
 	}
 	
 	// Returns true if the node exists.
-	FORCEINLINE bool FindNode(FNode& OutNode, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
+	FORCEINLINE bool FindNode(FRsapNode& OutNode, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
 	{
 		const auto& Iterator = Octrees[NodeState]->Layers[LayerIdx]->find(NodeMC);
 		if(Iterator == Octrees[NodeState]->Layers[LayerIdx]->end()) return false;
@@ -81,7 +81,7 @@ public:
 		return true;
 	}
 	// Returns true if the leaf node exists.
-	FORCEINLINE bool FindLeafNode(FLeafNode& OutLeafNode, const node_morton NodeMC, const node_state NodeState) const
+	FORCEINLINE bool FindLeafNode(FRsapLeaf& OutLeafNode, const node_morton NodeMC, const node_state NodeState) const
 	{
 		const auto& Iterator = Octrees[NodeState]->LeafNodes->find(NodeMC);
 		if(Iterator == Octrees[NodeState]->LeafNodes->end()) return false;
@@ -90,24 +90,24 @@ public:
 	}
 	
 	// Returns a reference to this node. Will initialize one if it does not exist yet.
-	FORCEINLINE FNode& TryInitNode(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
+	FORCEINLINE FRsapNode& TryInitNode(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
 	{
 		return Octrees[NodeState]->Layers[LayerIdx]->try_emplace(NodeMC).first->second;
 	}
 	// Returns a reference to this node. Will initialize one if it does not exist yet. Has additional boolean for checking insertion.
-	FORCEINLINE FNode& TryInitNode(bool& bOutInserted, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
+	FORCEINLINE FRsapNode& TryInitNode(bool& bOutInserted, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
 	{
 		const auto [NodePair, bInserted] = Octrees[NodeState]->Layers[LayerIdx]->try_emplace(NodeMC);
 		bOutInserted = bInserted;
 		return NodePair->second;
 	}
 	// Returns a reference to this leaf node. Will initialize one if it does not exist yet.
-	FORCEINLINE FLeafNode& TryInitLeafNode(const node_morton NodeMC, const node_state NodeState) const
+	FORCEINLINE FRsapLeaf& TryInitLeafNode(const node_morton NodeMC, const node_state NodeState) const
 	{
 		return Octrees[NodeState]->LeafNodes->try_emplace(NodeMC).first->second;
 	}
 	// Returns a reference to this leaf node. Will initialize one if it does not exist yet. Has additional boolean for checking insertion.
-	FORCEINLINE FLeafNode& TryInitLeafNode(bool& bOutInserted, const node_morton NodeMC, const node_state NodeState) const
+	FORCEINLINE FRsapLeaf& TryInitLeafNode(bool& bOutInserted, const node_morton NodeMC, const node_state NodeState) const
 	{
 		const auto [NodePair, bInserted] = Octrees[NodeState]->LeafNodes->try_emplace(NodeMC);
 		bOutInserted = bInserted;
@@ -141,4 +141,4 @@ public:
 	}
 };
 
-typedef std::pair<chunk_morton, FChunk> FChunkPair;
+typedef std::pair<chunk_morton, FRsapChunk> FRsapChunkPair;

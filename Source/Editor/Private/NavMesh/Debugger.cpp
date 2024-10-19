@@ -136,13 +136,13 @@ void FRsapDebugger::DrawNode(const UWorld* World, const FGlobalVector& NodeCente
 	DrawDebugBox(World, *NodeCenter, FVector(Node::HalveSizes[LayerIdx]), LayerColors[LayerIdx], true, -1, 0, Thickness[LayerIdx]);
 }
 
-void FRsapDebugger::DrawLeafNode(const UWorld* World, const FChunk& Chunk, const FGlobalVector ChunkLocation, const node_morton NodeMC, const FVector& CameraLocation)
+void FRsapDebugger::DrawLeafNode(const UWorld* World, const FRsapChunk& Chunk, const FGlobalVector ChunkLocation, const node_morton NodeMC, const FVector& CameraLocation)
 {
 	const FGlobalVector NodeLocation = FGlobalVector::FromNodeMorton(NodeMC, ChunkLocation);
 	if(!InDistance(CameraLocation, NodeLocation + Node::HalveSizes[Layer::NodeDepth], Layer::NodeDepth)) return;
 	DrawNode(World, NodeLocation + Node::HalveSizes[Layer::NodeDepth], Layer::NodeDepth);
 	
-	const FLeafNode LeafNode = Chunk.GetLeafNode(NodeMC, 0);
+	const FRsapLeaf LeafNode = Chunk.GetLeafNode(NodeMC, 0);
 
 	// Separate the 64 leafs into groups of 8 to simulate octree behavior.
 	for(child_idx LeafGroupIdx = 0; LeafGroupIdx < 8; ++LeafGroupIdx)
@@ -150,7 +150,7 @@ void FRsapDebugger::DrawLeafNode(const UWorld* World, const FChunk& Chunk, const
 		const uint8 GroupedLeafs = LeafNode.Leafs >> Leaf::Children::MasksShift[LeafGroupIdx];
 		if(!GroupedLeafs) continue;
 
-		const FGlobalVector GroupLocation = FNode::GetChildLocation(NodeLocation, Layer::GroupedLeaf, LeafGroupIdx);
+		const FGlobalVector GroupLocation = FRsapNode::GetChildLocation(NodeLocation, Layer::GroupedLeaf, LeafGroupIdx);
 		if(InDistance(CameraLocation, GroupLocation + Node::HalveSizes[Layer::GroupedLeaf], Layer::GroupedLeaf))
 		{
 			DrawNode(World, GroupLocation + Node::HalveSizes[Layer::GroupedLeaf], Layer::GroupedLeaf);
@@ -161,7 +161,7 @@ void FRsapDebugger::DrawLeafNode(const UWorld* World, const FChunk& Chunk, const
 		{
 			if(GroupedLeafs & LeafMask)
 			{
-				const FGlobalVector LeafLocation = FNode::GetChildLocation(GroupLocation, Layer::Leaf, LeafIdx);
+				const FGlobalVector LeafLocation = FRsapNode::GetChildLocation(GroupLocation, Layer::Leaf, LeafIdx);
 				if(InDistance(CameraLocation, LeafLocation + Node::HalveSizes[Layer::Leaf], Layer::Leaf))
 				{
 					DrawNode(World, LeafLocation + Node::HalveSizes[Layer::Leaf], Layer::Leaf);
@@ -173,9 +173,9 @@ void FRsapDebugger::DrawLeafNode(const UWorld* World, const FChunk& Chunk, const
 	}
 }
 
-void FRsapDebugger::DrawNodes(const UWorld* World, const FChunk& Chunk, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation)
+void FRsapDebugger::DrawNodes(const UWorld* World, const FRsapChunk& Chunk, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation)
 {
-	const FNode& Node = Chunk.GetNode(NodeMC, LayerIdx, 0);
+	const FRsapNode& Node = Chunk.GetNode(NodeMC, LayerIdx, 0);
 	const FGlobalVector NodeLocation = FGlobalVector::FromNodeMorton(NodeMC, ChunkLocation);
 	const FGlobalVector NodeCenter = NodeLocation + Node::HalveSizes[LayerIdx];
 
@@ -209,7 +209,7 @@ void FRsapDebugger::DrawNodeInfo(const UWorld* World, const node_morton NodeMC, 
 	DrawDebugString(World, *(NodeCenter + FGlobalVector(0, 0, -40 + LayerIdx*3)), MortonString, nullptr, FColor::Black, -1, false, 1 + (10-LayerIdx));
 }
 
-void FRsapDebugger::DrawNodeRelations(const UWorld* World, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const FNode& Node, const node_morton NodeMC, const FGlobalVector& NodeCenter, const layer_idx LayerIdx)
+void FRsapDebugger::DrawNodeRelations(const UWorld* World, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const FRsapNode& Node, const node_morton NodeMC, const FGlobalVector& NodeCenter, const layer_idx LayerIdx)
 {
 	for (const rsap_direction Direction : Direction::List)
 	{

@@ -93,7 +93,7 @@ void FRsapUpdateTask::ReRasterizeBounds(const UPrimitiveComponent* CollisionComp
 	
 }
 
-void FRsapUpdateTask::ReRasterizeNode(FChunk* Chunk, FNode& Node, const node_morton NodeMC,
+void FRsapUpdateTask::ReRasterizeNode(FRsapChunk* Chunk, FRsapNode& Node, const node_morton NodeMC,
 	const FGlobalVector& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent)
 {
 	

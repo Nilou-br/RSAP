@@ -24,14 +24,14 @@ using namespace Rsap::NavMesh;
  * - ChildStates: bitmask indicating the node type for this node's children.
  * - SoundPresetId: Identifier to a preset of attenuation settings for the actor this node is occluding.
  */
-struct FNode
+struct FRsapNode
 {
-	FNodeRelations Relations;
+	FRsapRelations  Relations;
 	uint8 Children: 8 = 0b00000000;			// Initialized/occluding (1) or not (0).
 	uint8 ChildrenTypes: 8 = 0b00000000;	// Static (0) or dynamic (1).
 	uint16 SoundPresetID = 0;
 
-	FNode() = default;
+	FRsapNode() = default;
 
 	FORCEINLINE void SetChildActive(const child_idx ChildIdx)
 	{
@@ -49,11 +49,11 @@ struct FNode
 		return Children & Node::Children::Masks[ChildIdx];
 	}
 	
-	FORCEINLINE static FNodeVector GetMortonLocation(const node_morton MortonCode)
+	FORCEINLINE static FLocalVector GetMortonLocation(const node_morton MortonCode)
 	{
 		uint16 X, Y, Z;
 		FMortonUtils::Node::Decode(MortonCode, X, Y, Z);
-		return FNodeVector(X, Y, Z);
+		return FLocalVector(X, Y, Z);
 	}
 	FORCEINLINE static FGlobalVector GetGlobalLocation(const FGlobalVector& ChunkLocation, const node_morton MortonCode)
 	{
@@ -149,7 +149,7 @@ struct FNode
 	}
 
 	// This overload is meant for initializing a node from serialized data that was packed.
-	explicit FNode(const uint64 PackedData) {
+	explicit FRsapNode(const uint64 PackedData) {
 		Children		= PackedData;
 		ChildrenTypes	= PackedData >> 8;
 		SoundPresetID	= PackedData >> 16;
@@ -157,11 +157,11 @@ struct FNode
 	}
 };
 
-struct FLeafNode
+struct FRsapLeaf
 {
 	uint64 Leafs;
 };
 
-typedef std::pair<node_morton, FNode> FNodePair;
-typedef Rsap::Map::ordered_map<node_morton, FNode> FOctreeLayer;
-typedef Rsap::Map::ordered_map<node_morton, FLeafNode> FOctreeLeafNodes;
+typedef std::pair<node_morton, FRsapNode> FRsapNodePair;
+typedef Rsap::Map::ordered_map<node_morton, FRsapNode> FOctreeLayer;
+typedef Rsap::Map::ordered_map<node_morton, FRsapLeaf> FOctreeLeafNodes;

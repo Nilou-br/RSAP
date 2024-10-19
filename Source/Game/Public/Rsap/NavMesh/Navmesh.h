@@ -39,9 +39,9 @@ public:
 class FRsapNavmesh
 {
 #if WITH_EDITOR
-	Rsap::Map::ordered_map<chunk_morton, FChunk> Chunks;
+	Rsap::Map::ordered_map<chunk_morton, FRsapChunk> Chunks;
 #else
-	Rsap::Map::flat_map<chunk_morton, FChunk> Chunks;
+	Rsap::Map::flat_map<chunk_morton, FRsapChunk> Chunks;
 #endif
 
 public:

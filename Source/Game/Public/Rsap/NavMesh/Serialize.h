@@ -35,14 +35,14 @@ inline FArchive& operator<<(FArchive& Ar, FOctreeLayer& Layer)
 			Ar << NodeMC;
 			Ar << PackedData;
 			
-			Layer.emplace(NodeMC, FNode(PackedData));
+			Layer.emplace(NodeMC, FRsapNode(PackedData));
 		}
 	}
 	
 	return Ar;
 }
 
-inline FArchive& operator<<(FArchive& Ar, const FChunk& Chunk){
+inline FArchive& operator<<(FArchive& Ar, const FRsapChunk& Chunk){
 
 	// Only serialize the static-octree.
 	for (layer_idx LayerIdx = 0; LayerIdx <= Layer::NodeDepth; ++LayerIdx)
@@ -71,7 +71,7 @@ inline FArchive& operator<<(FArchive& Ar, FNavMeshType& NavMesh){
 		for(size_t i = 0; i < Size; ++i)
 		{
 			chunk_morton ChunkMC;
-			FChunk Chunk = FChunk();
+			FRsapChunk Chunk = FRsapChunk();
 			
 			Ar << ChunkMC;
 			Ar << Chunk;
@@ -91,7 +91,7 @@ inline FString GetChunkDirectory(const FString& LevelPath, const chunk_morton Ch
 	return PathBuilder.ToString();
 }
 
-inline void SerializeChunk(const FChunk& Chunk, const chunk_morton ChunkMC, const FString& NavmeshFolderPath)
+inline void SerializeChunk(const FRsapChunk& Chunk, const chunk_morton ChunkMC, const FString& NavmeshFolderPath)
 {
 	const FString ChunkDirectory = GetChunkDirectory(NavmeshFolderPath, ChunkMC);
 	if (!IFileManager::Get().DirectoryExists(*ChunkDirectory)) IFileManager::Get().MakeDirectory(*ChunkDirectory, true);
@@ -136,7 +136,7 @@ inline void SerializeNavMesh(const UWorld* World, const FNavMeshType& NavMesh, c
 	for (const chunk_morton ChunkMC : ChunksToSave)
 	{
 		Metadata->SavedChunkIDs.Add(ChunkMC, FGuid::NewGuid());
-		const FChunk& Chunk = NavMesh.find(ChunkMC)->second;
+		const FRsapChunk& Chunk = NavMesh.find(ChunkMC)->second;
 		SerializeChunk(Chunk, ChunkMC, LevelPath);
 	}
 
@@ -202,7 +202,7 @@ inline EDeserializeResult DeserializeNavMesh(const UWorld* World, FNavMeshType& 
 		}
 
 		// Deserialize the chunk, and add to the navmesh.
-		FChunk StoredChunk;
+		FRsapChunk StoredChunk;
 		*ChunkFileArchive << StoredChunk;
 		OutNavMesh.emplace(ChunkMC, std::move(StoredChunk));
 
