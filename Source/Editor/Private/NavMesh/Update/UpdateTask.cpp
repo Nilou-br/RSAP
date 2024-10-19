@@ -2,7 +2,7 @@
 
 #include "Rsap/NavMesh/Update/UpdateTask.h"
 #include "RSAP/Math/Bounds.h"
-#include "Rsap/RsapEditorEvents.h"
+#include "..\..\..\Public\Rsap\RsapEditorWorld.h"
 
 
 

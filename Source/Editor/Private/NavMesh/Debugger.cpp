@@ -28,7 +28,6 @@ FString ToBinaryString(const IntType Value, const uint8 BitCount)
 
 static bool InDistance(const FVector& CameraLocation, const FGlobalVector& NodeCenter, const layer_idx LayerIdx)
 {
-	// const uint8 Mult = 3;
 	const int64 LayerRenderDistances[Layer::Total] = {
 		16000, 8000, 4000, 2000, 1000, 900, 800, 640, 320, 160, 80, 40, 30
 	};

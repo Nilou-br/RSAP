@@ -1,6 +1,6 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-#include "Rsap/RsapEditorEvents.h"
+#include "..\Public\Rsap\RsapEditorWorld.h"
 #include "LevelEditor.h"
 #include "Engine/StaticMeshActor.h"
 #include "Kismet/GameplayStatics.h"
@@ -12,39 +12,39 @@
 
 // Variables:
 
-FActorMap							FRsapEditorEvents::CachedActors;
-FActorBoundsMap						FRsapEditorEvents::CachedActorBounds;
-std::vector<actor_key>				FRsapEditorEvents::SelectedActors;
+FActorMap							FRsapEditorWorld::CachedActors;
+FActorBoundsMap						FRsapEditorWorld::CachedActorBounds;
+std::vector<actor_key>				FRsapEditorWorld::SelectedActors;
 
 
 // Delegates
 
-FRsapEditorEvents::FOnMapOpened			FRsapEditorEvents::OnMapOpened;
-FRsapEditorEvents::FPreMapSaved			FRsapEditorEvents::PreMapSaved;
-FRsapEditorEvents::FPostMapSaved		FRsapEditorEvents::PostMapSaved;
+FRsapEditorWorld::FOnMapOpened			FRsapEditorWorld::OnMapOpened;
+FRsapEditorWorld::FPreMapSaved			FRsapEditorWorld::PreMapSaved;
+FRsapEditorWorld::FPostMapSaved		FRsapEditorWorld::PostMapSaved;
 
-FRsapEditorEvents::FOnActorMoved		FRsapEditorEvents::OnActorMoved;
-FRsapEditorEvents::FOnActorAdded		FRsapEditorEvents::OnActorAdded;
-FRsapEditorEvents::FOnActorDeleted		FRsapEditorEvents::OnActorDeleted;
+FRsapEditorWorld::FOnActorMoved		FRsapEditorWorld::OnActorMoved;
+FRsapEditorWorld::FOnActorAdded		FRsapEditorWorld::OnActorAdded;
+FRsapEditorWorld::FOnActorDeleted		FRsapEditorWorld::OnActorDeleted;
 
-FRsapEditorEvents::FOnCameraMoved		FRsapEditorEvents::OnCameraMoved;
+FRsapEditorWorld::FOnCameraMoved		FRsapEditorWorld::OnCameraMoved;
 
 
 // Delegate handles:
 
-FDelegateHandle FRsapEditorEvents::MapOpenedHandle;
-FDelegateHandle FRsapEditorEvents::PreMapSavedHandle;
-FDelegateHandle FRsapEditorEvents::PostMapSavedHandle;
+FDelegateHandle FRsapEditorWorld::MapOpenedHandle;
+FDelegateHandle FRsapEditorWorld::PreMapSavedHandle;
+FDelegateHandle FRsapEditorWorld::PostMapSavedHandle;
 
-FDelegateHandle FRsapEditorEvents::ActorSelectionChangedHandle;
-FDelegateHandle FRsapEditorEvents::ObjectPropertyChangedHandle;
+FDelegateHandle FRsapEditorWorld::ActorSelectionChangedHandle;
+FDelegateHandle FRsapEditorWorld::ObjectPropertyChangedHandle;
 
-FDelegateHandle FRsapEditorEvents::OnCameraMovedHandle;
+FDelegateHandle FRsapEditorWorld::OnCameraMovedHandle;
 
 
 
 // Returns true if the actor has any component with collision.
-bool FRsapEditorEvents::ActorHasCollisionComponent(const AActor* Actor)
+bool FRsapEditorWorld::ActorHasCollisionComponent(const AActor* Actor)
 {
 	// Check all components of this actor for if they have collision enabled.
 	for (UActorComponent* Component : Actor->K2_GetComponentsByClass(UPrimitiveComponent::StaticClass()))
@@ -58,19 +58,19 @@ bool FRsapEditorEvents::ActorHasCollisionComponent(const AActor* Actor)
 	return false;
 }
 
-void FRsapEditorEvents::Initialize()
+void FRsapEditorWorld::Initialize()
 {
-	MapOpenedHandle = FEditorDelegates::OnMapOpened.AddStatic(&FRsapEditorEvents::HandleMapOpened);
-	PreMapSavedHandle = FEditorDelegates::PreSaveWorldWithContext.AddStatic(&FRsapEditorEvents::HandlePreMapSaved);
-	PostMapSavedHandle = FEditorDelegates::PostSaveWorldWithContext.AddStatic(&FRsapEditorEvents::HandlePostMapSaved);
+	MapOpenedHandle = FEditorDelegates::OnMapOpened.AddStatic(&FRsapEditorWorld::HandleMapOpened);
+	PreMapSavedHandle = FEditorDelegates::PreSaveWorldWithContext.AddStatic(&FRsapEditorWorld::HandlePreMapSaved);
+	PostMapSavedHandle = FEditorDelegates::PostSaveWorldWithContext.AddStatic(&FRsapEditorWorld::HandlePostMapSaved);
 	
-	ActorSelectionChangedHandle = FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor").OnActorSelectionChanged().AddStatic(&FRsapEditorEvents::HandleActorSelectionChanged);
-	ObjectPropertyChangedHandle = FCoreUObjectDelegates::OnObjectPropertyChanged.AddStatic(&FRsapEditorEvents::HandleObjectPropertyChanged);
+	ActorSelectionChangedHandle = FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor").OnActorSelectionChanged().AddStatic(&FRsapEditorWorld::HandleActorSelectionChanged);
+	ObjectPropertyChangedHandle = FCoreUObjectDelegates::OnObjectPropertyChanged.AddStatic(&FRsapEditorWorld::HandleObjectPropertyChanged);
 
-	OnCameraMovedHandle = FEditorDelegates::OnEditorCameraMoved.AddStatic(&FRsapEditorEvents::HandleOnCameraMoved);
+	OnCameraMovedHandle = FEditorDelegates::OnEditorCameraMoved.AddStatic(&FRsapEditorWorld::HandleOnCameraMoved);
 }
 
-void FRsapEditorEvents::Deinitialize()
+void FRsapEditorWorld::Deinitialize()
 {
 	// todo: try these.
 	//FEditorDelegates::OnMapLoad
@@ -87,7 +87,7 @@ void FRsapEditorEvents::Deinitialize()
 	FEditorDelegates::OnEditorCameraMoved.Remove(OnCameraMovedHandle); OnCameraMovedHandle.Reset();
 }
 
-void FRsapEditorEvents::HandleMapOpened(const FString& Filename, bool bAsTemplate)
+void FRsapEditorWorld::HandleMapOpened(const FString& Filename, bool bAsTemplate)
 {
 	// Static-mesh actors are initialized next frame. ( FWorldDelegates::OnWorldInitializedActors event doesn't have them initialized for some reason. )
 	GEditor->GetEditorWorldContext().World()->GetTimerManager().SetTimerForNextTick([&]()
@@ -116,18 +116,18 @@ void FRsapEditorEvents::HandleMapOpened(const FString& Filename, bool bAsTemplat
 	});
 }
 
-void FRsapEditorEvents::HandlePreMapSaved(UWorld* World, FObjectPreSaveContext PreSaveContext)
+void FRsapEditorWorld::HandlePreMapSaved(UWorld* World, FObjectPreSaveContext PreSaveContext)
 {
 	if(PreMapSaved.IsBound()) PreMapSaved.Execute();
 }
 
-void FRsapEditorEvents::HandlePostMapSaved(UWorld* World, FObjectPostSaveContext PostSaveContext)
+void FRsapEditorWorld::HandlePostMapSaved(UWorld* World, FObjectPostSaveContext PostSaveContext)
 {
 	if(PostMapSaved.IsBound()) PostMapSaved.Execute(PostSaveContext.SaveSucceeded());
 }
 
 // From this event alone, we can deduce if one or more actors have been added/deleted. Will broadcast OnActorAdded or OnActorDeleted.
-void FRsapEditorEvents::HandleActorSelectionChanged(const TArray<UObject*>& Objects, bool)
+void FRsapEditorWorld::HandleActorSelectionChanged(const TArray<UObject*>& Objects, bool)
 {
 	std::vector<actor_key> PrevSelectedActors = std::move(SelectedActors);
 	
@@ -169,7 +169,7 @@ void FRsapEditorEvents::HandleActorSelectionChanged(const TArray<UObject*>& Obje
 }
 
 // Checks the type of object, and what property has changed. If it was an actor's transform that has changed, then the OnActorMoved will be broadcast.
-void FRsapEditorEvents::HandleObjectPropertyChanged(UObject* Object, FPropertyChangedEvent& PropertyChangedEvent)
+void FRsapEditorWorld::HandleObjectPropertyChanged(UObject* Object, FPropertyChangedEvent& PropertyChangedEvent)
 {
 	const AActor* Actor = Cast<AActor>(Object);
 	if(!Actor) return;
@@ -204,7 +204,7 @@ void FRsapEditorEvents::HandleObjectPropertyChanged(UObject* Object, FPropertyCh
 	if(OnActorMoved.IsBound()) OnActorMoved.Execute(ActorKey, FMovedBounds(PreviousBounds, CurrentBounds));
 }
 
-void FRsapEditorEvents::HandleOnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation, ELevelViewportType LevelViewportType, int32 RandomInt)
+void FRsapEditorWorld::HandleOnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation, ELevelViewportType LevelViewportType, int32 RandomInt)
 {
 	if(OnCameraMoved.IsBound()) OnCameraMoved.Execute(CameraLocation, CameraRotation);
 }

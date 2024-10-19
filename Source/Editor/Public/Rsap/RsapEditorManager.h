@@ -37,7 +37,7 @@ private:
 	bool bFullyRegenerated = false;
 	std::unordered_set<chunk_morton> ChunksToSerialize; // New/updated chunks pending to be serialized.
 
-	void OnEditorWorldInitialized(UWorld* World, const FActorBoundsMap& ActorBoundsMap);
+	void OnWorldInitialized(const UWorld* World, const FActorBoundsMap& ActorBoundsMap);
 	void PreMapSaved();
 	void PostMapSaved(const bool bSuccess);
 	

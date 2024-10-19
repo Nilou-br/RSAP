@@ -5,7 +5,7 @@
 #include "RSAP/Math/Bounds.h"
 #include "RSAP/NavMesh/Types/Chunk.h"
 #include "RSAP/NavMesh/Types/Node.h"
-#include "Rsap/RsapEditorEvents.h"
+#include "..\..\..\Public\Rsap\RsapEditorWorld.h"
 #include "Rsap/NavMesh/Shared/NMShared.h"
 
 const UWorld*	FRsapGenerator::World;

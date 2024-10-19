@@ -4,7 +4,7 @@
 #include "Rsap/RsapEditor.h"
 
 #include "LevelEditor.h"
-#include "Rsap/RsapEditorEvents.h"
+#include "..\Public\Rsap\RsapEditorWorld.h"
 #include "Rsap/Menu/RsapMenu.h"
 #include "Rsap/Menu/RsapStyle.h"
 
@@ -15,7 +15,7 @@
 void FRsapEditorModule::StartupModule()
 {
 	FRsapStyle::Initialize();
-	FRsapEditorEvents::Initialize();
+	FRsapEditorWorld::Initialize();
 
 	// Register and bind commands.
 	FRsapCommands::Register();
@@ -28,7 +28,7 @@ void FRsapEditorModule::StartupModule()
 void FRsapEditorModule::ShutdownModule()
 {
 	FRsapStyle::Shutdown();
-	FRsapEditorEvents::Deinitialize();
+	FRsapEditorWorld::Deinitialize();
 	FRsapCommands::Unregister();
 	
 	IModuleInterface::ShutdownModule();

@@ -3,7 +3,7 @@
 #pragma once
 
 #include "Rsap/Definitions.h"
-#include "Rsap/RsapEditorEvents.h"
+#include "..\RsapEditorWorld.h"
 #include "Rsap/NavMesh/Update/Updater.h"
 
 
@@ -18,14 +18,14 @@ public:
 		NavMesh = InNavMesh;
 
 		NavMeshUpdatedHandle = FRsapUpdater::OnUpdateComplete.AddStatic(&FRsapDebugger::OnNavMeshUpdated);
-		FRsapEditorEvents::OnCameraMoved.BindStatic(&FRsapDebugger::OnCameraMoved);
+		FRsapEditorWorld::OnCameraMoved.BindStatic(&FRsapDebugger::OnCameraMoved);
 	}
 	static void Stop()
 	{
 		NavMesh->clear();
 
 		FRsapUpdater::OnUpdateComplete.Remove(NavMeshUpdatedHandle); NavMeshUpdatedHandle.Reset();
-		FRsapEditorEvents::OnCameraMoved.Unbind();
+		FRsapEditorWorld::OnCameraMoved.Unbind();
 	}
 
 private:

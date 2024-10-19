@@ -11,7 +11,7 @@
 /**
  * Provides easy to read events to be used by the editor manager. todo: split getters to FRsapEditorUtils?
  */
-class FRsapEditorEvents
+class FRsapEditorWorld
 {
 	struct FCachedActor
 	{
@@ -19,7 +19,7 @@ class FRsapEditorEvents
 		FGlobalBounds Bounds;
 	};
 
-	DECLARE_DELEGATE_TwoParams(FOnMapOpened, UWorld* EditorWorld, const FActorBoundsMap&);
+	DECLARE_DELEGATE_TwoParams(FOnMapOpened, const UWorld* EditorWorld, const FActorBoundsMap&);
 	DECLARE_DELEGATE(FPreMapSaved);
 	DECLARE_DELEGATE_OneParam(FPostMapSaved, const bool bSuccess);
 	

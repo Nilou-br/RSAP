@@ -3,7 +3,7 @@
 #include "Rsap/RsapEditorManager.h"
 
 #include <ranges>
-#include "Rsap/RsapEditorEvents.h"
+#include "..\Public\Rsap\RsapEditorWorld.h"
 #include "Rsap/NavMesh/Debugger.h"
 #include "Rsap/NavMesh/Update/Updater.h"
 #include "Rsap/NavMesh/Generate/Generator.h"
@@ -19,13 +19,13 @@ void URsapEditorManager::Initialize(FSubsystemCollectionBase& Collection)
 	NavMesh = std::make_shared<FNavMeshType>();
 	FRsapUpdater::GetInstance();
 
-	FRsapEditorEvents::OnMapOpened.BindUObject(this, &ThisClass::OnEditorWorldInitialized);
-	FRsapEditorEvents::PreMapSaved.BindUObject(this, &ThisClass::PreMapSaved);
-	FRsapEditorEvents::PostMapSaved.BindUObject(this, &ThisClass::PostMapSaved);
+	FRsapEditorWorld::OnMapOpened.BindUObject(this, &ThisClass::OnWorldInitialized);
+	FRsapEditorWorld::PreMapSaved.BindUObject(this, &ThisClass::PreMapSaved);
+	FRsapEditorWorld::PostMapSaved.BindUObject(this, &ThisClass::PostMapSaved);
 
-	FRsapEditorEvents::OnActorMoved.BindUObject(this, &ThisClass::OnActorMoved);
-	FRsapEditorEvents::OnActorAdded.BindUObject(this, &ThisClass::OnActorAdded);
-	FRsapEditorEvents::OnActorDeleted.BindUObject(this, &ThisClass::OnActorDeleted);
+	FRsapEditorWorld::OnActorMoved.BindUObject(this, &ThisClass::OnActorMoved);
+	FRsapEditorWorld::OnActorAdded.BindUObject(this, &ThisClass::OnActorAdded);
+	FRsapEditorWorld::OnActorDeleted.BindUObject(this, &ThisClass::OnActorDeleted);
 
 	FRsapUpdater::OnUpdateComplete.AddUObject(this, &ThisClass::OnNavMeshUpdated);
 }
@@ -34,13 +34,13 @@ void URsapEditorManager::Deinitialize()
 {
 	NavMesh.reset();
 	
-	FRsapEditorEvents::OnMapOpened.Unbind();
-	FRsapEditorEvents::PreMapSaved.Unbind();
-	FRsapEditorEvents::PostMapSaved.Unbind();
+	FRsapEditorWorld::OnMapOpened.Unbind();
+	FRsapEditorWorld::PreMapSaved.Unbind();
+	FRsapEditorWorld::PostMapSaved.Unbind();
 
-	FRsapEditorEvents::OnActorMoved.Unbind();
-	FRsapEditorEvents::OnActorAdded.Unbind();
-	FRsapEditorEvents::OnActorDeleted.Unbind();
+	FRsapEditorWorld::OnActorMoved.Unbind();
+	FRsapEditorWorld::OnActorAdded.Unbind();
+	FRsapEditorWorld::OnActorDeleted.Unbind();
 
 	FRsapUpdater::OnUpdateComplete.RemoveAll(this);
 	
@@ -62,21 +62,21 @@ void URsapEditorManager::Regenerate(const UWorld* World)
 	// Call generate on generator.
 
 	NavMesh->clear();
-	FRsapGenerator::Generate(World, NavMesh, FRsapEditorEvents::GetActors());
+	FRsapGenerator::Generate(World, NavMesh, FRsapEditorWorld::GetActors());
 	if(World->GetOuter()->MarkPackageDirty())
 	{
 		UE_LOG(LogRsap, Log, TEXT("Regeneration complete. The sound-navigation-mesh will be cached when you save the map."))
 	}
 }
 
-void URsapEditorManager::OnEditorWorldInitialized(UWorld* World, const FActorBoundsMap& ActorBoundsMap)
+void URsapEditorManager::OnWorldInitialized(const UWorld* World, const FActorBoundsMap& ActorBoundsMap)
 {
 	switch (std::vector<chunk_morton> MismatchedChunks; DeserializeNavMesh(World, *NavMesh, MismatchedChunks)){
 		case EDeserializeResult::Success:
 			break;
 		case EDeserializeResult::NotFound:
 			UE_LOG(LogRsap, Log, TEXT("Generating the sound-navigation-mesh..."))
-			FRsapGenerator::Generate(World, NavMesh, FRsapEditorEvents::GetActors());
+			FRsapGenerator::Generate(World, NavMesh, FRsapEditorWorld::GetActors());
 			if(World->GetOuter()->MarkPackageDirty()) UE_LOG(LogRsap, Log, TEXT("Generation complete. The sound-navigation-mesh will be cached when you save the map."));
 			bFullyRegenerated = true;
 			break;
@@ -110,9 +110,9 @@ void URsapEditorManager::OnEditorWorldInitialized(UWorld* World, const FActorBou
 
 void URsapEditorManager::PreMapSaved()
 {
-	// FRsapEditorEvents::PostMapSaved.BindLambda([&](const bool bSuccess)
+	// FRsapEditorWorld::PostMapSaved.BindLambda([&](const bool bSuccess)
 	// {
-	// 	FRsapEditorEvents::PostMapSaved.Unbind();
+	// 	FRsapEditorWorld::PostMapSaved.Unbind();
 	// 	
 	// 	if(!bSuccess) return;
 	// 	
@@ -174,7 +174,7 @@ void URsapEditorManager::ProfileGeneration() const
 	const auto StartTime = std::chrono::high_resolution_clock::now();
 
 	const FNavMesh ProfileNavMesh = std::make_shared<FNavMeshType>();
-	const FActorMap& ActorMap = FRsapEditorEvents::GetActors();
+	const FActorMap& ActorMap = FRsapEditorWorld::GetActors();
 	for (int i = 0; i < 1000; ++i)
 	{
 		FRsapGenerator::Generate(GEngine->GetWorld(), ProfileNavMesh, ActorMap);
