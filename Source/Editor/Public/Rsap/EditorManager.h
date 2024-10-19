@@ -4,7 +4,7 @@
 
 #include "Rsap/Math/Bounds.h"
 #include "Rsap/NavMesh/Types/Chunk.h"
-#include "RsapEditorManager.generated.h"
+#include "EditorManager.generated.h"
 
 class FRsapUpdater;
 class FRsapDebugger;

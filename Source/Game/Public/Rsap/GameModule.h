@@ -7,7 +7,7 @@
 
 
 
-class FRsapModule final : public IModuleInterface
+class FRsapGameModule final : public IModuleInterface
 {
 public:
 	

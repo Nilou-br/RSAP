@@ -1,14 +1,14 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-
 #include "Engine/AssetUserData.h"
-#include "LevelMetadata.generated.h"
+#include "Rsap/Definitions.h"
+#include "Navmesh.generated.h"
 
 
 
 UCLASS()
-class RSAPGAME_API URsapLevelMetadata : public UAssetUserData
+class RSAPGAME_API URsapNavmeshMetadata : public UAssetUserData
 {
 	GENERATED_BODY()
 
@@ -22,16 +22,32 @@ public:
 	TMap<uint64, FGuid> SavedChunkIDs;
 
 	// Gets the metadata for this level/world. Initialized if it does not exist yet.
-	static URsapLevelMetadata* Load(const UWorld* World)
+	static URsapNavmeshMetadata* Load(const UWorld* World)
 	{
-		URsapLevelMetadata* LevelMetadata = World->PersistentLevel->GetAssetUserData<URsapLevelMetadata>();
+		URsapNavmeshMetadata* LevelMetadata = World->PersistentLevel->GetAssetUserData<URsapNavmeshMetadata>();
 
 		if(!LevelMetadata)
 		{
-			LevelMetadata = NewObject<URsapLevelMetadata>(World->PersistentLevel, StaticClass());
+			LevelMetadata = NewObject<URsapNavmeshMetadata>(World->PersistentLevel, StaticClass());
 			World->PersistentLevel->AddAssetUserData(LevelMetadata);
 		}
 
 		return LevelMetadata;
 	}
+};
+
+class FRsapNavmesh
+{
+#if WITH_EDITOR
+	Rsap::Map::ordered_map<chunk_morton, FChunk> Chunks;
+#else
+	Rsap::Map::flat_map<chunk_morton, FChunk> Chunks;
+#endif
+
+public:
+	void Generate();
+	void GenerateAsync();
+
+	void Update();
+	void UpdateAsync();
 };

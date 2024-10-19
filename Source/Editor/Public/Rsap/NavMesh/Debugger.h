@@ -3,7 +3,7 @@
 #pragma once
 
 #include "Rsap/Definitions.h"
-#include "..\RsapEditorWorld.h"
+#include "..\EditorWorld.h"
 #include "Rsap/NavMesh/Update/Updater.h"
 
 

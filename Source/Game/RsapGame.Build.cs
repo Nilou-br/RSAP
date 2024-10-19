@@ -25,12 +25,5 @@ public class RsapGame : ModuleRules
 				"UnrealEd"
 			}
 		);
-        
-		// PublicIncludePaths.AddRange(
-		// 	new string[] {
-		// 		Path.Combine(ModuleDirectory, "ThirdParty/LibMorton"),
-		// 		Path.Combine(ModuleDirectory, "ThirdParty/unordered_dense")
-		// 	}
-		// );
 	}
 }

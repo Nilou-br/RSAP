@@ -1,10 +1,9 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-#include "Rsap/RsapEditor.h"
-
+#include "Rsap/EditorModule.h"
 #include "LevelEditor.h"
-#include "..\Public\Rsap\RsapEditorWorld.h"
+#include "Rsap/EditorWorld.h"
 #include "Rsap/Menu/RsapMenu.h"
 #include "Rsap/Menu/RsapStyle.h"
 

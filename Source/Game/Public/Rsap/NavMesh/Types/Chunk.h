@@ -1,7 +1,7 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-#include "Node.h"
+#include "Rsap/NavMesh/Types/Node.h"
 #include "RSAP/Math/Vectors.h"
 #include "RSAP/Definitions.h"
 #include "RSAP/Math/Overlap.h"

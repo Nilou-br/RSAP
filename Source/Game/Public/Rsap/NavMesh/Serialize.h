@@ -3,10 +3,9 @@
 #pragma once
 
 #include <unordered_set>
-
-#include "../LevelMetadata.h"
-#include "Types/Chunk.h"
-#include "Types/Node.h"
+#include "Rsap/NavMesh/Navmesh.h"
+#include "Rsap/NavMesh/Types/Chunk.h"
+#include "Rsap/NavMesh/Types/Node.h"
 
 
 
@@ -114,7 +113,7 @@ inline void SerializeChunk(const FChunk& Chunk, const chunk_morton ChunkMC, cons
 // Serialize all chunks within the navmesh.
 inline void SerializeNavMesh(const UWorld* World, FNavMeshType& NavMesh) // todo: Clear chunks that should not exist anymore.
 {
-	URsapLevelMetadata* Metadata = URsapLevelMetadata::Load(World);
+	URsapNavmeshMetadata* Metadata = URsapNavmeshMetadata::Load(World);
 	Metadata->SavedChunkIDs.Empty();
 	
 	const FString BasePath = FPaths::ProjectDir() / TEXT("Rsap");
@@ -130,7 +129,7 @@ inline void SerializeNavMesh(const UWorld* World, FNavMeshType& NavMesh) // todo
 // Serialize certain chunks within the navmesh.
 inline void SerializeNavMesh(const UWorld* World, const FNavMeshType& NavMesh, const std::unordered_set<chunk_morton>& ChunksToSave, const std::unordered_set<chunk_morton>& ChunksToDelete = std::unordered_set<chunk_morton>())
 {
-	URsapLevelMetadata* Metadata = URsapLevelMetadata::Load(World);
+	URsapNavmeshMetadata* Metadata = URsapNavmeshMetadata::Load(World);
 	const FString BasePath = FPaths::ProjectDir() / TEXT("Rsap");
 	const FString LevelPath = BasePath / Metadata->NavMeshID.ToString();
 	
@@ -160,7 +159,7 @@ enum class EDeserializeResult
 
 inline EDeserializeResult DeserializeNavMesh(const UWorld* World, FNavMeshType& OutNavMesh, std::vector<chunk_morton>& OutMismatchedChunks)
 {
-	const URsapLevelMetadata* LevelMetadata = URsapLevelMetadata::Load(World);
+	const URsapNavmeshMetadata* LevelMetadata = URsapNavmeshMetadata::Load(World);
 	const FString BasePath = FPaths::ProjectDir() / TEXT("Rsap");
 	const FString LevelPath = BasePath / LevelMetadata->NavMeshID.ToString();
 	

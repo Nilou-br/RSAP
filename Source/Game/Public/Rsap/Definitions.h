@@ -175,7 +175,6 @@ namespace Rsap::NavMesh::Direction
 }
 
 struct FChunk;
-struct FChunkVector;
 struct FNode;
 struct FNodeVector;
 struct FGlobalVector;

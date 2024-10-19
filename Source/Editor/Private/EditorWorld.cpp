@@ -1,6 +1,6 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-#include "..\Public\Rsap\RsapEditorWorld.h"
+#include "Rsap/EditorWorld.h"
 #include "LevelEditor.h"
 #include "Engine/StaticMeshActor.h"
 #include "Kismet/GameplayStatics.h"

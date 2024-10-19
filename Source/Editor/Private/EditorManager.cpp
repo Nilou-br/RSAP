@@ -1,9 +1,9 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-#include "Rsap/RsapEditorManager.h"
+#include "Rsap/EditorManager.h"
 
 #include <ranges>
-#include "..\Public\Rsap\RsapEditorWorld.h"
+#include "Rsap/EditorWorld.h"
 #include "Rsap/NavMesh/Debugger.h"
 #include "Rsap/NavMesh/Update/Updater.h"
 #include "Rsap/NavMesh/Generate/Generator.h"
