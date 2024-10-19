@@ -6,8 +6,8 @@
 #include "Rsap/EditorWorld.h"
 #include "Rsap/NavMesh/Debugger.h"
 #include "Rsap/NavMesh/Update/Updater.h"
-#include "Rsap/NavMesh/Generate/Generator.h"
-#include "RSAP/NavMesh/Serialize.h"
+#include "Rsap/NavMesh/Processing/Generator.h"
+#include "Rsap/NavMesh/Serialize.h"
 #include "Engine/World.h"
 #include "Editor.h"
 

@@ -3,8 +3,8 @@
 // ReSharper disable CppUE4CodingStandardNamingViolationWarning
 #pragma once
 
-#include "RSAP/Definitions.h"
-#include "RSAP/ThirdParty/LibMorton/morton.h"
+#include "Rsap/Definitions.h"
+#include "Rsap/ThirdParty/LibMorton/morton.h"
 
 
 

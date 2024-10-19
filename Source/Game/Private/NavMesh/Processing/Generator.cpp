@@ -1,12 +1,11 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
-#include "Rsap/NavMesh/Generate/Generator.h"
+#include "Rsap/NavMesh/Processing/Generator.h"
+#include "Rsap/NavMesh/Processing/Shared.h"
+#include "Rsap/Math/Bounds.h"
+#include "Rsap/NavMesh/Types/Chunk.h"
+#include "Rsap/NavMesh/Types/Node.h"
 #include <ranges>
-#include "RSAP/Math/Bounds.h"
-#include "RSAP/NavMesh/Types/Chunk.h"
-#include "RSAP/NavMesh/Types/Node.h"
-#include "Rsap/EditorWorld.h"
-#include "Rsap/NavMesh/Shared/NMShared.h"
 
 const UWorld*	FRsapGenerator::World;
 FNavMesh		FRsapGenerator::NavMesh;
@@ -186,12 +185,12 @@ void FRsapGenerator::RasterizeChunks(const UPrimitiveComponent* CollisionCompone
 				// There is an overlap, so get/init the node or leaf-node, and also init/update any missing parent.
 				if(LayerIdx < Layer::NodeDepth)
 				{
-					FRsapNode& Node = FNmShared::InitNodeAndParents(NavMesh, *CurrentChunk, ChunkMC, NodeMC, LayerIdx, 0, Negative::XYZ);
+					FRsapNode& Node = FRsapNavmeshShared::InitNodeAndParents(NavMesh, *CurrentChunk, ChunkMC, NodeMC, LayerIdx, 0, Negative::XYZ);
 					RasterizeNode(AABB, *CurrentChunk, ChunkMC, Node, NodeMC, NodeLocation, LayerIdx, CollisionComponent, false);
 				}
 				else
 				{
-					FRsapLeaf& LeafNode = FNmShared::InitLeafNodeAndParents(NavMesh, *CurrentChunk, ChunkMC, NodeMC, 0);
+					FRsapLeaf& LeafNode = FRsapNavmeshShared::InitLeafNodeAndParents(NavMesh, *CurrentChunk, ChunkMC, NodeMC, 0);
 					RasterizeLeafNode(AABB, LeafNode, NodeLocation, CollisionComponent, false);
 				}
 				
@@ -252,7 +251,7 @@ void FRsapGenerator::RasterizeNode(const FGlobalBounds& AABB, FRsapChunk& Chunk,
 		const node_morton ChildNodeMC = FMortonUtils::Node::GetChild(NodeMC, ChildLayerIdx, ChildIdx);
 
 		// FRsapNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk.GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk.TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
-		// FNmShared::SetNodeRelations(NavMesh, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildLayerIdx, Direction::Negative::XYZ);
+		// FRsapNavmeshShared::SetNodeRelations(NavMesh, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildLayerIdx, Direction::Negative::XYZ);
 		// Node.SetChildActive(ChildIdx);
 		// if(ChildLayerIdx < Layer::StaticDepth) FilteredRasterize(Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildNodeLocation, ChildLayerIdx, EdgesToCheck, LayerSkipMasks, CollisionComponent);;
 
@@ -261,7 +260,7 @@ void FRsapGenerator::RasterizeNode(const FGlobalBounds& AABB, FRsapChunk& Chunk,
 		{
 			FRsapNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk.GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk.TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
 			RasterizeNode(AABB, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildNodeLocation, ChildLayerIdx, CollisionComponent, bIsChildContained);
-			FNmShared::SetNodeRelations(NavMesh, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildLayerIdx, Direction::Negative::XYZ);
+			FRsapNavmeshShared::SetNodeRelations(NavMesh, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildLayerIdx, Direction::Negative::XYZ);
 		}
 		else
 		{

@@ -1,7 +1,7 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #include "Rsap/NavMesh/Update/UpdateTask.h"
-#include "RSAP/Math/Bounds.h"
+#include "Rsap/Math/Bounds.h"
 #include "Rsap/EditorWorld.h"
 
 

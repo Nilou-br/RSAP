@@ -1,15 +1,15 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-#include "RSAP/Definitions.h"
-#include "RSAP/Math/Bounds.h"
-#include "RSAP/NavMesh/Types/Node.h"
+#include "Rsap/Definitions.h"
+#include "Rsap/Math/Bounds.h"
+#include "Rsap/NavMesh/Types/Node.h"
 
 
 /**
  *
  */
-class FRsapGenerator
+class RSAPGAME_API FRsapGenerator
 {
 	// Used to tell which nodes can be skipped during re-rasterization.
 	// Similar to TBounds, but offers better readability.

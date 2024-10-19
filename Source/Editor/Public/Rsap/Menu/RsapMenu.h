@@ -3,7 +3,7 @@
 #pragma once
 
 #include "RsapStyle.h"
-#include "RSAP/Definitions.h"
+#include "Rsap/Definitions.h"
 #include "..\EditorManager.h"
 #include "SubMenus/DebugSubMenu.h"
 #include "Submenus/ProfilerSubMenu.h"

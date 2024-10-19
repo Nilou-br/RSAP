@@ -1,8 +1,8 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #include "Rsap/NavMesh/Update/Updater.h"
-#include "RSAP/Definitions.h"
-#include "RSAP/Math/Bounds.h"
+#include "Rsap/Definitions.h"
+#include "Rsap/Math/Bounds.h"
 #include <set>
 
 FRsapUpdater::FOnUpdateComplete FRsapUpdater::OnUpdateComplete;

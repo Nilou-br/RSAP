@@ -3,7 +3,7 @@
 #pragma once
 #include <unordered_set>
 
-#include "RSAP/Math/Vectors.h"
+#include "Rsap/Math/Vectors.h"
 
 using namespace Rsap::NavMesh;
 

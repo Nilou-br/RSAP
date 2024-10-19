@@ -1,11 +1,11 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-#include "RSAP/Definitions.h"
-#include "RSAP/NavMesh/Types/Node.h"
+#include "Rsap/Definitions.h"
+#include "Rsap/NavMesh/Types/Node.h"
 
 
-class FNmShared
+class FRsapNavmeshShared
 {
 public:
 	static FRsapNode& InitNodeAndParents(const FNavMesh& NavMesh, const FRsapChunk& Chunk, chunk_morton ChunkMC, node_morton NodeMC, layer_idx LayerIdx, node_state NodeState, rsap_direction RelationsToSet);

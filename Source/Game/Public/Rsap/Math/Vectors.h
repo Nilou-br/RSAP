@@ -1,8 +1,8 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-#include "RSAP/Math/Morton.h"
-#include "RSAP/Definitions.h"
+#include "Rsap/Math/Morton.h"
+#include "Rsap/Definitions.h"
 
 
 

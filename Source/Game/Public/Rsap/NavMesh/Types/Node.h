@@ -2,11 +2,11 @@
 
 #pragma once
 #include "Relations.h"
-#include "RSAP/Math/Morton.h"
-#include "RSAP/Math/Vectors.h"
-#include "RSAP/Definitions.h"
-#include "RSAP/Math/Overlap.h"
-#include "RSAP/Math/Bounds.h"
+#include "Rsap/Math/Morton.h"
+#include "Rsap/Math/Vectors.h"
+#include "Rsap/Definitions.h"
+#include "Rsap/Math/Overlap.h"
+#include "Rsap/Math/Bounds.h"
 
 using namespace Rsap::NavMesh;
 

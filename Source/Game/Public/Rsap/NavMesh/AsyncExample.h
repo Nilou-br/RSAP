@@ -12,7 +12,7 @@
  * ::IsRunning	- To know whether there is anny ongoing update.
  * ::StageData	- To add data that is used to update the navmesh.
  */
-class RSAPGAME_API FRsapGameUpdater final : public FTickableGameObject
+class RSAPGAME_API FRsapAsyncExample final : public FTickableGameObject
 {
 	DECLARE_DELEGATE(FOnNavMeshUpdatedDelegate);
 
@@ -21,7 +21,7 @@ class RSAPGAME_API FRsapGameUpdater final : public FTickableGameObject
 public:
 	FOnNavMeshUpdatedDelegate OnNavMeshUpdatedDelegate;
 	
-	explicit FRsapGameUpdater() {}
+	explicit FRsapAsyncExample() {}
 	
 	virtual void Tick(float DeltaTime) override;
 	virtual TStatId GetStatId() const override { RETURN_QUICK_DECLARE_CYCLE_STAT(FNavMeshUpdater, STATGROUP_Tickables); }

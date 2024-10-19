@@ -1,9 +1,9 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-#include "RSAP/Definitions.h"
-#include "RSAP/Math/Bounds.h"
-#include "RSAP/NavMesh/Types/Chunk.h"
+#include "Rsap/Definitions.h"
+#include "Rsap/Math/Bounds.h"
+#include "Rsap/NavMesh/Types/Chunk.h"
 
 
 
