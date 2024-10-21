@@ -3,7 +3,7 @@
 #pragma once
 
 #include "Rsap/Math/Bounds.h"
-#include "Rsap/NavMesh/Types/Chunk.h"
+#include "Rsap/NavMesh/Navmesh.h"
 #include "EditorManager.generated.h"
 
 class FRsapUpdater;
@@ -33,7 +33,7 @@ public:
 	void Regenerate(const UWorld* World);
 
 private:
-	FNavMesh NavMesh;
+	FRsapNavmesh NavMesh;
 	bool bFullyRegenerated = false;
 	std::unordered_set<chunk_morton> ChunksToSerialize; // New/updated chunks pending to be serialized.
 

@@ -3,6 +3,7 @@
 #pragma once
 #include "Rsap/Definitions.h"
 #include "Rsap/Math/Bounds.h"
+#include "Rsap/NavMesh/Navmesh.h"
 #include "Rsap/NavMesh/Types/Node.h"
 
 
@@ -48,14 +49,13 @@ class RSAPGAME_API FRsapGenerator
 
 	static layer_idx CalculateOptimalStartingLayer(const FGlobalBounds& Bounds);
 	static uint8 GetChildrenToRasterizeAndUpdateEdges(rsap_direction& EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks, layer_idx LayerIdx, layer_idx ChildLayerIdx);
-	static void RasterizeChunks(const UPrimitiveComponent* CollisionComponent);
-	static void RasterizeNode(const FGlobalBounds& AABB, FRsapChunk& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, node_morton NodeMC, const FGlobalVector& NodeLocation, layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent, const bool bIsAABBContained);
+	static void RasterizeChunks(FRsapNavmesh& Navmesh, const UPrimitiveComponent* CollisionComponent);
+	static void RasterizeNode(FRsapNavmesh& Navmesh, const FGlobalBounds& AABB, FRsapChunk& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, node_morton NodeMC, const FGlobalVector& NodeLocation, layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent, const bool bIsAABBContained);
 	static void RasterizeLeafNode(const FGlobalBounds& AABB, FRsapLeaf& LeafNode, const FGlobalVector& NodeLocation, const UPrimitiveComponent* CollisionComponent, const bool bIsAABBContained);
 
 	static const UWorld* World;
-	static FNavMesh NavMesh;
 
 public:
-	static void Generate(const UWorld* InWorld, const FNavMesh& InNavMesh, const FActorMap& ActorMap);
-	static void RegenerateChunks(const UWorld* InWorld, const FNavMesh& InNavMesh, const std::vector<chunk_morton>& ChunkMCs);
+	static void Generate(const UWorld* InWorld, FRsapNavmesh& Navmesh, const FActorMap& ActorMap);
+	static void RegenerateChunks(const UWorld* InWorld, FRsapNavmesh& Navmesh, const std::vector<chunk_morton>& ChunkMCs);
 };

@@ -16,8 +16,7 @@ void URsapEditorManager::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 	
-	NavMesh = std::make_shared<FNavMeshType>();
-	FRsapUpdater::GetInstance();
+	//FRsapUpdater::GetInstance();
 
 	FRsapEditorWorld::OnMapOpened.BindUObject(this, &ThisClass::OnWorldInitialized);
 	FRsapEditorWorld::PreMapSaved.BindUObject(this, &ThisClass::PreMapSaved);
@@ -27,12 +26,12 @@ void URsapEditorManager::Initialize(FSubsystemCollectionBase& Collection)
 	FRsapEditorWorld::OnActorAdded.BindUObject(this, &ThisClass::OnActorAdded);
 	FRsapEditorWorld::OnActorDeleted.BindUObject(this, &ThisClass::OnActorDeleted);
 
-	FRsapUpdater::OnUpdateComplete.AddUObject(this, &ThisClass::OnNavMeshUpdated);
+	//FRsapUpdater::OnUpdateComplete.AddUObject(this, &ThisClass::OnNavMeshUpdated);
 }
 
 void URsapEditorManager::Deinitialize()
 {
-	NavMesh.reset();
+	NavMesh.Chunks.clear();
 	
 	FRsapEditorWorld::OnMapOpened.Unbind();
 	FRsapEditorWorld::PreMapSaved.Unbind();
@@ -42,27 +41,27 @@ void URsapEditorManager::Deinitialize()
 	FRsapEditorWorld::OnActorAdded.Unbind();
 	FRsapEditorWorld::OnActorDeleted.Unbind();
 
-	FRsapUpdater::OnUpdateComplete.RemoveAll(this);
+	// FRsapUpdater::OnUpdateComplete.RemoveAll(this);
 	
 	Super::Deinitialize();
 }
 
 void URsapEditorManager::Regenerate(const UWorld* World)
 {
+	// todo:
+	// Stop updater.
+	// Wait until ongoing update completes.
+	// Clear navmesh.
+	// Call generate on generator.
+	
 	if(!World)
 	{
 		UE_LOG(LogRsap, Warning, TEXT("Cannot regenerate the navmesh without an active world."));
 		return;
 	}
 
-	// todo:
-	// Stop updater.
-	// Wait until ongoing update completes.
-	// Clear navmesh.
-	// Call generate on generator.
+	NavMesh.Generate(World, FRsapEditorWorld::GetActors());
 
-	NavMesh->clear();
-	FRsapGenerator::Generate(World, NavMesh, FRsapEditorWorld::GetActors());
 	if(World->GetOuter()->MarkPackageDirty())
 	{
 		UE_LOG(LogRsap, Log, TEXT("Regeneration complete. The sound-navigation-mesh will be cached when you save the map."))
@@ -71,7 +70,7 @@ void URsapEditorManager::Regenerate(const UWorld* World)
 
 void URsapEditorManager::OnWorldInitialized(const UWorld* World, const FActorBoundsMap& ActorBoundsMap)
 {
-	switch (std::vector<chunk_morton> MismatchedChunks; DeserializeNavMesh(World, *NavMesh, MismatchedChunks)){
+	switch (std::vector<chunk_morton> MismatchedChunks; DeserializeNavMesh(World, NavMesh, MismatchedChunks)){
 		case EDeserializeResult::Success:
 			break;
 		case EDeserializeResult::NotFound:
@@ -93,7 +92,7 @@ void URsapEditorManager::OnWorldInitialized(const UWorld* World, const FActorBou
 	return;
 
 	// Start the updater/debugger. todo: stop before closing map.
-	FRsapUpdater::GetInstance().Start(World, NavMesh);
+	// FRsapUpdater::GetInstance().Start(World, NavMesh);
 	
 	// Backup code to wait for update complete ( for PIE start during update scenario ):
 	// NavMeshUpdater->StageData(Data);
@@ -126,11 +125,11 @@ void URsapEditorManager::PostMapSaved(const bool bSuccess)
 	
 	if(bFullyRegenerated)
 	{
-		SerializeNavMesh(GEditor->GetEditorWorldContext().World(), *NavMesh);
+		SerializeNavMesh(GEditor->GetEditorWorldContext().World(), NavMesh);
 	}
 	else
 	{
-		SerializeNavMesh(GEditor->GetEditorWorldContext().World(), *NavMesh, ChunksToSerialize);
+		SerializeNavMesh(GEditor->GetEditorWorldContext().World(), NavMesh, ChunksToSerialize);
 		ChunksToSerialize.clear();
 	}
 }
@@ -146,7 +145,7 @@ void URsapEditorManager::OnActorMoved(const actor_key ActorKey, const FMovedBoun
 {
 	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnActorMoved"))
 
-	FRsapUpdater::GetInstance().StageData(ActorKey, MovedBounds);
+	// FRsapUpdater::GetInstance().StageData(ActorKey, MovedBounds);
 }
 
 void URsapEditorManager::OnActorAdded(const actor_key ActorKey, const FGlobalBounds& Bounds)
@@ -154,7 +153,7 @@ void URsapEditorManager::OnActorAdded(const actor_key ActorKey, const FGlobalBou
 	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnActorAdded"))
 
 	// Leave 'from' empty because the actor did not exist before this operation.
-	FRsapUpdater::GetInstance().StageData(ActorKey, FMovedBounds(FGlobalBounds::EmptyBounds(), Bounds));
+	// FRsapUpdater::GetInstance().StageData(ActorKey, FMovedBounds(FGlobalBounds::EmptyBounds(), Bounds));
 }
 
 void URsapEditorManager::OnActorDeleted(const actor_key ActorKey, const FGlobalBounds& Bounds)
@@ -162,7 +161,7 @@ void URsapEditorManager::OnActorDeleted(const actor_key ActorKey, const FGlobalB
 	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnActorDeleted"))
 
 	// Leave 'to' empty because the actor does not exist anymore.
-	FRsapUpdater::GetInstance().StageData(ActorKey, FMovedBounds(Bounds, FGlobalBounds::EmptyBounds()));
+	// FRsapUpdater::GetInstance().StageData(ActorKey, FMovedBounds(Bounds, FGlobalBounds::EmptyBounds()));
 }
 
 void URsapEditorManager::OnNavMeshUpdated() const {}
@@ -173,7 +172,7 @@ void URsapEditorManager::ProfileGeneration() const
 {
 	const auto StartTime = std::chrono::high_resolution_clock::now();
 
-	const FNavMesh ProfileNavMesh = std::make_shared<FNavMeshType>();
+	FRsapNavmesh ProfileNavMesh;
 	const FActorMap& ActorMap = FRsapEditorWorld::GetActors();
 	for (int i = 0; i < 1000; ++i)
 	{
@@ -196,7 +195,7 @@ void URsapEditorManager::ProfileIteration() const
 	bool bNodesOrdered = true;
 	for (int i = 0; i < 50000; ++i)
 	{
-		for(const auto& [ChunkMC, Chunk] : *NavMesh)
+		for(const auto& [ChunkMC, Chunk] : NavMesh.Chunks)
 		{
 			if(LastChunkMC && ChunkMC < LastChunkMC) bChunksOrdered = false;
 			LastChunkMC = ChunkMC;

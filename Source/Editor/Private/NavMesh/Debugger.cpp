@@ -11,7 +11,7 @@
 #include "Rsap/NavMesh/Types/Node.h"
 
 
-FNavMesh		FRsapDebugger::NavMesh;
+FRsapNavmesh	FRsapDebugger::NavMesh;
 FDelegateHandle FRsapDebugger::NavMeshUpdatedHandle;
 
 
@@ -38,7 +38,7 @@ static bool InDistance(const FVector& CameraLocation, const FGlobalVector& NodeC
 void FRsapDebugger::Draw()
 {
 	const UWorld* World = GEditor->GetEditorWorldContext().World();
-	if(!bEnabled || !World || !NavMesh) return;
+	if(!bEnabled || !World) return;
 	FlushDebug();
 	
 	FVector CameraLocation;
@@ -74,7 +74,7 @@ void FRsapDebugger::Draw()
 void FRsapDebugger::Draw(const FVector& CameraLocation, const FRotator& CameraRotation)
 {
 	const UWorld* World = GEditor->GetEditorWorldContext().World();
-	if(!bEnabled || !World || !NavMesh) return;
+	if(!bEnabled || !World) return;
 	FlushDebug();
 	
 	const FVector CameraForwardVector = FRotationMatrix(CameraRotation).GetUnitAxis(EAxis::X);
@@ -96,7 +96,7 @@ void FRsapDebugger::Draw(const FVector& CameraLocation, const FRotator& CameraRo
 		{
 			for (ChunkLocation.X = RenderBoundaries.Min.X; ChunkLocation.X <= RenderBoundaries.Max.X; ChunkLocation.X += Chunk::Size)
 			{
-				if(const auto ChunkIterator = NavMesh->find(CurrentChunkMC); ChunkIterator != NavMesh->end())
+				if(const FRsapChunk* Chunk = NavMesh.FindChunk(CurrentChunkMC); Chunk)
 				{
 					if(bDrawChunks)
 					{
@@ -104,7 +104,7 @@ void FRsapDebugger::Draw(const FVector& CameraLocation, const FRotator& CameraRo
 						DrawDebugBox(World, *ChunkGlobalCenterLocation, FVector(Node::HalveSizes[0]), FColor::Black, true, -1, 11, 5);
 					}
 					
-					DrawNodes(World, ChunkIterator->second, CurrentChunkMC, ChunkLocation, 0, 0, CameraLocation);
+					DrawNodes(World, *Chunk, CurrentChunkMC, ChunkLocation, 0, 0, CameraLocation);
 				}
 
 				if(ChunkLocation.X == RenderBoundaries.Max.X)

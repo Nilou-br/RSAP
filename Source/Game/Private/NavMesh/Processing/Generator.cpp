@@ -8,7 +8,6 @@
 #include <ranges>
 
 const UWorld*	FRsapGenerator::World;
-FNavMesh		FRsapGenerator::NavMesh;
 
 
 
@@ -94,7 +93,7 @@ uint8 FRsapGenerator::GetChildrenToRasterizeAndUpdateEdges(rsap_direction& Edges
 }
 
 // todo: this method can be made a template?
-void FRsapGenerator::RasterizeChunks(const UPrimitiveComponent* CollisionComponent)
+void FRsapGenerator::RasterizeChunks(FRsapNavmesh& Navmesh, const UPrimitiveComponent* CollisionComponent)
 {
 	using namespace Direction;
 	
@@ -119,7 +118,7 @@ void FRsapGenerator::RasterizeChunks(const UPrimitiveComponent* CollisionCompone
 	chunk_morton ChunkMC = StartingChunkMC; // Will be updated when iterating into a new chunk.
 
 	// Keep track of the current chunk.
-	FRsapChunk* CurrentChunk = FRsapChunk::TryFind(NavMesh, ChunkMC);
+	FRsapChunk* CurrentChunk = Navmesh.FindChunk(ChunkMC);
 
 	// This mask represents the edges that have nodes that can be skipped. When we are at an edge in a certain direction, then that direction will certainly have nodes that can be skipped.
 	rsap_direction EdgesToCheck = 0b111000; // Initially set to be on the negative edge in every direction.
@@ -131,7 +130,7 @@ void FRsapGenerator::RasterizeChunks(const UPrimitiveComponent* CollisionCompone
 		if(ChunkMC != NewChunkMC)
 		{
 			ChunkMC = NewChunkMC;
-			CurrentChunk = FRsapChunk::TryFind(NavMesh, ChunkMC);
+			CurrentChunk = Navmesh.FindChunk(ChunkMC);
 		}
 	};
 
@@ -170,7 +169,7 @@ void FRsapGenerator::RasterizeChunks(const UPrimitiveComponent* CollisionCompone
 						HandleIterateX(NodeLocation);
 						continue;
 					}
-					CurrentChunk = &FRsapChunk::TryInit(NavMesh, ChunkMC);
+					CurrentChunk = &Navmesh.TryInitChunk(ChunkMC);
 				}
 
 				// todo: when creating updater, try to find a node first, then if nullptr check if collision, and if collision true then init node.
@@ -185,12 +184,12 @@ void FRsapGenerator::RasterizeChunks(const UPrimitiveComponent* CollisionCompone
 				// There is an overlap, so get/init the node or leaf-node, and also init/update any missing parent.
 				if(LayerIdx < Layer::NodeDepth)
 				{
-					FRsapNode& Node = FRsapNavmeshShared::InitNodeAndParents(NavMesh, *CurrentChunk, ChunkMC, NodeMC, LayerIdx, 0, Negative::XYZ);
-					RasterizeNode(AABB, *CurrentChunk, ChunkMC, Node, NodeMC, NodeLocation, LayerIdx, CollisionComponent, false);
+					FRsapNode& Node = FRsapSharedProcessing::InitNodeAndParents(Navmesh, *CurrentChunk, ChunkMC, NodeMC, LayerIdx, 0, Negative::XYZ);
+					RasterizeNode(Navmesh, AABB, *CurrentChunk, ChunkMC, Node, NodeMC, NodeLocation, LayerIdx, CollisionComponent, false);
 				}
 				else
 				{
-					FRsapLeaf& LeafNode = FRsapNavmeshShared::InitLeafNodeAndParents(NavMesh, *CurrentChunk, ChunkMC, NodeMC, 0);
+					FRsapLeaf& LeafNode = FRsapSharedProcessing::InitLeafNodeAndParents(Navmesh, *CurrentChunk, ChunkMC, NodeMC, 0);
 					RasterizeLeafNode(AABB, LeafNode, NodeLocation, CollisionComponent, false);
 				}
 				
@@ -219,7 +218,7 @@ void FRsapGenerator::RasterizeChunks(const UPrimitiveComponent* CollisionCompone
 
 // todo: unroll this method along with ::GetChildRasterizeMask.
 // Re-rasterizes the node while skipping children that are not intersecting with the actor's boundaries.
-void FRsapGenerator::RasterizeNode(const FGlobalBounds& AABB, FRsapChunk& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent, const bool bIsAABBContained)
+void FRsapGenerator::RasterizeNode(FRsapNavmesh& Navmesh, const FGlobalBounds& AABB, FRsapChunk& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent, const bool bIsAABBContained)
 {
 	// Create the children.
 	const layer_idx ChildLayerIdx = LayerIdx+1;
@@ -251,7 +250,7 @@ void FRsapGenerator::RasterizeNode(const FGlobalBounds& AABB, FRsapChunk& Chunk,
 		const node_morton ChildNodeMC = FMortonUtils::Node::GetChild(NodeMC, ChildLayerIdx, ChildIdx);
 
 		// FRsapNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk.GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk.TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
-		// FRsapNavmeshShared::SetNodeRelations(NavMesh, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildLayerIdx, Direction::Negative::XYZ);
+		// FRsapSharedProcessing::SetNodeRelations(NavMesh, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildLayerIdx, Direction::Negative::XYZ);
 		// Node.SetChildActive(ChildIdx);
 		// if(ChildLayerIdx < Layer::StaticDepth) FilteredRasterize(Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildNodeLocation, ChildLayerIdx, EdgesToCheck, LayerSkipMasks, CollisionComponent);;
 
@@ -259,8 +258,8 @@ void FRsapGenerator::RasterizeNode(const FGlobalBounds& AABB, FRsapChunk& Chunk,
 		if(ChildLayerIdx < Layer::NodeDepth) // todo: remove and uncomment above code when done testing leaf nodes.
 		{
 			FRsapNode& ChildNode = Node.DoesChildExist(ChildIdx) ? Chunk.GetNode(ChildNodeMC, ChildLayerIdx, 0) : Chunk.TryInitNode(ChildNodeMC, ChildLayerIdx, 0);
-			RasterizeNode(AABB, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildNodeLocation, ChildLayerIdx, CollisionComponent, bIsChildContained);
-			FRsapNavmeshShared::SetNodeRelations(NavMesh, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildLayerIdx, Direction::Negative::XYZ);
+			RasterizeNode(Navmesh, AABB, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildNodeLocation, ChildLayerIdx, CollisionComponent, bIsChildContained);
+			FRsapSharedProcessing::SetNodeRelations(Navmesh, Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildLayerIdx, Direction::Negative::XYZ);
 		}
 		else
 		{
@@ -324,12 +323,11 @@ std::vector<const UPrimitiveComponent*> GetActorCollisionComponents(const AActor
 	return CollisionComponents;
 };
 
-void FRsapGenerator::Generate(const UWorld* InWorld, const FNavMesh& InNavMesh, const FActorMap& ActorMap)
+void FRsapGenerator::Generate(const UWorld* InWorld, FRsapNavmesh& Navmesh, const FActorMap& ActorMap)
 {
 	FlushPersistentDebugLines(InWorld);
 
 	World = InWorld;
-	NavMesh = InNavMesh;
 
 	FRsapOverlap::InitCollisionBoxes();
 	
@@ -341,21 +339,15 @@ void FRsapGenerator::Generate(const UWorld* InWorld, const FNavMesh& InNavMesh, 
 			// todo: move this to start of method. Different ExecuteRead overload.
 			FPhysicsCommand::ExecuteRead(CollisionComponent->BodyInstance.ActorHandle, [&](const FPhysicsActorHandle& ActorHandle)
 			{
-				RasterizeChunks(CollisionComponent);
+				RasterizeChunks(Navmesh, CollisionComponent);
 			});
 		}
 	}
-	
-	World = nullptr;
-	NavMesh.reset();
 }
 
-void FRsapGenerator::RegenerateChunks(const UWorld* InWorld, const FNavMesh& InNavMesh, const std::vector<chunk_morton>& ChunkMCs)
+void FRsapGenerator::RegenerateChunks(const UWorld* InWorld, FRsapNavmesh& Navmesh, const std::vector<chunk_morton>& ChunkMCs)
 {
 	FlushPersistentDebugLines(InWorld);
-
-	World = InWorld;
-	NavMesh = InNavMesh;
 
 	FRsapOverlap::InitCollisionBoxes();
 	
@@ -369,12 +361,9 @@ void FRsapGenerator::RegenerateChunks(const UWorld* InWorld, const FNavMesh& InN
 				// todo: move this to start of method. Different ExecuteRead overload.
 				FPhysicsCommand::ExecuteRead(CollisionComponent->BodyInstance.ActorHandle, [&](const FPhysicsActorHandle& ActorHandle)
 				{
-					RasterizeChunks(CollisionComponent);
+					RasterizeChunks(Navmesh, CollisionComponent);
 				});
 			}
 		}
 	}
-	
-	World = nullptr;
-	NavMesh.reset();
 }

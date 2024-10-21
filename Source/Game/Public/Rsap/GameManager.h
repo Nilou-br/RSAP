@@ -1,7 +1,6 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-#include "Rsap/NavMesh/Types/Chunk.h"
 #include "GameManager.generated.h"
 
 
@@ -24,7 +23,6 @@ private:
 	void OnWorldInitializedActors(const FActorsInitializedParams& ActorsInitializedParams);
 
 	UPROPERTY() UWorld* World;
-	FNavMesh NavMesh;
 	
 	bool bWorldReady;
 	FVector LastCameraLocation;

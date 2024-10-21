@@ -4,8 +4,7 @@
 
 #include "Rsap/Definitions.h"
 #include "Rsap/EditorWorld.h"
-#include "Rsap/NavMesh/Update/Updater.h"
-
+#include "Rsap/NavMesh/Navmesh.h"
 
 
 class FRsapDebugger
@@ -13,18 +12,16 @@ class FRsapDebugger
 public:
 	explicit FRsapDebugger(){}
 
-	static void Start(const FNavMesh& InNavMesh)
+	static void Start(const FRsapNavmesh& InNavMesh)
 	{
 		NavMesh = InNavMesh;
-
-		NavMeshUpdatedHandle = FRsapUpdater::OnUpdateComplete.AddStatic(&FRsapDebugger::OnNavMeshUpdated);
+	
+		//NavMeshUpdatedHandle = FRsapUpdater::OnUpdateComplete.AddStatic(&FRsapDebugger::OnNavMeshUpdated);
 		FRsapEditorWorld::OnCameraMoved.BindStatic(&FRsapDebugger::OnCameraMoved);
 	}
 	static void Stop()
 	{
-		NavMesh->clear();
-
-		FRsapUpdater::OnUpdateComplete.Remove(NavMeshUpdatedHandle); NavMeshUpdatedHandle.Reset();
+		//FRsapUpdater::OnUpdateComplete.Remove(NavMeshUpdatedHandle); NavMeshUpdatedHandle.Reset();
 		FRsapEditorWorld::OnCameraMoved.Unbind();
 	}
 
@@ -44,10 +41,10 @@ private:
 	}
 	static void OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation)
 	{
-		if(!FRsapUpdater::GetInstance().IsRunningTask()) Draw(CameraLocation, CameraRotation);
+		// if(!FRsapUpdater::GetInstance().IsRunningTask()) Draw(CameraLocation, CameraRotation);
 	}
 
-	static FNavMesh NavMesh;
+	static FRsapNavmesh NavMesh;
 	static FDelegateHandle NavMeshUpdatedHandle;
 
 	inline static bool bEnabled				= true;

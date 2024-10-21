@@ -20,8 +20,8 @@ struct FRsapChunk
 private:
 	struct FOctree
 	{
-		std::array<std::unique_ptr<FOctreeLayer>, 10> Layers;
-		std::unique_ptr<FOctreeLeafNodes> LeafNodes;
+		std::array<std::shared_ptr<FOctreeLayer>, 10> Layers;
+		std::shared_ptr<FOctreeLeafNodes> LeafNodes;
 
 		FOctree()
 		{
@@ -35,31 +35,31 @@ private:
 	
 	void Initialize()
 	{
-		Octrees[0] = std::make_unique<FOctree>();
-		Octrees[1] = std::make_unique<FOctree>();
+		Octrees[0] = std::make_shared<FOctree>();
+		Octrees[1] = std::make_shared<FOctree>();
 	}
 	
 public:
-	std::array<std::unique_ptr<FOctree>, 2> Octrees; // Accessed using a node-state, 0 static, 1 dynamic.
+	std::array<std::shared_ptr<FOctree>, 2> Octrees; // Accessed using a node-state, 0 static, 1 dynamic.
 
 	FRsapChunk()
 	{
 		Initialize();
 	}
 
-	// Returns reference to the chunk with this morton-code. New chunk will be initialized if it does not exist yet.
-	FORCEINLINE static FRsapChunk& TryInit(const FNavMesh& NavMesh, const chunk_morton ChunkMC)
-	{
-		return NavMesh->try_emplace(ChunkMC).first->second;
-	}
-
-	// Tries to find a chunk with this morton-code. Will be nullptr if it does not exist.
-	FORCEINLINE static FRsapChunk* TryFind(const FNavMesh& NavMesh, const chunk_morton ChunkMC)
-	{
-		const auto Iterator = NavMesh->find(ChunkMC);
-		if(Iterator == NavMesh->end()) return nullptr;
-		return &Iterator->second;
-	}
+	// // Returns reference to the chunk with this morton-code. New chunk will be initialized if it does not exist yet.
+	// FORCEINLINE static FRsapChunk& TryInit(const FNavMesh& NavMesh, const chunk_morton ChunkMC)
+	// {
+	// 	return NavMesh->try_emplace(ChunkMC).first->second;
+	// }
+	//
+	// // Tries to find a chunk with this morton-code. Will be nullptr if it does not exist.
+	// FORCEINLINE static FRsapChunk* TryFind(const FNavMesh& NavMesh, const chunk_morton ChunkMC)
+	// {
+	// 	const auto Iterator = NavMesh->find(ChunkMC);
+	// 	if(Iterator == NavMesh->end()) return nullptr;
+	// 	return &Iterator->second;
+	// }
 
 	// Use only when you are certain it exists.
 	FORCEINLINE FRsapNode& GetNode(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const

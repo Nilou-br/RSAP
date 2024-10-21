@@ -189,10 +189,12 @@ namespace Rsap::Map
 	using ordered_map = std::map<Key, T, Compare, Allocator>;
 }
 
-typedef Rsap::Map::ordered_map<chunk_morton, FRsapChunk> FNavMeshType;
-typedef std::shared_ptr<FNavMeshType> FNavMesh;
+// typedef Rsap::Map::ordered_map<chunk_morton, FRsapChunk> FNavMeshType;
+// typedef std::shared_ptr<FNavMeshType> FNavMesh;
+
 // typedef Rsap::Map::ordered_map<chunk_morton, FRsapChunk> FNavMeshEditorType;
 // typedef std::shared_ptr<FNavMeshEditorType> FNavMeshEditor;
+
 // typedef Rsap::Map::flat_map<chunk_morton, FRsapChunk> FNavMeshGameType;
 // typedef std::shared_ptr<FNavMeshGameType> FNavMeshGame;
 

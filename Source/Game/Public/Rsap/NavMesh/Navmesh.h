@@ -3,6 +3,7 @@
 #pragma once
 #include "Engine/AssetUserData.h"
 #include "Rsap/Definitions.h"
+#include "Rsap/NavMesh/Types/Chunk.h"
 #include "Navmesh.generated.h"
 
 
@@ -15,11 +16,11 @@ class RSAPGAME_API URsapNavmeshMetadata : public UAssetUserData
 public:
 	// ID of the navmesh, used to locate the binaries.
 	UPROPERTY(VisibleAnywhere, Category="RSAP | NavigationMesh")
-	FGuid NavMeshID;
+	FGuid ID;
 
 	// Chunks that have been serialized. The ID is used to check if the binaries for a given chunk is in-sync with the world.
 	UPROPERTY(VisibleAnywhere, Category="RSAP | NavigationMesh")
-	TMap<uint64, FGuid> SavedChunkIDs;
+	TMap<uint64, FGuid> Chunks;
 
 	// Gets the metadata for this level/world. Initialized if it does not exist yet.
 	static URsapNavmeshMetadata* Load(const UWorld* World)
@@ -36,18 +37,32 @@ public:
 	}
 };
 
-class FRsapNavmesh
+class RSAPGAME_API FRsapNavmesh
 {
+public:
+	
 #if WITH_EDITOR
 	Rsap::Map::ordered_map<chunk_morton, FRsapChunk> Chunks;
 #else
 	Rsap::Map::flat_map<chunk_morton, FRsapChunk> Chunks;
 #endif
 
-public:
-	void Generate();
+	void Generate(const UWorld* World, const FActorMap& ActorMap);
 	void GenerateAsync();
 
 	void Update();
 	void UpdateAsync();
+
+	// Returns nullptr if it does not exist.
+	FORCEINLINE FRsapChunk* FindChunk(const chunk_morton ChunkMC)
+	{
+		const auto Iterator = Chunks.find(ChunkMC);
+		if(Iterator == Chunks.end()) return nullptr;
+		return &Iterator->second;
+	}
+
+	FORCEINLINE FRsapChunk& TryInitChunk(const chunk_morton ChunkMC)
+	{
+		return Chunks.try_emplace(ChunkMC).first->second;
+	}
 };

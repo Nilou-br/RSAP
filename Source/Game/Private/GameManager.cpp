@@ -9,8 +9,6 @@ void URsapGameManager::Initialize(FSubsystemCollectionBase& Collection)
 	Super::Initialize(Collection);
 
 	OnWorldInitializedActorsDelegateHandle = FWorldDelegates::OnWorldInitializedActors.AddUObject(this, &ThisClass::OnWorldInitializedActors);
-
-	NavMesh = std::make_shared<FNavMeshType>();
 }
 
 void URsapGameManager::Deinitialize()
