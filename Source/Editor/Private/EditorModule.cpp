@@ -37,18 +37,29 @@ void FRsapEditorModule::BindCommands() const
 {
 	const FLevelEditorModule& LevelEditor = FModuleManager::GetModuleChecked<FLevelEditorModule>("LevelEditor");
 	const TSharedRef<FUICommandList> CommandList = LevelEditor.GetGlobalLevelEditorActions();
-	
+
 	CommandList->MapAction(
 		FRsapCommands::Get().ToggleEnableDebugger,
-		FExecuteAction::CreateLambda([]() { FRsapDebugger::ToggleEnabled(); })
+		FExecuteAction::CreateLambda([]() {
+			FRsapDebugger* Debugger = GEditor->GetEditorSubsystem<URsapEditorManager>()->GetDebugger();
+			Debugger->ToggleEnabled();
+		})
 	);
 	CommandList->MapAction(
 		FRsapCommands::Get().IncrementDrawLayerIdx,
-		FExecuteAction::CreateLambda([]() { if(FRsapDebugger::ShouldDrawSpecificLayer()) FRsapDebugger::IncrementDrawLayerIdx(); })
+		FExecuteAction::CreateLambda([]()
+		{
+			FRsapDebugger* Debugger = GEditor->GetEditorSubsystem<URsapEditorManager>()->GetDebugger();
+			if(Debugger->ShouldDrawSpecificLayer()) Debugger->IncrementDrawLayerIdx();
+		})
 	);
 	CommandList->MapAction(
 		FRsapCommands::Get().DecrementDrawLayerIdx,
-		FExecuteAction::CreateLambda([]() { if(FRsapDebugger::ShouldDrawSpecificLayer()) FRsapDebugger::DecrementDrawLayerIdx(); })
+		FExecuteAction::CreateLambda([]()
+		{
+			FRsapDebugger* Debugger = GEditor->GetEditorSubsystem<URsapEditorManager>()->GetDebugger();
+			if(Debugger->ShouldDrawSpecificLayer()) Debugger->DecrementDrawLayerIdx();
+		})
 	);
 }
 

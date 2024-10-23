@@ -14,6 +14,9 @@ class FDebugSubMenu
 public:
 	static void RegisterSubMenu(FMenuBuilder& MenuBuilder)
 	{
+		const URsapEditorManager* EditorManager = GEditor->GetEditorSubsystem<URsapEditorManager>();
+		FRsapDebugger* Debugger = EditorManager->GetDebugger();
+		
 		MenuBuilder.BeginSection("RsapDebugSection", LOCTEXT("RsapDebugSectionLabel", "Debug options"));
 
 		// Enable debugger checkbox.
@@ -22,9 +25,9 @@ public:
 			LOCTEXT("RsapDebugEnabledTooltip", "Enables/disable the debugger."),
 			FSlateIcon(),
 			FUIAction(
-				FExecuteAction::CreateStatic([]() { FRsapDebugger::ToggleEnabled(); }),
+				FExecuteAction::CreateLambda([&Debugger]() { Debugger->ToggleEnabled(); }),
 				FCanExecuteAction(),
-				FIsActionChecked::CreateStatic([]() { return FRsapDebugger::IsEnabled(); })
+				FIsActionChecked::CreateLambda([&Debugger]() { return Debugger->IsEnabled(); })
 			),
 			NAME_None,
 			EUserInterfaceActionType::ToggleButton
@@ -36,9 +39,9 @@ public:
 			LOCTEXT("RsapDebugDrawNodeInfoTooltip", "Draw specific node information like it's morton-code, local-location, global-location, layer-index and child-index."),
 			FSlateIcon(),
 			FUIAction(
-				FExecuteAction::CreateStatic([]() { FRsapDebugger::ToggleDrawNodeInfo(); }),
+				FExecuteAction::CreateLambda([&Debugger]() { Debugger->ToggleDrawNodeInfo(); }),
 				FCanExecuteAction(),
-				FIsActionChecked::CreateStatic([]() { return FRsapDebugger::ShouldDrawNodeInfo(); })
+				FIsActionChecked::CreateLambda([&Debugger]() { return Debugger->ShouldDrawNodeInfo(); })
 			),
 			NAME_None,
 			EUserInterfaceActionType::ToggleButton
@@ -50,9 +53,9 @@ public:
 			LOCTEXT("RsapDebugDrawRelationsTooltip", "Draw the neighbour relations."),
 			FSlateIcon(),
 			FUIAction(
-				FExecuteAction::CreateStatic([]() { FRsapDebugger::ToggleDrawRelations(); }),
+				FExecuteAction::CreateLambda([&Debugger]() { Debugger->ToggleDrawRelations(); }),
 				FCanExecuteAction(),
-				FIsActionChecked::CreateStatic([]() { return FRsapDebugger::ShouldDrawRelations(); })
+				FIsActionChecked::CreateLambda([&Debugger]() { return Debugger->ShouldDrawRelations(); })
 			),
 			NAME_None,
 			EUserInterfaceActionType::ToggleButton
@@ -64,9 +67,9 @@ public:
 			LOCTEXT("RsapDebugDrawNavPathsTooltip", "Draw the navigation paths that are taken through the navigation mesh."),
 			FSlateIcon(),
 			FUIAction(
-				FExecuteAction::CreateStatic([]() { FRsapDebugger::ToggleDrawNavPaths(); }),
+				FExecuteAction::CreateLambda([&Debugger]() { Debugger->ToggleDrawNavPaths(); }),
 				FCanExecuteAction(),
-				FIsActionChecked::CreateStatic([]() { return FRsapDebugger::ShouldDrawNavPaths(); })
+				FIsActionChecked::CreateLambda([&Debugger]() { return Debugger->ShouldDrawNavPaths(); })
 			),
 			NAME_None,
 			EUserInterfaceActionType::ToggleButton
@@ -78,9 +81,9 @@ public:
 			LOCTEXT("RsapDebugDrawChunksTooltip", "Draw the chunks."),
 			FSlateIcon(),
 			FUIAction(
-				FExecuteAction::CreateStatic([]() { FRsapDebugger::ToggleDrawChunks(); }),
+				FExecuteAction::CreateLambda([&Debugger]() { Debugger->ToggleDrawChunks(); }),
 				FCanExecuteAction(),
-				FIsActionChecked::CreateStatic([]() { return FRsapDebugger::ShouldDrawChunks(); })
+				FIsActionChecked::CreateLambda([&Debugger]() { return Debugger->ShouldDrawChunks(); })
 			),
 			NAME_None,
 			EUserInterfaceActionType::ToggleButton
@@ -95,9 +98,9 @@ public:
 			LOCTEXT("RsapDebugShowLayerTooltip", "Show a specific layer."),
 			FSlateIcon(),
 			FUIAction(
-				FExecuteAction::CreateStatic([]() { FRsapDebugger::ToggleDrawSpecificLayer(); }),
+				FExecuteAction::CreateLambda([&Debugger]() { Debugger->ToggleDrawSpecificLayer(); }),
 				FCanExecuteAction(),
-				FIsActionChecked::CreateStatic([]() { return FRsapDebugger::ShouldDrawSpecificLayer(); })
+				FIsActionChecked::CreateLambda([&Debugger]() { return Debugger->ShouldDrawSpecificLayer(); })
 			),
 			NAME_None,
 			EUserInterfaceActionType::ToggleButton
@@ -114,19 +117,19 @@ public:
 				.FillWidth(1.0f)
 				[
 					SNew(SSlider)
-					.Value(FRsapDebugger::GetDrawLayerIdx())
+					.Value(Debugger->GetDrawLayerIdx())
 					.MinValue(0)
 					.MaxValue(Layer::Leaf)
 					.StepSize(1)
 					.MouseUsesStep(true)
-					.OnValueChanged_Static([](const float Value) { FRsapDebugger::SetDrawLayerIdx(static_cast<int32>(Value)); })
+					.OnValueChanged_Lambda([&Debugger](const float Value) { Debugger->SetDrawLayerIdx(static_cast<int32>(Value)); })
 				]
 				+ SHorizontalBox::Slot()
 				.AutoWidth()
 				.Padding(FMargin(5, 0, 0, 0))
 				[
 					SNew(STextBlock)
-					.Text_Static([](){ return FText::AsNumber(FRsapDebugger::GetDrawLayerIdx()); })
+					.Text_Lambda([&Debugger](){ return FText::AsNumber(Debugger->GetDrawLayerIdx()); })
 				]
 			],
 			LOCTEXT("RsapDebugShowLayerSliderLabel", "Layer")

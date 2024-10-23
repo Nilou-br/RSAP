@@ -169,7 +169,7 @@ void FRsapGenerator::RasterizeChunks(FRsapNavmesh& Navmesh, const UPrimitiveComp
 						HandleIterateX(NodeLocation);
 						continue;
 					}
-					CurrentChunk = &Navmesh.TryInitChunk(ChunkMC);
+					CurrentChunk = &Navmesh.InitChunk(ChunkMC);
 				}
 
 				// todo: when creating updater, try to find a node first, then if nullptr check if collision, and if collision true then init node.

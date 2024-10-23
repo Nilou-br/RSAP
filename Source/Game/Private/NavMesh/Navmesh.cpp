@@ -11,3 +11,13 @@ void FRsapNavmesh::Generate(const UWorld* World, const FActorMap& ActorMap)
 	Chunks.clear();
 	FRsapGenerator::Generate(World, *this, ActorMap);
 }
+
+void FRsapNavmesh::LoopChunks()
+{
+	for (const auto Pair : Chunks)
+	{
+		const FRsapChunk& Chunk = Pair.second;
+		const FGlobalVector Test = FGlobalVector::FromChunkMorton(Pair.first);
+		const chunk_morton MC = Pair.first;
+	}
+}

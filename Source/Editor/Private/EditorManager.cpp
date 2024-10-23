@@ -15,6 +15,8 @@
 void URsapEditorManager::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
+
+	Debugger = new FRsapDebugger(NavMesh);
 	
 	//FRsapUpdater::GetInstance();
 
@@ -31,8 +33,6 @@ void URsapEditorManager::Initialize(FSubsystemCollectionBase& Collection)
 
 void URsapEditorManager::Deinitialize()
 {
-	NavMesh.Chunks.clear();
-	
 	FRsapEditorWorld::OnMapOpened.Unbind();
 	FRsapEditorWorld::PreMapSaved.Unbind();
 	FRsapEditorWorld::PostMapSaved.Unbind();
@@ -42,6 +42,9 @@ void URsapEditorManager::Deinitialize()
 	FRsapEditorWorld::OnActorDeleted.Unbind();
 
 	// FRsapUpdater::OnUpdateComplete.RemoveAll(this);
+
+	delete Debugger;
+	NavMesh.Chunks.clear();
 	
 	Super::Deinitialize();
 }
@@ -70,6 +73,8 @@ void URsapEditorManager::Regenerate(const UWorld* World)
 
 void URsapEditorManager::OnWorldInitialized(const UWorld* World, const FActorBoundsMap& ActorBoundsMap)
 {
+	Debugger->Stop();
+	
 	switch (std::vector<chunk_morton> MismatchedChunks; DeserializeNavMesh(World, NavMesh, MismatchedChunks)){
 		case EDeserializeResult::Success:
 			break;
@@ -87,7 +92,7 @@ void URsapEditorManager::OnWorldInitialized(const UWorld* World, const FActorBou
 			break;
 	}
 	
-	FRsapDebugger::Start(NavMesh);
+	Debugger->Start();
 
 	return;
 

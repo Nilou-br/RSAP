@@ -9,74 +9,82 @@
 
 class FRsapDebugger
 {
-public:
-	explicit FRsapDebugger(){}
-
-	static void Start(const FRsapNavmesh& InNavMesh)
-	{
-		NavMesh = InNavMesh;
+	FRsapNavmesh& Navmesh;
 	
+public:
+	explicit FRsapDebugger(FRsapNavmesh& InNavmesh)
+		: Navmesh(InNavmesh)
+	{
 		//NavMeshUpdatedHandle = FRsapUpdater::OnUpdateComplete.AddStatic(&FRsapDebugger::OnNavMeshUpdated);
-		FRsapEditorWorld::OnCameraMoved.BindStatic(&FRsapDebugger::OnCameraMoved);
+		FRsapEditorWorld::OnCameraMoved.BindRaw(this, &FRsapDebugger::OnCameraMoved);
 	}
-	static void Stop()
+
+	~FRsapDebugger()
 	{
 		//FRsapUpdater::OnUpdateComplete.Remove(NavMeshUpdatedHandle); NavMeshUpdatedHandle.Reset();
 		FRsapEditorWorld::OnCameraMoved.Unbind();
 	}
 
+	void Start() { bRunning = true; }
+	void Stop()
+	{
+		bRunning = false;
+		FlushDebug();
+	}
+
 private:
-	static void Draw();
-	static void Draw(const FVector& CameraLocation, const FRotator& CameraRotation);
+	void Draw();
+	void Draw(const FVector& CameraLocation, const FRotator& CameraRotation);
 
-	static void DrawNode(const UWorld* World, const FGlobalVector& NodeCenter, const layer_idx LayerIdx);
-	static void DrawLeafNode(const UWorld* World, const FRsapChunk& Chunk, FGlobalVector ChunkLocation, node_morton NodeMC, const FVector& CameraLocation);
-	static void DrawNodes(const UWorld* World, const FRsapChunk& Chunk, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation);
-	static void DrawNodeInfo(const UWorld* World, const node_morton NodeMC, const FGlobalVector& NodeCenter, layer_idx LayerIdx);
-	static void DrawNodeRelations(const UWorld* World, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const FRsapNode& Node, const node_morton NodeMC, const FGlobalVector& NodeCenter, const layer_idx LayerIdx);
+	void DrawNode(const UWorld* World, const FGlobalVector& NodeCenter, const layer_idx LayerIdx);
+	void DrawLeafNode(const UWorld* World, const FRsapChunk& Chunk, FGlobalVector ChunkLocation, node_morton NodeMC, const FVector& CameraLocation);
+	void DrawNodes(const UWorld* World, const FRsapChunk& Chunk, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation);
+	void DrawNodeInfo(const UWorld* World, const node_morton NodeMC, const FGlobalVector& NodeCenter, layer_idx LayerIdx);
+	void DrawNodeRelations(const UWorld* World, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const FRsapNode& Node, const node_morton NodeMC, const FGlobalVector& NodeCenter, const layer_idx LayerIdx);
 
-	static void OnNavMeshUpdated()
+	void OnNavMeshUpdated()
 	{
 		Draw();
 	}
-	static void OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation)
+	void OnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation)
 	{
 		// if(!FRsapUpdater::GetInstance().IsRunningTask()) Draw(CameraLocation, CameraRotation);
+		Draw(CameraLocation, CameraRotation);
 	}
 
-	static FRsapNavmesh NavMesh;
-	static FDelegateHandle NavMeshUpdatedHandle;
-
-	inline static bool bEnabled				= true;
-	inline static bool bDrawNodeInfo		= false;
-	inline static bool bDrawRelations		= false;
-	inline static bool bDrawNavPaths		= false;
-	inline static bool bDrawChunks			= false;
-	inline static bool bDrawSpecificLayer	= false;
-	inline static layer_idx DrawLayerIdx	= 5;
+	bool bRunning = false;
+	FDelegateHandle NavMeshUpdatedHandle;
+	
+	bool bEnabled			= true;
+	bool bDrawNodeInfo		= false;
+	bool bDrawRelations		= false;
+	bool bDrawNavPaths		= false;
+	bool bDrawChunks		= false;
+	bool bDrawSpecificLayer	= false;
+	layer_idx DrawLayerIdx	= 5;
 
 public:
-	static void ToggleEnabled()				{ bEnabled			 = !bEnabled;			FlushDebug(); Draw(); }
-	static void ToggleDrawNodeInfo()		{ bDrawNodeInfo		 = !bDrawNodeInfo;		Draw(); }
-	static void ToggleDrawRelations()		{ bDrawRelations	 = !bDrawRelations;		Draw(); }
-	static void ToggleDrawNavPaths()		{ bDrawNavPaths		 = !bDrawNavPaths;		Draw(); }
-	static void ToggleDrawChunks()			{ bDrawChunks		 = !bDrawChunks;		Draw(); }
-	static void ToggleDrawSpecificLayer()	{ bDrawSpecificLayer = !bDrawSpecificLayer; Draw(); }
+	void ToggleEnabled()			{ bEnabled			 = !bEnabled;			FlushDebug(); Draw(); }
+	void ToggleDrawNodeInfo()		{ bDrawNodeInfo		 = !bDrawNodeInfo;		Draw(); }
+	void ToggleDrawRelations()		{ bDrawRelations	 = !bDrawRelations;		Draw(); }
+	void ToggleDrawNavPaths()		{ bDrawNavPaths		 = !bDrawNavPaths;		Draw(); }
+	void ToggleDrawChunks()			{ bDrawChunks		 = !bDrawChunks;		Draw(); }
+	void ToggleDrawSpecificLayer()	{ bDrawSpecificLayer = !bDrawSpecificLayer; Draw(); }
 
-	static bool IsEnabled()					{ return bEnabled; }
-	static bool ShouldDrawNodeInfo()		{ return bDrawNodeInfo; }
-	static bool ShouldDrawRelations()		{ return bDrawRelations; }
-	static bool ShouldDrawNavPaths()		{ return bDrawNavPaths; }
-	static bool ShouldDrawChunks()			{ return bDrawChunks; }
-	static bool ShouldDrawSpecificLayer()	{ return bDrawSpecificLayer; }
+	bool IsEnabled()				const { return bEnabled; }
+	bool ShouldDrawNodeInfo()		const { return bDrawNodeInfo; }
+	bool ShouldDrawRelations()		const { return bDrawRelations; }
+	bool ShouldDrawNavPaths()		const { return bDrawNavPaths; }
+	bool ShouldDrawChunks()			const { return bDrawChunks; }
+	bool ShouldDrawSpecificLayer()  const { return bDrawSpecificLayer; }
 
-	static void DecrementDrawLayerIdx() { if(DrawLayerIdx > 0) --DrawLayerIdx; Draw(); }
-	static void IncrementDrawLayerIdx() { if(DrawLayerIdx < Layer::Leaf) ++DrawLayerIdx; Draw(); }
-	static void SetDrawLayerIdx(const layer_idx Value) { DrawLayerIdx = FMath::Clamp(Value, 0, Layer::Leaf); Draw(); }
-	static layer_idx GetDrawLayerIdx()	{ return DrawLayerIdx; }
+	void DecrementDrawLayerIdx() { if(DrawLayerIdx > 0) --DrawLayerIdx; Draw(); }
+	void IncrementDrawLayerIdx() { if(DrawLayerIdx < Layer::Leaf) ++DrawLayerIdx; Draw(); }
+	void SetDrawLayerIdx(const layer_idx Value) { DrawLayerIdx = FMath::Clamp(Value, 0, Layer::Leaf); Draw(); }
+	layer_idx GetDrawLayerIdx() const { return DrawLayerIdx; }
 
 private:
-	inline static constexpr FColor LayerColors[Layer::Total] = {
+	FColor LayerColors[Layer::Total] = {
 		{255, 102, 102},  // Light Red
 		{102, 255, 102},  // Light Green
 		{102, 102, 255},  // Light Blue
@@ -92,7 +100,7 @@ private:
 		{0, 0, 0}         // Black
 	};
 
-	static FColor AdjustBrightness(const FColor& Color, float Factor)
+	FColor AdjustBrightness(const FColor& Color, float Factor) const
 	{
 		Factor = std::clamp(Factor, 0.0f, 1.0f);
 		return FColor(Color.R * Factor, Color.G * Factor, Color.B * Factor, Color.A);

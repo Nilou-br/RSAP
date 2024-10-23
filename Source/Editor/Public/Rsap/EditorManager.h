@@ -34,6 +34,7 @@ public:
 
 private:
 	FRsapNavmesh NavMesh;
+	FRsapDebugger* Debugger;
 	bool bFullyRegenerated = false;
 	std::unordered_set<chunk_morton> ChunksToSerialize; // New/updated chunks pending to be serialized.
 
@@ -50,4 +51,6 @@ private:
 public:
 	void ProfileGeneration() const;
 	void ProfileIteration() const;
+
+	FRsapDebugger* GetDebugger() const { return Debugger; }
 };

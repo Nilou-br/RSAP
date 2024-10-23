@@ -11,10 +11,6 @@
 #include "Rsap/NavMesh/Types/Node.h"
 
 
-FRsapNavmesh	FRsapDebugger::NavMesh;
-FDelegateHandle FRsapDebugger::NavMeshUpdatedHandle;
-
-
 
 template <typename IntType>
 FString ToBinaryString(const IntType Value, const uint8 BitCount)
@@ -38,7 +34,7 @@ static bool InDistance(const FVector& CameraLocation, const FGlobalVector& NodeC
 void FRsapDebugger::Draw()
 {
 	const UWorld* World = GEditor->GetEditorWorldContext().World();
-	if(!bEnabled || !World) return;
+	if(!bRunning || !bEnabled || !World) return;
 	FlushDebug();
 	
 	FVector CameraLocation;
@@ -74,7 +70,7 @@ void FRsapDebugger::Draw()
 void FRsapDebugger::Draw(const FVector& CameraLocation, const FRotator& CameraRotation)
 {
 	const UWorld* World = GEditor->GetEditorWorldContext().World();
-	if(!bEnabled || !World) return;
+	if(!bRunning || !bEnabled || !World) return;
 	FlushDebug();
 	
 	const FVector CameraForwardVector = FRotationMatrix(CameraRotation).GetUnitAxis(EAxis::X);
@@ -89,6 +85,8 @@ void FRsapDebugger::Draw(const FVector& CameraLocation, const FRotator& CameraRo
 	FGlobalVector ChunkLocation;
 	const chunk_morton StartingChunkMC = RenderBoundaries.Min.ToChunkMorton();
 	chunk_morton CurrentChunkMC = StartingChunkMC;
+
+	Navmesh.LoopChunks();
 	
  	for (ChunkLocation.Z = RenderBoundaries.Min.Z; ChunkLocation.Z <= RenderBoundaries.Max.Z; ChunkLocation.Z += Chunk::Size)
 	{
@@ -96,7 +94,7 @@ void FRsapDebugger::Draw(const FVector& CameraLocation, const FRotator& CameraRo
 		{
 			for (ChunkLocation.X = RenderBoundaries.Min.X; ChunkLocation.X <= RenderBoundaries.Max.X; ChunkLocation.X += Chunk::Size)
 			{
-				if(const FRsapChunk* Chunk = NavMesh.FindChunk(CurrentChunkMC); Chunk)
+				if(const FRsapChunk* Chunk = Navmesh.FindChunk(CurrentChunkMC); Chunk)
 				{
 					if(bDrawChunks)
 					{

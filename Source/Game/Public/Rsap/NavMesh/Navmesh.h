@@ -61,8 +61,14 @@ public:
 		return &Iterator->second;
 	}
 
-	FORCEINLINE FRsapChunk& TryInitChunk(const chunk_morton ChunkMC)
+	FORCEINLINE FRsapChunk& InitChunk(const chunk_morton ChunkMC)
 	{
 		return Chunks.try_emplace(ChunkMC).first->second;
 	}
+
+
+
+	// Debug code
+
+	void LoopChunks();
 };
