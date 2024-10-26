@@ -50,8 +50,14 @@ public:
 	void Generate(const UWorld* World, const FActorMap& ActorMap);
 	void GenerateAsync();
 
+	void PartlyRegenerate(const UWorld* World, const FActorMap& ActorMap);
+	void PartlyRegenerateAsync();
+
 	void Update();
 	void UpdateAsync();
+
+	void Serialize(const UWorld* World);
+	void Deserialize(const UWorld* World);
 
 	// Returns nullptr if it does not exist.
 	FORCEINLINE FRsapChunk* FindChunk(const chunk_morton ChunkMC)
@@ -66,9 +72,13 @@ public:
 		return Chunks.try_emplace(ChunkMC).first->second;
 	}
 
+private:
+	bool bRegenerated = false;
+	std::unordered_set<chunk_morton> UpdatedChunks; // New/updated chunks pending to be serialized.
 
 
 	// Debug code
+public:
 
 	void LoopChunks();
 };

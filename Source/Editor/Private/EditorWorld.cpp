@@ -92,7 +92,7 @@ void FRsapEditorWorld::HandleMapOpened(const FString& Filename, bool bAsTemplate
 	// Static-mesh actors are initialized next frame. ( FWorldDelegates::OnWorldInitializedActors event doesn't have them initialized for some reason. )
 	GEditor->GetEditorWorldContext().World()->GetTimerManager().SetTimerForNextTick([&]()
 	{
-		UWorld* World = GEditor->GetEditorWorldContext().World();
+		const UWorld* World = GEditor->GetEditorWorldContext().World();
 		if (!IsValid(World) || World->WorldType != EWorldType::Editor) return;
 
 		// Get all the static-mesh actors.

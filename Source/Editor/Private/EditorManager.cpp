@@ -74,24 +74,7 @@ void URsapEditorManager::Regenerate(const UWorld* World)
 void URsapEditorManager::OnWorldInitialized(const UWorld* World, const FActorBoundsMap& ActorBoundsMap)
 {
 	Debugger->Stop();
-	
-	switch (std::vector<chunk_morton> MismatchedChunks; DeserializeNavMesh(World, NavMesh, MismatchedChunks)){
-		case EDeserializeResult::Success:
-			break;
-		case EDeserializeResult::NotFound:
-			UE_LOG(LogRsap, Log, TEXT("Generating the sound-navigation-mesh..."))
-			FRsapGenerator::Generate(World, NavMesh, FRsapEditorWorld::GetActors());
-			if(World->GetOuter()->MarkPackageDirty()) UE_LOG(LogRsap, Log, TEXT("Generation complete. The sound-navigation-mesh will be cached when you save the map."));
-			bFullyRegenerated = true;
-			break;
-		case EDeserializeResult::ChunkMisMatch:
-			UE_LOG(LogRsap, Log, TEXT("Generating the sound-navigation-mesh..."))
-			FRsapGenerator::RegenerateChunks(World, NavMesh, MismatchedChunks);
-			std::ranges::copy(MismatchedChunks, std::inserter(ChunksToSerialize,ChunksToSerialize.end()));
-			if(World->GetOuter()->MarkPackageDirty()) UE_LOG(LogRsap, Log, TEXT("Generation complete. The sound-navigation-mesh will be cached when you save the map."));
-			break;
-	}
-	
+	NavMesh.Deserialize(World);
 	Debugger->Start();
 
 	return;
@@ -126,17 +109,7 @@ void URsapEditorManager::PreMapSaved()
 
 void URsapEditorManager::PostMapSaved(const bool bSuccess)
 {
-	if(!bSuccess) return;
-	
-	if(bFullyRegenerated)
-	{
-		SerializeNavMesh(GEditor->GetEditorWorldContext().World(), NavMesh);
-	}
-	else
-	{
-		SerializeNavMesh(GEditor->GetEditorWorldContext().World(), NavMesh, ChunksToSerialize);
-		ChunksToSerialize.clear();
-	}
+	if(bSuccess) NavMesh.Serialize(GEditor->GetEditorWorldContext().World());
 }
 
 FVector Transform(const FVector& Location, const FTransform& ActorTransform)

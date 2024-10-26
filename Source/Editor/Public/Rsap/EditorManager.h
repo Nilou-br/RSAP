@@ -35,8 +35,6 @@ public:
 private:
 	FRsapNavmesh NavMesh;
 	FRsapDebugger* Debugger;
-	bool bFullyRegenerated = false;
-	std::unordered_set<chunk_morton> ChunksToSerialize; // New/updated chunks pending to be serialized.
 
 	void OnWorldInitialized(const UWorld* World, const FActorBoundsMap& ActorBoundsMap);
 	void PreMapSaved();

@@ -110,19 +110,25 @@ inline void SerializeChunk(const FRsapChunk& Chunk, const chunk_morton ChunkMC, 
 	delete ChunkFileArchive;
 }
 
+// Returns the path where the navmesh's chunk binary files are stored.
+inline FString GetNavmeshBinaryPath(const URsapNavmeshMetadata* NavmeshMetadata)
+{
+	const FString BasePath = FPaths::ProjectDir() / TEXT("Rsap");
+	const FString NavmeshPath = BasePath / NavmeshMetadata->ID.ToString();
+	return NavmeshPath;
+}
+
 // Serialize all chunks within the navmesh.
 inline void SerializeNavMesh(const UWorld* World, FRsapNavmesh& NavMesh) // todo: Clear chunks that should not exist anymore.
 {
 	URsapNavmeshMetadata* Metadata = URsapNavmeshMetadata::Load(World);
+	const FString NavmeshPath = GetNavmeshBinaryPath(Metadata);
 	Metadata->Chunks.Empty();
-	
-	const FString BasePath = FPaths::ProjectDir() / TEXT("Rsap");
-	const FString LevelPath = BasePath / Metadata->ID.ToString();
 
 	for (const auto& [ChunkMC, Chunk] : NavMesh.Chunks)
 	{
 		Metadata->Chunks.Add(ChunkMC, FGuid::NewGuid());
-		SerializeChunk(Chunk, ChunkMC, LevelPath);
+		SerializeChunk(Chunk, ChunkMC, NavmeshPath);
 	}
 }
 
@@ -130,21 +136,20 @@ inline void SerializeNavMesh(const UWorld* World, FRsapNavmesh& NavMesh) // todo
 inline void SerializeNavMesh(const UWorld* World, const FRsapNavmesh& NavMesh, const std::unordered_set<chunk_morton>& ChunksToSave, const std::unordered_set<chunk_morton>& ChunksToDelete = std::unordered_set<chunk_morton>())
 {
 	URsapNavmeshMetadata* Metadata = URsapNavmeshMetadata::Load(World);
-	const FString BasePath = FPaths::ProjectDir() / TEXT("Rsap");
-	const FString LevelPath = BasePath / Metadata->ID.ToString();
+	const FString NavmeshPath = GetNavmeshBinaryPath(Metadata);
 	
 	for (const chunk_morton ChunkMC : ChunksToSave)
 	{
 		Metadata->Chunks.Add(ChunkMC, FGuid::NewGuid());
 		const FRsapChunk& Chunk = NavMesh.Chunks.find(ChunkMC)->second;
-		SerializeChunk(Chunk, ChunkMC, LevelPath);
+		SerializeChunk(Chunk, ChunkMC, NavmeshPath);
 	}
 
 	for (const chunk_morton ChunkMC : ChunksToDelete)
 	{
 		Metadata->Chunks.Remove(ChunkMC);
 		
-		FString ChunkDirectory = GetChunkDirectory(LevelPath, ChunkMC);
+		FString ChunkDirectory = GetChunkDirectory(NavmeshPath, ChunkMC);
 		const FString ChunkFilePath = ChunkDirectory / FString::Printf(TEXT("Chunk_%llu.bin"), ChunkMC & 0b111111);
 		IFileManager::Get().Delete(*ChunkFilePath);
 	}
@@ -159,21 +164,20 @@ enum class EDeserializeResult
 
 inline EDeserializeResult DeserializeNavMesh(const UWorld* World, FRsapNavmesh& Navmesh, std::vector<chunk_morton>& OutMismatchedChunks)
 {
-	const URsapNavmeshMetadata* LevelMetadata = URsapNavmeshMetadata::Load(World);
-	const FString BasePath = FPaths::ProjectDir() / TEXT("Rsap");
-	const FString LevelPath = BasePath / LevelMetadata->ID.ToString();
+	const URsapNavmeshMetadata* Metadata = URsapNavmeshMetadata::Load(World);
+	const FString NavmeshPath = GetNavmeshBinaryPath(Metadata);
 	
-	if(!IFileManager::Get().DirectoryExists(*LevelPath)) return EDeserializeResult::NotFound;
+	if(!IFileManager::Get().DirectoryExists(*NavmeshPath)) return EDeserializeResult::NotFound;
 
 	std::vector<chunk_morton> ChunksToRegen;
 	Navmesh.Chunks.clear();
 	
-	for (const auto& Pair : LevelMetadata->Chunks)
+	for (const auto& Pair : Metadata->Chunks)
 	{
 		const chunk_morton ChunkMC = Pair.Key;
 		const FGuid ChunkID = Pair.Value;
 
-		FString ChunkDirectory = GetChunkDirectory(LevelPath, ChunkMC);
+		FString ChunkDirectory = GetChunkDirectory(NavmeshPath, ChunkMC);
 		const FString ChunkFilePath = ChunkDirectory / FString::Printf(TEXT("Chunk_%llu.bin"), ChunkMC & 0b111111);
 
 		// Regen chunk if it's binary file does not exist.

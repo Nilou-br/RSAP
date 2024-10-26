@@ -2,7 +2,6 @@
 
 #pragma once
 #include <unordered_set>
-
 #include "Rsap/Math/Vectors.h"
 
 using namespace Rsap::NavMesh;
@@ -37,12 +36,9 @@ struct TBounds
 	TBounds(const VectorType& VectorMin, const VectorType& VectorMax, const bool InValid = true)
 		: Min(VectorMin), Max(VectorMax), bIsValid(InValid)
 	{}
-	
-	explicit TBounds(const AActor* Actor) : bIsValid(true)
+
+	void Initialize(const FVector& Origin, const FVector& Extent)
 	{
-		FVector Origin, Extent;
-		Actor->GetActorBounds(false, Origin, Extent, true);
-        
 		// Get the bounds from the Origin and Extent, and rounding the result down to an integer.
 		Min = VectorType(	FMath::RoundToInt(Origin.X - Extent.X), 
 							FMath::RoundToInt(Origin.Y - Extent.Y), 
@@ -58,26 +54,19 @@ struct TBounds
 		if(Max.Y == Min.Y) ++Max.Y;
 		if(Max.Z == Min.Z) ++Max.Z;
 	}
+	
+	explicit TBounds(const AActor* Actor) : bIsValid(true)
+	{
+		FVector Origin, Extent;
+		Actor->GetActorBounds(false, Origin, Extent, true);
+		Initialize(Origin, Extent);
+	}
 
 	explicit TBounds(const UPrimitiveComponent* Component) : bIsValid(true)
 	{
 		const FVector Origin = Component->Bounds.Origin;
 		const FVector Extent = Component->Bounds.BoxExtent;
-        
-		// Get the bounds from the Origin and Extent, and rounding the result down to an integer.
-		Min = VectorType(	FMath::RoundToInt(Origin.X - Extent.X), 
-							FMath::RoundToInt(Origin.Y - Extent.Y), 
-							FMath::RoundToInt(Origin.Z - Extent.Z));
-		
-		Max = VectorType(	FMath::RoundToInt(Origin.X + Extent.X), 
-							FMath::RoundToInt(Origin.Y + Extent.Y), 
-							FMath::RoundToInt(Origin.Z + Extent.Z));
-
-		// Increment axis on Max if it equals the corresponding axis on Min.
-		// There needs to be at least 1 unit of depth.
-		if(Max.X == Min.X) ++Max.X;
-		if(Max.Y == Min.Y) ++Max.Y;
-		if(Max.Z == Min.Z) ++Max.Z;
+        Initialize(Origin, Extent);
 	}
 
 	// Returns a bounds object that has no dimensions and is set to be invalid.
