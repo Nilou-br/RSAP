@@ -2,15 +2,15 @@
 
 #include "Rsap/NavMesh/Navmesh.h"
 
-#include "Rsap/GameWorld.h"
+#include "Rsap/World/GameWorld.h"
 #include "Rsap/NavMesh/Serialize.h"
 #include "Rsap/NavMesh/Processing/Generator.h"
 
-void FRsapNavmesh::Generate(const UWorld* World, const FActorMap& ActorMap)
+void FRsapNavmesh::Generate(const IRsapWorld* RsapWorld)
 {
-	if(!World) return;
+	if(!RsapWorld->GetWorld()) return;
 	Chunks.clear();
-	FRsapGenerator::Generate(World, *this, ActorMap);
+	FRsapGenerator::Generate(RsapWorld->GetWorld(), *this, RsapWorld->GetActors());
 
 	UpdatedChunks.clear(); // 
 	bRegenerated = true;
@@ -23,12 +23,10 @@ void FRsapNavmesh::GenerateAsync()
 	bRegenerated = true;
 }
 
-void FRsapNavmesh::PartlyRegenerate(const UWorld* World, const FActorMap& ActorMap)
+void FRsapNavmesh::PartlyRegenerate(const IRsapWorld* RsapWorld, const FRsapActorMap& Actors)
 {
-	if(!World) return;
-	FRsapGenerator::Generate(World, *this, ActorMap);
-
-	// Get 
+	if(!RsapWorld->GetWorld()) return;
+	FRsapGenerator::Generate(RsapWorld->GetWorld(), *this, Actors);
 }
 
 void FRsapNavmesh::PartlyRegenerateAsync()
@@ -43,12 +41,12 @@ void FRsapNavmesh::UpdateAsync()
 {
 }
 
-void FRsapNavmesh::Serialize(const UWorld* World)
+void FRsapNavmesh::Serialize(const IRsapWorld* RsapWorld)
 {
-	if(bRegenerated) SerializeNavMesh(World, *this);
+	if(bRegenerated) SerializeNavMesh(RsapWorld->GetWorld(), *this);
 	else
 	{
-		SerializeNavMesh(World, *this, std::move(UpdatedChunks));
+		SerializeNavMesh(RsapWorld->GetWorld(), *this, std::move(UpdatedChunks));
 		// todo: check if UpdatedChunks is empty.
 	}
 
@@ -56,22 +54,22 @@ void FRsapNavmesh::Serialize(const UWorld* World)
 	bRegenerated = false;
 }
 
-void FRsapNavmesh::Deserialize(const UWorld* World)
+void FRsapNavmesh::Deserialize(const IRsapWorld* RsapWorld)
 {
 	std::vector<chunk_morton> MismatchedChunks;
-	switch (DeserializeNavMesh(World, *this, MismatchedChunks)){
+	switch (DeserializeNavMesh(RsapWorld->GetWorld(), *this, MismatchedChunks)){
 	case EDeserializeResult::Success:
 		break;
 	case EDeserializeResult::NotFound:
 		UE_LOG(LogRsap, Log, TEXT("Generating the sound-navigation-mesh..."))
-		Generate(World, FRsapGameWorld::GetActorMap());
-		if(World->GetOuter()->MarkPackageDirty()) UE_LOG(LogRsap, Log, TEXT("Generation complete. The sound-navigation-mesh will be cached when you save the map."));
+		Generate(RsapWorld);
+		if(RsapWorld->GetWorld()->GetOuter()->MarkPackageDirty()) UE_LOG(LogRsap, Log, TEXT("Generation complete. The sound-navigation-mesh will be cached when you save the map."));
 		break;
 	case EDeserializeResult::ChunkMisMatch:
 		UE_LOG(LogRsap, Log, TEXT("Generating the sound-navigation-mesh..."))
 		// todo: We should get the actors within the mismatched chunks, and check which ones need to be regenerated.
-		PartlyRegenerate(World, FRsapGameWorld::GetActorMap());
-		if(World->GetOuter()->MarkPackageDirty()) UE_LOG(LogRsap, Log, TEXT("Generation complete. The sound-navigation-mesh will be cached when you save the map."));
+		PartlyRegenerate(RsapWorld, RsapWorld->GetActors());
+		if(RsapWorld->GetWorld()->GetOuter()->MarkPackageDirty()) UE_LOG(LogRsap, Log, TEXT("Generation complete. The sound-navigation-mesh will be cached when you save the map."));
 		break;
 	}
 }

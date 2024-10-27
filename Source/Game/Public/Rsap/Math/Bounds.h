@@ -343,28 +343,18 @@ typedef Rsap::Map::flat_map<actor_key, FGlobalBounds> FActorBoundsMap;
 
 
 
-/**
- * Pair of bounds for storing changes that have happened.
- * 
- * @tparam VectorType FGlobalVector or FLocalVector
- */
-template<typename VectorType>
-struct TMovedBounds
+struct FRsapMovedBounds
 {
-	static_assert(std::is_same_v<VectorType, FGlobalVector> || std::is_same_v<VectorType, FLocalVector>, "TMovedBounds can only be instantiated with FGlobalVector or FLocalVector");
-
-	using FBounds = TBounds<VectorType>;
-	
-	FBounds From;
-	FBounds To;
+	FGlobalBounds From;
+	FGlobalBounds To;
 	
 
-	TMovedBounds() {}
+	FRsapMovedBounds() {}
 	
-	TMovedBounds(const FBounds& InFrom, const FBounds& InTo)
+	FRsapMovedBounds(const FGlobalBounds& InFrom, const FGlobalBounds& InTo)
 		: From(InFrom), To(InTo) {}
 
-	TMovedBounds(const FBounds& InFrom, const AActor* Actor)
+	FRsapMovedBounds(const FGlobalBounds& InFrom, const AActor* Actor)
 		: From(InFrom), To(Actor) {}
 
 	
@@ -375,8 +365,5 @@ struct TMovedBounds
 	}
 };
 
-typedef TMovedBounds<FGlobalVector> FMovedBounds;
-typedef TMovedBounds<FLocalVector> FChangedMortonBounds;
-
 // Map associating an actor with changed boundaries. To hold changes that have happened for multiple actors.
-typedef Rsap::Map::flat_map<actor_key, FMovedBounds> FMovedBoundsMap;
+// typedef Rsap::Map::flat_map<actor_key, FRsapMovedBounds> FMovedBoundsMap;

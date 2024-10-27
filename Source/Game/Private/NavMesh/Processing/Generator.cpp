@@ -7,6 +7,8 @@
 #include "Rsap/NavMesh/Types/Node.h"
 #include <ranges>
 
+#include "Rsap/NavMesh/Types/Actor.h"
+
 const UWorld*	FRsapGenerator::World;
 
 
@@ -323,7 +325,7 @@ std::vector<const UPrimitiveComponent*> GetActorCollisionComponents(const AActor
 	return CollisionComponents;
 };
 
-void FRsapGenerator::Generate(const UWorld* InWorld, FRsapNavmesh& Navmesh, const FActorMap& ActorMap)
+void FRsapGenerator::Generate(const UWorld* InWorld, FRsapNavmesh& Navmesh, const FRsapActorMap& ActorMap)
 {
 	FlushPersistentDebugLines(InWorld);
 
@@ -331,15 +333,18 @@ void FRsapGenerator::Generate(const UWorld* InWorld, FRsapNavmesh& Navmesh, cons
 
 	FRsapOverlap::InitCollisionBoxes();
 	
-	for (const auto ActorPtr : ActorMap | std::views::values)
+	for (const FRsapActor& RsapActor : ActorMap | std::views::values)
 	{
 		// REFACTOR?
-		for (const UPrimitiveComponent* CollisionComponent : GetActorCollisionComponents(ActorPtr.Get()))
+		for (const FRsapCollisionComponent& RsapCollisionComponent : RsapActor.GetCollisionComponents())
 		{
+			const UPrimitiveComponent* Component = RsapCollisionComponent.ComponentPtr.Get();
+			if(!IsValid(Component)) continue;
+
 			// todo: move this to start of method. Different ExecuteRead overload.
-			FPhysicsCommand::ExecuteRead(CollisionComponent->BodyInstance.ActorHandle, [&](const FPhysicsActorHandle& ActorHandle)
+			FPhysicsCommand::ExecuteRead(Component->BodyInstance.ActorHandle, [&](const FPhysicsActorHandle& ActorHandle)
 			{
-				RasterizeChunks(Navmesh, CollisionComponent);
+				RasterizeChunks(Navmesh, Component);
 			});
 		}
 	}

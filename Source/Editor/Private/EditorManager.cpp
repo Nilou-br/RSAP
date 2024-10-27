@@ -6,10 +6,10 @@
 #include "Rsap/EditorWorld.h"
 #include "Rsap/NavMesh/Debugger.h"
 #include "Rsap/NavMesh/Update/Updater.h"
-#include "Rsap/NavMesh/Processing/Generator.h"
 #include "Rsap/NavMesh/Serialize.h"
 #include "Engine/World.h"
 #include "Editor.h"
+
 
 
 void URsapEditorManager::Initialize(FSubsystemCollectionBase& Collection)
@@ -20,31 +20,35 @@ void URsapEditorManager::Initialize(FSubsystemCollectionBase& Collection)
 	
 	//FRsapUpdater::GetInstance();
 
-	FRsapEditorWorld::OnMapOpened.BindUObject(this, &ThisClass::OnWorldInitialized);
-	FRsapEditorWorld::PreMapSaved.BindUObject(this, &ThisClass::PreMapSaved);
-	FRsapEditorWorld::PostMapSaved.BindUObject(this, &ThisClass::PostMapSaved);
+	FRsapEditorWorld& EditorWorld = FRsapEditorWorld::GetInstance();
 
-	FRsapEditorWorld::OnActorMoved.BindUObject(this, &ThisClass::OnActorMoved);
-	FRsapEditorWorld::OnActorAdded.BindUObject(this, &ThisClass::OnActorAdded);
-	FRsapEditorWorld::OnActorDeleted.BindUObject(this, &ThisClass::OnActorDeleted);
+	EditorWorld.OnMapOpened.BindUObject(this, &ThisClass::OnMapOpened);
+	EditorWorld.PreMapSaved.BindUObject(this, &ThisClass::PreMapSaved);
+	EditorWorld.PostMapSaved.BindUObject(this, &ThisClass::PostMapSaved);
+
+	EditorWorld.OnActorMoved.BindUObject(this, &ThisClass::OnActorMoved);
+	EditorWorld.OnActorAdded.BindUObject(this, &ThisClass::OnActorAdded);
+	EditorWorld.OnActorDeleted.BindUObject(this, &ThisClass::OnActorDeleted);
 
 	//FRsapUpdater::OnUpdateComplete.AddUObject(this, &ThisClass::OnNavMeshUpdated);
 }
 
 void URsapEditorManager::Deinitialize()
 {
-	FRsapEditorWorld::OnMapOpened.Unbind();
-	FRsapEditorWorld::PreMapSaved.Unbind();
-	FRsapEditorWorld::PostMapSaved.Unbind();
+	FRsapEditorWorld& EditorWorld = FRsapEditorWorld::GetInstance();
+	
+	EditorWorld.OnMapOpened.Unbind();
+	EditorWorld.PreMapSaved.Unbind();
+	EditorWorld.PostMapSaved.Unbind();
 
-	FRsapEditorWorld::OnActorMoved.Unbind();
-	FRsapEditorWorld::OnActorAdded.Unbind();
-	FRsapEditorWorld::OnActorDeleted.Unbind();
+	EditorWorld.OnActorMoved.Unbind();
+	EditorWorld.OnActorAdded.Unbind();
+	EditorWorld.OnActorDeleted.Unbind();
 
 	// FRsapUpdater::OnUpdateComplete.RemoveAll(this);
 
 	delete Debugger;
-	NavMesh.Chunks.clear();
+	NavMesh.Clear();
 	
 	Super::Deinitialize();
 }
@@ -56,14 +60,16 @@ void URsapEditorManager::Regenerate(const UWorld* World)
 	// Wait until ongoing update completes.
 	// Clear navmesh.
 	// Call generate on generator.
+
+	const FRsapEditorWorld& RsapWorld = FRsapEditorWorld::GetInstance();
 	
-	if(!World)
+	if(!RsapWorld.GetWorld())
 	{
 		UE_LOG(LogRsap, Warning, TEXT("Cannot regenerate the navmesh without an active world."));
 		return;
 	}
 
-	NavMesh.Generate(World, FRsapEditorWorld::GetActors());
+	NavMesh.Generate(&RsapWorld);
 
 	if(World->GetOuter()->MarkPackageDirty())
 	{
@@ -71,10 +77,10 @@ void URsapEditorManager::Regenerate(const UWorld* World)
 	}
 }
 
-void URsapEditorManager::OnWorldInitialized(const UWorld* World, const FActorBoundsMap& ActorBoundsMap)
+void URsapEditorManager::OnMapOpened(const IRsapWorld* RsapWorld, const FRsapActorMap& Actors)
 {
 	Debugger->Stop();
-	NavMesh.Deserialize(World);
+	NavMesh.Deserialize(RsapWorld);
 	Debugger->Start();
 
 	return;
@@ -109,7 +115,7 @@ void URsapEditorManager::PreMapSaved()
 
 void URsapEditorManager::PostMapSaved(const bool bSuccess)
 {
-	if(bSuccess) NavMesh.Serialize(GEditor->GetEditorWorldContext().World());
+	if(bSuccess) NavMesh.Serialize(&FRsapEditorWorld::GetInstance());
 }
 
 FVector Transform(const FVector& Location, const FTransform& ActorTransform)
@@ -119,14 +125,7 @@ FVector Transform(const FVector& Location, const FTransform& ActorTransform)
 	return ActorTransform.GetLocation() + RotatedPosition;
 }
 
-void URsapEditorManager::OnActorMoved(const actor_key ActorKey, const FMovedBounds& MovedBounds)
-{
-	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnActorMoved"))
-
-	// FRsapUpdater::GetInstance().StageData(ActorKey, MovedBounds);
-}
-
-void URsapEditorManager::OnActorAdded(const actor_key ActorKey, const FGlobalBounds& Bounds)
+void URsapEditorManager::OnActorAdded(const FRsapActor& RsapActor)
 {
 	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnActorAdded"))
 
@@ -134,7 +133,14 @@ void URsapEditorManager::OnActorAdded(const actor_key ActorKey, const FGlobalBou
 	// FRsapUpdater::GetInstance().StageData(ActorKey, FMovedBounds(FGlobalBounds::EmptyBounds(), Bounds));
 }
 
-void URsapEditorManager::OnActorDeleted(const actor_key ActorKey, const FGlobalBounds& Bounds)
+void URsapEditorManager::OnActorMoved(const FRsapActor& RsapActor, const FGlobalBounds& PreviousBounds)
+{
+	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnActorMoved"))
+
+	// FRsapUpdater::GetInstance().StageData(ActorKey, MovedBounds);
+}
+
+void URsapEditorManager::OnActorDeleted(const FGlobalBounds& LastKnownBounds)
 {
 	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnActorDeleted"))
 
@@ -148,19 +154,19 @@ void URsapEditorManager::OnNavMeshUpdated() const {}
 
 void URsapEditorManager::ProfileGeneration() const
 {
-	const auto StartTime = std::chrono::high_resolution_clock::now();
-
-	FRsapNavmesh ProfileNavMesh;
-	const FActorMap& ActorMap = FRsapEditorWorld::GetActors();
-	for (int i = 0; i < 1000; ++i)
-	{
-		FRsapGenerator::Generate(GEngine->GetWorld(), ProfileNavMesh, ActorMap);
-	}
-
-	const auto EndTime = std::chrono::high_resolution_clock::now();
-	UE_LOG(LogRsap, Warning, TEXT("Profile-Generation took:"));
-	UE_LOG(LogRsap, Warning, TEXT("'%lld' milli-seconds"), std::chrono::duration_cast<std::chrono::milliseconds>(EndTime - StartTime).count());
-	UE_LOG(LogRsap, Warning, TEXT("'%lld' micro-seconds"), std::chrono::duration_cast<std::chrono::microseconds>(EndTime - StartTime).count());
+	// const auto StartTime = std::chrono::high_resolution_clock::now();
+	//
+	// FRsapNavmesh ProfileNavMesh;
+	// // const FRsapActorMap& ActorMap = FRsapEditorWorld::GetActors(); // todo: Fix static issue
+	// for (int i = 0; i < 1000; ++i)
+	// {
+	// 	FRsapGenerator::Generate(GEngine->GetWorld(), ProfileNavMesh, ActorMap);
+	// }
+	//
+	// const auto EndTime = std::chrono::high_resolution_clock::now();
+	// UE_LOG(LogRsap, Warning, TEXT("Profile-Generation took:"));
+	// UE_LOG(LogRsap, Warning, TEXT("'%lld' milli-seconds"), std::chrono::duration_cast<std::chrono::milliseconds>(EndTime - StartTime).count());
+	// UE_LOG(LogRsap, Warning, TEXT("'%lld' micro-seconds"), std::chrono::duration_cast<std::chrono::microseconds>(EndTime - StartTime).count());
 }
 
 void URsapEditorManager::ProfileIteration() const

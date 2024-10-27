@@ -56,6 +56,6 @@ class RSAPGAME_API FRsapGenerator
 	static const UWorld* World;
 
 public:
-	static void Generate(const UWorld* InWorld, FRsapNavmesh& Navmesh, const FActorMap& ActorMap);
+	static void Generate(const UWorld* InWorld, FRsapNavmesh& Navmesh, const FRsapActorMap& ActorMap);
 	static void RegenerateChunks(const UWorld* InWorld, FRsapNavmesh& Navmesh, const std::vector<chunk_morton>& ChunkMCs);
 };

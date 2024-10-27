@@ -7,32 +7,37 @@
 
 
 
+inline actor_key GetActorKey(const AActor* Actor)
+{
+	return GetTypeHash(Actor->GetActorGuid());
+}
+
 struct FRsapCollisionComponent
 {
-	const UPrimitiveComponent* Component;
+	TWeakObjectPtr<const UPrimitiveComponent> ComponentPtr;
 	uint16 SoundPresetID = 0;
 	FGlobalBounds Boundaries;
 
-	explicit FRsapCollisionComponent(const UPrimitiveComponent* InComponent)
+	explicit FRsapCollisionComponent(const UPrimitiveComponent* Component)
 	{
-		Component = InComponent;
-		Boundaries = FGlobalBounds(InComponent);
+		ComponentPtr = Component;
+		Boundaries = FGlobalBounds(Component);
 	}
 };
 
 class FRsapActor
 {
-	TWeakObjectPtr<const AActor>& ActorPtr;
-	std::vector<const FRsapCollisionComponent> CollisionComponents;
+	TWeakObjectPtr<const AActor> ActorPtr;
+	std::vector<FRsapCollisionComponent> CollisionComponents;
 	uint16 SoundPresetID = 0;
 	FGlobalBounds Boundaries;
 
+public:
 	explicit FRsapActor(const AActor* Actor)
 	{
 		ActorPtr = Actor;
 		Boundaries = FGlobalBounds(Actor);
 
-		std::vector<const FRsapCollisionComponent> CollisionComponents;
 		TArray<UActorComponent*> Components; Actor->GetComponents(Components);
 		for (UActorComponent* Component : Components)
 		{
@@ -42,12 +47,17 @@ class FRsapActor
 			}
 		}
 	}
-
+	
 	actor_key GetKey() const
 	{
 		if(!ActorPtr.IsValid()) return 0;
 		return GetTypeHash(ActorPtr->GetActorGuid());
 	}
+
+	const AActor* GetActor() const { return ActorPtr.Get(); } // todo: add check?
+	const std::vector<FRsapCollisionComponent>& GetCollisionComponents() const { return CollisionComponents; }
+	uint16 GetSoundPresetID() const { return SoundPresetID; }
+	FGlobalBounds GetBoundaries() const { return Boundaries; }
 };
 
-// typedef Rsap::Map::flat_map<actor_key, FRsapActor> FActorMap;
+typedef Rsap::Map::flat_map<actor_key, FRsapActor> FRsapActorMap;

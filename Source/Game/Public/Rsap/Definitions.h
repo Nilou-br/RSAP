@@ -198,4 +198,4 @@ namespace Rsap::Map
 // typedef Rsap::Map::flat_map<chunk_morton, FRsapChunk> FNavMeshGameType;
 // typedef std::shared_ptr<FNavMeshGameType> FNavMeshGame;
 
-typedef Rsap::Map::flat_map<actor_key, TWeakObjectPtr<const AActor>> FActorMap;
+// typedef Rsap::Map::flat_map<actor_key, TWeakObjectPtr<const AActor>> FActorMap;

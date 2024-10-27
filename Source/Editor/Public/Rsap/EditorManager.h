@@ -36,13 +36,13 @@ private:
 	FRsapNavmesh NavMesh;
 	FRsapDebugger* Debugger;
 
-	void OnWorldInitialized(const UWorld* World, const FActorBoundsMap& ActorBoundsMap);
+	void OnMapOpened(const IRsapWorld* RsapWorld, const FRsapActorMap& Actors);
 	void PreMapSaved();
 	void PostMapSaved(const bool bSuccess);
-	
-	void OnActorMoved(const actor_key ActorKey, const FMovedBounds& MovedBounds);
-	void OnActorAdded(const actor_key ActorKey, const FGlobalBounds& Bounds);
-	void OnActorDeleted(const actor_key ActorKey, const FGlobalBounds& Bounds);
+
+	void OnActorAdded(const FRsapActor& RsapActor);
+	void OnActorMoved(const FRsapActor& RsapActor, const FGlobalBounds& PreviousBounds);
+	void OnActorDeleted(const FGlobalBounds& LastKnownBounds);
 
 	void OnNavMeshUpdated() const;
 

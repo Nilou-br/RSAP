@@ -7,6 +7,7 @@
 #include "Rsap/NavMesh/Navmesh.h"
 
 
+
 class FRsapDebugger
 {
 	FRsapNavmesh& Navmesh;
@@ -16,13 +17,15 @@ public:
 		: Navmesh(InNavmesh)
 	{
 		//NavMeshUpdatedHandle = FRsapUpdater::OnUpdateComplete.AddStatic(&FRsapDebugger::OnNavMeshUpdated);
-		FRsapEditorWorld::OnCameraMoved.BindRaw(this, &FRsapDebugger::OnCameraMoved);
+		FRsapEditorWorld& RsapWorld = FRsapEditorWorld::GetInstance();
+		RsapWorld.OnCameraMoved.BindRaw(this, &FRsapDebugger::OnCameraMoved);
 	}
 
 	~FRsapDebugger()
 	{
 		//FRsapUpdater::OnUpdateComplete.Remove(NavMeshUpdatedHandle); NavMeshUpdatedHandle.Reset();
-		FRsapEditorWorld::OnCameraMoved.Unbind();
+		FRsapEditorWorld& RsapWorld = FRsapEditorWorld::GetInstance();
+		RsapWorld.OnCameraMoved.Unbind();
 	}
 
 	void Start() { bRunning = true; }

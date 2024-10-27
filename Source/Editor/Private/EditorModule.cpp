@@ -13,21 +13,19 @@
 
 void FRsapEditorModule::StartupModule()
 {
+	FRsapEditorWorld::GetInstance().Initialize();
+	
 	FRsapStyle::Initialize();
-	FRsapEditorWorld::Initialize();
-
-	// Register and bind commands.
 	FRsapCommands::Register();
 	BindCommands();
-
-	// Register the menu in the top toolbar.
-	FRsapMenu::RegisterMenu();
+	FRsapMenu::RegisterMenu(); // Register the menu in the top toolbar.
 }
 
 void FRsapEditorModule::ShutdownModule()
 {
+	FRsapEditorWorld::GetInstance().Deinitialize();
+	
 	FRsapStyle::Shutdown();
-	FRsapEditorWorld::Deinitialize();
 	FRsapCommands::Unregister();
 	
 	IModuleInterface::ShutdownModule();

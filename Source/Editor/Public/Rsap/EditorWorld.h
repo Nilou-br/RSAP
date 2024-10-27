@@ -3,63 +3,55 @@
 #pragma once
 
 #include "Rsap/Definitions.h"
-#include "Rsap/Math/Bounds.h"
+#include "Rsap/NavMesh/Types/Actor.h"
 #include "Rsap/ThirdParty/unordered_dense/unordered_dense.h"
+#include "Rsap/World/World.h"
 
 
 
 /**
- * Provides easy to read events for within the editor's world.
+ * Singleton that provides easy to read events and methods for within the editor's world.
  */
-class FRsapEditorWorld
+class FRsapEditorWorld final : public IRsapWorld
 {
-	struct FCachedActor
+public:
+	static FRsapEditorWorld& GetInstance()
 	{
-		TWeakObjectPtr<const AActor> ActorPtr;
-		FGlobalBounds Bounds;
-	};
+		static FRsapEditorWorld Instance;
+		return Instance;
+	}
+	FRsapEditorWorld() {}
+	FRsapEditorWorld(const FRsapEditorWorld&) = delete;
+	FRsapEditorWorld& operator=(const FRsapEditorWorld&) = delete;
 
-	DECLARE_DELEGATE_TwoParams(FOnMapOpened, const UWorld* EditorWorld, const FActorBoundsMap&);
+private:
+	DECLARE_DELEGATE_TwoParams(FOnMapOpened, const IRsapWorld* RsapWorld, const FRsapActorMap& RsapActors);
 	DECLARE_DELEGATE(FPreMapSaved);
 	DECLARE_DELEGATE_OneParam(FPostMapSaved, const bool bSuccess);
-	
-	DECLARE_DELEGATE_TwoParams(FOnActorMoved, const actor_key, const FMovedBounds& MovedBounds);
-	DECLARE_DELEGATE_TwoParams(FOnActorAdded, const actor_key, const FGlobalBounds& Bounds);
-	DECLARE_DELEGATE_TwoParams(FOnActorDeleted, const actor_key, const FGlobalBounds& Bounds);
 
 	DECLARE_DELEGATE_TwoParams(FOnCameraMoved, const FVector& CameraLocation, const FRotator& CameraRotation);
 
 public:
-	static void Initialize();
-	static void Deinitialize();
+	virtual void Initialize() override;
+	virtual void Deinitialize() override;
 
-	static FOnMapOpened			OnMapOpened;
-	static FPreMapSaved			PreMapSaved;
-	static FPostMapSaved		PostMapSaved;
-	
-	static FOnActorMoved		OnActorMoved;
-	static FOnActorAdded		OnActorAdded;
-	static FOnActorDeleted		OnActorDeleted;
-
-	static FOnCameraMoved		OnCameraMoved;
-	
-	FORCEINLINE static FActorBoundsMap& GetLevelActorBounds(){ return CachedActorBounds; }
-	FORCEINLINE static const AActor* GetActor(const actor_key Key) { return CachedActors.find(Key)->second.Get(); }
-	FORCEINLINE static const FActorMap& GetActors() { return CachedActors; }
+	FOnMapOpened	OnMapOpened;
+	FPreMapSaved	PreMapSaved;
+	FPostMapSaved	PostMapSaved;
+	FOnCameraMoved	OnCameraMoved;
 	
 private:
-	FORCEINLINE static bool ActorHasCollisionComponent(const AActor* Actor);
+	static bool ActorHasCollisionComponent(const AActor* Actor);
 
-	static FActorMap CachedActors;
-	static FActorBoundsMap CachedActorBounds; // Easier to manage when stored separately.
-	static std::vector<actor_key> SelectedActors;
+	std::vector<actor_key> SelectedActors;
+	Rsap::Map::flat_map<actor_key, FGlobalBounds> SelectedActorsBounds;
 
-	static FDelegateHandle MapOpenedHandle;				static void HandleMapOpened(const FString& Filename, bool bAsTemplate);
-	static FDelegateHandle PreMapSavedHandle;			static void HandlePreMapSaved(UWorld* World, FObjectPreSaveContext PreSaveContext);
-	static FDelegateHandle PostMapSavedHandle;			static void HandlePostMapSaved(UWorld* World, FObjectPostSaveContext PostSaveContext);
+	FDelegateHandle MapOpenedHandle;	void HandleMapOpened(const FString& Filename, bool bAsTemplate);
+	FDelegateHandle PreMapSavedHandle;	void HandlePreMapSaved(UWorld* World, FObjectPreSaveContext PreSaveContext);
+	FDelegateHandle PostMapSavedHandle;	void HandlePostMapSaved(UWorld* World, FObjectPostSaveContext PostSaveContext);
 	
-	static FDelegateHandle ActorSelectionChangedHandle; static void HandleActorSelectionChanged(const TArray<UObject*>& Objects, bool);
-	static FDelegateHandle ObjectPropertyChangedHandle; static void HandleObjectPropertyChanged(UObject* Object, FPropertyChangedEvent& PropertyChangedEvent);
+	FDelegateHandle ActorSelectionChangedHandle; void HandleActorSelectionChanged(const TArray<UObject*>& Objects, bool);
+	FDelegateHandle ObjectPropertyChangedHandle; void HandleObjectPropertyChanged(UObject* Object, FPropertyChangedEvent& PropertyChangedEvent);
 
-	static FDelegateHandle OnCameraMovedHandle; static void HandleOnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation, ELevelViewportType LevelViewportType, int32 RandomInt);
+	FDelegateHandle OnCameraMovedHandle; void HandleOnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation, ELevelViewportType LevelViewportType, int32 RandomInt);
 };

@@ -4,42 +4,8 @@
 #include "LevelEditor.h"
 #include "Engine/StaticMeshActor.h"
 #include "Kismet/GameplayStatics.h"
+#include "Rsap/NavMesh/Types/Actor.h"
 #include "UObject/ObjectSaveContext.h"
-
-
-
-// Static member definitions:
-
-// Variables:
-
-FActorMap							FRsapEditorWorld::CachedActors;
-FActorBoundsMap						FRsapEditorWorld::CachedActorBounds;
-std::vector<actor_key>				FRsapEditorWorld::SelectedActors;
-
-
-// Delegates
-
-FRsapEditorWorld::FOnMapOpened			FRsapEditorWorld::OnMapOpened;
-FRsapEditorWorld::FPreMapSaved			FRsapEditorWorld::PreMapSaved;
-FRsapEditorWorld::FPostMapSaved		FRsapEditorWorld::PostMapSaved;
-
-FRsapEditorWorld::FOnActorMoved		FRsapEditorWorld::OnActorMoved;
-FRsapEditorWorld::FOnActorAdded		FRsapEditorWorld::OnActorAdded;
-FRsapEditorWorld::FOnActorDeleted		FRsapEditorWorld::OnActorDeleted;
-
-FRsapEditorWorld::FOnCameraMoved		FRsapEditorWorld::OnCameraMoved;
-
-
-// Delegate handles:
-
-FDelegateHandle FRsapEditorWorld::MapOpenedHandle;
-FDelegateHandle FRsapEditorWorld::PreMapSavedHandle;
-FDelegateHandle FRsapEditorWorld::PostMapSavedHandle;
-
-FDelegateHandle FRsapEditorWorld::ActorSelectionChangedHandle;
-FDelegateHandle FRsapEditorWorld::ObjectPropertyChangedHandle;
-
-FDelegateHandle FRsapEditorWorld::OnCameraMovedHandle;
 
 
 
@@ -60,14 +26,14 @@ bool FRsapEditorWorld::ActorHasCollisionComponent(const AActor* Actor)
 
 void FRsapEditorWorld::Initialize()
 {
-	MapOpenedHandle = FEditorDelegates::OnMapOpened.AddStatic(&FRsapEditorWorld::HandleMapOpened);
-	PreMapSavedHandle = FEditorDelegates::PreSaveWorldWithContext.AddStatic(&FRsapEditorWorld::HandlePreMapSaved);
-	PostMapSavedHandle = FEditorDelegates::PostSaveWorldWithContext.AddStatic(&FRsapEditorWorld::HandlePostMapSaved);
+	MapOpenedHandle = FEditorDelegates::OnMapOpened.AddRaw(this, &FRsapEditorWorld::HandleMapOpened);
+	PreMapSavedHandle = FEditorDelegates::PreSaveWorldWithContext.AddRaw(this, &FRsapEditorWorld::HandlePreMapSaved);
+	PostMapSavedHandle = FEditorDelegates::PostSaveWorldWithContext.AddRaw(this, &FRsapEditorWorld::HandlePostMapSaved);
 	
-	ActorSelectionChangedHandle = FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor").OnActorSelectionChanged().AddStatic(&FRsapEditorWorld::HandleActorSelectionChanged);
-	ObjectPropertyChangedHandle = FCoreUObjectDelegates::OnObjectPropertyChanged.AddStatic(&FRsapEditorWorld::HandleObjectPropertyChanged);
+	ActorSelectionChangedHandle = FModuleManager::LoadModuleChecked<FLevelEditorModule>("LevelEditor").OnActorSelectionChanged().AddRaw(this, &FRsapEditorWorld::HandleActorSelectionChanged);
+	ObjectPropertyChangedHandle = FCoreUObjectDelegates::OnObjectPropertyChanged.AddRaw(this, &FRsapEditorWorld::HandleObjectPropertyChanged);
 
-	OnCameraMovedHandle = FEditorDelegates::OnEditorCameraMoved.AddStatic(&FRsapEditorWorld::HandleOnCameraMoved);
+	OnCameraMovedHandle = FEditorDelegates::OnEditorCameraMoved.AddRaw(this, &FRsapEditorWorld::HandleOnCameraMoved);
 }
 
 void FRsapEditorWorld::Deinitialize()
@@ -92,36 +58,33 @@ void FRsapEditorWorld::HandleMapOpened(const FString& Filename, bool bAsTemplate
 	// Static-mesh actors are initialized next frame. ( FWorldDelegates::OnWorldInitializedActors event doesn't have them initialized for some reason. )
 	GEditor->GetEditorWorldContext().World()->GetTimerManager().SetTimerForNextTick([&]()
 	{
-		const UWorld* World = GEditor->GetEditorWorldContext().World();
+		World = GEditor->GetEditorWorldContext().World();
 		if (!IsValid(World) || World->WorldType != EWorldType::Editor) return;
 
 		// Get all the static-mesh actors.
 		TArray<AActor*> FoundActors; UGameplayStatics::GetAllActorsOfClass(World, AStaticMeshActor::StaticClass(), FoundActors);
 
 		// Cache all of their boundaries.
-		for (AActor* Actor : FoundActors)
+		for (const AActor* Actor : FoundActors)
 		{
 			// Skip the actors that don't have any collision.
 			if (!ActorHasCollisionComponent(Actor)) continue;
 			
-			const actor_key ActorID = GetTypeHash(Actor->GetActorGuid());
-			const FGlobalBounds Bounds(Actor);
-
-			CachedActorBounds.emplace(ActorID, Bounds);
-			CachedActors.emplace(ActorID, Actor);
+			const actor_key ActorKey = GetTypeHash(Actor->GetActorGuid());
+			Actors.emplace(ActorKey, Actor);
 		}
 
 		// Notify that the actors are ready.
-		if(OnMapOpened.IsBound()) OnMapOpened.Execute(World, CachedActorBounds);
+		if(OnMapOpened.IsBound()) OnMapOpened.Execute(&*this, Actors);
 	});
 }
 
-void FRsapEditorWorld::HandlePreMapSaved(UWorld* World, FObjectPreSaveContext PreSaveContext)
+void FRsapEditorWorld::HandlePreMapSaved(UWorld* InWorld, FObjectPreSaveContext PreSaveContext)
 {
 	if(PreMapSaved.IsBound()) PreMapSaved.Execute();
 }
 
-void FRsapEditorWorld::HandlePostMapSaved(UWorld* World, FObjectPostSaveContext PostSaveContext)
+void FRsapEditorWorld::HandlePostMapSaved(UWorld* InWorld, FObjectPostSaveContext PostSaveContext)
 {
 	if(PostMapSaved.IsBound()) PostMapSaved.Execute(PostSaveContext.SaveSucceeded());
 }
@@ -142,52 +105,50 @@ void FRsapEditorWorld::HandleActorSelectionChanged(const TArray<UObject*>& Objec
 
 		// If this actor is not yet in the cache, then it has just been added to the world.
 		// Add this new actor to the cache, but only if it has collision.
-		if(CachedActors.find(ActorKey) != CachedActors.end() || !ActorHasCollisionComponent(Actor)) continue;
-		const FGlobalBounds ActorBounds(Actor);
-		CachedActors.emplace(ActorKey, Actor);
-		CachedActorBounds.emplace(ActorKey, ActorBounds);
-		if(OnActorAdded.IsBound()) OnActorAdded.Execute(ActorKey, ActorBounds);
+		if(Actors.find(ActorKey) != Actors.end() || !ActorHasCollisionComponent(Actor)) continue;
+		const FRsapActor& RsapActor = Actors.emplace(ActorKey, FRsapActor(Actor)).first->second;
+		if(OnActorAdded.IsBound()) OnActorAdded.Execute(RsapActor);
 	}
 
 	// Loop through remaining 'previous selected actors', and check their alive state.
 	// Actors that are invalid are deleted from the viewport, so we can clear it from the cache and broadcast this change.
 	for (auto PrevActorKey : PrevSelectedActors)
 	{
-		const auto Iterator = CachedActors.find(PrevActorKey);
-		if(Iterator == CachedActors.end() || IsValid(Iterator->second.Get())) continue;
+		const auto Iterator = Actors.find(PrevActorKey);
+		if(Iterator == Actors.end() || IsValid(Iterator->second.GetActor())) continue;
 
-		// Get it's last stored bounds.
-		const FGlobalBounds PreviousBounds = CachedActorBounds.find(PrevActorKey)->second;
+		// Actor doesn't exist anymore, so get it's last known bounds we cached for this scenario.
+		const FGlobalBounds PreviousBounds = SelectedActorsBounds.find(PrevActorKey)->second;
 
-		// Remove this actor from the cache.
-		CachedActors.erase(PrevActorKey);
-		CachedActorBounds.erase(PrevActorKey);
+		// Remove from both caches.
+		Actors.erase(PrevActorKey);
+		SelectedActorsBounds.erase(PrevActorKey);
 
-		// Broadcast deletion by leaving the "current" bounds empty.
-		if(OnActorDeleted.IsBound()) OnActorDeleted.Execute(PrevActorKey, PreviousBounds);	
+		// Broadcast delete event.
+		if(OnActorDeleted.IsBound()) OnActorDeleted.Execute(PreviousBounds);	
 	}
 }
 
 // Checks the type of object, and what property has changed. If it was an actor's transform that has changed, then the OnActorMoved will be broadcast.
 void FRsapEditorWorld::HandleObjectPropertyChanged(UObject* Object, FPropertyChangedEvent& PropertyChangedEvent)
 {
+	// todo: refactor to check the Actors map first instead of SelectedActorsBounds.
 	const AActor* Actor = Cast<AActor>(Object);
 	if(!Actor) return;
 
 	// Get the cached bounds for this actor.
 	const actor_key ActorKey = GetTypeHash(Actor->GetActorGuid());
-	const auto Iterator = CachedActorBounds.find(ActorKey);
-	if(Iterator == CachedActorBounds.end())
+	const auto Iterator = SelectedActorsBounds.find(ActorKey);
+	if(Iterator == SelectedActorsBounds.end())
 	{
 		// This actor is not cached, so it either has been dropped in the viewport, or the user has triggered an "undo" operation on a deleted actor.
 		
-		// Check if actor has any collision component.
+		// Skip if it does not have collision.
 		if(!ActorHasCollisionComponent(Actor)) return;
 		
-		// Cache it, and broadcast the event without any "previous" bounds.
-		const FGlobalBounds ActorBounds(Actor);
-		CachedActorBounds.emplace(ActorKey, ActorBounds);
-		if(OnActorAdded.IsBound()) OnActorAdded.Execute(ActorKey, ActorBounds);
+		const FRsapActor& RsapActor = Actors.emplace(ActorKey, FRsapActor(Actor)).first->second;
+		SelectedActorsBounds.emplace(ActorKey, RsapActor.GetBoundaries());
+		if(OnActorAdded.IsBound()) OnActorAdded.Execute(RsapActor);
 		return;
 	}
 
@@ -198,10 +159,10 @@ void FRsapEditorWorld::HandleObjectPropertyChanged(UObject* Object, FPropertyCha
 
 	// There is a change, so get a copy of the stored value before replacing it with the new one.
 	const FGlobalBounds PreviousBounds = StoredBounds;
-	CachedActorBounds[ActorKey] = CurrentBounds;
+	SelectedActorsBounds[ActorKey] = CurrentBounds;
 
 	// Broadcast the change that happened.
-	if(OnActorMoved.IsBound()) OnActorMoved.Execute(ActorKey, FMovedBounds(PreviousBounds, CurrentBounds));
+	if(OnActorMoved.IsBound()) OnActorMoved.Execute(Actors.find(ActorKey)->second, PreviousBounds);
 }
 
 void FRsapEditorWorld::HandleOnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation, ELevelViewportType LevelViewportType, int32 RandomInt)

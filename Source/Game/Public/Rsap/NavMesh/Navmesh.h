@@ -4,9 +4,12 @@
 #include "Engine/AssetUserData.h"
 #include "Rsap/Definitions.h"
 #include "Rsap/NavMesh/Types/Chunk.h"
+#include "Types/Actor.h"
 #include "Navmesh.generated.h"
 
 
+
+class IRsapWorld;
 
 UCLASS()
 class RSAPGAME_API URsapNavmeshMetadata : public UAssetUserData
@@ -47,17 +50,17 @@ public:
 	Rsap::Map::flat_map<chunk_morton, FRsapChunk> Chunks;
 #endif
 
-	void Generate(const UWorld* World, const FActorMap& ActorMap);
+	void Generate(const IRsapWorld* RsapWorld);
 	void GenerateAsync();
 
-	void PartlyRegenerate(const UWorld* World, const FActorMap& ActorMap);
+	void PartlyRegenerate(const IRsapWorld* RsapWorld, const FRsapActorMap& Actors);
 	void PartlyRegenerateAsync();
 
 	void Update();
 	void UpdateAsync();
 
-	void Serialize(const UWorld* World);
-	void Deserialize(const UWorld* World);
+	void Serialize(const IRsapWorld* RsapWorld);
+	void Deserialize(const IRsapWorld* RsapWorld);
 
 	// Returns nullptr if it does not exist.
 	FORCEINLINE FRsapChunk* FindChunk(const chunk_morton ChunkMC)
@@ -70,6 +73,11 @@ public:
 	FORCEINLINE FRsapChunk& InitChunk(const chunk_morton ChunkMC)
 	{
 		return Chunks.try_emplace(ChunkMC).first->second;
+	}
+
+	FORCEINLINE void Clear()
+	{
+		Chunks.clear();
 	}
 
 private:
