@@ -25,17 +25,19 @@ public:
 	UPROPERTY(VisibleAnywhere, Category="RSAP | NavigationMesh")
 	TMap<uint64, FGuid> Chunks;
 
-	// Gets the metadata for this level/world. Initialized if it does not exist yet.
+	// Gets the metadata for this level/world.
 	static URsapNavmeshMetadata* Load(const UWorld* World)
 	{
 		URsapNavmeshMetadata* LevelMetadata = World->PersistentLevel->GetAssetUserData<URsapNavmeshMetadata>();
+		return LevelMetadata;
+	}
 
-		if(!LevelMetadata)
-		{
-			LevelMetadata = NewObject<URsapNavmeshMetadata>(World->PersistentLevel, StaticClass());
-			World->PersistentLevel->AddAssetUserData(LevelMetadata);
-		}
-
+	// Initializes new metadata for this world. Will override previously stored metadata.
+	static URsapNavmeshMetadata* Init(const UWorld* World)
+	{
+		URsapNavmeshMetadata* LevelMetadata = NewObject<URsapNavmeshMetadata>(World->PersistentLevel, StaticClass());
+		LevelMetadata->ID = FGuid::NewGuid();
+		World->PersistentLevel->AddAssetUserData(LevelMetadata);
 		return LevelMetadata;
 	}
 };

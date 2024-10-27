@@ -77,7 +77,7 @@ void URsapEditorManager::Regenerate(const UWorld* World)
 	}
 }
 
-void URsapEditorManager::OnMapOpened(const IRsapWorld* RsapWorld, const FRsapActorMap& Actors)
+void URsapEditorManager::OnMapOpened(const IRsapWorld* RsapWorld)
 {
 	Debugger->Stop();
 	NavMesh.Deserialize(RsapWorld);

@@ -5,12 +5,17 @@
 
 
 
-// /**
-//  * Singleton that provides easy to read events and methods for within the game's world.
-//  */
-class FRsapGameWorld : public IRsapWorld
+/**
+ * Singleton that provides easy to read events and methods for within the game's world.
+ */
+class FRsapGameWorld final : public IRsapWorld
 {
 public:
 	virtual void Initialize() override {}
 	virtual void Deinitialize() override {}
+
+	void HandleMapOpened() {}
+	void HandleOnActorMoved() {}
+	void HandleActorAdded() {}
+	void HandleActorDeleted() {}
 };

@@ -75,16 +75,16 @@ void FRsapEditorWorld::HandleMapOpened(const FString& Filename, bool bAsTemplate
 		}
 
 		// Notify that the actors are ready.
-		if(OnMapOpened.IsBound()) OnMapOpened.Execute(&*this, Actors);
+		if(OnMapOpened.IsBound()) OnMapOpened.Execute(&*this);
 	});
 }
 
-void FRsapEditorWorld::HandlePreMapSaved(UWorld* InWorld, FObjectPreSaveContext PreSaveContext)
+void FRsapEditorWorld::HandlePreMapSaved(UWorld*, FObjectPreSaveContext PreSaveContext)
 {
 	if(PreMapSaved.IsBound()) PreMapSaved.Execute();
 }
 
-void FRsapEditorWorld::HandlePostMapSaved(UWorld* InWorld, FObjectPostSaveContext PostSaveContext)
+void FRsapEditorWorld::HandlePostMapSaved(UWorld*, FObjectPostSaveContext PostSaveContext)
 {
 	if(PostMapSaved.IsBound()) PostMapSaved.Execute(PostSaveContext.SaveSucceeded());
 }

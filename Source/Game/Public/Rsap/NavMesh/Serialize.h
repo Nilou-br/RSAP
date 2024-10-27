@@ -96,7 +96,7 @@ inline void SerializeChunk(const FRsapChunk& Chunk, const chunk_morton ChunkMC, 
 	const FString ChunkDirectory = GetChunkDirectory(NavmeshFolderPath, ChunkMC);
 	if (!IFileManager::Get().DirectoryExists(*ChunkDirectory)) IFileManager::Get().MakeDirectory(*ChunkDirectory, true);
 
-	const FString ChunkFilePath = ChunkDirectory / FString::Printf(TEXT("Chunk_%llu.bin"), ChunkMC & 0b111111);
+	const FString ChunkFilePath = ChunkDirectory / FString::Printf(TEXT("%llu.bin"), ChunkMC & 0b111111);
 	FArchive* ChunkFileArchive = IFileManager::Get().CreateFileWriter(*ChunkFilePath);
 		
 	// Serialize a new guid for this chunk.
@@ -122,8 +122,17 @@ inline FString GetNavmeshBinaryPath(const URsapNavmeshMetadata* NavmeshMetadata)
 inline void SerializeNavMesh(const UWorld* World, FRsapNavmesh& NavMesh) // todo: Clear chunks that should not exist anymore.
 {
 	URsapNavmeshMetadata* Metadata = URsapNavmeshMetadata::Load(World);
+
+	// Clear the previously serialized navmesh if it's metadata exists.
+	if(Metadata)
+	{
+		const FString NavmeshPath = GetNavmeshBinaryPath(Metadata);
+		IFileManager::Get().DeleteDirectory(*NavmeshPath, false, true);
+	}
+
+	// Init new metadata which will generate a new ID for this navmesh used to find the binaries.
+	Metadata = URsapNavmeshMetadata::Init(World);
 	const FString NavmeshPath = GetNavmeshBinaryPath(Metadata);
-	Metadata->Chunks.Empty();
 
 	for (const auto& [ChunkMC, Chunk] : NavMesh.Chunks)
 	{
@@ -150,7 +159,7 @@ inline void SerializeNavMesh(const UWorld* World, const FRsapNavmesh& NavMesh, c
 		Metadata->Chunks.Remove(ChunkMC);
 		
 		FString ChunkDirectory = GetChunkDirectory(NavmeshPath, ChunkMC);
-		const FString ChunkFilePath = ChunkDirectory / FString::Printf(TEXT("Chunk_%llu.bin"), ChunkMC & 0b111111);
+		const FString ChunkFilePath = ChunkDirectory / FString::Printf(TEXT("%llu.bin"), ChunkMC & 0b111111);
 		IFileManager::Get().Delete(*ChunkFilePath);
 	}
 }
@@ -178,7 +187,7 @@ inline EDeserializeResult DeserializeNavMesh(const UWorld* World, FRsapNavmesh& 
 		const FGuid ChunkID = Pair.Value;
 
 		FString ChunkDirectory = GetChunkDirectory(NavmeshPath, ChunkMC);
-		const FString ChunkFilePath = ChunkDirectory / FString::Printf(TEXT("Chunk_%llu.bin"), ChunkMC & 0b111111);
+		const FString ChunkFilePath = ChunkDirectory / FString::Printf(TEXT("%llu.bin"), ChunkMC & 0b111111);
 
 		// Regen chunk if it's binary file does not exist.
 		if (!IFileManager::Get().FileExists(*ChunkFilePath))

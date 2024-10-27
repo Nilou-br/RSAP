@@ -36,7 +36,7 @@ private:
 	FRsapNavmesh NavMesh;
 	FRsapDebugger* Debugger;
 
-	void OnMapOpened(const IRsapWorld* RsapWorld, const FRsapActorMap& Actors);
+	void OnMapOpened(const IRsapWorld* RsapWorld);
 	void PreMapSaved();
 	void PostMapSaved(const bool bSuccess);
 

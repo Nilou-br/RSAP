@@ -8,6 +8,7 @@
 // Base Interface for the UWorld wrapper.
 class IRsapWorld
 {
+	DECLARE_DELEGATE_OneParam(FOnMapOpened,		const IRsapWorld* RsapWorld);
 	DECLARE_DELEGATE_OneParam(FOnActorAdded,	const FRsapActor& RsapActor);
 	DECLARE_DELEGATE_TwoParams(FOnActorMoved,	const FRsapActor& RsapActor, const FGlobalBounds& PreviousBounds);
 	DECLARE_DELEGATE_OneParam(FOnActorDeleted,	const FGlobalBounds& LastKnownBounds);
@@ -23,11 +24,16 @@ public:
 
 	const UWorld* GetWorld() const { return World; }
 
+	FOnMapOpened	OnMapOpened;
 	FOnActorMoved	OnActorMoved;
 	FOnActorAdded	OnActorAdded;
 	FOnActorDeleted	OnActorDeleted;
-
+	
 protected:
+	FDelegateHandle MapOpenedHandle;
+	FDelegateHandle PreMapSavedHandle;
+	FDelegateHandle PostMapSavedHandle;
+	
 	FRsapActorMap Actors;
 	UWorld* World = nullptr;
 };

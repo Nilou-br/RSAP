@@ -25,7 +25,7 @@ public:
 	FRsapEditorWorld& operator=(const FRsapEditorWorld&) = delete;
 
 private:
-	DECLARE_DELEGATE_TwoParams(FOnMapOpened, const IRsapWorld* RsapWorld, const FRsapActorMap& RsapActors);
+	// DECLARE_DELEGATE_OneParam(FOnMapOpened, const IRsapWorld* RsapWorld);
 	DECLARE_DELEGATE(FPreMapSaved);
 	DECLARE_DELEGATE_OneParam(FPostMapSaved, const bool bSuccess);
 
@@ -35,7 +35,7 @@ public:
 	virtual void Initialize() override;
 	virtual void Deinitialize() override;
 
-	FOnMapOpened	OnMapOpened;
+	// FOnMapOpened	OnMapOpened;
 	FPreMapSaved	PreMapSaved;
 	FPostMapSaved	PostMapSaved;
 	FOnCameraMoved	OnCameraMoved;
@@ -46,9 +46,9 @@ private:
 	std::vector<actor_key> SelectedActors;
 	Rsap::Map::flat_map<actor_key, FGlobalBounds> SelectedActorsBounds;
 
-	FDelegateHandle MapOpenedHandle;	void HandleMapOpened(const FString& Filename, bool bAsTemplate);
-	FDelegateHandle PreMapSavedHandle;	void HandlePreMapSaved(UWorld* World, FObjectPreSaveContext PreSaveContext);
-	FDelegateHandle PostMapSavedHandle;	void HandlePostMapSaved(UWorld* World, FObjectPostSaveContext PostSaveContext);
+	void HandleMapOpened(const FString& Filename, bool bAsTemplate);
+	void HandlePreMapSaved(UWorld* World, FObjectPreSaveContext PreSaveContext);
+	void HandlePostMapSaved(UWorld* World, FObjectPostSaveContext PostSaveContext);
 	
 	FDelegateHandle ActorSelectionChangedHandle; void HandleActorSelectionChanged(const TArray<UObject*>& Objects, bool);
 	FDelegateHandle ObjectPropertyChangedHandle; void HandleObjectPropertyChanged(UObject* Object, FPropertyChangedEvent& PropertyChangedEvent);
