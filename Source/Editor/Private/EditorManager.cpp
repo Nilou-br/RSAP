@@ -6,7 +6,6 @@
 #include "Rsap/EditorWorld.h"
 #include "Rsap/NavMesh/Debugger.h"
 #include "Rsap/NavMesh/Update/Updater.h"
-#include "Rsap/NavMesh/Serialize.h"
 #include "Engine/World.h"
 #include "Editor.h"
 
@@ -55,35 +54,39 @@ void URsapEditorManager::Deinitialize()
 
 void URsapEditorManager::Regenerate(const UWorld* World)
 {
-	// todo:
-	// Stop updater.
-	// Wait until ongoing update completes.
-	// Clear navmesh.
-	// Call generate on generator.
-
 	const FRsapEditorWorld& RsapWorld = FRsapEditorWorld::GetInstance();
 	
 	if(!RsapWorld.GetWorld())
 	{
-		UE_LOG(LogRsap, Warning, TEXT("Cannot regenerate the navmesh without an active world."));
+		UE_LOG(LogRsap, Warning, TEXT("Cannot regenerate the sound-navigation-mesh without an active world."));
 		return;
 	}
 
 	NavMesh.Generate(&RsapWorld);
 
-	if(World->GetOuter()->MarkPackageDirty())
-	{
-		UE_LOG(LogRsap, Log, TEXT("Regeneration complete. The sound-navigation-mesh will be cached when you save the map."))
-	}
+	if(RsapWorld.MarkDirty()) UE_LOG(LogRsap, Log, TEXT("Regeneration complete. The sound-navigation-mesh will be cached when you save the map."))
 }
 
 void URsapEditorManager::OnMapOpened(const IRsapWorld* RsapWorld)
 {
 	Debugger->Stop();
-	NavMesh.Deserialize(RsapWorld);
-	Debugger->Start();
+	
+	
+	const FRsapNavmeshLoadResult LoadResult = NavMesh.Deserialize(RsapWorld);
+	switch (LoadResult.Result) {
+		case ERsapNavmeshLoadResult::Success: break;
+		case ERsapNavmeshLoadResult::NotFound:
+			NavMesh.Generate(RsapWorld);
+			if(RsapWorld->MarkDirty()) UE_LOG(LogRsap, Log, TEXT("Generation complete. The sound-navigation-mesh will be cached when you save the map."))
+			break;
+		case ERsapNavmeshLoadResult::MisMatch:
+			NavMesh.PartlyRegenerate(RsapWorld, LoadResult.MismatchedActors);
+			if(RsapWorld->MarkDirty()) UE_LOG(LogRsap, Log, TEXT("Regenerated out-of-sync areas. The sound-navigation-mesh will be cached when you save the map."))
+			break;
+	}
 
-	return;
+
+	Debugger->Start();
 
 	// Start the updater/debugger. todo: stop before closing map.
 	// FRsapUpdater::GetInstance().Start(World, NavMesh);

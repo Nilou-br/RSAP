@@ -7,9 +7,9 @@
 #include "Types/Actor.h"
 #include "Navmesh.generated.h"
 
-
-
 class IRsapWorld;
+
+
 
 UCLASS()
 class RSAPGAME_API URsapNavmeshMetadata : public UAssetUserData
@@ -25,22 +25,47 @@ public:
 	UPROPERTY(VisibleAnywhere, Category="RSAP | NavigationMesh")
 	TMap<uint64, FGuid> Chunks;
 
-	// Gets the metadata for this level/world.
-	static URsapNavmeshMetadata* Load(const UWorld* World)
+	URsapNavmeshMetadata()
 	{
-		URsapNavmeshMetadata* LevelMetadata = World->PersistentLevel->GetAssetUserData<URsapNavmeshMetadata>();
-		return LevelMetadata;
+		ID = FGuid::NewGuid();
 	}
 
-	// Initializes new metadata for this world. Will override previously stored metadata.
+	// Returns a new instance.
 	static URsapNavmeshMetadata* Init(const UWorld* World)
 	{
-		URsapNavmeshMetadata* LevelMetadata = NewObject<URsapNavmeshMetadata>(World->PersistentLevel, StaticClass());
-		LevelMetadata->ID = FGuid::NewGuid();
-		World->PersistentLevel->AddAssetUserData(LevelMetadata);
-		return LevelMetadata;
+		URsapNavmeshMetadata* Metadata = NewObject<URsapNavmeshMetadata>(World->PersistentLevel, StaticClass());
+		return Metadata;
+	}
+
+	static URsapNavmeshMetadata* Load(const UWorld* World)
+	{
+		URsapNavmeshMetadata* Metadata = World->PersistentLevel->GetAssetUserData<URsapNavmeshMetadata>();
+		if(!Metadata) Metadata = Init(World);
+		return Metadata;
+	}
+
+	void Save(const UWorld* World)
+	{
+		World->PersistentLevel->AddAssetUserData(this);
 	}
 };
+
+
+
+enum class ERsapNavmeshLoadResult
+{
+	Success,	// Navmesh is in-sync with the world.
+	NotFound,	// No navmesh found for this world.
+	MisMatch	// Navmesh is found, but certain actors are out-of-sync.
+};
+
+struct FRsapNavmeshLoadResult
+{
+	ERsapNavmeshLoadResult Result;
+	FRsapActorMap MismatchedActors;
+};
+
+
 
 class RSAPGAME_API FRsapNavmesh
 {
@@ -62,7 +87,7 @@ public:
 	void UpdateAsync();
 
 	void Serialize(const IRsapWorld* RsapWorld);
-	void Deserialize(const IRsapWorld* RsapWorld);
+	FRsapNavmeshLoadResult Deserialize(const IRsapWorld* RsapWorld);
 
 	// Returns nullptr if it does not exist.
 	FORCEINLINE FRsapChunk* FindChunk(const chunk_morton ChunkMC)

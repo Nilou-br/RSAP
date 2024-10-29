@@ -23,6 +23,7 @@ public:
 	const FRsapActorMap& GetActors() const { return Actors; }
 
 	const UWorld* GetWorld() const { return World; }
+	bool MarkDirty() const { return World ? World->GetOuter()->MarkPackageDirty() : false; }
 
 	FOnMapOpened	OnMapOpened;
 	FOnActorMoved	OnActorMoved;
