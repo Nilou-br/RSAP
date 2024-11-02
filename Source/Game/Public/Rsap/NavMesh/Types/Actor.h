@@ -31,6 +31,7 @@ class FRsapActor
 	std::vector<FRsapCollisionComponent> CollisionComponents;
 	uint16 SoundPresetID = 0;
 	FGlobalBounds Boundaries;
+	bool bIsStatic = true; // todo: maybe enum or uint8?
 
 public:
 	explicit FRsapActor(const AActor* Actor)

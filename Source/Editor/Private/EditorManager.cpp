@@ -71,20 +71,17 @@ void URsapEditorManager::OnMapOpened(const IRsapWorld* RsapWorld)
 {
 	Debugger->Stop();
 	
-	
-	const FRsapNavmeshLoadResult LoadResult = NavMesh.Deserialize(RsapWorld);
-	switch (LoadResult.Result) {
+	switch (const auto [Result, MismatchedActors] = NavMesh.Load(RsapWorld); Result) {
 		case ERsapNavmeshLoadResult::Success: break;
 		case ERsapNavmeshLoadResult::NotFound:
 			NavMesh.Generate(RsapWorld);
 			if(RsapWorld->MarkDirty()) UE_LOG(LogRsap, Log, TEXT("Generation complete. The sound-navigation-mesh will be cached when you save the map."))
 			break;
 		case ERsapNavmeshLoadResult::MisMatch:
-			NavMesh.PartlyRegenerate(RsapWorld, LoadResult.MismatchedActors);
+			NavMesh.Regenerate(RsapWorld, MismatchedActors);
 			if(RsapWorld->MarkDirty()) UE_LOG(LogRsap, Log, TEXT("Regenerated out-of-sync areas. The sound-navigation-mesh will be cached when you save the map."))
 			break;
 	}
-
 
 	Debugger->Start();
 
@@ -106,19 +103,12 @@ void URsapEditorManager::OnMapOpened(const IRsapWorld* RsapWorld)
 
 void URsapEditorManager::PreMapSaved()
 {
-	// FRsapEditorWorld::PostMapSaved.BindLambda([&](const bool bSuccess)
-	// {
-	// 	FRsapEditorWorld::PostMapSaved.Unbind();
-	// 	
-	// 	if(!bSuccess) return;
-	// 	
-	// 	SerializeNavMesh(GEditor->GetEditorWorldContext().World(), *NavMesh);
-	// });
+	
 }
 
 void URsapEditorManager::PostMapSaved(const bool bSuccess)
 {
-	if(bSuccess) NavMesh.Serialize(&FRsapEditorWorld::GetInstance());
+	if(bSuccess) NavMesh.Save(); // todo: check if this also runs if a different level is saved from the one that is opened?
 }
 
 FVector Transform(const FVector& Location, const FTransform& ActorTransform)

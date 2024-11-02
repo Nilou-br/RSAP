@@ -41,6 +41,39 @@ inline FArchive& operator<<(FArchive& Ar, FOctreeLayer& Layer)
 	return Ar;
 }
 
+inline FArchive& operator<<(FArchive& Ar, FOctreeLeafNodes& LeafNodes)
+{
+	size_t Size = LeafNodes.size();
+	Ar << Size;
+	
+	if(Ar.IsSaving())
+	{
+		for(const auto& [MortonCode, Leaf] : LeafNodes)
+		{
+			node_morton LeafMC = MortonCode;
+			uint64 LeafData = Leaf.Leafs;
+			
+			Ar << LeafMC;
+			Ar << LeafData;
+		}	
+	}
+	else if (Ar.IsLoading())
+	{
+		for(size_t i = 0; i < Size; ++i)
+		{
+			node_morton LeafMC;
+			uint64 LeafData;
+			
+			Ar << LeafMC;
+			Ar << LeafData;
+			
+			LeafNodes.emplace(LeafMC, FRsapLeaf(LeafData));
+		}
+	}
+	
+	return Ar;
+}
+
 inline FArchive& operator<<(FArchive& Ar, const FRsapChunk& Chunk){
 
 	// Only serialize the static-octree.
@@ -48,6 +81,8 @@ inline FArchive& operator<<(FArchive& Ar, const FRsapChunk& Chunk){
 	{
 		Ar << *Chunk.Octrees[0]->Layers[LayerIdx];
 	}
+
+	Ar << *Chunk.Octrees[0]->LeafNodes;
 	
 	return Ar;
 }
@@ -90,19 +125,16 @@ inline FString GetChunkDirectory(const FString& LevelPath, const chunk_morton Ch
 	return PathBuilder.ToString();
 }
 
-inline void SerializeChunk(const FRsapChunk& Chunk, const chunk_morton ChunkMC, const FString& NavmeshFolderPath)
+inline void SerializeChunk(const FRsapChunk& Chunk, const chunk_morton ChunkMC, FGuid* ChunkID, const FString& NavmeshFolderPath)
 {
 	const FString ChunkDirectory = GetChunkDirectory(NavmeshFolderPath, ChunkMC);
 	if (!IFileManager::Get().DirectoryExists(*ChunkDirectory)) IFileManager::Get().MakeDirectory(*ChunkDirectory, true);
 
 	const FString ChunkFilePath = ChunkDirectory / FString::Printf(TEXT("%llu.bin"), ChunkMC & 0b111111);
 	FArchive* ChunkFileArchive = IFileManager::Get().CreateFileWriter(*ChunkFilePath);
-		
-	// Serialize a new guid for this chunk.
-	FGuid NewChunkID = FGuid::NewGuid();
-	*ChunkFileArchive << NewChunkID;
 
 	// Serialize the chunk.
+	*ChunkFileArchive << *ChunkID;
 	*ChunkFileArchive << Chunk;
 		
 	ChunkFileArchive->Close();
@@ -117,54 +149,18 @@ inline FString GetNavmeshBinaryPath(const URsapNavmeshMetadata* NavmeshMetadata)
 	return NavmeshPath;
 }
 
-// Serialize all chunks within the navmesh.
-inline void SerializeNavmesh(const UWorld* World, FRsapNavmesh& NavMesh) // todo: Clear chunks that should not exist anymore.
+FRsapNavmeshLoadResult FRsapNavmesh::Load(const IRsapWorld* RsapWorld)
 {
-	URsapNavmeshMetadata* Metadata = URsapNavmeshMetadata::Load(World);
+	Chunks.clear();
 
-	// Clear the previous binaries
+	// Load the metadata and try to locate the binaries.
+	Metadata = URsapNavmeshMetadata::Load(RsapWorld->GetWorld());
 	const FString NavmeshPath = GetNavmeshBinaryPath(Metadata);
-	IFileManager::Get().DeleteDirectory(*NavmeshPath, false, true);
-
-	for (const auto& [ChunkMC, Chunk] : NavMesh.Chunks)
-	{
-		SerializeChunk(Chunk, ChunkMC, NavmeshPath);
-	}
-}
-
-// Serialize certain chunks within the navmesh.
-inline void SerializeNavmesh(const UWorld* World, const FRsapNavmesh& NavMesh, const std::unordered_set<chunk_morton>& ChunksToSave, const std::unordered_set<chunk_morton>& ChunksToDelete = std::unordered_set<chunk_morton>())
-{
-	URsapNavmeshMetadata* Metadata = URsapNavmeshMetadata::Load(World);
-	const FString NavmeshPath = GetNavmeshBinaryPath(Metadata);
-	
-	for (const chunk_morton ChunkMC : ChunksToSave)
-	{
-		Metadata->Chunks.Add(ChunkMC, FGuid::NewGuid());
-		const FRsapChunk& Chunk = NavMesh.Chunks.find(ChunkMC)->second;
-		SerializeChunk(Chunk, ChunkMC, NavmeshPath);
-	}
-
-	for (const chunk_morton ChunkMC : ChunksToDelete)
-	{
-		Metadata->Chunks.Remove(ChunkMC);
-		
-		FString ChunkDirectory = GetChunkDirectory(NavmeshPath, ChunkMC);
-		const FString ChunkFilePath = ChunkDirectory / FString::Printf(TEXT("%llu.bin"), ChunkMC & 0b111111);
-		IFileManager::Get().Delete(*ChunkFilePath);
-	}
-}
-
-FRsapNavmeshLoadResult FRsapNavmesh::Deserialize(const IRsapWorld* RsapWorld)
-{
-	const URsapNavmeshMetadata* Metadata = URsapNavmeshMetadata::Load(RsapWorld->GetWorld());
-	const FString NavmeshPath = GetNavmeshBinaryPath(Metadata);
-	
 	if(!IFileManager::Get().DirectoryExists(*NavmeshPath)) return { ERsapNavmeshLoadResult::NotFound };
 
+	// Loop through the chunks within the metadata to locate each chunk binary.
+	// Check if these chunks are in-sync by comparing the serialized ID with the ID stored on the metadata.
 	std::vector<chunk_morton> MismatchedChunks;
-	Chunks.clear();
-	
 	for (const auto& Pair : Metadata->Chunks)
 	{
 		const chunk_morton ChunkMC = Pair.Key;
@@ -188,9 +184,10 @@ FRsapNavmeshLoadResult FRsapNavmesh::Deserialize(const IRsapWorld* RsapWorld)
 			continue;
 		}
 
+		// todo: If out-of-sync, then read all the serialized actors, and pass it to a separate method that returns a new list of actors which are the ones out-of-sync.
+		// todo: If in-sync, then skip the actors using FArchive.
 		// Get the serialized chunk ID. If there is a mismatch, then it's out-of-sync.
-		FGuid StoredChunkID;
-		*ChunkFileArchive << StoredChunkID;
+		FGuid StoredChunkID; *ChunkFileArchive << StoredChunkID;
 		if (StoredChunkID != ChunkID)
 		{
 			MismatchedChunks.emplace_back(ChunkMC);
@@ -199,28 +196,61 @@ FRsapNavmeshLoadResult FRsapNavmesh::Deserialize(const IRsapWorld* RsapWorld)
 			continue;
 		}
 
-		// Deserialize the chunk, and add to the navmesh.
-		FRsapChunk StoredChunk;
-		*ChunkFileArchive << StoredChunk;
+		// Deserialize the chunk, and add it to the navmesh.
+		FRsapChunk StoredChunk; *ChunkFileArchive << StoredChunk;
 		Chunks.emplace(ChunkMC, std::move(StoredChunk));
 
 		ChunkFileArchive->Close();
 		delete ChunkFileArchive;
 	}
-
+	
 	if(MismatchedChunks.size()) return { ERsapNavmeshLoadResult::MisMatch, FRsapActorMap() };
 	return { ERsapNavmeshLoadResult::Success };
 }
 
-void FRsapNavmesh::Serialize(const IRsapWorld* RsapWorld)
+void FRsapNavmesh::Save()
 {
-	if(bRegenerated) SerializeNavmesh(RsapWorld->GetWorld(), *this);
+	const FString NavmeshPath = GetNavmeshBinaryPath(Metadata);
+
+	// Note: The chunk IDs on the metadata should exactly correspond to the chunks on the navmesh,
+	// as they are set from the result of a generation or an update.
+	
+	// If the navmesh is regenerated, then all chunks should be serialized.
+	// Else, only serialize the chunks that have been recently updated or deleted.
+	
+	if(bRegenerated)
+	{
+		// Clear the previous binaries
+		IFileManager::Get().DeleteDirectory(*NavmeshPath, false, true);
+
+		// Serialize all the chunks.
+		for (const auto& [ChunkMC, Chunk] : Chunks)
+		{
+			SerializeChunk(Chunk, ChunkMC, Metadata->Chunks.Find(ChunkMC), NavmeshPath);
+		}
+
+		// Set regenerated to false to start keep track of newly updated chunks, and serialize only those after the next save.
+		bRegenerated = false;
+	}
 	else
 	{
-		SerializeNavmesh(RsapWorld->GetWorld(), *this, std::move(UpdatedChunks));
+		for (const chunk_morton ChunkMC : UpdatedChunkMCs)
+		{
+			const FRsapChunk& Chunk = Chunks.find(ChunkMC)->second;
+			SerializeChunk(Chunk, ChunkMC, Metadata->Chunks.Find(ChunkMC), NavmeshPath);
+		}
+
+		for (const chunk_morton ChunkMC : DeletedChunkMCs)
+		{
+			FString ChunkDirectory = GetChunkDirectory(NavmeshPath, ChunkMC);
+			const FString ChunkFilePath = ChunkDirectory / FString::Printf(TEXT("%llu.bin"), ChunkMC & 0b111111);
+			IFileManager::Get().Delete(*ChunkFilePath);
+			Metadata->Chunks.Remove(ChunkMC);
+		}
+
+		UpdatedChunkMCs.clear();
+		DeletedChunkMCs.clear();
+		
 		// todo: check if UpdatedChunks is empty.
 	}
-
-	// Set regenerated to false so that new updates will cause only newly updated chunks to be serialized.
-	bRegenerated = false;
 }

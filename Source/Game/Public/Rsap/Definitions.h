@@ -179,23 +179,12 @@ struct FRsapNode;
 struct FLocalVector;
 struct FGlobalVector;
 
-// Used map types.
+// Map types that could be used interchangeably, mainly one for in-editor and the other in-game for performance reasons.
 namespace Rsap::Map
 {
-	template <class Key, class T, class Hash = ankerl::unordered_dense::hash<Key>, class KeyEqual = std::equal_to<Key>, class AllocatorOrContainer = std::allocator<std::pair<Key, T>>, class Bucket = ankerl::unordered_dense::bucket_type::standard> // todo:
+	template <class Key, class T, class Hash = ankerl::unordered_dense::hash<Key>, class KeyEqual = std::equal_to<Key>, class AllocatorOrContainer = std::allocator<std::pair<Key, T>>, class Bucket = ankerl::unordered_dense::bucket_type::standard>
 	using flat_map = ankerl::unordered_dense::map<Key, T, Hash, KeyEqual, AllocatorOrContainer, Bucket>;
 	
 	template <class Key, class T, class Compare = std::less<Key>, class Allocator = std::allocator<std::pair<const Key, T>>>
 	using ordered_map = std::map<Key, T, Compare, Allocator>;
 }
-
-// typedef Rsap::Map::ordered_map<chunk_morton, FRsapChunk> FNavMeshType;
-// typedef std::shared_ptr<FNavMeshType> FNavMesh;
-
-// typedef Rsap::Map::ordered_map<chunk_morton, FRsapChunk> FNavMeshEditorType;
-// typedef std::shared_ptr<FNavMeshEditorType> FNavMeshEditor;
-
-// typedef Rsap::Map::flat_map<chunk_morton, FRsapChunk> FNavMeshGameType;
-// typedef std::shared_ptr<FNavMeshGameType> FNavMeshGame;
-
-// typedef Rsap::Map::flat_map<actor_key, TWeakObjectPtr<const AActor>> FActorMap;

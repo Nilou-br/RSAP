@@ -11,6 +11,10 @@ class IRsapWorld;
 
 
 
+/*
+ * Metadata for Rsap's navmesh.
+ * Used to locate the binaries, and to check for validity in them.
+ */
 UCLASS()
 class RSAPGAME_API URsapNavmeshMetadata : public UAssetUserData
 {
@@ -30,7 +34,6 @@ public:
 		ID = FGuid::NewGuid();
 	}
 
-	// Returns a new instance.
 	static URsapNavmeshMetadata* Init(const UWorld* World)
 	{
 		URsapNavmeshMetadata* Metadata = NewObject<URsapNavmeshMetadata>(World->PersistentLevel, StaticClass());
@@ -67,6 +70,10 @@ struct FRsapNavmeshLoadResult
 
 
 
+/*
+ * RSAP's sound-navigation-mesh wrapper providing API for loading, saving, generating and updating the navmesh.
+ * Call the load method before anything else.
+ */
 class RSAPGAME_API FRsapNavmesh
 {
 public:
@@ -80,14 +87,14 @@ public:
 	void Generate(const IRsapWorld* RsapWorld);
 	void GenerateAsync();
 
-	void PartlyRegenerate(const IRsapWorld* RsapWorld, const FRsapActorMap& Actors);
-	void PartlyRegenerateAsync();
+	void Regenerate(const IRsapWorld* RsapWorld, const FRsapActorMap& Actors);
+	void RegenerateAsync();
 
 	void Update();
 	void UpdateAsync();
 
-	void Serialize(const IRsapWorld* RsapWorld);
-	FRsapNavmeshLoadResult Deserialize(const IRsapWorld* RsapWorld);
+	void Save();
+	FRsapNavmeshLoadResult Load(const IRsapWorld* RsapWorld);
 
 	// Returns nullptr if it does not exist.
 	FORCEINLINE FRsapChunk* FindChunk(const chunk_morton ChunkMC)
@@ -108,9 +115,11 @@ public:
 	}
 
 private:
+	URsapNavmeshMetadata* Metadata = nullptr;
+	
 	bool bRegenerated = false;
-	std::unordered_set<chunk_morton> UpdatedChunks; // New/updated chunks pending to be serialized.
-
+	std::unordered_set<chunk_morton> UpdatedChunkMCs;
+	std::unordered_set<chunk_morton> DeletedChunkMCs;
 
 	// Debug code
 public:

@@ -2,9 +2,9 @@
 
 #pragma once
 #include "Relations.h"
+#include "Rsap/Definitions.h"
 #include "Rsap/Math/Morton.h"
 #include "Rsap/Math/Vectors.h"
-#include "Rsap/Definitions.h"
 #include "Rsap/Math/Overlap.h"
 #include "Rsap/Math/Bounds.h"
 
@@ -17,18 +17,18 @@ using namespace Rsap::NavMesh;
  *
  * - MortonCode: represents its 3d location in a single value, used as a key to find nodes.
  *				 Also makes the nodes locally coherent in memory for cache efficiency.
- *				 The morton-code is not stored on this class. This is because these are already associated with nodes as key-value pairs on the hashmap.
+ *				 The morton-code is not stored on this class itself because these are the keys on the hashmap.
  * - Relations: Every face of the node has a 4 bit layer-index, and a node-state, for locating it's neighbour.
  *				A neighbour can only be on the same-layer as this node, or above ( as in a parent layer ).
  * - Children: bitmask indicating which of this node's children are alive and occluding.
  * - ChildStates: bitmask indicating the node type for this node's children.
- * - SoundPresetId: Identifier to a preset of attenuation settings for the actor this node is occluding.
+ * - SoundPresetID: Identifier to a preset of attenuation settings for the collision component this node is occluding.
  */
 struct FRsapNode
 {
 	FRsapRelations  Relations;
-	uint8 Children: 8 = 0b00000000;			// Initialized/occluding (1) or not (0).
-	uint8 ChildrenTypes: 8 = 0b00000000;	// Static (0) or dynamic (1).
+	uint8 Children = 0b00000000;		// Initialized/occluding (1) or not (0).
+	uint8 ChildrenTypes = 0b00000000;	// Static (0) or dynamic (1).
 	uint16 SoundPresetID = 0;
 
 	FRsapNode() = default;
@@ -159,7 +159,13 @@ struct FRsapNode
 
 struct FRsapLeaf
 {
-	uint64 Leafs;
+	uint64 Leafs = 0;
+
+	FRsapLeaf() = default;
+	explicit FRsapLeaf(const uint64 InLeafs)
+	{
+		Leafs = InLeafs;
+	}
 };
 
 typedef std::pair<node_morton, FRsapNode> FRsapNodePair;

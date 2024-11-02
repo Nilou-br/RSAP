@@ -183,7 +183,8 @@ struct TBounds
 		
 		std::vector<TBounds> BoundsList;
 		TBounds RemainingBounds = Other;
-		
+
+		// I should explain this mess next time lol
 		if(Other.Max.X > Max.X){  // + X
 			BoundsList.push_back(FGlobalBounds(VectorType(Max.X, RemainingBounds.Min.Y, RemainingBounds.Min.Z), RemainingBounds.Max));
 			RemainingBounds.Max.X = Max.X;

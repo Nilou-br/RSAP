@@ -95,9 +95,11 @@ uint8 FRsapGenerator::GetChildrenToRasterizeAndUpdateEdges(rsap_direction& Edges
 }
 
 // todo: this method can be made a template?
-void FRsapGenerator::RasterizeChunks(FRsapNavmesh& Navmesh, const UPrimitiveComponent* CollisionComponent)
+std::vector<chunk_morton> FRsapGenerator::RasterizeChunks(FRsapNavmesh& Navmesh, const UPrimitiveComponent* CollisionComponent)
 {
 	using namespace Direction;
+
+	std::vector<chunk_morton> InitializedChunks;
 	
 	// Get the bounds of this component.
 	const FGlobalBounds AABB(CollisionComponent);
@@ -108,6 +110,7 @@ void FRsapGenerator::RasterizeChunks(FRsapNavmesh& Navmesh, const UPrimitiveComp
 	// Round the bounds to the node-size of the layer. This is the layer we will be looping through.
 	const FGlobalBounds RoundedBounds = AABB.RoundToLayer(LayerIdx);
 
+	// Currently unused.
 	// Get the difference between the rounded/un-rounded bounds.
 	// This results in a bit-mask which tells exactly which nodes, and from which layer, fit between the rounded/un-rounded bounds, which don't have to be checked for occlusion because these do not overlap with the actor's bounds.
 	const FLayerSkipMasks LayerSkipMasks(AABB, RoundedBounds);
@@ -125,8 +128,7 @@ void FRsapGenerator::RasterizeChunks(FRsapNavmesh& Navmesh, const UPrimitiveComp
 	// This mask represents the edges that have nodes that can be skipped. When we are at an edge in a certain direction, then that direction will certainly have nodes that can be skipped.
 	rsap_direction EdgesToCheck = 0b111000; // Initially set to be on the negative edge in every direction.
 
-	// Lambda that checks if the given chunk-morton-code differs from what is currently cached.
-	// Will reset it to nullptr if true.
+	// Lambda that checks if the given chunk-morton-code differs from what is cached, and updates the current chunk if true.
 	const auto HandleNewChunkMC = [&](const chunk_morton NewChunkMC)
 	{
 		if(ChunkMC != NewChunkMC)
@@ -151,7 +153,9 @@ void FRsapGenerator::RasterizeChunks(FRsapNavmesh& Navmesh, const UPrimitiveComp
 		if(FMortonUtils::Node::XEqualsZero(NodeMC)) HandleNewChunkMC(FMortonUtils::Chunk::IncrementX(ChunkMC));
 	};
 
-	// todo: try to unroll this loop into max of 27 different versions, and pick the right one based on dimensions. Leave this nested loop for objects larger than 3 chunks in any direction.
+	// todo: Later on when I have the time, try to unroll this loop into max of 27 different versions? and pick the right one based on the amount of nodes in each direction.
+	// todo: Leave this nested loop for objects larger than 3 chunks in any direction ( which would be the case for objects larger than a volume of 240x240x240 meter )
+	// This nested loop is a bit convoluted but it basically prevents having to calculate a new morton-code for every node/chunk, which is slow.
 	FGlobalVector NodeLocation;
 	for (NodeLocation.Z = RoundedBounds.Min.Z; NodeLocation.Z <= RoundedBounds.Max.Z; NodeLocation.Z += Node::Sizes[LayerIdx])
 	{
@@ -172,6 +176,7 @@ void FRsapGenerator::RasterizeChunks(FRsapNavmesh& Navmesh, const UPrimitiveComp
 						continue;
 					}
 					CurrentChunk = &Navmesh.InitChunk(ChunkMC);
+					InitializedChunks.emplace_back(ChunkMC);
 				}
 
 				// todo: when creating updater, try to find a node first, then if nullptr check if collision, and if collision true then init node.
@@ -216,6 +221,8 @@ void FRsapGenerator::RasterizeChunks(FRsapNavmesh& Navmesh, const UPrimitiveComp
 		NodeMC = FMortonUtils::Node::AddZ(NodeMC, LayerIdx);
 		if(FMortonUtils::Node::ZEqualsZero(NodeMC)) HandleNewChunkMC(FMortonUtils::Chunk::IncrementZ(ChunkMC));
 	}
+
+	return InitializedChunks;
 }
 
 // todo: unroll this method along with ::GetChildRasterizeMask.
@@ -325,17 +332,16 @@ std::vector<const UPrimitiveComponent*> GetActorCollisionComponents(const AActor
 	return CollisionComponents;
 };
 
-void FRsapGenerator::Generate(const UWorld* InWorld, FRsapNavmesh& Navmesh, const FRsapActorMap& ActorMap)
+std::set<chunk_morton> FRsapGenerator::Generate(const UWorld* InWorld, FRsapNavmesh& Navmesh, const FRsapActorMap& ActorMap)
 {
 	FlushPersistentDebugLines(InWorld);
-
+	FRsapOverlap::InitCollisionBoxes();
 	World = InWorld;
 
-	FRsapOverlap::InitCollisionBoxes();
-	
+	std::set<chunk_morton> InitializedChunks;
 	for (const FRsapActor& RsapActor : ActorMap | std::views::values)
 	{
-		// REFACTOR?
+		// todo: REFACTOR?
 		for (const FRsapCollisionComponent& RsapCollisionComponent : RsapActor.GetCollisionComponents())
 		{
 			const UPrimitiveComponent* Component = RsapCollisionComponent.ComponentPtr.Get();
@@ -344,10 +350,12 @@ void FRsapGenerator::Generate(const UWorld* InWorld, FRsapNavmesh& Navmesh, cons
 			// todo: move this to start of method. Different ExecuteRead overload.
 			FPhysicsCommand::ExecuteRead(Component->BodyInstance.ActorHandle, [&](const FPhysicsActorHandle& ActorHandle)
 			{
-				RasterizeChunks(Navmesh, Component);
+				const std::vector<chunk_morton> Chunks = RasterizeChunks(Navmesh, Component);
+				InitializedChunks.insert(Chunks.begin(), Chunks.end());
 			});
 		}
 	}
+	return InitializedChunks;
 }
 
 void FRsapGenerator::RegenerateChunks(const UWorld* InWorld, FRsapNavmesh& Navmesh, const std::vector<chunk_morton>& ChunkMCs)
@@ -360,7 +368,7 @@ void FRsapGenerator::RegenerateChunks(const UWorld* InWorld, FRsapNavmesh& Navme
 	{
 		for (const auto Actor : FRsapOverlap::GetActors(World, FGlobalVector::FromChunkMorton(ChunkMC), 0))
 		{
-			// REFACTOR?
+			// todo: REFACTOR?
 			for (const UPrimitiveComponent* CollisionComponent : GetActorCollisionComponents(Actor))
 			{
 				// todo: move this to start of method. Different ExecuteRead overload.

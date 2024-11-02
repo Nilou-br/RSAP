@@ -6,18 +6,24 @@
 
 
 
+// Generates the navmesh based on the world.
 void FRsapNavmesh::Generate(const IRsapWorld* RsapWorld)
 {
 	if(!RsapWorld->GetWorld()) return;
 	
+	Metadata->Chunks.Empty();
 	Chunks.clear();
-	FRsapGenerator::Generate(RsapWorld->GetWorld(), *this, RsapWorld->GetActors());
-	UpdatedChunks.clear();
-	bRegenerated = true;
+	UpdatedChunkMCs.clear();
+	DeletedChunkMCs.clear();
+
+	// Generate the navmesh using all the actors in the world. Store the resulting morton-codes in the metadata.
+	for (auto GeneratedChunkMC : FRsapGenerator::Generate(RsapWorld->GetWorld(), *this, RsapWorld->GetActors()))
+	{
+		Metadata->Chunks.Emplace(GeneratedChunkMC, FGuid::NewGuid());
+	}
 	
-	URsapNavmeshMetadata* Metadata = URsapNavmeshMetadata::Load(RsapWorld->GetWorld());
-	// todo: add the chunks to metadata.
 	Metadata->Save(RsapWorld->GetWorld());
+	bRegenerated = true;
 }
 
 void FRsapNavmesh::GenerateAsync()
@@ -26,19 +32,18 @@ void FRsapNavmesh::GenerateAsync()
 }
 
 // todo: Instead utilize the update to delete list of boundaries, and to rasterize the new actors.
-void FRsapNavmesh::PartlyRegenerate(const IRsapWorld* RsapWorld, const FRsapActorMap& Actors)
+// Regenerates part of the navmesh using the map of actors.
+void FRsapNavmesh::Regenerate(const IRsapWorld* RsapWorld, const FRsapActorMap& Actors)
 {
 	if(!RsapWorld->GetWorld()) return;
 	
 	FRsapGenerator::Generate(RsapWorld->GetWorld(), *this, Actors);
-	UpdatedChunks.clear();
-
-	URsapNavmeshMetadata* Metadata = URsapNavmeshMetadata::Load(RsapWorld->GetWorld());
+	
 	// todo: add the chunks to metadata.
 	Metadata->Save(RsapWorld->GetWorld());
 }
 
-void FRsapNavmesh::PartlyRegenerateAsync()
+void FRsapNavmesh::RegenerateAsync()
 {
 }
 
