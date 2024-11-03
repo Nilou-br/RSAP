@@ -6,7 +6,8 @@
 #include "Rsap/NavMesh/Types/Node.h"
 
 
-class FRsapSharedProcessing
+
+class FRsapProcessing
 {
 public:
 	static FRsapNode& InitNodeAndParents(FRsapNavmesh& NavMesh, const FRsapChunk& Chunk, chunk_morton ChunkMC, node_morton NodeMC, layer_idx LayerIdx, node_state NodeState, rsap_direction RelationsToSet);

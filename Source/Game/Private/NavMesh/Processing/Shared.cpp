@@ -7,7 +7,7 @@
 
 
 // Returns a reference to this node. Will initialize one if it does not exist yet. Will also init any parents of this node that do not exist yet, and set it's relations.
-FRsapNode& FRsapSharedProcessing::InitNodeAndParents(FRsapNavmesh& NavMesh, const FRsapChunk& Chunk, const chunk_morton ChunkMC, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState, const rsap_direction RelationsToSet = Direction::Negative::XYZ)
+FRsapNode& FRsapProcessing::InitNodeAndParents(FRsapNavmesh& NavMesh, const FRsapChunk& Chunk, const chunk_morton ChunkMC, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState, const rsap_direction RelationsToSet = Direction::Negative::XYZ)
 {
 	bool bWasInserted;
 	FRsapNode& Node = Chunk.TryInitNode(bWasInserted, NodeMC, LayerIdx, NodeState);
@@ -22,7 +22,7 @@ FRsapNode& FRsapSharedProcessing::InitNodeAndParents(FRsapNavmesh& NavMesh, cons
 }
 
 // Returns a reference to this leaf-node. Will initialize one if it does not exist yet. Will also init any parents of this node that do not exist yet.
-FRsapLeaf& FRsapSharedProcessing::InitLeafNodeAndParents(FRsapNavmesh& NavMesh, const FRsapChunk& Chunk, const chunk_morton ChunkMC, const node_morton NodeMC, const node_state NodeState)
+FRsapLeaf& FRsapProcessing::InitLeafNodeAndParents(FRsapNavmesh& NavMesh, const FRsapChunk& Chunk, const chunk_morton ChunkMC, const node_morton NodeMC, const node_state NodeState)
 {
 	bool bWasInserted;
 	FRsapLeaf& LeafNode = Chunk.TryInitLeafNode(bWasInserted, NodeMC, NodeState);
@@ -37,7 +37,7 @@ FRsapLeaf& FRsapSharedProcessing::InitLeafNodeAndParents(FRsapNavmesh& NavMesh, 
 }
 
 // Recursively inits the parents of the node until an existing one is found. All parents will have their Children mask updated correctly.
-void FRsapSharedProcessing::InitParentsOfNode(FRsapNavmesh& NavMesh, const FRsapChunk& Chunk, const chunk_morton ChunkMC, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState)
+void FRsapProcessing::InitParentsOfNode(FRsapNavmesh& NavMesh, const FRsapChunk& Chunk, const chunk_morton ChunkMC, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState)
 {
 	const layer_idx ParentLayerIdx = LayerIdx-1;
 	const node_morton ParentNodeMC = FMortonUtils::Node::GetParent(NodeMC, ParentLayerIdx);
@@ -62,7 +62,7 @@ void FRsapSharedProcessing::InitParentsOfNode(FRsapNavmesh& NavMesh, const FRsap
 // Tries to set the given relation for this node.
 // Will be set to a valid neighbour if found in the same layer, or any upper layers.
 // If the neighbour is located within the same parent and does not exist, then the relation will be set to point to this node's parent.
-void FRsapSharedProcessing::SetNodeRelation(FRsapNavmesh& NavMesh, const FRsapChunk& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, const node_morton NodeMC, const layer_idx LayerIdx, const rsap_direction Relation)
+void FRsapProcessing::SetNodeRelation(FRsapNavmesh& NavMesh, const FRsapChunk& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, const node_morton NodeMC, const layer_idx LayerIdx, const rsap_direction Relation)
 {
 	// Get the neighbour's morton-code for this relation starting from the current layer.
 	node_morton NeighbourMC = FMortonUtils::Node::Move(NodeMC, LayerIdx, Relation);
@@ -108,7 +108,7 @@ void FRsapSharedProcessing::SetNodeRelation(FRsapNavmesh& NavMesh, const FRsapCh
 }
 
 // Tries to set the given relations for this node.
-void FRsapSharedProcessing::SetNodeRelations(FRsapNavmesh& NavMesh, const FRsapChunk& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, const node_morton NodeMC, const layer_idx LayerIdx, const rsap_direction Relations)
+void FRsapProcessing::SetNodeRelations(FRsapNavmesh& NavMesh, const FRsapChunk& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, const node_morton NodeMC, const layer_idx LayerIdx, const rsap_direction Relations)
 {
 	for (const rsap_direction Direction : Direction::List)
 	{
@@ -117,7 +117,7 @@ void FRsapSharedProcessing::SetNodeRelations(FRsapNavmesh& NavMesh, const FRsapC
 }
 
 // Re-rasterizes the node normally without any specific filtering.
-void FRsapSharedProcessing::ReRasterize(FRsapNavmesh& NavMesh, FRsapChunk& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent)
+void FRsapProcessing::ReRasterize(FRsapNavmesh& NavMesh, FRsapChunk& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent)
 {
 	const layer_idx ChildLayerIdx = LayerIdx+1;
 	

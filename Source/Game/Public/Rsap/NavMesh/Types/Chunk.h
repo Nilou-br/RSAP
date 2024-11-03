@@ -37,29 +37,23 @@ private:
 	{
 		Octrees[0] = std::make_shared<FOctree>();
 		Octrees[1] = std::make_shared<FOctree>();
+		ActorEntries = new Rsap::Map::flat_map<actor_key, FGuid>();
 	}
 	
 public:
 	std::array<std::shared_ptr<FOctree>, 2> Octrees; // Accessed using a node-state, 0 static, 1 dynamic.
+	Rsap::Map::flat_map<actor_key, FGuid>* ActorEntries;
 
 	FRsapChunk()
 	{
 		Initialize();
 	}
 
-	// // Returns reference to the chunk with this morton-code. New chunk will be initialized if it does not exist yet.
-	// FORCEINLINE static FRsapChunk& TryInit(const FNavMesh& NavMesh, const chunk_morton ChunkMC)
-	// {
-	// 	return NavMesh->try_emplace(ChunkMC).first->second;
-	// }
-	//
-	// // Tries to find a chunk with this morton-code. Will be nullptr if it does not exist.
-	// FORCEINLINE static FRsapChunk* TryFind(const FNavMesh& NavMesh, const chunk_morton ChunkMC)
-	// {
-	// 	const auto Iterator = NavMesh->find(ChunkMC);
-	// 	if(Iterator == NavMesh->end()) return nullptr;
-	// 	return &Iterator->second;
-	// }
+	// Adds/updates this actor to the entry with a new unique FGuid.
+	FORCEINLINE void UpdateActorEntry(const actor_key ActorKey)
+	{
+		ActorEntries->insert_or_assign(ActorKey,FGuid::NewGuid());
+	}
 
 	// Use only when you are certain it exists.
 	FORCEINLINE FRsapNode& GetNode(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const

@@ -1,6 +1,9 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #include "Rsap/NavMesh/Navmesh.h"
+
+#include <ranges>
+
 #include "Rsap/World/GameWorld.h"
 #include "Rsap/NavMesh/Processing/Generator.h"
 
@@ -16,10 +19,12 @@ void FRsapNavmesh::Generate(const IRsapWorld* RsapWorld)
 	UpdatedChunkMCs.clear();
 	DeletedChunkMCs.clear();
 
-	// Generate the navmesh using all the actors in the world. Store the resulting morton-codes in the metadata.
-	for (auto GeneratedChunkMC : FRsapGenerator::Generate(RsapWorld->GetWorld(), *this, RsapWorld->GetActors()))
+	// Generate the navmesh using all the actors in the world.
+	// Store all the chunk morton-codes in the metadata.
+	FRsapGenerator::Generate(RsapWorld->GetWorld(), *this, RsapWorld->GetActors());
+	for (const auto& ChunkMC : Chunks | std::views::keys)
 	{
-		Metadata->Chunks.Emplace(GeneratedChunkMC, FGuid::NewGuid());
+		Metadata->Chunks.Emplace(ChunkMC, FGuid::NewGuid());
 	}
 	
 	Metadata->Save(RsapWorld->GetWorld());

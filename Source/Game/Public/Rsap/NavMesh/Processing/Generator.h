@@ -52,13 +52,13 @@ class RSAPGAME_API FRsapGenerator
 
 	static layer_idx CalculateOptimalStartingLayer(const FGlobalBounds& Bounds);
 	static uint8 GetChildrenToRasterizeAndUpdateEdges(rsap_direction& EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks, layer_idx LayerIdx, layer_idx ChildLayerIdx);
-	static std::vector<chunk_morton> RasterizeChunks(FRsapNavmesh& Navmesh, const UPrimitiveComponent* CollisionComponent);
+	static std::unordered_set<chunk_morton> RasterizeChunks(FRsapNavmesh& Navmesh, const UPrimitiveComponent* CollisionComponent);
 	static void RasterizeNode(FRsapNavmesh& Navmesh, const FGlobalBounds& AABB, FRsapChunk& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, node_morton NodeMC, const FGlobalVector& NodeLocation, layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent, const bool bIsAABBContained);
 	static void RasterizeLeafNode(const FGlobalBounds& AABB, FRsapLeaf& LeafNode, const FGlobalVector& NodeLocation, const UPrimitiveComponent* CollisionComponent, const bool bIsAABBContained);
 
 	static const UWorld* World;
 
 public:
-	static std::set<chunk_morton> Generate(const UWorld* InWorld, FRsapNavmesh& Navmesh, const FRsapActorMap& ActorMap);
+	static void Generate(const UWorld* InWorld, FRsapNavmesh& Navmesh, const FRsapActorMap& ActorMap);
 	static void RegenerateChunks(const UWorld* InWorld, FRsapNavmesh& Navmesh, const std::vector<chunk_morton>& ChunkMCs);
 };

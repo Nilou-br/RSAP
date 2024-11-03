@@ -74,20 +74,55 @@ inline FArchive& operator<<(FArchive& Ar, FOctreeLeafNodes& LeafNodes)
 	return Ar;
 }
 
-inline FArchive& operator<<(FArchive& Ar, const FRsapChunk& Chunk){
+inline FArchive& operator<<(FArchive& Ar, Rsap::Map::flat_map<actor_key, FGuid>& ActorEntries)
+{
+	size_t Size = ActorEntries.size();
+	Ar << Size;
+	
+	if(Ar.IsSaving())
+	{
+		for (const auto& [Key, ID] : ActorEntries)
+		{
+			actor_key ActorKey = Key;
+			FGuid Guid = ID;
+			
+			Ar << ActorKey;
+			Ar << Guid;
+		}
+	}
+	else
+	{
+		for(size_t i = 0; i < Size; ++i)
+		{
+			actor_key ActorKey;
+			FGuid Guid;
+			
+			Ar << ActorKey;
+			Ar << Guid;
+			
+			ActorEntries.emplace(ActorKey, Guid);
+		}
+	}
 
-	// Only serialize the static-octree.
+	return Ar;
+}
+
+inline FArchive& operator<<(FArchive& Ar, const FRsapChunk& Chunk)
+{
+	Ar << *Chunk.ActorEntries;
+	
+	// Only serialize the static octree.
 	for (layer_idx LayerIdx = 0; LayerIdx <= Layer::NodeDepth; ++LayerIdx)
 	{
 		Ar << *Chunk.Octrees[0]->Layers[LayerIdx];
 	}
-
 	Ar << *Chunk.Octrees[0]->LeafNodes;
 	
 	return Ar;
 }
 
-inline FArchive& operator<<(FArchive& Ar, FRsapNavmesh& NavMesh){
+inline FArchive& operator<<(FArchive& Ar, FRsapNavmesh& NavMesh)
+{
 	size_t Size = NavMesh.Chunks.size();
 	Ar << Size;
 	if(Ar.IsSaving())
