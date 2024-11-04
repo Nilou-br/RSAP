@@ -5,9 +5,8 @@
 #include "Rsap/Math/Bounds.h"
 #include "Rsap/NavMesh/Types/Chunk.h"
 #include "Rsap/NavMesh/Types/Node.h"
-#include <ranges>
-
 #include "Rsap/NavMesh/Types/Actor.h"
+#include <ranges>
 
 const UWorld*	FRsapGenerator::World;
 
@@ -20,7 +19,7 @@ const UWorld*	FRsapGenerator::World;
  * so it will skip any upper layers that will definitely occlude the actor anyway,
  * but it will also not return a very deep layer, which is not efficient to loop through compared to using recursion to skip large unoccluded parts.
  */
-layer_idx FRsapGenerator::CalculateOptimalStartingLayer(const FGlobalBounds& Bounds)
+layer_idx FRsapGenerator::CalculateOptimalStartingLayer(const FRsapBounds& Bounds)
 {
 	// Get the largest dimension of this bounding-box.
 	const int32 LargestSide = Bounds.GetLengths().GetLargestAxis();
@@ -103,13 +102,13 @@ std::unordered_set<chunk_morton> FRsapGenerator::RasterizeChunks(FRsapNavmesh& N
 	std::unordered_set<chunk_morton> IntersectingChunks;
 	
 	// Get the bounds of this component.
-	const FGlobalBounds AABB(CollisionComponent);
+	const FRsapBounds AABB(CollisionComponent);
 
 	// Get the optimal update layer for these boundaries.
 	const layer_idx LayerIdx = CalculateOptimalStartingLayer(AABB);
 	
 	// Round the bounds to the node-size of the layer. This is the layer we will be looping through.
-	const FGlobalBounds RoundedBounds = AABB.RoundToLayer(LayerIdx);
+	const FRsapBounds RoundedBounds = AABB.RoundToLayer(LayerIdx);
 
 	// Currently unused.
 	// Get the difference between the rounded/un-rounded bounds.
@@ -140,7 +139,7 @@ std::unordered_set<chunk_morton> FRsapGenerator::RasterizeChunks(FRsapNavmesh& N
 	};
 
 	// Should be called before continuing the loop to update the node's / chunk's morton-code. Updating these is much faster then encoding new morton-codes from a vector.
-	const auto HandleIterateX = [&](const FGlobalVector& NodeLocation)
+	const auto HandleIterateX = [&](const FRsapVector32& NodeLocation)
 	{
 		if(NodeLocation.X == RoundedBounds.Min.X) EdgesToCheck &= Negative::NOT_X;
 		if(NodeLocation.X == RoundedBounds.Max.X)
@@ -154,10 +153,18 @@ std::unordered_set<chunk_morton> FRsapGenerator::RasterizeChunks(FRsapNavmesh& N
 		if(FMortonUtils::Node::XEqualsZero(NodeMC)) HandleNewChunkMC(FMortonUtils::Chunk::IncrementX(ChunkMC));
 	};
 
+	FlushPersistentDebugLines(World);
+	for (const auto [MC, Bounds] : AABB.SplitPerChunk())
+	{
+		const FRsapBounds ChunkBounds = FRsapBounds::FromChunkMorton(MC);
+		//ChunkBounds.Draw(World);
+		Bounds.Draw(World, FColor::Red, 0.1);
+	}
+
 	// todo: Later on when I have the time, try to unroll this loop into max of 27 different versions? and pick the right one based on the amount of nodes in each direction.
 	// todo: Leave this nested loop for objects larger than 3 chunks in any direction ( which would be the case for objects larger than a volume of 240x240x240 meter )
 	// This nested loop is a bit convoluted but it basically prevents having to calculate a new morton-code for every node/chunk, which is slow.
-	FGlobalVector NodeLocation;
+	FRsapVector32 NodeLocation;
 	for (NodeLocation.Z = RoundedBounds.Min.Z; NodeLocation.Z <= RoundedBounds.Max.Z; NodeLocation.Z += Node::Sizes[LayerIdx])
 	{
 		if(NodeLocation.Z == RoundedBounds.Max.Z) EdgesToCheck &= Negative::Z;
@@ -231,14 +238,14 @@ std::unordered_set<chunk_morton> FRsapGenerator::RasterizeChunks(FRsapNavmesh& N
 
 // todo: unroll this method along with ::GetChildRasterizeMask.
 // Re-rasterizes the node while skipping children that are not intersecting with the actor's boundaries.
-void FRsapGenerator::RasterizeNode(FRsapNavmesh& Navmesh, const FGlobalBounds& AABB, FRsapChunk& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent, const bool bIsAABBContained)
+void FRsapGenerator::RasterizeNode(FRsapNavmesh& Navmesh, const FRsapBounds& AABB, FRsapChunk& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, const node_morton NodeMC, const FRsapVector32& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent, const bool bIsAABBContained)
 {
 	// Create the children.
 	const layer_idx ChildLayerIdx = LayerIdx+1;
 	for(child_idx ChildIdx = 0; ChildIdx < 8; ++ChildIdx)
 	{
 		bool bIsChildContained = bIsAABBContained;
-		const FGlobalVector ChildNodeLocation = FRsapNode::GetChildLocation(NodeLocation, ChildLayerIdx, ChildIdx);
+		const FRsapVector32 ChildNodeLocation = FRsapNode::GetChildLocation(NodeLocation, ChildLayerIdx, ChildIdx);
 
 		// Skip if not overlapping.
 		// Do a simple trace if the node is intersecting with the AABB.
@@ -285,7 +292,7 @@ void FRsapGenerator::RasterizeNode(FRsapNavmesh& Navmesh, const FGlobalBounds& A
 	}
 }
 
-void FRsapGenerator::RasterizeLeafNode(const FGlobalBounds& AABB, FRsapLeaf& LeafNode, const FGlobalVector& NodeLocation, const UPrimitiveComponent* CollisionComponent, const bool bIsAABBContained)
+void FRsapGenerator::RasterizeLeafNode(const FRsapBounds& AABB, FRsapLeaf& LeafNode, const FRsapVector32& NodeLocation, const UPrimitiveComponent* CollisionComponent, const bool bIsAABBContained)
 {
 	// DrawDebugBox(World, *(NodeLocation + Node::HalveSizes[Layer::NodeDepth]), FVector(Node::HalveSizes[Layer::NodeDepth]), FColor::Red, true, -1, 0, .1);
 
@@ -293,7 +300,7 @@ void FRsapGenerator::RasterizeLeafNode(const FGlobalBounds& AABB, FRsapLeaf& Lea
 	
 	for(child_idx LeafGroupIdx = 0; LeafGroupIdx < 8; ++LeafGroupIdx)
 	{
-		const FGlobalVector GroupLocation = FRsapNode::GetChildLocation(NodeLocation, Layer::GroupedLeaf, LeafGroupIdx);
+		const FRsapVector32 GroupLocation = FRsapNode::GetChildLocation(NodeLocation, Layer::GroupedLeaf, LeafGroupIdx);
 		if(!FRsapNode::HasComponentOverlap(CollisionComponent, GroupLocation, Layer::GroupedLeaf, true))
 		{
 			// todo: for updater, clear these 8 bits.
@@ -378,7 +385,7 @@ void FRsapGenerator::RegenerateChunks(const UWorld* InWorld, FRsapNavmesh& Navme
 	
 	for (const chunk_morton ChunkMC : ChunkMCs)
 	{
-		for (const auto Actor : FRsapOverlap::GetActors(World, FGlobalVector::FromChunkMorton(ChunkMC), 0))
+		for (const auto Actor : FRsapOverlap::GetActors(World, FRsapVector32::FromChunkMorton(ChunkMC), 0))
 		{
 			// todo: REFACTOR?
 			for (const UPrimitiveComponent* CollisionComponent : GetActorCollisionComponents(Actor))

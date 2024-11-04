@@ -1,6 +1,7 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
+#include <unordered_set>
 #include "Engine/AssetUserData.h"
 #include "Rsap/Definitions.h"
 #include "Rsap/NavMesh/Types/Chunk.h"

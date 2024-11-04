@@ -1,7 +1,7 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-#include <unordered_set>
+#include <set>
 #include "Rsap/Math/Vectors.h"
 
 using namespace Rsap::NavMesh;
@@ -16,35 +16,29 @@ enum class EAABBOverlapResult
 	Contained	// Fully contained
 };
 
+// todo: maybe remove validation part? see bIsValid, IsValid(). 
 /**
  * Lightweight AABB.
  */
-template<typename VectorType>
-struct TBounds
+struct FRsapBounds
 {
-	static_assert(std::is_same_v<VectorType, FGlobalVector> || std::is_same_v<VectorType, FLocalVector>, "TBounds can only be instantiated with FGlobalVector or FLocalVector");
+	FRsapVector32 Min;
+	FRsapVector32 Max;
 
-	using FGlobalBounds = TBounds<FGlobalVector>;
-	using FRsapNodeBounds = TBounds<FLocalVector>;
-	
-	VectorType Min;
-	VectorType Max;
-	bool bIsValid;
+	FRsapBounds() : Min(FRsapVector32()), Max(FRsapVector32()) {}
 
-	TBounds() : Min(VectorType()), Max(VectorType()), bIsValid(false) {}
-
-	TBounds(const VectorType& VectorMin, const VectorType& VectorMax, const bool InValid = true)
-		: Min(VectorMin), Max(VectorMax), bIsValid(InValid)
+	FRsapBounds(const FRsapVector32& VectorMin, const FRsapVector32& VectorMax, const bool InValid = true)
+		: Min(VectorMin), Max(VectorMax)
 	{}
 
 	void Initialize(const FVector& Origin, const FVector& Extent)
 	{
-		// Get the bounds from the Origin and Extent, and rounding the result down to an integer.
-		Min = VectorType(	FMath::RoundToInt(Origin.X - Extent.X), 
+		// Get the bounds from the Origin and Extent, and floor the result down to an integer.
+		Min = FRsapVector32(FMath::RoundToInt(Origin.X - Extent.X), 
 							FMath::RoundToInt(Origin.Y - Extent.Y), 
 							FMath::RoundToInt(Origin.Z - Extent.Z));
 		
-		Max = VectorType(	FMath::RoundToInt(Origin.X + Extent.X), 
+		Max = FRsapVector32(FMath::RoundToInt(Origin.X + Extent.X), 
 							FMath::RoundToInt(Origin.Y + Extent.Y), 
 							FMath::RoundToInt(Origin.Z + Extent.Z));
 
@@ -55,77 +49,66 @@ struct TBounds
 		if(Max.Z == Min.Z) ++Max.Z;
 	}
 	
-	explicit TBounds(const AActor* Actor) : bIsValid(true)
+	explicit FRsapBounds(const AActor* Actor)
 	{
 		FVector Origin, Extent;
 		Actor->GetActorBounds(false, Origin, Extent, true);
 		Initialize(Origin, Extent);
 	}
 
-	explicit TBounds(const UPrimitiveComponent* Component) : bIsValid(true)
+	explicit FRsapBounds(const UPrimitiveComponent* Component)
 	{
 		const FVector Origin = Component->Bounds.Origin;
 		const FVector Extent = Component->Bounds.BoxExtent;
         Initialize(Origin, Extent);
 	}
 
-	// Returns a bounds object that has no dimensions and is set to be invalid.
-	static TBounds EmptyBounds()
+	static FRsapBounds FromChunkMorton(const chunk_morton ChunkMC)
 	{
-		return TBounds();
+		const FRsapVector32 ChunkLocation = FRsapVector32::FromChunkMorton(ChunkMC);
+		return FRsapBounds(ChunkLocation, ChunkLocation + Chunk::Size);
+	}
+
+	// Returns a bounds object that has no dimensions.
+	static FRsapBounds EmptyBounds()
+	{
+		return FRsapBounds();
 	}
 	
-	FORCEINLINE bool Equals(const TBounds& Other) const
+	FORCEINLINE bool Equals(const FRsapBounds& Other) const
 	{
 		return	Max.X == Other.Max.X && Max.Y == Other.Max.Y && Max.Z == Other.Max.Z &&
 				Min.X == Other.Min.X && Min.Y == Other.Min.Y && Min.Z == Other.Min.Z;
 	}
 
-	FORCEINLINE bool IsValid() const
+	FORCEINLINE FRsapBounds operator+(const FRsapVector32& Vector) const
 	{
-		return bIsValid;
+		return FRsapBounds(Min + Vector, Max + Vector);
 	}
 
-	FORCEINLINE TBounds operator+(const VectorType& Vector) const
+	FORCEINLINE FRsapBounds operator-(const FRsapVector32& Vector) const
 	{
-		return TBounds(Min + Vector, Max + Vector, bIsValid);
+		return FRsapBounds(Min - Vector, Max - Vector);
 	}
 
-	FORCEINLINE TBounds operator-(const VectorType& Vector) const
+	FORCEINLINE FRsapBounds operator+(const uint64 Value) const
 	{
-		return TBounds(Min - Vector, Max - Vector, bIsValid);
+		return FRsapBounds(Min + Value, Max + Value);
 	}
 
-	FORCEINLINE TBounds operator+(const uint64 Value) const
+	FORCEINLINE FRsapBounds operator-(const uint64 Value) const
 	{
-		return TBounds(Min + Value, Max + Value, bIsValid);
+		return FRsapBounds(Min - Value, Max - Value);
 	}
 
-	FORCEINLINE TBounds operator-(const uint64 Value) const
+	FORCEINLINE FRsapBounds operator<<(const uint8 Value) const
 	{
-		return TBounds(Min - Value, Max - Value, bIsValid);
+		return FRsapBounds(Min << Value, Max << Value);
 	}
 
-	FORCEINLINE TBounds operator<<(const uint8 Value) const
+	FORCEINLINE FRsapBounds operator>>(const uint8 Value) const
 	{
-		return TBounds(Min << Value, Max << Value, bIsValid);
-	}
-
-	FORCEINLINE TBounds operator>>(const uint8 Value) const
-	{
-		return TBounds(Min >> Value, Max >> Value, bIsValid);
-	}
-
-	template<typename T = VectorType>
-	FORCEINLINE auto operator&(const int32 Mask) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, FGlobalBounds>
-	{
-		return FGlobalBounds(Min & Mask, Max & Mask, bIsValid);
-	}
-
-	template<typename T = VectorType>
-	FORCEINLINE auto operator&(const uint16 Mask) const -> std::enable_if_t<std::is_same_v<T, FLocalVector>, FRsapNodeBounds>
-	{
-		return FRsapNodeBounds(Min & Mask, Max & Mask, bIsValid);
+		return FRsapBounds(Min >> Value, Max >> Value);
 	}
 
 	FORCEINLINE bool operator!() const
@@ -133,12 +116,13 @@ struct TBounds
 		return	Max.X == 0 && Max.Y == 0 && Max.Z == 0 &&
 				Min.X == 0 && Min.Y == 0 && Min.Z == 0;
 	}
+
+	explicit operator bool() const { return (Max.X > Min.X) && (Max.Y > Min.Y) && (Max.Z > Min.Z); }
 	
 	// Rounds the bounds to the layer's node-size in global-space. Min will be rounded down, Max will be rounded up.
-	template<typename T = VectorType>
-	FORCEINLINE auto RoundToLayer(const layer_idx LayerIdx) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, FGlobalBounds>
+	FORCEINLINE FRsapBounds RoundToLayer(const layer_idx LayerIdx) const
 	{
-		FGlobalBounds Bounds = FGlobalBounds(FGlobalVector(Min + Chunk::SignOffset).RoundToLayer(LayerIdx) - Chunk::SignOffset, FGlobalVector(Max + Chunk::SignOffset).RoundToLayer(LayerIdx) - Chunk::SignOffset);
+		FRsapBounds Bounds = FRsapBounds(FRsapVector32(Min + Chunk::SignOffset).RoundToLayer(LayerIdx) - Chunk::SignOffset, FRsapVector32(Max + Chunk::SignOffset).RoundToLayer(LayerIdx) - Chunk::SignOffset);
 		
 		// Round the Max bounds up, but only if it is smaller than the un-rounded bounds.
 		// Its possible for the un-rounded value to already equal the rounded to value, but we still want to round it a whole node-size upwards ( otherwise the Min axis would equal the Max and there is no width, thus no volume ).
@@ -148,86 +132,77 @@ struct TBounds
 		return Bounds;
 	}
 
-	// // Rounds the bounds to the layer's node-size in morton-space. Min will be rounded down, Max will be rounded up.
-	// template<typename T = VectorType>
-	// FORCEINLINE auto RoundToLayer(const layer_idx LayerIdx) const -> std::enable_if_t<std::is_same_v<T, FLocalVector>, FRsapNodeBounds>
-	// {
-	// 	FRsapNodeBounds Rounded = *this & Rsap::NavMesh::Layer::LocalMasks[LayerIdx];
-	//
-	// 	// Round the max up.
-	// 	// The '-1' is to adjust to nodes in morton-space. Because the origin of a node is at its negative most corner. So if Min/Max are equal, then they hold the same node. Min/Max just determine the 'first' and 'last' node in the bounds.
-	// 	Rounded.Max = Rounded.Max + Rsap::Node::MortonOffsets[LayerIdx] - 1;
-	// 	return Rounded;
-	// }
-
-	// Returns the part of the bounds that intersects with the other.
-	FORCEINLINE TBounds GetIntersection(const TBounds& Other) const
+	// Clamps the bounds to the other bounds.
+	// Basically returns the part of the bounds that is within the other.
+	FORCEINLINE FRsapBounds Clamp(const FRsapBounds& Other) const
 	{
-		const VectorType ClampedMin(
+		const FRsapVector32 ClampedMin(
 			FMath::Max(Min.X, Other.Min.X),
 			FMath::Max(Min.Y, Other.Min.Y),
 			FMath::Max(Min.Z, Other.Min.Z));
-		const VectorType ClampedMax(
+		const FRsapVector32 ClampedMax(
 			FMath::Min(Max.X, Other.Max.X),
 			FMath::Min(Max.Y, Other.Max.Y),
 			FMath::Min(Max.Z, Other.Max.Z));
-		return TBounds(ClampedMin, ClampedMax, bIsValid);
+		return FRsapBounds(ClampedMin, ClampedMax);
 	}
 	
 	// Gets the remaining parts of the bounds that are not overlapping with the other bounds. A boolean-cut.
-	template<typename T = VectorType>
-	auto Cut(const FGlobalBounds& Other) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, std::vector<FGlobalBounds>>
+	std::vector<FRsapBounds> Cut(const FRsapBounds& Other) const
 	{
-		if(!IsValid()) return { Other };
-		if(!Other.IsValid() || !HasAABBOverlap(Other)) return { Other }; // Return the whole instance when there is no overlap between the two bounds.
+		if(!HasAABBOverlap(Other)) return { Other }; // Return the whole instance when there is no overlap between the two bounds.
 		
-		std::vector<TBounds> BoundsList;
-		TBounds RemainingBounds = Other;
+		std::vector<FRsapBounds> BoundsList;
+		FRsapBounds RemainingBounds = Other;
 
 		// I should explain this mess next time lol
 		if(Other.Max.X > Max.X){  // + X
-			BoundsList.push_back(FGlobalBounds(VectorType(Max.X, RemainingBounds.Min.Y, RemainingBounds.Min.Z), RemainingBounds.Max));
+			BoundsList.push_back(FRsapBounds(FRsapVector32(Max.X, RemainingBounds.Min.Y, RemainingBounds.Min.Z), RemainingBounds.Max));
 			RemainingBounds.Max.X = Max.X;
 		}if(Other.Min.X < Min.X){ // + X
-			BoundsList.push_back(FGlobalBounds(RemainingBounds.Min, VectorType(Min.X, RemainingBounds.Max.Y, RemainingBounds.Max.Z)));
+			BoundsList.push_back(FRsapBounds(RemainingBounds.Min, FRsapVector32(Min.X, RemainingBounds.Max.Y, RemainingBounds.Max.Z)));
 			RemainingBounds.Min.X = Min.X;
 		}if(Other.Max.Y > Max.Y){ // + Y
-			BoundsList.push_back(FGlobalBounds(VectorType(RemainingBounds.Min.X, Max.Y, RemainingBounds.Min.Z), RemainingBounds.Max));
+			BoundsList.push_back(FRsapBounds(FRsapVector32(RemainingBounds.Min.X, Max.Y, RemainingBounds.Min.Z), RemainingBounds.Max));
 			RemainingBounds.Max.Y = Max.Y;
 		}if(Other.Min.Y < Min.Y){ // - Y
-			BoundsList.push_back(FGlobalBounds(RemainingBounds.Min, VectorType(RemainingBounds.Max.X, Min.Y, RemainingBounds.Max.Z)));
+			BoundsList.push_back(FRsapBounds(RemainingBounds.Min, FRsapVector32(RemainingBounds.Max.X, Min.Y, RemainingBounds.Max.Z)));
 			RemainingBounds.Min.Y = Min.Y;
 		}if(Other.Max.Z > Max.Z){ // + Z
-			BoundsList.push_back(FGlobalBounds(VectorType(RemainingBounds.Min.X, RemainingBounds.Min.Y, Max.Z), RemainingBounds.Max));
+			BoundsList.push_back(FRsapBounds(FRsapVector32(RemainingBounds.Min.X, RemainingBounds.Min.Y, Max.Z), RemainingBounds.Max));
 		}if(Other.Min.Z < Min.Z) { // - Z
-			BoundsList.push_back(FGlobalBounds(RemainingBounds.Min, VectorType(RemainingBounds.Max.X, RemainingBounds.Max.Y, Min.Z)));
+			BoundsList.push_back(FRsapBounds(RemainingBounds.Min, FRsapVector32(RemainingBounds.Max.X, RemainingBounds.Max.Y, Min.Z)));
 		}
 		
 		return BoundsList;
 	}
 
-	/**
-	 * Returns a set of morton-codes for each chunk that is intersecting with these boundaries.
-	 * 
-	 * @note Chunks are NOT automatically initialized.
-	 * 
-	 * @tparam T VectorType which must be of type FGlobalVector.
-	 * @return std::unordered_set of ChunkKeyType chunk-keys.
-	 */
-	template<typename T = VectorType>
-	std::enable_if_t<std::is_same_v<T, FGlobalVector>, std::unordered_set<chunk_morton>> GetIntersectingChunks() const // todo: create loop with callback
+	// Rounds the boundaries to the chunk-size.
+	FRsapBounds RoundToChunk() const
 	{
-		std::unordered_set<chunk_morton> ChunkKeys;
-		if(!IsValid()) return ChunkKeys;
+		return FRsapBounds(Min & Chunk::SizeMask, Max & Chunk::SizeMask);
 
-		// Get the start/end axis of the chunks from the boundaries.
-		const FGlobalVector ChunkMin = Min   & Chunk::SizeMask;
-		const FGlobalVector ChunkMax = Max-1 & Chunk::SizeMask;
+		// auto RoundDown = [](int32 Value) { return ((Value - Chunk::Size + 1) / Chunk::Size) * Chunk::Size; };
+		// FRsapVector32 RoundedMin(RoundDown(Min.X), RoundDown(Min.Y), RoundDown(Min.Z));
+		// FRsapVector32 RoundedMax(RoundDown(Max.X), RoundDown(Max.Y), RoundDown(Max.Z));
+		// return FRsapBounds(RoundedMin, RoundedMax);
+	}
+
+	/**
+	 * Returns a set of morton-codes for each chunk that these boundaries are in.
+	 * 
+	 * @tparam T FRsapVector32 which must be of type FRsapVector32.
+	 * @return std::set of chunk_morton.
+	 */
+	std::set<chunk_morton> GetChunks() const
+	{
+		std::set<chunk_morton> ChunkKeys;
+		const FRsapBounds Rounded = RoundToChunk();
 		
-		for (int32 GlobalX = ChunkMin.X; GlobalX <= ChunkMax.X; GlobalX+=Chunk::Size){
-			for (int32 GlobalY = ChunkMin.Y; GlobalY <= ChunkMax.Y; GlobalY+=Chunk::Size){
-				for (int32 GlobalZ = ChunkMin.Z; GlobalZ <= ChunkMax.Z; GlobalZ+=Chunk::Size){
-					const FGlobalVector ChunkLocation = FGlobalVector(GlobalX, GlobalY, GlobalZ);
+		for (int32 GlobalX = Rounded.Min.X; GlobalX <= Rounded.Max.X; GlobalX+=Chunk::Size){
+			for (int32 GlobalY = Rounded.Min.Y; GlobalY <= Rounded.Max.Y; GlobalY+=Chunk::Size){
+				for (int32 GlobalZ = Rounded.Min.Z; GlobalZ <= Rounded.Max.Z; GlobalZ+=Chunk::Size){
+					const FRsapVector32 ChunkLocation = FRsapVector32(GlobalX, GlobalY, GlobalZ);
 					ChunkKeys.insert(ChunkLocation.ToChunkMorton());
 				}
 			}
@@ -236,9 +211,31 @@ struct TBounds
 		return ChunkKeys;
 	}
 
+	/**
+	 * Returns a set of morton-codes for each chunk that these boundaries are in.
+	 */
+	Rsap::Map::flat_map<chunk_morton, FRsapBounds> SplitPerChunk() const
+	{
+		Rsap::Map::flat_map<chunk_morton, FRsapBounds> Result;
+		const FRsapBounds Rounded = RoundToChunk();
+		
+		for (int32 GlobalX = Rounded.Min.X; GlobalX <= Rounded.Max.X; GlobalX+=Chunk::Size){
+			for (int32 GlobalY = Rounded.Min.Y; GlobalY <= Rounded.Max.Y; GlobalY+=Chunk::Size){
+				for (int32 GlobalZ = Rounded.Min.Z; GlobalZ <= Rounded.Max.Z; GlobalZ+=Chunk::Size){
+					const FRsapVector32 ChunkLocation = FRsapVector32(GlobalX, GlobalY, GlobalZ);
+					const FRsapBounds ChunkBounds(ChunkLocation, ChunkLocation + Chunk::Size);
+					
+					const FRsapBounds ClampedBounds = Clamp(ChunkBounds);
+					if(ClampedBounds) Result[ChunkLocation.ToChunkMorton()] = ClampedBounds;
+				}
+			}
+		}
+
+		return Result;
+	}
+
 	// Returns true if the AABB overlap with the other.
-	template<typename T = VectorType>
-	FORCEINLINE auto HasAABBOverlap(const FGlobalBounds& Other) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, bool>
+	FORCEINLINE bool HasAABBOverlap(const FRsapBounds& Other) const
 	{
 		return	Max.X > Other.Min.X && Min.X < Other.Max.X &&
 				Max.Y > Other.Min.Y && Min.Y < Other.Max.Y &&
@@ -246,8 +243,7 @@ struct TBounds
 	}
 
 	// Returns true if the AABB intersects with the other.
-	template<typename T = VectorType>
-	FORCEINLINE auto HasAABBIntersection(const FGlobalBounds& Other) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, EAABBOverlapResult>
+	FORCEINLINE EAABBOverlapResult HasAABBIntersection(const FRsapBounds& Other) const
 	{
 		if(!HasAABBOverlap(Other)) return EAABBOverlapResult::NoOverlap;
 
@@ -270,42 +266,18 @@ struct TBounds
 		return EAABBOverlapResult::Intersect;
 	}
 
-	template<typename T = VectorType>
-	FORCEINLINE auto ToNodeSpace(const FGlobalVector& ChunkLocation) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, FRsapNodeBounds>
+	FORCEINLINE void Draw(const UWorld* World, const FColor Color = FColor::Black, const float Thickness = 1) const
 	{
-		const FLocalVector LocalMin = ( Min-ChunkLocation << SizeExponent).ToNodeVector();
-		const FLocalVector LocalMax = ((Max-ChunkLocation << SizeExponent) - Leaf::Size).ToNodeVector();
-		return FRsapNodeBounds(LocalMin, LocalMax, IsValid());
-	}
-
-	template<typename T = VectorType>
-	FORCEINLINE auto ToGlobalSpace(const FGlobalVector& ChunkLocation) const -> std::enable_if_t<std::is_same_v<T, FLocalVector>, FGlobalBounds>
-	{
-		const FGlobalVector LocalMin = (FGlobalVector(Min) >> SizeExponent) + ChunkLocation;
-		const FGlobalVector LocalMax = ((FGlobalVector(Max) + Leaf::Size) >> SizeExponent) + ChunkLocation;
-		return FGlobalBounds(LocalMin, LocalMax, IsValid());
-	}
-
-	template<typename T = VectorType>
-	FORCEINLINE auto Draw(const UWorld* World, const FColor Color = FColor::Black, const float Thickness = 1) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, void>
-	{
-		const FGlobalVector Center = (Min + Max) >> 1;
-		const FGlobalVector Extents = (Max - Min) >> 1;
+		const FRsapVector32 Center = (Min + Max) >> 1;
+		const FRsapVector32 Extents = (Max - Min) >> 1;
 		DrawDebugBox(World, Center.ToVector(), Extents.ToVector(), Color, true, -1, 0, Thickness);
 	}
 
-	template<typename T = VectorType>
-	FORCEINLINE auto Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const FColor Color = FColor::Black) const -> std::enable_if_t<std::is_same_v<T, FLocalVector>, void>
-	{
-		ToGlobalSpace(ChunkLocation).Draw(World, Color);
-	}
+	FORCEINLINE FRsapVector32 GetCenter () const { return Min+Max >> 1; }
+	FORCEINLINE FRsapVector32 GetExtents() const { return Max-Min >> 1; }
+	FORCEINLINE FRsapVector32 GetLengths() const { return FRsapVector32(Max.X - Min.X, Max.Y - Min.Y, Max.Z - Min.Z); }
 
-	FORCEINLINE FGlobalVector GetCenter () const { return Min+Max >> 1; }
-	FORCEINLINE FGlobalVector GetExtents() const { return Max-Min >> 1; }
-	FORCEINLINE FGlobalVector GetLengths() const { return FGlobalVector(Max.X - Min.X, Max.Y - Min.Y, Max.Z - Min.Z); }
-
-	template<typename T = VectorType>
-	FORCEINLINE auto HasWorldOverlap(const UWorld* World) const -> std::enable_if_t<std::is_same_v<T, FGlobalVector>, bool>
+	FORCEINLINE bool HasWorldOverlap(const UWorld* World) const
 	{
 		return FPhysicsInterface::GeomOverlapBlockingTest(
 			World,
@@ -324,38 +296,35 @@ struct TBounds
 		for (OffsetType X = Min.X; X < Max.X; X+=Offset) {
 			for (OffsetType Y = Min.Y; Y < Max.Y; Y+=Offset) {
 				for (OffsetType Z = Min.Z; Z < Max.Z; Z+=Offset) {
-					Callback(VectorType(X, Y, Z));
+					Callback(FRsapVector32(X, Y, Z));
 				}
 			}
 		}
 	}
 };
 
-typedef TBounds<FGlobalVector> FGlobalBounds;
-typedef TBounds<FLocalVector> FRsapNodeBounds;
-
 // Type used for updating the navmesh.
 // Will store all the previous known bounds of the actor since last update, paired with its current bounds.
-typedef std::pair<std::vector<FGlobalBounds>, FGlobalBounds> FNavMeshUpdateType;
-typedef Rsap::Map::flat_map<actor_key, std::pair<std::vector<FGlobalBounds>, FGlobalBounds>> FNavMeshUpdateMap; // todo: rename both.
+typedef std::pair<std::vector<FRsapBounds>, FRsapBounds> FNavMeshUpdateType;
+typedef Rsap::Map::flat_map<actor_key, std::pair<std::vector<FRsapBounds>, FRsapBounds>> FNavMeshUpdateMap; // todo: rename both.
 
 // Map holding actors and their boundaries.
-typedef Rsap::Map::flat_map<actor_key, FGlobalBounds> FActorBoundsMap;
+typedef Rsap::Map::flat_map<actor_key, FRsapBounds> FActorBoundsMap;
 
 
 
 struct FRsapMovedBounds
 {
-	FGlobalBounds From;
-	FGlobalBounds To;
+	FRsapBounds From;
+	FRsapBounds To;
 	
 
 	FRsapMovedBounds() {}
 	
-	FRsapMovedBounds(const FGlobalBounds& InFrom, const FGlobalBounds& InTo)
+	FRsapMovedBounds(const FRsapBounds& InFrom, const FRsapBounds& InTo)
 		: From(InFrom), To(InTo) {}
 
-	FRsapMovedBounds(const FGlobalBounds& InFrom, const AActor* Actor)
+	FRsapMovedBounds(const FRsapBounds& InFrom, const AActor* Actor)
 		: From(InFrom), To(Actor) {}
 
 	
@@ -365,6 +334,3 @@ struct FRsapMovedBounds
 		To.Draw(World, FColor::Green);
 	}
 };
-
-// Map associating an actor with changed boundaries. To hold changes that have happened for multiple actors.
-// typedef Rsap::Map::flat_map<actor_key, FRsapMovedBounds> FMovedBoundsMap;

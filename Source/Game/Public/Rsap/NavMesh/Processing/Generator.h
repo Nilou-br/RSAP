@@ -27,10 +27,10 @@ class RSAPGAME_API FRsapGenerator
 		uint16 Y_Positive: 10;
 		uint16 Z_Positive: 10;
 
-		FLayerSkipMasks(const FGlobalBounds& Bounds, const FGlobalBounds& RoundedBounds)
+		FLayerSkipMasks(const FRsapBounds& Bounds, const FRsapBounds& RoundedBounds)
 		{
-			const FGlobalVector Min = Bounds.Min - RoundedBounds.Min;
-			const FGlobalVector Max = RoundedBounds.Max - Bounds.Max;
+			const FRsapVector32 Min = Bounds.Min - RoundedBounds.Min;
+			const FRsapVector32 Max = RoundedBounds.Max - Bounds.Max;
 
 			X_Negative = Min.X;
 			Y_Negative = Min.Y;
@@ -50,11 +50,11 @@ class RSAPGAME_API FRsapGenerator
 															   0b0000000111, 0b0000000011, 0b0000000001, 0b0000000000, 0b0000000000};
 	};
 
-	static layer_idx CalculateOptimalStartingLayer(const FGlobalBounds& Bounds);
+	static layer_idx CalculateOptimalStartingLayer(const FRsapBounds& Bounds);
 	static uint8 GetChildrenToRasterizeAndUpdateEdges(rsap_direction& EdgesToCheck, const FLayerSkipMasks& LayerSkipMasks, layer_idx LayerIdx, layer_idx ChildLayerIdx);
 	static std::unordered_set<chunk_morton> RasterizeChunks(FRsapNavmesh& Navmesh, const UPrimitiveComponent* CollisionComponent);
-	static void RasterizeNode(FRsapNavmesh& Navmesh, const FGlobalBounds& AABB, FRsapChunk& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, node_morton NodeMC, const FGlobalVector& NodeLocation, layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent, const bool bIsAABBContained);
-	static void RasterizeLeafNode(const FGlobalBounds& AABB, FRsapLeaf& LeafNode, const FGlobalVector& NodeLocation, const UPrimitiveComponent* CollisionComponent, const bool bIsAABBContained);
+	static void RasterizeNode(FRsapNavmesh& Navmesh, const FRsapBounds& AABB, FRsapChunk& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, node_morton NodeMC, const FRsapVector32& NodeLocation, layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent, const bool bIsAABBContained);
+	static void RasterizeLeafNode(const FRsapBounds& AABB, FRsapLeaf& LeafNode, const FRsapVector32& NodeLocation, const UPrimitiveComponent* CollisionComponent, const bool bIsAABBContained);
 
 	static const UWorld* World;
 

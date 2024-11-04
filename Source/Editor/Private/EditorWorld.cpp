@@ -118,7 +118,7 @@ void FRsapEditorWorld::HandleActorSelectionChanged(const TArray<UObject*>& Objec
 		if(Iterator == Actors.end() || IsValid(Iterator->second.GetActor())) continue;
 
 		// Actor doesn't exist anymore, so get it's last known bounds we cached for this scenario.
-		const FGlobalBounds PreviousBounds = SelectedActorsBounds.find(PrevActorKey)->second;
+		const FRsapBounds PreviousBounds = SelectedActorsBounds.find(PrevActorKey)->second;
 
 		// Remove from both caches.
 		Actors.erase(PrevActorKey);
@@ -153,12 +153,12 @@ void FRsapEditorWorld::HandleObjectPropertyChanged(UObject* Object, FPropertyCha
 	}
 
 	// The actor is already cached, so check if there is a change in it's bounds.
-	const FGlobalBounds& StoredBounds = Iterator->second;
-	const FGlobalBounds CurrentBounds(Actor);
+	const FRsapBounds& StoredBounds = Iterator->second;
+	const FRsapBounds CurrentBounds(Actor);
 	if(CurrentBounds.Equals(StoredBounds)) return;
 
 	// There is a change, so get a copy of the stored value before replacing it with the new one.
-	const FGlobalBounds PreviousBounds = StoredBounds;
+	const FRsapBounds PreviousBounds = StoredBounds;
 	SelectedActorsBounds[ActorKey] = CurrentBounds;
 
 	// Broadcast the change that happened.

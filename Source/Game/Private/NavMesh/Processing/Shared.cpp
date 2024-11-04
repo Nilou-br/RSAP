@@ -117,7 +117,7 @@ void FRsapProcessing::SetNodeRelations(FRsapNavmesh& NavMesh, const FRsapChunk& 
 }
 
 // Re-rasterizes the node normally without any specific filtering.
-void FRsapProcessing::ReRasterize(FRsapNavmesh& NavMesh, FRsapChunk& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, const node_morton NodeMC, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent)
+void FRsapProcessing::ReRasterize(FRsapNavmesh& NavMesh, FRsapChunk& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, const node_morton NodeMC, const FRsapVector32& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent)
 {
 	const layer_idx ChildLayerIdx = LayerIdx+1;
 	
@@ -125,7 +125,7 @@ void FRsapProcessing::ReRasterize(FRsapNavmesh& NavMesh, FRsapChunk& Chunk, cons
 	for(uint8 ChildIdx = 0; ChildIdx < 8; ++ChildIdx)
 	{
 		// Skip if not overlapping.
-		const FGlobalVector ChildLocation = FRsapNode::GetChildLocation(NodeLocation, ChildLayerIdx, ChildIdx);
+		const FRsapVector32 ChildLocation = FRsapNode::GetChildLocation(NodeLocation, ChildLayerIdx, ChildIdx);
 		if(!FRsapNode::HasComponentOverlap(CollisionComponent, ChildLocation, ChildLayerIdx, false)) continue;
 
 		const node_morton ChildNodeMC = FMortonUtils::Node::GetChild(NodeMC, ChildLayerIdx, ChildIdx);

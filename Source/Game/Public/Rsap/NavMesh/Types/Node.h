@@ -49,13 +49,13 @@ struct FRsapNode
 		return Children & Node::Children::Masks[ChildIdx];
 	}
 	
-	FORCEINLINE static FLocalVector GetMortonLocation(const node_morton MortonCode)
+	FORCEINLINE static FRsapVectorU32 GetMortonLocation(const node_morton MortonCode)
 	{
 		uint16 X, Y, Z;
 		FMortonUtils::Node::Decode(MortonCode, X, Y, Z);
-		return FLocalVector(X, Y, Z);
+		return FRsapVectorU32(X, Y, Z);
 	}
-	FORCEINLINE static FGlobalVector GetGlobalLocation(const FGlobalVector& ChunkLocation, const node_morton MortonCode)
+	FORCEINLINE static FRsapVector32 GetGlobalLocation(const FRsapVector32& ChunkLocation, const node_morton MortonCode)
 	{
 		return ChunkLocation + GetMortonLocation(MortonCode);
 	}
@@ -72,7 +72,7 @@ struct FRsapNode
 		};
 	}
 
-	FORCEINLINE static FGlobalVector GetChildLocation(FGlobalVector ParentNodeLocation, const layer_idx ChildLayerIdx, const uint8 ChildIdx)
+	FORCEINLINE static FRsapVector32 GetChildLocation(FRsapVector32 ParentNodeLocation, const layer_idx ChildLayerIdx, const uint8 ChildIdx)
 	{
 		using namespace Node;
 		switch (ChildIdx)
@@ -103,35 +103,35 @@ struct FRsapNode
 	}
 
 	// Occlusion checks
-	FORCEINLINE static bool HasAnyOverlap(const UWorld* World, const FGlobalVector& ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx)
+	FORCEINLINE static bool HasAnyOverlap(const UWorld* World, const FRsapVector32& ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx)
 	{
 		return FRsapOverlap::Any(World, GetGlobalLocation(ChunkLocation, NodeMC), LayerIdx);
 	}
-	FORCEINLINE static bool HasAnyOverlap(const UWorld* World, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
+	FORCEINLINE static bool HasAnyOverlap(const UWorld* World, const FRsapVector32& NodeLocation, const layer_idx LayerIdx)
 	{
 		return FRsapOverlap::Any(World, NodeLocation, LayerIdx);
 	}
-	// FORCEINLINE static bool HasComponentOverlap(const UPrimitiveComponent* Component, const FGlobalVector& ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx)
+	// FORCEINLINE static bool HasComponentOverlap(const UPrimitiveComponent* Component, const FRsapVector32& ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx)
 	// {
 	// 	return FRsapOverlap::Component(Component, GetGlobalLocation(ChunkLocation, NodeMC), LayerIdx);
 	// }
-	FORCEINLINE static bool HasComponentOverlap(const UPrimitiveComponent* Component, const FGlobalVector& NodeLocation, const layer_idx LayerIdx, const bool bComplex)
+	FORCEINLINE static bool HasComponentOverlap(const UPrimitiveComponent* Component, const FRsapVector32& NodeLocation, const layer_idx LayerIdx, const bool bComplex)
 	{
 		return FRsapOverlap::Component(Component, NodeLocation, LayerIdx, bComplex);
 	}
-	FORCEINLINE static bool HasAABBOverlap(const FGlobalBounds& AABB, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
+	FORCEINLINE static bool HasAABBOverlap(const FRsapBounds& AABB, const FRsapVector32& NodeLocation, const layer_idx LayerIdx)
 	{
-		const FGlobalBounds NodeBounds(NodeLocation, NodeLocation + Node::Sizes[LayerIdx]);
+		const FRsapBounds NodeBounds(NodeLocation, NodeLocation + Node::Sizes[LayerIdx]);
 		return AABB.HasAABBOverlap(NodeBounds);
 	}
-	FORCEINLINE static EAABBOverlapResult HasAABBIntersection(const FGlobalBounds& AABB, const FGlobalVector& NodeLocation, const layer_idx LayerIdx)
+	FORCEINLINE static EAABBOverlapResult HasAABBIntersection(const FRsapBounds& AABB, const FRsapVector32& NodeLocation, const layer_idx LayerIdx)
 	{
-		const FGlobalBounds NodeBounds(NodeLocation, NodeLocation + Node::Sizes[LayerIdx]);
+		const FRsapBounds NodeBounds(NodeLocation, NodeLocation + Node::Sizes[LayerIdx]);
 		return AABB.HasAABBIntersection(NodeBounds);
 	}
 
 	// Debug draw
-	FORCEINLINE void Draw(const UWorld* World, const FGlobalVector& ChunkLocation, const node_morton MortonCode, const layer_idx LayerIdx, const FColor Color, const uint32 Thickness) const
+	FORCEINLINE void Draw(const UWorld* World, const FRsapVector32& ChunkLocation, const node_morton MortonCode, const layer_idx LayerIdx, const FColor Color, const uint32 Thickness) const
 	{
 		const FVector GlobalCenter = GetGlobalLocation(ChunkLocation, MortonCode).ToVector() + Node::HalveSizes[LayerIdx];
 		const FVector Extent(Node::HalveSizes[LayerIdx]);

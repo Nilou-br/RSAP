@@ -44,7 +44,7 @@ private:
 	static bool ActorHasCollisionComponent(const AActor* Actor);
 
 	std::vector<actor_key> SelectedActors;
-	Rsap::Map::flat_map<actor_key, FGlobalBounds> SelectedActorsBounds;
+	Rsap::Map::flat_map<actor_key, FRsapBounds> SelectedActorsBounds;
 
 	void HandleMapOpened(const FString& Filename, bool bAsTemplate);
 	void HandlePreMapSaved(UWorld* World, FObjectPreSaveContext PreSaveContext);

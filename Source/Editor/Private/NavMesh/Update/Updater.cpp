@@ -15,7 +15,7 @@
 // 	for (const auto& [ActorKey, Bounds] : ActorBoundsMap)
 // 	{
 // 		// Simply create pass an instance of FMovedBounds where the 'from' bounds is empty/invalid.
-// 		StageData(ActorKey, FMovedBounds(FGlobalBounds::EmptyBounds(), Bounds));
+// 		StageData(ActorKey, FMovedBounds(FRsapBounds::EmptyBounds(), Bounds));
 // 	}
 // }
 //

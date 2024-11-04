@@ -16,12 +16,12 @@ struct FRsapCollisionComponent
 {
 	TWeakObjectPtr<const UPrimitiveComponent> ComponentPtr;
 	uint16 SoundPresetID = 0;
-	FGlobalBounds Boundaries;
+	FRsapBounds Boundaries;
 
 	explicit FRsapCollisionComponent(const UPrimitiveComponent* Component)
 	{
 		ComponentPtr = Component;
-		Boundaries = FGlobalBounds(Component);
+		Boundaries = FRsapBounds(Component);
 	}
 };
 
@@ -30,14 +30,14 @@ class FRsapActor
 	TWeakObjectPtr<const AActor> ActorPtr;
 	std::vector<FRsapCollisionComponent> CollisionComponents;
 	uint16 SoundPresetID = 0;
-	FGlobalBounds Boundaries;
+	FRsapBounds Boundaries;
 	bool bIsStatic = true; // todo: maybe enum or uint8?
 
 public:
 	explicit FRsapActor(const AActor* Actor)
 	{
 		ActorPtr = Actor;
-		Boundaries = FGlobalBounds(Actor);
+		Boundaries = FRsapBounds(Actor);
 
 		TArray<UActorComponent*> Components; Actor->GetComponents(Components);
 		for (UActorComponent* Component : Components)
@@ -58,7 +58,7 @@ public:
 	const AActor* GetActor() const { return ActorPtr.Get(); } // todo: add check?
 	const std::vector<FRsapCollisionComponent>& GetCollisionComponents() const { return CollisionComponents; }
 	uint16 GetSoundPresetID() const { return SoundPresetID; }
-	FGlobalBounds GetBoundaries() const { return Boundaries; }
+	FRsapBounds GetBoundaries() const { return Boundaries; }
 };
 
 typedef Rsap::Map::flat_map<actor_key, FRsapActor> FRsapActorMap;

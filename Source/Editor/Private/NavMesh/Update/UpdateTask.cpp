@@ -94,7 +94,7 @@
 // }
 //
 // void FRsapUpdateTask::ReRasterizeNode(FRsapChunk* Chunk, FRsapNode& Node, const node_morton NodeMC,
-// 	const FGlobalVector& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent)
+// 	const FRsapVector32& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent)
 // {
 // 	
 // }

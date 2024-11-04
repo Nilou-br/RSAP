@@ -39,11 +39,11 @@ private:
 	void Draw();
 	void Draw(const FVector& CameraLocation, const FRotator& CameraRotation);
 
-	void DrawNode(const UWorld* World, const FGlobalVector& NodeCenter, const layer_idx LayerIdx);
-	void DrawLeafNode(const UWorld* World, const FRsapChunk& Chunk, FGlobalVector ChunkLocation, node_morton NodeMC, const FVector& CameraLocation);
-	void DrawNodes(const UWorld* World, const FRsapChunk& Chunk, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation);
-	void DrawNodeInfo(const UWorld* World, const node_morton NodeMC, const FGlobalVector& NodeCenter, layer_idx LayerIdx);
-	void DrawNodeRelations(const UWorld* World, const chunk_morton ChunkMC, const FGlobalVector ChunkLocation, const FRsapNode& Node, const node_morton NodeMC, const FGlobalVector& NodeCenter, const layer_idx LayerIdx);
+	void DrawNode(const UWorld* World, const FRsapVector32& NodeCenter, const layer_idx LayerIdx);
+	void DrawLeafNode(const UWorld* World, const FRsapChunk& Chunk, FRsapVector32 ChunkLocation, node_morton NodeMC, const FVector& CameraLocation);
+	void DrawNodes(const UWorld* World, const FRsapChunk& Chunk, const chunk_morton ChunkMC, const FRsapVector32 ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation);
+	void DrawNodeInfo(const UWorld* World, const node_morton NodeMC, const FRsapVector32& NodeCenter, layer_idx LayerIdx);
+	void DrawNodeRelations(const UWorld* World, const chunk_morton ChunkMC, const FRsapVector32 ChunkLocation, const FRsapNode& Node, const node_morton NodeMC, const FRsapVector32& NodeCenter, const layer_idx LayerIdx);
 
 	void OnNavMeshUpdated()
 	{

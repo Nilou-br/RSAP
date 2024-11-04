@@ -121,15 +121,15 @@ public:
 
 	FORCEINLINE static void Draw(const UWorld* World, const chunk_morton ChunkMC)
 	{
-		const FGlobalVector ChunkGlobalCenterLocation = FGlobalVector::FromChunkMorton(ChunkMC) + Node::HalveSizes[0];
+		const FRsapVector32 ChunkGlobalCenterLocation = FRsapVector32::FromChunkMorton(ChunkMC) + Node::HalveSizes[0];
 		DrawDebugBox(World, *ChunkGlobalCenterLocation, FVector(Node::HalveSizes[0]), FColor::Black, true, -1, 11, 5);	
 	}
 
-	FORCEINLINE static bool HasAnyOverlap(const UWorld* World, const FGlobalVector& ChunkLocation)
+	FORCEINLINE static bool HasAnyOverlap(const UWorld* World, const FRsapVector32& ChunkLocation)
 	{
 		return FRsapOverlap::Any(World, ChunkLocation, 0);
 	}
-	FORCEINLINE static bool HasComponentOverlap(const UPrimitiveComponent* Component, const FGlobalVector& ChunkLocation)
+	FORCEINLINE static bool HasComponentOverlap(const UPrimitiveComponent* Component, const FRsapVector32& ChunkLocation)
 	{
 		return FRsapOverlap::Component(Component, ChunkLocation, 0, false);
 	}

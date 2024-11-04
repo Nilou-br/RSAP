@@ -41,8 +41,8 @@ private:
 	void PostMapSaved(const bool bSuccess);
 
 	void OnActorAdded(const FRsapActor& RsapActor);
-	void OnActorMoved(const FRsapActor& RsapActor, const FGlobalBounds& PreviousBounds);
-	void OnActorDeleted(const FGlobalBounds& LastKnownBounds);
+	void OnActorMoved(const FRsapActor& RsapActor, const FRsapBounds& PreviousBounds);
+	void OnActorDeleted(const FRsapBounds& LastKnownBounds);
 
 	void OnNavMeshUpdated() const;
 

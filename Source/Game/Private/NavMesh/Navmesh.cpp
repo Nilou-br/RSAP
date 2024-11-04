@@ -65,7 +65,7 @@ void FRsapNavmesh::LoopChunks()
 	for (const auto Pair : Chunks)
 	{
 		const FRsapChunk& Chunk = Pair.second;
-		const FGlobalVector Test = FGlobalVector::FromChunkMorton(Pair.first);
+		const FRsapVector32 Test = FRsapVector32::FromChunkMorton(Pair.first);
 		const chunk_morton MC = Pair.first;
 	}
 }

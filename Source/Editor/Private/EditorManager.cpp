@@ -123,22 +123,22 @@ void URsapEditorManager::OnActorAdded(const FRsapActor& RsapActor)
 	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnActorAdded"))
 
 	// Leave 'from' empty because the actor did not exist before this operation.
-	// FRsapUpdater::GetInstance().StageData(ActorKey, FMovedBounds(FGlobalBounds::EmptyBounds(), Bounds));
+	// FRsapUpdater::GetInstance().StageData(ActorKey, FMovedBounds(FRsapBounds::EmptyBounds(), Bounds));
 }
 
-void URsapEditorManager::OnActorMoved(const FRsapActor& RsapActor, const FGlobalBounds& PreviousBounds)
+void URsapEditorManager::OnActorMoved(const FRsapActor& RsapActor, const FRsapBounds& PreviousBounds)
 {
 	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnActorMoved"))
 
 	// FRsapUpdater::GetInstance().StageData(ActorKey, MovedBounds);
 }
 
-void URsapEditorManager::OnActorDeleted(const FGlobalBounds& LastKnownBounds)
+void URsapEditorManager::OnActorDeleted(const FRsapBounds& LastKnownBounds)
 {
 	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnActorDeleted"))
 
 	// Leave 'to' empty because the actor does not exist anymore.
-	// FRsapUpdater::GetInstance().StageData(ActorKey, FMovedBounds(Bounds, FGlobalBounds::EmptyBounds()));
+	// FRsapUpdater::GetInstance().StageData(ActorKey, FMovedBounds(Bounds, FRsapBounds::EmptyBounds()));
 }
 
 void URsapEditorManager::OnNavMeshUpdated() const {}

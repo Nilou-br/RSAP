@@ -9,9 +9,10 @@
 class IRsapWorld
 {
 	DECLARE_DELEGATE_OneParam(FOnMapOpened,		const IRsapWorld* RsapWorld);
+	
 	DECLARE_DELEGATE_OneParam(FOnActorAdded,	const FRsapActor& RsapActor);
-	DECLARE_DELEGATE_TwoParams(FOnActorMoved,	const FRsapActor& RsapActor, const FGlobalBounds& PreviousBounds);
-	DECLARE_DELEGATE_OneParam(FOnActorDeleted,	const FGlobalBounds& LastKnownBounds);
+	DECLARE_DELEGATE_TwoParams(FOnActorMoved,	const FRsapActor& RsapActor, const FRsapBounds& PreviousBounds);
+	DECLARE_DELEGATE_OneParam(FOnActorDeleted,	const FRsapBounds& LastKnownBounds);
 	
 public:
 	virtual ~IRsapWorld() = default;
