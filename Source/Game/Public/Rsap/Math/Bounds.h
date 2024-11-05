@@ -34,13 +34,13 @@ struct FRsapBounds
 	void Initialize(const FVector& Origin, const FVector& Extent)
 	{
 		// Get the bounds from the Origin and Extent, and floor the result down to an integer.
-		Min = FRsapVector32(FMath::RoundToInt(Origin.X - Extent.X), 
-							FMath::RoundToInt(Origin.Y - Extent.Y), 
-							FMath::RoundToInt(Origin.Z - Extent.Z));
+		Min = FRsapVector32(FMath::FloorToInt32(Origin.X - Extent.X), 
+							FMath::FloorToInt32(Origin.Y - Extent.Y), 
+							FMath::FloorToInt32(Origin.Z - Extent.Z));
 		
-		Max = FRsapVector32(FMath::RoundToInt(Origin.X + Extent.X), 
-							FMath::RoundToInt(Origin.Y + Extent.Y), 
-							FMath::RoundToInt(Origin.Z + Extent.Z));
+		Max = FRsapVector32(FMath::CeilToInt32(Origin.X + Extent.X), 
+							FMath::CeilToInt32(Origin.Y + Extent.Y), 
+							FMath::CeilToInt32(Origin.Z + Extent.Z));
 
 		// Increment axis on Max if it equals the corresponding axis on Min.
 		// There needs to be at least 1 unit of depth.
@@ -177,27 +177,19 @@ struct FRsapBounds
 		return BoundsList;
 	}
 
-	// Rounds the boundaries to the chunk-size.
-	FRsapBounds RoundToChunk() const
+	// Floors the boundaries to the chunk-size.
+	FRsapBounds FloorToChunk() const
 	{
-		return FRsapBounds(Min & Chunk::SizeMask, Max & Chunk::SizeMask);
-
-		// auto RoundDown = [](int32 Value) { return ((Value - Chunk::Size + 1) / Chunk::Size) * Chunk::Size; };
-		// FRsapVector32 RoundedMin(RoundDown(Min.X), RoundDown(Min.Y), RoundDown(Min.Z));
-		// FRsapVector32 RoundedMax(RoundDown(Max.X), RoundDown(Max.Y), RoundDown(Max.Z));
-		// return FRsapBounds(RoundedMin, RoundedMax);
+		return FRsapBounds(Min.FloorToChunk(), Max.FloorToChunk());
 	}
 
 	/**
 	 * Returns a set of morton-codes for each chunk that these boundaries are in.
-	 * 
-	 * @tparam T FRsapVector32 which must be of type FRsapVector32.
-	 * @return std::set of chunk_morton.
 	 */
 	std::set<chunk_morton> GetChunks() const
 	{
 		std::set<chunk_morton> ChunkKeys;
-		const FRsapBounds Rounded = RoundToChunk();
+		const FRsapBounds Rounded = FloorToChunk();
 		
 		for (int32 GlobalX = Rounded.Min.X; GlobalX <= Rounded.Max.X; GlobalX+=Chunk::Size){
 			for (int32 GlobalY = Rounded.Min.Y; GlobalY <= Rounded.Max.Y; GlobalY+=Chunk::Size){
@@ -212,16 +204,17 @@ struct FRsapBounds
 	}
 
 	/**
-	 * Returns a set of morton-codes for each chunk that these boundaries are in.
+	 * Divides the boundaries into each chunk it intersects.
+	 * Returns a map holding the chunk's morton-code and the intersected bounds.
 	 */
-	Rsap::Map::flat_map<chunk_morton, FRsapBounds> SplitPerChunk() const
+	Rsap::Map::flat_map<chunk_morton, FRsapBounds> DividePerChunk() const
 	{
 		Rsap::Map::flat_map<chunk_morton, FRsapBounds> Result;
-		const FRsapBounds Rounded = RoundToChunk();
+		const FRsapBounds FlooredBounds = FloorToChunk();
 		
-		for (int32 GlobalX = Rounded.Min.X; GlobalX <= Rounded.Max.X; GlobalX+=Chunk::Size){
-			for (int32 GlobalY = Rounded.Min.Y; GlobalY <= Rounded.Max.Y; GlobalY+=Chunk::Size){
-				for (int32 GlobalZ = Rounded.Min.Z; GlobalZ <= Rounded.Max.Z; GlobalZ+=Chunk::Size){
+		for (int32 GlobalX = FlooredBounds.Min.X; GlobalX <= FlooredBounds.Max.X; GlobalX+=Chunk::Size){
+			for (int32 GlobalY = FlooredBounds.Min.Y; GlobalY <= FlooredBounds.Max.Y; GlobalY+=Chunk::Size){
+				for (int32 GlobalZ = FlooredBounds.Min.Z; GlobalZ <= FlooredBounds.Max.Z; GlobalZ+=Chunk::Size){
 					const FRsapVector32 ChunkLocation = FRsapVector32(GlobalX, GlobalY, GlobalZ);
 					const FRsapBounds ChunkBounds(ChunkLocation, ChunkLocation + Chunk::Size);
 					

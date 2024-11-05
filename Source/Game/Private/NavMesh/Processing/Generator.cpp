@@ -154,10 +154,10 @@ std::unordered_set<chunk_morton> FRsapGenerator::RasterizeChunks(FRsapNavmesh& N
 	};
 
 	FlushPersistentDebugLines(World);
-	for (const auto [MC, Bounds] : AABB.SplitPerChunk())
+	for (const auto [MC, Bounds] : AABB.DividePerChunk())
 	{
 		const FRsapBounds ChunkBounds = FRsapBounds::FromChunkMorton(MC);
-		//ChunkBounds.Draw(World);
+		ChunkBounds.Draw(World);
 		Bounds.Draw(World, FColor::Red, 0.1);
 	}
 

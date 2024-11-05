@@ -4,6 +4,8 @@
 #include "Rsap/Math/Morton.h"
 #include "Rsap/Definitions.h"
 
+using namespace Rsap::NavMesh;
+
 
 
 // todo: this type:
@@ -160,9 +162,27 @@ struct FRsapVector32 // todo: int64 to support SizeExponent >= 2 ?
 		return *this & Rsap::NavMesh::Chunk::SizeMask;
 	}
 
-	FORCEINLINE FRsapVector32 RoundToLayer(const layer_idx LayerIdx) const
+	FORCEINLINE FRsapVector32 RoundToLayer(const layer_idx LayerIdx) const // todo: incorrect for unsigned values
 	{
 		return *this & Rsap::NavMesh::Node::SizesMask[LayerIdx];
+	}
+
+	FORCEINLINE FRsapVector32 FloorToLayer(const layer_idx LayerIdx) const
+	{
+		return FRsapVector32(
+			(X >= 0) ? (X & Node::SizesMask[LayerIdx]) : ((X - Node::Sizes[LayerIdx] + 1) & Node::SizesMask[LayerIdx]),
+			(Y >= 0) ? (Y & Node::SizesMask[LayerIdx]) : ((Y - Node::Sizes[LayerIdx] + 1) & Node::SizesMask[LayerIdx]),
+			(Z >= 0) ? (Z & Node::SizesMask[LayerIdx]) : ((X - Node::Sizes[LayerIdx] + 1) & Node::SizesMask[LayerIdx])
+		);
+	}
+
+	FORCEINLINE FRsapVector32 FloorToChunk() const
+	{
+		return FRsapVector32(
+			(X >= 0) ? (X / Chunk::Size) * Chunk::Size : ((X - Chunk::Size + 1) / Chunk::Size) * Chunk::Size,
+			(Y >= 0) ? (Y / Chunk::Size) * Chunk::Size : ((Y - Chunk::Size + 1) / Chunk::Size) * Chunk::Size,
+			(Z >= 0) ? (Z / Chunk::Size) * Chunk::Size : ((Z - Chunk::Size + 1) / Chunk::Size) * Chunk::Size
+		);
 	}
 
 	FORCEINLINE FRsapVector32 ComponentMin(const FRsapVector32& Other) const
