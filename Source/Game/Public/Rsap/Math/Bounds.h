@@ -41,8 +41,11 @@ struct FRsapBounds
 		: Min(VectorMin), Max(VectorMax)
 	{}
 
-	void Initialize(const FVector& Origin, const FVector& Extent)
+	void Initialize(const FVector& Origin, FVector Extent)
 	{
+		// Increase the extent by 1-cm to account for floating point precision and to have at-least some volume.
+		Extent += FVector(1);
+		
 		// Floor / ceil the boundaries to the leaf-size.
 		Min = FRsapVector32(
 			FloorToLeaf(Origin.X - Extent.X),
