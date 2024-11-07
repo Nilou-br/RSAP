@@ -58,7 +58,7 @@ private:
 	bool bRunning = false;
 	FDelegateHandle NavMeshUpdatedHandle;
 	
-	bool bEnabled			= true;
+	bool bEnabled			= false;
 	bool bDrawNodeInfo		= false;
 	bool bDrawRelations		= false;
 	bool bDrawNavPaths		= false;

@@ -169,21 +169,42 @@ struct FRsapVector32 // todo: int64 to support SizeExponent >= 2 ?
 
 	FORCEINLINE FRsapVector32 FloorToLayer(const layer_idx LayerIdx) const
 	{
+		const int32 NodeSize = Node::Sizes[LayerIdx];
 		return FRsapVector32(
-			(X >= 0) ? (X & Node::SizesMask[LayerIdx]) : ((X - Node::Sizes[LayerIdx] + 1) & Node::SizesMask[LayerIdx]),
-			(Y >= 0) ? (Y & Node::SizesMask[LayerIdx]) : ((Y - Node::Sizes[LayerIdx] + 1) & Node::SizesMask[LayerIdx]),
-			(Z >= 0) ? (Z & Node::SizesMask[LayerIdx]) : ((X - Node::Sizes[LayerIdx] + 1) & Node::SizesMask[LayerIdx])
+			(X >= 0) ? (X / NodeSize) * NodeSize : ((X - NodeSize) / NodeSize) * NodeSize,
+			(Y >= 0) ? (Y / NodeSize) * NodeSize : ((Y - NodeSize) / NodeSize) * NodeSize,
+			(Z >= 0) ? (Z / NodeSize) * NodeSize : ((Z - NodeSize) / NodeSize) * NodeSize
+		);
+	}
+
+	FORCEINLINE FRsapVector32 CeilToLayer(const layer_idx LayerIdx) const
+	{
+		const int32 NodeSize = Node::Sizes[LayerIdx];
+		return FRsapVector32(
+			(X >= 0) ? ((X + NodeSize - 1) / NodeSize) * NodeSize : (X / NodeSize) * NodeSize,
+			(Y >= 0) ? ((Y + NodeSize - 1) / NodeSize) * NodeSize : (Y / NodeSize) * NodeSize,
+			(Z >= 0) ? ((Z + NodeSize - 1) / NodeSize) * NodeSize : (Z / NodeSize) * NodeSize
 		);
 	}
 
 	FORCEINLINE FRsapVector32 FloorToChunk() const
 	{
 		return FRsapVector32(
-			(X >= 0) ? (X / Chunk::Size) * Chunk::Size : ((X - Chunk::Size + 1) / Chunk::Size) * Chunk::Size,
-			(Y >= 0) ? (Y / Chunk::Size) * Chunk::Size : ((Y - Chunk::Size + 1) / Chunk::Size) * Chunk::Size,
-			(Z >= 0) ? (Z / Chunk::Size) * Chunk::Size : ((Z - Chunk::Size + 1) / Chunk::Size) * Chunk::Size
+			(X >= 0) ? (X / Chunk::Size) * Chunk::Size : ((X - Chunk::Size) / Chunk::Size) * Chunk::Size,
+			(Y >= 0) ? (Y / Chunk::Size) * Chunk::Size : ((Y - Chunk::Size) / Chunk::Size) * Chunk::Size,
+			(Z >= 0) ? (Z / Chunk::Size) * Chunk::Size : ((Z - Chunk::Size) / Chunk::Size) * Chunk::Size
 		);
 	}
+
+	FORCEINLINE FRsapVector32 CeilToChunk() const
+	{
+		return FRsapVector32(
+			(X >= 0) ? ((X + Chunk::Size - 1) / Chunk::Size) * Chunk::Size : (X / Chunk::Size) * Chunk::Size,
+			(Y >= 0) ? ((Y + Chunk::Size - 1) / Chunk::Size) * Chunk::Size : (Y / Chunk::Size) * Chunk::Size,
+			(Z >= 0) ? ((Z + Chunk::Size - 1) / Chunk::Size) * Chunk::Size : (Z / Chunk::Size) * Chunk::Size
+		);
+	}
+
 
 	FORCEINLINE FRsapVector32 ComponentMin(const FRsapVector32& Other) const
 	{

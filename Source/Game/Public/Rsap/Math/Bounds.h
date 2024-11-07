@@ -16,6 +16,16 @@ enum class EAABBOverlapResult
 	Contained	// Fully contained
 };
 
+static int32 FloorToLeaf(const float Value) {
+	// return FMath::FloorToInt32(static_cast<float>(Value) / Multiple) * Multiple;
+	return FMath::FloorToInt32(Value) & Leaf::SizeMask;
+}
+
+static int32 CeilToLeaf(const float Value) {
+	// return FMath::CeilToInt32(Value / Multiple) * Multiple;
+	return (FMath::CeilToInt32(Value) + (Leaf::Size - 1)) & Leaf::SizeMask;
+}
+
 // todo: maybe remove validation part? see bIsValid, IsValid(). 
 /**
  * Lightweight AABB.
@@ -33,20 +43,17 @@ struct FRsapBounds
 
 	void Initialize(const FVector& Origin, const FVector& Extent)
 	{
-		// Get the bounds from the Origin and Extent, and floor the result down to an integer.
-		Min = FRsapVector32(FMath::FloorToInt32(Origin.X - Extent.X), 
-							FMath::FloorToInt32(Origin.Y - Extent.Y), 
-							FMath::FloorToInt32(Origin.Z - Extent.Z));
-		
-		Max = FRsapVector32(FMath::CeilToInt32(Origin.X + Extent.X), 
-							FMath::CeilToInt32(Origin.Y + Extent.Y), 
-							FMath::CeilToInt32(Origin.Z + Extent.Z));
-
-		// Increment axis on Max if it equals the corresponding axis on Min.
-		// There needs to be at least 1 unit of depth.
-		if(Max.X == Min.X) ++Max.X;
-		if(Max.Y == Min.Y) ++Max.Y;
-		if(Max.Z == Min.Z) ++Max.Z;
+		// Floor / ceil the boundaries to the leaf-size.
+		Min = FRsapVector32(
+			FloorToLeaf(Origin.X - Extent.X),
+			FloorToLeaf(Origin.Y - Extent.Y),
+			FloorToLeaf(Origin.Z - Extent.Z)
+		);
+		Max = FRsapVector32(
+			CeilToLeaf(Origin.X + Extent.X),
+			CeilToLeaf(Origin.Y + Extent.Y),
+			CeilToLeaf(Origin.Z + Extent.Z)
+		);
 	}
 	
 	explicit FRsapBounds(const AActor* Actor)
@@ -67,12 +74,6 @@ struct FRsapBounds
 	{
 		const FRsapVector32 ChunkLocation = FRsapVector32::FromChunkMorton(ChunkMC);
 		return FRsapBounds(ChunkLocation, ChunkLocation + Chunk::Size);
-	}
-
-	// Returns a bounds object that has no dimensions.
-	static FRsapBounds EmptyBounds()
-	{
-		return FRsapBounds();
 	}
 	
 	FORCEINLINE bool Equals(const FRsapBounds& Other) const
@@ -119,22 +120,22 @@ struct FRsapBounds
 
 	explicit operator bool() const { return (Max.X > Min.X) && (Max.Y > Min.Y) && (Max.Z > Min.Z); }
 	
-	// Rounds the bounds to the layer's node-size in global-space. Min will be rounded down, Max will be rounded up.
-	FORCEINLINE FRsapBounds RoundToLayer(const layer_idx LayerIdx) const
-	{
-		FRsapBounds Bounds = FRsapBounds(FRsapVector32(Min + Chunk::SignOffset).RoundToLayer(LayerIdx) - Chunk::SignOffset, FRsapVector32(Max + Chunk::SignOffset).RoundToLayer(LayerIdx) - Chunk::SignOffset);
-		
-		// Round the Max bounds up, but only if it is smaller than the un-rounded bounds.
-		// Its possible for the un-rounded value to already equal the rounded to value, but we still want to round it a whole node-size upwards ( otherwise the Min axis would equal the Max and there is no width, thus no volume ).
-		if(Bounds.Max.X < Max.X) Bounds.Max.X += Node::Sizes[LayerIdx];
-		if(Bounds.Max.Y < Max.Y) Bounds.Max.Y += Node::Sizes[LayerIdx];
-		if(Bounds.Max.Z < Max.Z) Bounds.Max.Z += Node::Sizes[LayerIdx];
-		return Bounds;
-	}
+	// // Rounds the bounds to the layer's node-size in global-space. Min will be rounded down, Max will be rounded up.
+	// FORCEINLINE FRsapBounds RoundToLayer(const layer_idx LayerIdx) const
+	// {
+	// 	FRsapBounds Bounds = FRsapBounds(FRsapVector32(Min + Chunk::SignOffset).RoundToLayer(LayerIdx) - Chunk::SignOffset, FRsapVector32(Max + Chunk::SignOffset).RoundToLayer(LayerIdx) - Chunk::SignOffset);
+	// 	
+	// 	// Round the Max bounds up, but only if it is smaller than the un-rounded bounds.
+	// 	// Its possible for the un-rounded value to already equal the rounded to value, but we still want to round it a whole node-size upwards ( otherwise the Min axis would equal the Max and there is no width, thus no volume ).
+	// 	if(Bounds.Max.X < Max.X) Bounds.Max.X += Node::Sizes[LayerIdx];
+	// 	if(Bounds.Max.Y < Max.Y) Bounds.Max.Y += Node::Sizes[LayerIdx];
+	// 	if(Bounds.Max.Z < Max.Z) Bounds.Max.Z += Node::Sizes[LayerIdx];
+	// 	return Bounds;
+	// }
 
 	// Clamps the bounds to the other bounds.
 	// Basically returns the part of the bounds that is within the other.
-	FORCEINLINE FRsapBounds Clamp(const FRsapBounds& Other) const
+	FRsapBounds Clamp(const FRsapBounds& Other) const
 	{
 		const FRsapVector32 ClampedMin(
 			FMath::Max(Min.X, Other.Min.X),
@@ -177,10 +178,16 @@ struct FRsapBounds
 		return BoundsList;
 	}
 
-	// Floors the boundaries to the chunk-size.
-	FRsapBounds FloorToChunk() const
+	// Rounds the boundaries to the node-size of the given layer.
+	FRsapBounds RoundToLayer(const layer_idx LayerIdx) const
 	{
-		return FRsapBounds(Min.FloorToChunk(), Max.FloorToChunk());
+		return FRsapBounds(Min.RoundToLayer(LayerIdx), Max.CeilToLayer(LayerIdx));
+	}
+
+	// Rounds the boundaries to the chunk-size.
+	FRsapBounds RoundToChunk() const
+	{
+		return FRsapBounds(Min.FloorToChunk(), Max.CeilToChunk());
 	}
 
 	/**
@@ -189,11 +196,11 @@ struct FRsapBounds
 	std::set<chunk_morton> GetChunks() const
 	{
 		std::set<chunk_morton> ChunkKeys;
-		const FRsapBounds Rounded = FloorToChunk();
+		const FRsapBounds Rounded = RoundToChunk();
 		
-		for (int32 GlobalX = Rounded.Min.X; GlobalX <= Rounded.Max.X; GlobalX+=Chunk::Size){
-			for (int32 GlobalY = Rounded.Min.Y; GlobalY <= Rounded.Max.Y; GlobalY+=Chunk::Size){
-				for (int32 GlobalZ = Rounded.Min.Z; GlobalZ <= Rounded.Max.Z; GlobalZ+=Chunk::Size){
+		for (int32 GlobalX = Rounded.Min.X; GlobalX < Rounded.Max.X; GlobalX+=Chunk::Size){
+			for (int32 GlobalY = Rounded.Min.Y; GlobalY < Rounded.Max.Y; GlobalY+=Chunk::Size){
+				for (int32 GlobalZ = Rounded.Min.Z; GlobalZ < Rounded.Max.Z; GlobalZ+=Chunk::Size){
 					const FRsapVector32 ChunkLocation = FRsapVector32(GlobalX, GlobalY, GlobalZ);
 					ChunkKeys.insert(ChunkLocation.ToChunkMorton());
 				}
@@ -210,11 +217,11 @@ struct FRsapBounds
 	Rsap::Map::flat_map<chunk_morton, FRsapBounds> DividePerChunk() const
 	{
 		Rsap::Map::flat_map<chunk_morton, FRsapBounds> Result;
-		const FRsapBounds FlooredBounds = FloorToChunk();
+		const FRsapBounds Rounded = RoundToChunk();
 		
-		for (int32 GlobalX = FlooredBounds.Min.X; GlobalX <= FlooredBounds.Max.X; GlobalX+=Chunk::Size){
-			for (int32 GlobalY = FlooredBounds.Min.Y; GlobalY <= FlooredBounds.Max.Y; GlobalY+=Chunk::Size){
-				for (int32 GlobalZ = FlooredBounds.Min.Z; GlobalZ <= FlooredBounds.Max.Z; GlobalZ+=Chunk::Size){
+		for (int32 GlobalX = Rounded.Min.X; GlobalX < Rounded.Max.X; GlobalX+=Chunk::Size){
+			for (int32 GlobalY = Rounded.Min.Y; GlobalY < Rounded.Max.Y; GlobalY+=Chunk::Size){
+				for (int32 GlobalZ = Rounded.Min.Z; GlobalZ < Rounded.Max.Z; GlobalZ+=Chunk::Size){
 					const FRsapVector32 ChunkLocation = FRsapVector32(GlobalX, GlobalY, GlobalZ);
 					const FRsapBounds ChunkBounds(ChunkLocation, ChunkLocation + Chunk::Size);
 					

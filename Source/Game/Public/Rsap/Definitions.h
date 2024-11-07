@@ -124,6 +124,7 @@ namespace Rsap::NavMesh::Node
 namespace Rsap::NavMesh::Leaf
 {
 	static inline constexpr int32 Size = 1 << SizeExponent;
+	static inline constexpr int32 SizeMask = ~(Size-1);
 
 	namespace Children
 	{
