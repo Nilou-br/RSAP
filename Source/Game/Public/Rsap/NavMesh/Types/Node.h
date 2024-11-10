@@ -49,11 +49,11 @@ struct FRsapNode
 		return Children & Node::Children::Masks[ChildIdx];
 	}
 	
-	FORCEINLINE static FRsapVectorU32 GetMortonLocation(const node_morton MortonCode)
+	FORCEINLINE static FRsapVectorU10 GetMortonLocation(const node_morton MortonCode)
 	{
 		uint16 X, Y, Z;
 		FMortonUtils::Node::Decode(MortonCode, X, Y, Z);
-		return FRsapVectorU32(X, Y, Z);
+		return FRsapVectorU10(X, Y, Z);
 	}
 	FORCEINLINE static FRsapVector32 GetGlobalLocation(const FRsapVector32& ChunkLocation, const node_morton MortonCode)
 	{

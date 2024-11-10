@@ -177,7 +177,7 @@ namespace Rsap::NavMesh::Direction
 
 struct FRsapChunk;
 struct FRsapNode;
-struct FRsapVectorU32;
+struct FRsapVectorU10;
 struct FRsapVector32;
 
 // Map types that could be used interchangeably, mainly one for in-editor and the other in-game for performance reasons.

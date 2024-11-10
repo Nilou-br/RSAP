@@ -106,53 +106,8 @@ std::unordered_set<chunk_morton> FRsapGenerator::RasterizeChunks(FRsapNavmesh& N
 
 	// Get the optimal update layer for these boundaries.
 	const layer_idx LayerIdx = CalculateOptimalStartingLayer(AABB);
-	
-	// Round the bounds to the node-size of the layer. This is the layer we will be looping through.
-	const FRsapBounds RoundedBounds = AABB.RoundToLayer(LayerIdx);
 
-	// Currently unused.
-	// Get the difference between the rounded/un-rounded bounds.
-	// This results in a bit-mask which tells exactly which nodes, and from which layer, fit between the rounded/un-rounded bounds, which don't have to be checked for occlusion because these do not overlap with the actor's bounds.
-	const FLayerSkipMasks LayerSkipMasks(AABB, RoundedBounds);
-	
-	// Get the morton-codes of the first node and chunk. Updating these directly when moving to another node/chunk is extremely fast compared to encoding a new morton-code everytime.
-	// Keep track of the starting node/chunk morton-code to reset the axis to on the morton-code.
-	const node_morton  StartingNodeMC  = RoundedBounds.Min.ToLocalVector(RoundedBounds.Min.RoundToChunk()).ToNodeMorton();
-	const chunk_morton StartingChunkMC = RoundedBounds.Min.ToChunkMorton();
-	node_morton  NodeMC  = StartingNodeMC;  // Will will be updated in every iteration.
-	chunk_morton ChunkMC = StartingChunkMC; // Will be updated when iterating into a new chunk.
-
-	// Keep track of the current chunk.
-	FRsapChunk* CurrentChunk = Navmesh.FindChunk(ChunkMC);
-
-	// This mask represents the edges that have nodes that can be skipped. When we are at an edge in a certain direction, then that direction will certainly have nodes that can be skipped.
-	rsap_direction EdgesToCheck = 0b111000; // Initially set to be on the negative edge in every direction.
-
-	// Lambda that checks if the given chunk-morton-code differs from what is cached, and updates the current chunk if true.
-	const auto HandleNewChunkMC = [&](const chunk_morton NewChunkMC)
-	{
-		if(ChunkMC != NewChunkMC)
-		{
-			ChunkMC = NewChunkMC;
-			CurrentChunk = Navmesh.FindChunk(ChunkMC);
-		}
-	};
-
-	// Should be called before continuing the loop to update the node's / chunk's morton-code. Updating these is much faster then encoding new morton-codes from a vector.
-	const auto HandleIterateX = [&](const FRsapVector32& NodeLocation)
-	{
-		if(NodeLocation.X == RoundedBounds.Min.X) EdgesToCheck &= Negative::NOT_X;
-		if(NodeLocation.X == RoundedBounds.Max.X)
-		{
-			NodeMC = FMortonUtils::Node::CopyX(NodeMC, StartingNodeMC);
-			HandleNewChunkMC(FMortonUtils::Chunk::CopyX(ChunkMC, StartingChunkMC));
-			return;
-		}
-				
-		NodeMC = FMortonUtils::Node::AddX(NodeMC, LayerIdx);
-		if(FMortonUtils::Node::XEqualsZero(NodeMC)) HandleNewChunkMC(FMortonUtils::Chunk::IncrementX(ChunkMC));
-	};
-
+	//
 	FlushPersistentDebugLines(World);
 	for (const auto [MC, Bounds] : AABB.DividePerChunk())
 	{
@@ -161,78 +116,137 @@ std::unordered_set<chunk_morton> FRsapGenerator::RasterizeChunks(FRsapNavmesh& N
 		Bounds.Draw(World, FColor::Red, 0.1);
 	}
 
-	// todo: Later on when I have the time, try to unroll this loop into max of 27 different versions? and pick the right one based on the amount of nodes in each direction.
-	// todo: Leave this nested loop for objects larger than 3 chunks in any direction ( which would be the case for objects larger than a volume of 240x240x240 meter )
-	// This nested loop is a bit convoluted but it basically prevents having to calculate a new morton-code for every node/chunk, which is slow.
-	FRsapVector32 NodeLocation;
-	for (NodeLocation.Z = RoundedBounds.Min.Z; NodeLocation.Z <= RoundedBounds.Max.Z; NodeLocation.Z += Node::Sizes[LayerIdx])
+	AABB.ForEachChunk([&](const chunk_morton ChunkMC, const FRsapVector32 ChunkLocation, const FRsapBounds& ClampedBounds)
 	{
-		if(NodeLocation.Z == RoundedBounds.Max.Z) EdgesToCheck &= Negative::Z;
-		for (NodeLocation.Y = RoundedBounds.Min.Y; NodeLocation.Y <= RoundedBounds.Max.Y; NodeLocation.Y += Node::Sizes[LayerIdx])
+		ClampedBounds.ForEachNode(LayerIdx, [&](const node_morton NodeMC, const FRsapVector32 NodeLocation)
 		{
-			if(NodeLocation.Y == RoundedBounds.Max.Y) EdgesToCheck &= Negative::Y;
-			for (NodeLocation.X = RoundedBounds.Min.X; NodeLocation.X <= RoundedBounds.Max.X; NodeLocation.X += Node::Sizes[LayerIdx])
-			{
-				if(NodeLocation.X == RoundedBounds.Max.X) EdgesToCheck &= Negative::X;
-				
-				if(!CurrentChunk)
-				{
-					if(!FRsapChunk::HasComponentOverlap(CollisionComponent, NodeLocation.RoundToChunk()))
-					{
-						// This will likely be hit on the corner of the actor's AABB that slightly intersects with this chunk's AABB.
-						// The next iteration will likely be within a new chunk, and there aren't many iterations anyway if not.
-						HandleIterateX(NodeLocation);
-						continue;
-					}
-					CurrentChunk = &Navmesh.InitChunk(ChunkMC);
-				}
+			const FRsapBounds NodeBounds = FRsapBounds(NodeLocation, NodeLocation + Node::Sizes[LayerIdx]);
+			NodeBounds.Draw(CollisionComponent->GetWorld());
+		});
+	});
 
-				// todo: when creating updater, try to find a node first, then if nullptr check if collision, and if collision true then init node.
-				// First check if the component overlaps this voxel.
-				if(!FRsapNode::HasComponentOverlap(CollisionComponent, NodeLocation, LayerIdx, true))
-				{
-					HandleIterateX(NodeLocation);
-					continue;
-				}
 
-				// Now we know the component's hitbox is occluding a voxel within this chunk, so add this chunk to the set.
-				IntersectingChunks.emplace(ChunkMC);
-
-				// todo: change back to normal-nodes only after test is done.
-				// There is an overlap, so get/init the node or leaf-node, and also init/update any missing parent.
-				if(LayerIdx < Layer::NodeDepth)
-				{
-					FRsapNode& Node = FRsapProcessing::InitNodeAndParents(Navmesh, *CurrentChunk, ChunkMC, NodeMC, LayerIdx, 0, Negative::XYZ);
-					RasterizeNode(Navmesh, AABB, *CurrentChunk, ChunkMC, Node, NodeMC, NodeLocation, LayerIdx, CollisionComponent, false);
-				}
-				else
-				{
-					FRsapLeaf& LeafNode = FRsapProcessing::InitLeafNodeAndParents(Navmesh, *CurrentChunk, ChunkMC, NodeMC, 0);
-					RasterizeLeafNode(AABB, LeafNode, NodeLocation, CollisionComponent, false);
-				}
-				
-				HandleIterateX(NodeLocation);
-			}
 	
-			if(NodeLocation.Y == RoundedBounds.Min.Y) EdgesToCheck &= Negative::NOT_Y;
-			if(NodeLocation.Y == RoundedBounds.Max.Y)
-			{
-				NodeMC = FMortonUtils::Node::CopyY(NodeMC, StartingNodeMC);
-				HandleNewChunkMC(FMortonUtils::Chunk::CopyY(ChunkMC, StartingChunkMC));
-				continue;
-			}
-
-			NodeMC = FMortonUtils::Node::AddY(NodeMC, LayerIdx);
-			if(FMortonUtils::Node::YEqualsZero(NodeMC)) HandleNewChunkMC(FMortonUtils::Chunk::IncrementY(ChunkMC));
-		}
 	
-		if(NodeLocation.Z == RoundedBounds.Min.Z) EdgesToCheck &= Negative::NOT_Z;
-		if(NodeLocation.Z == RoundedBounds.Max.Z) continue; // Don't need to reset Z axis because this axis won't be repeated.
-		
-		NodeMC = FMortonUtils::Node::AddZ(NodeMC, LayerIdx);
-		if(FMortonUtils::Node::ZEqualsZero(NodeMC)) HandleNewChunkMC(FMortonUtils::Chunk::IncrementZ(ChunkMC));
-	}
-
+	// // Round the bounds to the node-size of the layer. This is the layer we will be looping through.
+	// const FRsapBounds RoundedBounds = AABB.RoundToLayer(LayerIdx);
+	//
+	// // Currently unused.
+	// // Get the difference between the rounded/un-rounded bounds.
+	// // This results in a bit-mask which tells exactly which nodes, and from which layer, fit between the rounded/un-rounded bounds, which don't have to be checked for occlusion because these do not overlap with the actor's bounds.
+	// const FLayerSkipMasks LayerSkipMasks(AABB, RoundedBounds);
+	//
+	// // Get the morton-codes of the first node and chunk. Updating these directly when moving to another node/chunk is extremely fast compared to encoding a new morton-code everytime.
+	// // Keep track of the starting node/chunk morton-code to reset the axis to on the morton-code.
+	// const node_morton  StartingNodeMC  = RoundedBounds.Min.ToLocalVector(RoundedBounds.Min.RoundToChunk()).ToNodeMorton();
+	// const chunk_morton StartingChunkMC = RoundedBounds.Min.ToChunkMorton();
+	// node_morton  NodeMC  = StartingNodeMC;  // Will will be updated in every iteration.
+	// chunk_morton ChunkMC = StartingChunkMC; // Will be updated when iterating into a new chunk.
+	//
+	// // Keep track of the current chunk.
+	// FRsapChunk* CurrentChunk = Navmesh.FindChunk(ChunkMC);
+	//
+	// // This mask represents the edges that have nodes that can be skipped. When we are at an edge in a certain direction, then that direction will certainly have nodes that can be skipped.
+	// rsap_direction EdgesToCheck = 0b111000; // Initially set to be on the negative edge in every direction.
+	//
+	// // Lambda that checks if the given chunk-morton-code differs from what is cached, and updates the current chunk if true.
+	// const auto HandleNewChunkMC = [&](const chunk_morton NewChunkMC)
+	// {
+	// 	if(ChunkMC != NewChunkMC)
+	// 	{
+	// 		ChunkMC = NewChunkMC;
+	// 		CurrentChunk = Navmesh.FindChunk(ChunkMC);
+	// 	}
+	// };
+	//
+	// // Should be called before continuing the loop to update the node's / chunk's morton-code. Updating these is much faster then encoding new morton-codes from a vector.
+	// const auto HandleIterateX = [&](const FRsapVector32& NodeLocation)
+	// {
+	// 	if(NodeLocation.X == RoundedBounds.Min.X) EdgesToCheck &= Negative::NOT_X;
+	// 	if(NodeLocation.X == RoundedBounds.Max.X)
+	// 	{
+	// 		NodeMC = FMortonUtils::Node::CopyX(NodeMC, StartingNodeMC);
+	// 		HandleNewChunkMC(FMortonUtils::Chunk::CopyX(ChunkMC, StartingChunkMC));
+	// 		return;
+	// 	}
+	// 			
+	// 	NodeMC = FMortonUtils::Node::AddX(NodeMC, LayerIdx);
+	// 	if(FMortonUtils::Node::XEqualsZero(NodeMC)) HandleNewChunkMC(FMortonUtils::Chunk::IncrementX(ChunkMC));
+	// };
+	//
+	// // todo: Later on when I have the time, try to unroll this loop into max of 27 different versions? and pick the right one based on the amount of nodes in each direction.
+	// // todo: Leave this nested loop for objects larger than 3 chunks in any direction ( which would be the case for objects larger than a volume of 240x240x240 meter )
+	// // This nested loop is a bit convoluted but it basically prevents having to calculate a new morton-code for every node/chunk, which is slow.
+	// FRsapVector32 NodeLocation;
+	// for (NodeLocation.Z = RoundedBounds.Min.Z; NodeLocation.Z <= RoundedBounds.Max.Z; NodeLocation.Z += Node::Sizes[LayerIdx])
+	// {
+	// 	if(NodeLocation.Z == RoundedBounds.Max.Z) EdgesToCheck &= Negative::Z;
+	// 	for (NodeLocation.Y = RoundedBounds.Min.Y; NodeLocation.Y <= RoundedBounds.Max.Y; NodeLocation.Y += Node::Sizes[LayerIdx])
+	// 	{
+	// 		if(NodeLocation.Y == RoundedBounds.Max.Y) EdgesToCheck &= Negative::Y;
+	// 		for (NodeLocation.X = RoundedBounds.Min.X; NodeLocation.X <= RoundedBounds.Max.X; NodeLocation.X += Node::Sizes[LayerIdx])
+	// 		{
+	// 			if(NodeLocation.X == RoundedBounds.Max.X) EdgesToCheck &= Negative::X;
+	// 			
+	// 			if(!CurrentChunk)
+	// 			{
+	// 				if(!FRsapChunk::HasComponentOverlap(CollisionComponent, NodeLocation.RoundToChunk()))
+	// 				{
+	// 					// This will likely be hit on the corner of the actor's AABB that slightly intersects with this chunk's AABB.
+	// 					// The next iteration will likely be within a new chunk, and there aren't many iterations anyway if not.
+	// 					HandleIterateX(NodeLocation);
+	// 					continue;
+	// 				}
+	// 				CurrentChunk = &Navmesh.InitChunk(ChunkMC);
+	// 			}
+	//
+	// 			// todo: when creating updater, try to find a node first, then if nullptr check if collision, and if collision true then init node.
+	// 			// First check if the component overlaps this voxel.
+	// 			if(!FRsapNode::HasComponentOverlap(CollisionComponent, NodeLocation, LayerIdx, true))
+	// 			{
+	// 				HandleIterateX(NodeLocation);
+	// 				continue;
+	// 			}
+	//
+	// 			// Now we know the component's hitbox is occluding a voxel within this chunk, so add this chunk to the set.
+	// 			IntersectingChunks.emplace(ChunkMC);
+	//
+	// 			// todo: change back to normal-nodes only after test is done.
+	// 			// There is an overlap, so get/init the node or leaf-node, and also init/update any missing parent.
+	// 			if(LayerIdx < Layer::NodeDepth)
+	// 			{
+	// 				FRsapNode& Node = FRsapProcessing::InitNodeAndParents(Navmesh, *CurrentChunk, ChunkMC, NodeMC, LayerIdx, 0, Negative::XYZ);
+	// 				RasterizeNode(Navmesh, AABB, *CurrentChunk, ChunkMC, Node, NodeMC, NodeLocation, LayerIdx, CollisionComponent, false);
+	// 			}
+	// 			else
+	// 			{
+	// 				FRsapLeaf& LeafNode = FRsapProcessing::InitLeafNodeAndParents(Navmesh, *CurrentChunk, ChunkMC, NodeMC, 0);
+	// 				RasterizeLeafNode(AABB, LeafNode, NodeLocation, CollisionComponent, false);
+	// 			}
+	// 			
+	// 			HandleIterateX(NodeLocation);
+	// 		}
+	//
+	// 		if(NodeLocation.Y == RoundedBounds.Min.Y) EdgesToCheck &= Negative::NOT_Y;
+	// 		if(NodeLocation.Y == RoundedBounds.Max.Y)
+	// 		{
+	// 			NodeMC = FMortonUtils::Node::CopyY(NodeMC, StartingNodeMC);
+	// 			HandleNewChunkMC(FMortonUtils::Chunk::CopyY(ChunkMC, StartingChunkMC));
+	// 			continue;
+	// 		}
+	//
+	// 		NodeMC = FMortonUtils::Node::AddY(NodeMC, LayerIdx);
+	// 		if(FMortonUtils::Node::YEqualsZero(NodeMC)) HandleNewChunkMC(FMortonUtils::Chunk::IncrementY(ChunkMC));
+	// 	}
+	//
+	// 	if(NodeLocation.Z == RoundedBounds.Min.Z) EdgesToCheck &= Negative::NOT_Z;
+	// 	if(NodeLocation.Z == RoundedBounds.Max.Z) continue; // Don't need to reset Z axis because this axis won't be repeated.
+	// 	
+	// 	NodeMC = FMortonUtils::Node::AddZ(NodeMC, LayerIdx);
+	// 	if(FMortonUtils::Node::ZEqualsZero(NodeMC)) HandleNewChunkMC(FMortonUtils::Chunk::IncrementZ(ChunkMC));
+	// }
+	//
+	// return IntersectingChunks;
 	return IntersectingChunks;
 }
 

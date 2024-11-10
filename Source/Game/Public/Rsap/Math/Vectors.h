@@ -17,13 +17,13 @@ struct TRsapVector
 	IntType Z : NumBits;
 };
 
-// typedef TRsapVector<uint16, 10> FRsapVectorU32;
-// typedef TRsapVector<uint16, 16> FRsapVectorU32;
+// typedef TRsapVector<uint16, 10> FRsapVectorU10;
+// typedef TRsapVector<uint16, 16> FRsapVectorU10;
 // typedef TRsapVector<int64,  64>	FRsapVector32;
 
-// struct FRsapVectorU32 : TRsapVector<uint16, 16>
+// struct FRsapVectorU10 : TRsapVector<uint16, 16>
 // {
-// 	FRsapVectorU32 ToNodeVector()
+// 	FRsapVectorU10 ToNodeVector()
 // 	{
 // 		// ...
 // 	}
@@ -37,7 +37,7 @@ struct TRsapVector
  * Used for local-locations within a chunk, and can be converted to morton-codes directly.
  * Each axis has 10 bit allocated, which fits inside a 32-bit morton-code used for the nodes in the octree.
  */
-struct FRsapVectorU32
+struct FRsapVectorU10
 {
 	uint16 X, Y, Z: 10;
 	
@@ -53,54 +53,54 @@ struct FRsapVectorU32
 		return FMortonUtils::Node::Encode(X, Y, Z);
 	}
 	
-	FORCEINLINE static FRsapVectorU32 FromNodeMorton(const node_morton MortonCode)
+	FORCEINLINE static FRsapVectorU10 FromNodeMorton(const node_morton MortonCode)
 	{
 		uint16 OutX, OutY, OutZ;
 		FMortonUtils::Node::Decode(MortonCode, OutX, OutY, OutZ);
-		return FRsapVectorU32(OutX, OutY, OutZ);
+		return FRsapVectorU10(OutX, OutY, OutZ);
 	}
 
-	FORCEINLINE FRsapVectorU32 operator+(const uint16 Value) const
+	FORCEINLINE FRsapVectorU10 operator+(const uint16 Value) const
 	{
-		return FRsapVectorU32(X + Value, Y + Value, Z + Value);
+		return FRsapVectorU10(X + Value, Y + Value, Z + Value);
 	}
 
-	FORCEINLINE FRsapVectorU32 operator+(const FRsapVectorU32& Other) const
+	FORCEINLINE FRsapVectorU10 operator+(const FRsapVectorU10& Other) const
 	{
-		return FRsapVectorU32(X + Other.X, Y + Other.Y, Z + Other.Z);
+		return FRsapVectorU10(X + Other.X, Y + Other.Y, Z + Other.Z);
 	}
 
-	FORCEINLINE FRsapVectorU32 operator-(const uint16 Value) const
+	FORCEINLINE FRsapVectorU10 operator-(const uint16 Value) const
 	{
-		return FRsapVectorU32(X - Value, Y - Value, Z - Value);
+		return FRsapVectorU10(X - Value, Y - Value, Z - Value);
 	}
 
-	FORCEINLINE FRsapVectorU32 operator-(const FRsapVectorU32& Other) const
+	FORCEINLINE FRsapVectorU10 operator-(const FRsapVectorU10& Other) const
 	{
-		return FRsapVectorU32(X - Other.X, Y - Other.Y, Z - Other.Z);
+		return FRsapVectorU10(X - Other.X, Y - Other.Y, Z - Other.Z);
 	}
 
-	FORCEINLINE FRsapVectorU32 operator<<(const uint8 Value) const
+	FORCEINLINE FRsapVectorU10 operator<<(const uint8 Value) const
 	{
-		return FRsapVectorU32(X << Value, Y << Value, Z << Value);
+		return FRsapVectorU10(X << Value, Y << Value, Z << Value);
 	}
 
-	FORCEINLINE FRsapVectorU32 operator*(const uint8 Value) const
+	FORCEINLINE FRsapVectorU10 operator*(const uint8 Value) const
 	{
-		return FRsapVectorU32(X * Value, Y * Value, Z * Value);
+		return FRsapVectorU10(X * Value, Y * Value, Z * Value);
 	}
 
-	FORCEINLINE FRsapVectorU32 operator>>(const uint8 Value) const
+	FORCEINLINE FRsapVectorU10 operator>>(const uint8 Value) const
 	{
-		return FRsapVectorU32(X >> Value, Y >> Value, Z >> Value);
+		return FRsapVectorU10(X >> Value, Y >> Value, Z >> Value);
 	}
 
-	FORCEINLINE FRsapVectorU32 operator&(const uint16 Mask) const
+	FORCEINLINE FRsapVectorU10 operator&(const uint16 Mask) const
 	{
-		return FRsapVectorU32(X & Mask, Y & Mask, Z & Mask);
+		return FRsapVectorU10(X & Mask, Y & Mask, Z & Mask);
 	}
 
-	FORCEINLINE bool operator==(const FRsapVectorU32& Other) const {
+	FORCEINLINE bool operator==(const FRsapVectorU10& Other) const {
 		return X == Other.X && Y == Other.Y && Z == Other.Z;
 	}
 
@@ -109,10 +109,10 @@ struct FRsapVectorU32
 		return FVector(X, Y, Z);
 	}
 
-	explicit FRsapVectorU32(const uint16 InX, const uint16 InY, const uint16 InZ)
+	explicit FRsapVectorU10(const uint16 InX, const uint16 InY, const uint16 InZ)
 		: X(InX), Y(InY), Z(InZ) {}
 
-	FRsapVectorU32()
+	FRsapVectorU10()
 		:X(0), Y(0), Z(0)
 	{}
 };
@@ -135,10 +135,10 @@ struct FRsapVector32 // todo: int64 to support SizeExponent >= 2 ?
 		return FMortonUtils::Chunk::Encode(X, Y, Z);
 	}
 
-	FORCEINLINE FRsapVectorU32 ToLocalVector(const FRsapVector32 ChunkLocation) const
+	FORCEINLINE FRsapVectorU10 ToLocalVector(const FRsapVector32 ChunkLocation) const
 	{
 		using namespace Rsap::NavMesh;
-		return FRsapVectorU32(
+		return FRsapVectorU10(
 			static_cast<uint16>((ChunkLocation.X + X) >> SizeShift),
 			static_cast<uint16>((ChunkLocation.Y + Y) >> SizeShift),
 			static_cast<uint16>((ChunkLocation.Z + Z) >> SizeShift)
@@ -154,7 +154,7 @@ struct FRsapVector32 // todo: int64 to support SizeExponent >= 2 ?
 
 	static FRsapVector32 FromNodeMorton(const node_morton NodeMorton, const FRsapVector32& ChunkLocation)
 	{
-		return ChunkLocation + FRsapVectorU32::FromNodeMorton(NodeMorton);
+		return ChunkLocation + FRsapVectorU10::FromNodeMorton(NodeMorton);
 	}
 
 	FORCEINLINE FRsapVector32 RoundToChunk() const
@@ -236,13 +236,13 @@ struct FRsapVector32 // todo: int64 to support SizeExponent >= 2 ?
 		return FRsapVector32(X - Value, Y - Value, Z - Value);
 	}
 
-	FORCEINLINE FRsapVector32 operator+(const FRsapVectorU32& MortonVector) const
+	FORCEINLINE FRsapVector32 operator+(const FRsapVectorU10& MortonVector) const
 	{
 		const FRsapVector32 NodeGlobal(MortonVector);
 		return FRsapVector32(X + NodeGlobal.X, Y + NodeGlobal.Y, Z + NodeGlobal.Z);
 	}
 
-	FORCEINLINE FRsapVector32 operator-(const FRsapVectorU32& MortonVector) const
+	FORCEINLINE FRsapVector32 operator-(const FRsapVectorU10& MortonVector) const
 	{
 		const FRsapVector32 NodeGlobal(MortonVector);
 		return FRsapVector32(X - NodeGlobal.X, Y - NodeGlobal.Y, Z - NodeGlobal.Z);
@@ -315,7 +315,7 @@ struct FRsapVector32 // todo: int64 to support SizeExponent >= 2 ?
 		Z = static_cast<int32>(std::round(InVector.Z));
 	}
 
-	explicit FRsapVector32(const FRsapVectorU32 &InVector)
+	explicit FRsapVector32(const FRsapVectorU10 &InVector)
 	{
 		// Convert morton space to local.
 		X = static_cast<int32>(InVector.X) << Rsap::NavMesh::SizeShift;

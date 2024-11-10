@@ -184,7 +184,7 @@ struct FRsapBounds
 	// Rounds the boundaries to the node-size of the given layer.
 	FRsapBounds RoundToLayer(const layer_idx LayerIdx) const
 	{
-		return FRsapBounds(Min.RoundToLayer(LayerIdx), Max.CeilToLayer(LayerIdx));
+		return FRsapBounds(Min.FloorToLayer(LayerIdx), Max.CeilToLayer(LayerIdx));
 	}
 
 	// Rounds the boundaries to the chunk-size.
@@ -235,6 +235,83 @@ struct FRsapBounds
 		}
 
 		return Result;
+	}
+
+	/**
+	 * Runs the callback for-each chunk intersected by these bounds.
+	 * 
+	 * Callback returns:
+	 * chunk_morton: morton-code of the chunk.
+	 * FRsapVector32: location of the chunk.
+	 * FRsapBounds: boundaries that have been clamped to the chunk.
+	 */
+	template<typename Func>
+	void ForEachChunk(Func Callback) const
+	{
+		static_assert(std::is_invocable_v<Func, chunk_morton, FRsapVector32, FRsapBounds>, "'::ForEachChunk' callback must be invocable with 'chunk_morton, FRsapVector32, FRsapBounds'");
+		
+		const FRsapBounds Rounded = RoundToChunk();
+		for (int32 GlobalX = Rounded.Min.X; GlobalX < Rounded.Max.X; GlobalX+=Chunk::Size){
+			for (int32 GlobalY = Rounded.Min.Y; GlobalY < Rounded.Max.Y; GlobalY+=Chunk::Size){
+				for (int32 GlobalZ = Rounded.Min.Z; GlobalZ < Rounded.Max.Z; GlobalZ+=Chunk::Size){
+					const FRsapVector32 ChunkLocation = FRsapVector32(GlobalX, GlobalY, GlobalZ);
+					const FRsapBounds ChunkBounds(ChunkLocation, ChunkLocation + Chunk::Size);
+					
+					const FRsapBounds ClampedBounds = Clamp(ChunkBounds);
+					if(ClampedBounds) Callback(ChunkLocation.ToChunkMorton(), ChunkLocation, ClampedBounds);
+				}
+			}
+		}
+	}
+
+	/**
+	 * Runs the callback for-each node in the given layer intersecting with these bounds, ordered by their morton-code.
+	 * 
+	 * Callback returns:
+	 * node_morton: morton-code of the node.
+	 * FRsapVector32: global location of the node.
+	 */
+	template<typename Func>
+	void ForEachNode(const layer_idx LayerIdx, Func Callback) const
+	{
+		static_assert(std::is_invocable_v<Func, node_morton, FRsapVector32>, "'::ForEachNode' callback must be invocable with 'node_morton, FRsapVector32'");
+
+		// Round the boundaries to the node-size of the layer.
+		const FRsapBounds RoundedBounds = RoundToLayer(LayerIdx);
+
+		// Init the morton-code to the first node on the negative most corner.
+		const node_morton StartingMC = RoundedBounds.Min.ToLocalVector(RoundedBounds.Min.RoundToChunk()).ToNodeMorton();
+
+		// Loop through the nodes within these boundaries.
+		// Every iteration we update the morton-code to move one node-size in that direction.
+		// At the last iteration of a loop, we reset the axis for that loop back to the start.
+		node_morton NodeMC = StartingMC;
+		FRsapVector32 NodeLocation;
+		for (NodeLocation.Z = RoundedBounds.Min.Z; NodeLocation.Z < RoundedBounds.Max.Z; NodeLocation.Z += Node::Sizes[LayerIdx])
+		{
+			for (NodeLocation.Y = RoundedBounds.Min.Y; NodeLocation.Y < RoundedBounds.Max.Y; NodeLocation.Y += Node::Sizes[LayerIdx])
+			{
+				for (NodeLocation.X = RoundedBounds.Min.X; NodeLocation.X < RoundedBounds.Max.X; NodeLocation.X += Node::Sizes[LayerIdx])
+				{
+					// Run the callback.
+					Callback(NodeMC, NodeLocation);
+					
+					// Add node-size to X axis on the morton-code if we're not at the end of the loop yet.
+					// Otherwise reset the X axis back.
+					NodeMC = NodeLocation.X != RoundedBounds.Max.X
+						? FMortonUtils::Node::AddX(NodeMC, LayerIdx)
+						: FMortonUtils::Node::CopyX(NodeMC, StartingMC);
+				}
+
+				// Same as above, but for Y.
+				NodeMC = NodeLocation.Y != RoundedBounds.Max.Y
+					? FMortonUtils::Node::AddY(NodeMC, LayerIdx)
+					: FMortonUtils::Node::CopyY(NodeMC, StartingMC);
+			}
+
+			// We don't need to reset the Z axis because this loop won't be repeated.
+			if(NodeLocation.Z != RoundedBounds.Max.Z) NodeMC = FMortonUtils::Node::AddZ(NodeMC, LayerIdx);
+		}
 	}
 
 	// Returns true if the AABB overlap with the other.
