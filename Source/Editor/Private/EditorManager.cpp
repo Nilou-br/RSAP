@@ -78,8 +78,8 @@ void URsapEditorManager::OnMapOpened(const IRsapWorld* RsapWorld)
 			if(RsapWorld->MarkDirty()) UE_LOG(LogRsap, Log, TEXT("Generation complete. The sound-navigation-mesh will be cached when you save the map."))
 			break;
 		case ERsapNavmeshLoadResult::MisMatch:
-			NavMesh.Regenerate(RsapWorld, MismatchedActors);
-			if(RsapWorld->MarkDirty()) UE_LOG(LogRsap, Log, TEXT("Regenerated out-of-sync areas. The sound-navigation-mesh will be cached when you save the map."))
+			// NavMesh.Regenerate(RsapWorld, MismatchedActors);
+			// if(RsapWorld->MarkDirty()) UE_LOG(LogRsap, Log, TEXT("Regenerated out-of-sync areas. The sound-navigation-mesh will be cached when you save the map."))
 			break;
 	}
 

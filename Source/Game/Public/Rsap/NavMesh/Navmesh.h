@@ -86,13 +86,6 @@ public:
 #endif
 
 	void Generate(const IRsapWorld* RsapWorld);
-	void GenerateAsync();
-
-	void Regenerate(const IRsapWorld* RsapWorld, const FRsapActorMap& Actors);
-	void RegenerateAsync();
-
-	void Update();
-	void UpdateAsync();
 
 	void Save();
 	FRsapNavmeshLoadResult Load(const IRsapWorld* RsapWorld);
@@ -116,14 +109,64 @@ public:
 	}
 
 private:
-	URsapNavmeshMetadata* Metadata = nullptr;
+	// Processing
+	void HandleGenerate(const FRsapActorMap& ActorMap);
 	
+	void RasterizeNode(FRsapChunk& Chunk, chunk_morton ChunkMC, FRsapNode& Node,
+	                   node_morton NodeMC, const FRsapVector32& NodeLocation, layer_idx LayerIdx,
+	                   const FRsapCollisionComponent& CollisionComponent, bool bIsAABBContained);
+	void RasterizeLeaf(FRsapLeaf& LeafNode, const FRsapVector32& NodeLocation,
+	                   const FRsapCollisionComponent& CollisionComponent, bool bIsAABBContained);
+
+
+	static layer_idx CalculateOptimalIterationLayer(const FRsapBounds& Bounds);
+	FRsapNode& InitNode(const FRsapChunk& Chunk, chunk_morton ChunkMC, node_morton NodeMC, layer_idx LayerIdx, node_state NodeState, rsap_direction RelationsToSet);
+	FRsapLeaf& InitLeaf(const FRsapChunk& Chunk, chunk_morton ChunkMC, node_morton NodeMC, node_state NodeState);
+	void InitNodeParents(const FRsapChunk& Chunk, chunk_morton ChunkMC, node_morton NodeMC, layer_idx LayerIdx, node_state NodeState);
+	void SetNodeRelation(const FRsapChunk& Chunk, chunk_morton ChunkMC, FRsapNode& Node, node_morton NodeMC, layer_idx LayerIdx, rsap_direction Relation);
+	void SetNodeRelations(const FRsapChunk& Chunk, chunk_morton ChunkMC, FRsapNode& Node, node_morton NodeMC, layer_idx LayerIdx, rsap_direction Relations);
+	
+	URsapNavmeshMetadata* Metadata = nullptr;
 	bool bRegenerated = false;
 	std::unordered_set<chunk_morton> UpdatedChunkMCs;
 	std::unordered_set<chunk_morton> DeletedChunkMCs;
 
-	// Debug code
-public:
 
-	void LoopChunks();
+	
+	/**
+	 * Runs the given callback for each node in the most optimal layer intersecting the collision component.
+	 *
+	 * @param CollisionComponent The FRsapCollisionComponent to iterate over.
+	 * @param ProcessNodeCallback Callback that receives all the necessary data to rasterize the navmesh.
+	 *
+	 * The callback will receive:
+	 * - FRsapChunk*& The chunk the node is in, which can be nullptr.
+	 * - chunk_morton Morton-code of the chunk.
+	 * - layer_idx The layer the node is in.
+	 * - node_morton The morton-code of the node.
+	 * - FRsapVector32 The location of the node.
+	 */
+	template<typename TCallback>
+	void IterateIntersectingNodes(const FRsapCollisionComponent CollisionComponent, TCallback ProcessNodeCallback)
+	{
+		static_assert(std::is_invocable_v<TCallback, FRsapChunk*&, chunk_morton, layer_idx, node_morton, FRsapVector32>,
+		"Rasterize: ProcessNodeCallback signature must match (FRsapChunk*&, chunk_morton, layer_idx, node_morton, FRsapVector32&)");
+
+		const FRsapBounds& AABB = CollisionComponent.Boundaries;
+
+		// Get the optimal iteration layer for these boundaries.
+		const layer_idx LayerIdx = CalculateOptimalIterationLayer(AABB);
+
+		// Loop through the chunks intersecting these component's AABB. This also returns the intersection of the AABB with the chunk.
+		AABB.ForEachChunk([&](const chunk_morton ChunkMC, const FRsapVector32& ChunkLocation, const FRsapBounds& Intersection)
+		{
+			FRsapChunk* Chunk = FindChunk(ChunkMC);
+
+			// Loop through the nodes within the intersection.
+			Intersection.ForEachNode(LayerIdx, [&](const node_morton NodeMC, const FRsapVector32& NodeLocation)
+			{
+				ProcessNodeCallback(Chunk, ChunkMC, LayerIdx, NodeMC, NodeLocation);
+			});
+		});
+	}
 };

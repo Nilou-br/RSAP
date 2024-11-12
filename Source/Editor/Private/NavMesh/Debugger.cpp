@@ -85,8 +85,6 @@ void FRsapDebugger::Draw(const FVector& CameraLocation, const FRotator& CameraRo
 	FRsapVector32 ChunkLocation;
 	const chunk_morton StartingChunkMC = RenderBoundaries.Min.ToChunkMorton();
 	chunk_morton CurrentChunkMC = StartingChunkMC;
-
-	Navmesh.LoopChunks();
 	
  	for (ChunkLocation.Z = RenderBoundaries.Min.Z; ChunkLocation.Z <= RenderBoundaries.Max.Z; ChunkLocation.Z += Chunk::Size)
 	{

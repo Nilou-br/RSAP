@@ -7,10 +7,10 @@
 
 
 
-inline actor_key GetActorKey(const AActor* Actor)
-{
-	return GetTypeHash(Actor->GetActorGuid());
-}
+// inline actor_key GetActorKey(const AActor* Actor)
+// {
+// 	return GetTypeHash(Actor->GetActorGuid());
+// }
 
 struct FRsapCollisionComponent
 {
@@ -23,6 +23,9 @@ struct FRsapCollisionComponent
 		ComponentPtr = Component;
 		Boundaries = FRsapBounds(Component);
 	}
+
+	bool IsValid() const { return ComponentPtr.IsValid(); }
+	const UPrimitiveComponent* operator*() const { return ComponentPtr.Get(); }
 };
 
 class FRsapActor
