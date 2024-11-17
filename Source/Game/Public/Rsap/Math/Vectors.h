@@ -123,7 +123,7 @@ struct FRsapVectorU10
  */
 struct FRsapVector32 // todo: int64 to support SizeExponent >= 2 ?
 {
-	int32 X, Y, Z;
+	int32 X, Y, Z = 0;
 
 	FORCEINLINE chunk_morton ToChunkMorton() const
 	{

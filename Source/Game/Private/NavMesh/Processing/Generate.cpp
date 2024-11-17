@@ -37,12 +37,13 @@ void FRsapNavmesh::HandleGenerate(const FRsapActorMap& ActorMap)
 
 	for (const auto& RsapActor : ActorMap | std::views::values)
 	{
-		std::unordered_set<chunk_morton> InitializedChunks;
-		for (const FRsapCollisionComponent& CollisionComponent : RsapActor.GetCollisionComponents())
+		std::unordered_set<chunk_morton> OccludedChunks;
+		for (const FRsapCollisionComponent& CollisionComponent : RsapActor->GetCachedComponents())
 		{
 			if(!CollisionComponent.IsValid()) continue;
+			// todo: maybe find thread-safer way to handle the collision component?
+			// todo: maybe different ExecuteRead overload that takes scene instead?
 
-			// todo: move this to start of method. Different ExecuteRead overload.
 			FPhysicsCommand::ExecuteRead(CollisionComponent.ComponentPtr->BodyInstance.ActorHandle, [&](const FPhysicsActorHandle& ActorHandle)
 			{
 				IterateIntersectingNodes(CollisionComponent, [&](FRsapChunk*& Chunk, const chunk_morton ChunkMC, const layer_idx LayerIdx, const node_morton NodeMC, const FRsapVector32& NodeLocation)
@@ -52,7 +53,7 @@ void FRsapNavmesh::HandleGenerate(const FRsapActorMap& ActorMap)
 					if(!Chunk) Chunk = &InitChunk(ChunkMC);
 					
 					// The component's hitbox is occluding a voxel within this chunk, so add this chunk to the set.
-					InitializedChunks.emplace(ChunkMC);
+					OccludedChunks.emplace(ChunkMC);
 					
 					// There is an overlap, so get/init the node or leaf-node, and also init/update any missing parent.
 					if(LayerIdx < Layer::NodeDepth)
@@ -70,12 +71,11 @@ void FRsapNavmesh::HandleGenerate(const FRsapActorMap& ActorMap)
 		}
 
 		// Add this actor's key to each chunk it is occluding.
-		const actor_key ActorKey = RsapActor.GetKey();
-		for (auto ChunkMC : InitializedChunks)
+		const actor_key ActorKey = RsapActor->GetActorKey();
+		for (auto ChunkMC : OccludedChunks)
 		{
 			FRsapChunk& Chunk = Chunks.find(ChunkMC)->second;
 			Chunk.UpdateActorEntry(ActorKey);
 		}
-		
 	}
 }

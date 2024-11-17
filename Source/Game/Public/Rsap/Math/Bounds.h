@@ -127,19 +127,6 @@ struct FRsapBounds
 	}
 
 	explicit operator bool() const { return (Max.X > Min.X) && (Max.Y > Min.Y) && (Max.Z > Min.Z); }
-	
-	// // Rounds the bounds to the layer's node-size in global-space. Min will be rounded down, Max will be rounded up.
-	// FORCEINLINE FRsapBounds RoundToLayer(const layer_idx LayerIdx) const
-	// {
-	// 	FRsapBounds Bounds = FRsapBounds(FRsapVector32(Min + Chunk::SignOffset).RoundToLayer(LayerIdx) - Chunk::SignOffset, FRsapVector32(Max + Chunk::SignOffset).RoundToLayer(LayerIdx) - Chunk::SignOffset);
-	// 	
-	// 	// Round the Max bounds up, but only if it is smaller than the un-rounded bounds.
-	// 	// Its possible for the un-rounded value to already equal the rounded to value, but we still want to round it a whole node-size upwards ( otherwise the Min axis would equal the Max and there is no width, thus no volume ).
-	// 	if(Bounds.Max.X < Max.X) Bounds.Max.X += Node::Sizes[LayerIdx];
-	// 	if(Bounds.Max.Y < Max.Y) Bounds.Max.Y += Node::Sizes[LayerIdx];
-	// 	if(Bounds.Max.Z < Max.Z) Bounds.Max.Z += Node::Sizes[LayerIdx];
-	// 	return Bounds;
-	// }
 
 	// Clamps the bounds to the other bounds.
 	// Basically returns the part of the bounds that is within the other.
@@ -164,7 +151,7 @@ struct FRsapBounds
 		std::vector<FRsapBounds> BoundsList;
 		FRsapBounds RemainingBounds = Other;
 
-		// I should explain this mess next time lol
+		// I should explain this convoluted mess next time lol
 		if(Other.Max.X > Max.X){  // + X
 			BoundsList.push_back(FRsapBounds(FRsapVector32(Max.X, RemainingBounds.Min.Y, RemainingBounds.Min.Z), RemainingBounds.Max));
 			RemainingBounds.Max.X = Max.X;
@@ -371,6 +358,11 @@ struct FRsapBounds
 
 		// Otherwise, return true as they are intersecting.
 		return EAABBOverlapResult::Intersect;
+	}
+
+	FORCEINLINE FString ToString() const
+	{
+		return FString::Printf(TEXT("Min: '%s', Max: '%s'"), *Min.ToString(), *Max.ToString());
 	}
 
 	FORCEINLINE void Draw(const UWorld* World, const FColor Color = FColor::Black, const float Thickness = 1) const

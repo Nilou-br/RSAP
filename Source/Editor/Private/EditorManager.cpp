@@ -25,9 +25,7 @@ void URsapEditorManager::Initialize(FSubsystemCollectionBase& Collection)
 	EditorWorld.PreMapSaved.BindUObject(this, &ThisClass::PreMapSaved);
 	EditorWorld.PostMapSaved.BindUObject(this, &ThisClass::PostMapSaved);
 
-	EditorWorld.OnActorMoved.BindUObject(this, &ThisClass::OnActorMoved);
-	EditorWorld.OnActorAdded.BindUObject(this, &ThisClass::OnActorAdded);
-	EditorWorld.OnActorDeleted.BindUObject(this, &ThisClass::OnActorDeleted);
+	EditorWorld.OnActorChanged.BindUObject(this, &ThisClass::OnActorChanged);
 
 	//FRsapUpdater::OnUpdateComplete.AddUObject(this, &ThisClass::OnNavMeshUpdated);
 }
@@ -40,9 +38,7 @@ void URsapEditorManager::Deinitialize()
 	EditorWorld.PreMapSaved.Unbind();
 	EditorWorld.PostMapSaved.Unbind();
 
-	EditorWorld.OnActorMoved.Unbind();
-	EditorWorld.OnActorAdded.Unbind();
-	EditorWorld.OnActorDeleted.Unbind();
+	EditorWorld.OnActorChanged.Unbind();
 
 	// FRsapUpdater::OnUpdateComplete.RemoveAll(this);
 
@@ -111,34 +107,24 @@ void URsapEditorManager::PostMapSaved(const bool bSuccess)
 	if(bSuccess) NavMesh.Save(); // todo: check if this also runs if a different level is saved from the one that is opened?
 }
 
+void URsapEditorManager::OnActorChanged(const FRsapActorChangedResult& ActorChangedResult)
+{
+	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnActorChanged"))
+	switch (ActorChangedResult.ChangedType)
+	{
+		case ERsapActorChangedType::Added:		UE_LOG(LogRsap, Warning, TEXT("Added")); break;
+		case ERsapActorChangedType::Moved:		UE_LOG(LogRsap, Warning, TEXT("Moved")); break;
+		case ERsapActorChangedType::Deleted:	UE_LOG(LogRsap, Warning, TEXT("Deleted")); break;
+		case ERsapActorChangedType::None:		UE_LOG(LogRsap, Warning, TEXT("None")); break;
+		default: break;
+	}
+}
+
 FVector Transform(const FVector& Location, const FTransform& ActorTransform)
 {
 	const FVector ScaledPosition = Location * ActorTransform.GetScale3D();
 	const FVector RotatedPosition = ActorTransform.GetRotation().RotateVector(ScaledPosition);
 	return ActorTransform.GetLocation() + RotatedPosition;
-}
-
-void URsapEditorManager::OnActorAdded(const FRsapActor& RsapActor)
-{
-	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnActorAdded"))
-
-	// Leave 'from' empty because the actor did not exist before this operation.
-	// FRsapUpdater::GetInstance().StageData(ActorKey, FMovedBounds(FRsapBounds::EmptyBounds(), Bounds));
-}
-
-void URsapEditorManager::OnActorMoved(const FRsapActor& RsapActor, const FRsapBounds& PreviousBounds)
-{
-	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnActorMoved"))
-
-	// FRsapUpdater::GetInstance().StageData(ActorKey, MovedBounds);
-}
-
-void URsapEditorManager::OnActorDeleted(const FRsapBounds& LastKnownBounds)
-{
-	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnActorDeleted"))
-
-	// Leave 'to' empty because the actor does not exist anymore.
-	// FRsapUpdater::GetInstance().StageData(ActorKey, FMovedBounds(Bounds, FRsapBounds::EmptyBounds()));
 }
 
 void URsapEditorManager::OnNavMeshUpdated() const {}
@@ -147,19 +133,7 @@ void URsapEditorManager::OnNavMeshUpdated() const {}
 
 void URsapEditorManager::ProfileGeneration() const
 {
-	// const auto StartTime = std::chrono::high_resolution_clock::now();
-	//
-	// FRsapNavmesh ProfileNavMesh;
-	// // const FRsapActorMap& ActorMap = FRsapEditorWorld::GetActors(); // todo: Fix static issue
-	// for (int i = 0; i < 1000; ++i)
-	// {
-	// 	FRsapGenerator::Generate(GEngine->GetWorld(), ProfileNavMesh, ActorMap);
-	// }
-	//
-	// const auto EndTime = std::chrono::high_resolution_clock::now();
-	// UE_LOG(LogRsap, Warning, TEXT("Profile-Generation took:"));
-	// UE_LOG(LogRsap, Warning, TEXT("'%lld' milli-seconds"), std::chrono::duration_cast<std::chrono::milliseconds>(EndTime - StartTime).count());
-	// UE_LOG(LogRsap, Warning, TEXT("'%lld' micro-seconds"), std::chrono::duration_cast<std::chrono::microseconds>(EndTime - StartTime).count());
+	
 }
 
 void URsapEditorManager::ProfileIteration() const

@@ -3,7 +3,6 @@
 #pragma once
 
 #include "Rsap/Definitions.h"
-#include "Rsap/NavMesh/Types/Actor.h"
 #include "Rsap/ThirdParty/unordered_dense/unordered_dense.h"
 #include "Rsap/World/World.h"
 
@@ -41,10 +40,7 @@ public:
 	FOnCameraMoved	OnCameraMoved;
 	
 private:
-	static bool ActorHasCollisionComponent(const AActor* Actor);
-
 	std::vector<actor_key> SelectedActors;
-	Rsap::Map::flat_map<actor_key, FRsapBounds> SelectedActorsBounds;
 
 	void HandleMapOpened(const FString& Filename, bool bAsTemplate);
 	void HandlePreMapSaved(UWorld* World, FObjectPreSaveContext PreSaveContext);

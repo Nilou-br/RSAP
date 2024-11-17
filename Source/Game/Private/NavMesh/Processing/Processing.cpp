@@ -158,7 +158,7 @@ void FRsapNavmesh::RasterizeNode(FRsapChunk& Chunk, const chunk_morton ChunkMC, 
 		if(!bIsAABBContained)
 		{
 			// Not contained, so do a fast AABB intersection check, and do the actual trace when overlapping. Complex only when contained.
-			switch (FRsapNode::HasAABBIntersection(CollisionComponent.Boundaries, ChildNodeLocation, ChildLayerIdx))
+			switch (FRsapNode::HasAABBIntersection(CollisionComponent.CachedBoundaries, ChildNodeLocation, ChildLayerIdx))
 			{
 				case EAABBOverlapResult::NoOverlap: continue;
 				case EAABBOverlapResult::Intersect:

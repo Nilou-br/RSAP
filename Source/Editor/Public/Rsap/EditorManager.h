@@ -40,9 +40,7 @@ private:
 	void PreMapSaved();
 	void PostMapSaved(const bool bSuccess);
 
-	void OnActorAdded(const FRsapActor& RsapActor);
-	void OnActorMoved(const FRsapActor& RsapActor, const FRsapBounds& PreviousBounds);
-	void OnActorDeleted(const FRsapBounds& LastKnownBounds);
+	void OnActorChanged(const FRsapActorChangedResult& ActorChangedResult);
 
 	void OnNavMeshUpdated() const;
 

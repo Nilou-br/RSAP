@@ -9,10 +9,7 @@
 class IRsapWorld
 {
 	DECLARE_DELEGATE_OneParam(FOnMapOpened,		const IRsapWorld* RsapWorld);
-	
-	DECLARE_DELEGATE_OneParam(FOnActorAdded,	const FRsapActor& RsapActor);
-	DECLARE_DELEGATE_TwoParams(FOnActorMoved,	const FRsapActor& RsapActor, const FRsapBounds& PreviousBounds);
-	DECLARE_DELEGATE_OneParam(FOnActorDeleted,	const FRsapBounds& LastKnownBounds);
+	DECLARE_DELEGATE_OneParam(FOnActorChanged,	const FRsapActorChangedResult& ActorChangedResult);
 	
 public:
 	virtual ~IRsapWorld() = default;
@@ -20,22 +17,20 @@ public:
 	virtual void Initialize() = 0;
 	virtual void Deinitialize() = 0;
 
-	const FRsapActor& GetActor(const actor_key Key) { return Actors.find(Key)->second; }
-	const FRsapActorMap& GetActors() const { return Actors; }
+	const FRsapActor& GetActor(const actor_key Key) { return *RsapActors.find(Key)->second; }
+	const FRsapActorMap& GetActors() const { return RsapActors; }
 
 	const UWorld* GetWorld() const { return World; }
 	bool MarkDirty() const { return World ? World->GetOuter()->MarkPackageDirty() : false; }
 
 	FOnMapOpened	OnMapOpened;
-	FOnActorMoved	OnActorMoved;
-	FOnActorAdded	OnActorAdded;
-	FOnActorDeleted	OnActorDeleted;
+	FOnActorChanged	OnActorChanged;
 	
 protected:
 	FDelegateHandle MapOpenedHandle;
 	FDelegateHandle PreMapSavedHandle;
 	FDelegateHandle PostMapSavedHandle;
 	
-	FRsapActorMap Actors;
+	FRsapActorMap RsapActors;
 	UWorld* World = nullptr;
 };

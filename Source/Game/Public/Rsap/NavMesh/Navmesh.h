@@ -152,7 +152,7 @@ private:
 		static_assert(std::is_invocable_v<TCallback, FRsapChunk*&, chunk_morton, layer_idx, node_morton, FRsapVector32>,
 		"Rasterize: ProcessNodeCallback signature must match (FRsapChunk*&, chunk_morton, layer_idx, node_morton, FRsapVector32&)");
 
-		const FRsapBounds& AABB = CollisionComponent.Boundaries;
+		const FRsapBounds& AABB = CollisionComponent.CachedBoundaries;
 
 		// Get the optimal iteration layer for these boundaries.
 		const layer_idx LayerIdx = CalculateOptimalIterationLayer(AABB);
