@@ -27,7 +27,7 @@ using namespace Rsap::NavMesh;
 struct FRsapNode
 {
 	FRsapRelations  Relations;
-	uint8 Children = 0b00000000;		// Initialized/occluding (1) or not (0).
+	uint8 Children = 0b00000000;		// Occluding/initialized (1) or empty/uninitialized (0).
 	uint8 ChildrenTypes = 0b00000000;	// Static (0) or dynamic (1).
 	uint16 SoundPresetID = 0;
 
@@ -148,13 +148,15 @@ struct FRsapNode
 		return PackedData;
 	}
 
-	// This overload is meant for initializing a node from serialized data that was packed.
+	// Meant for initializing a node from serialized data that was packed.
 	explicit FRsapNode(const uint64 PackedData) {
 		Children		= PackedData;
 		ChildrenTypes	= PackedData >> 8;
 		SoundPresetID	= PackedData >> 16;
 		Relations.Unpack(PackedData  >> 32);
 	}
+
+	explicit FRsapNode(const uint8 InChildren): Children(InChildren) {}
 };
 
 struct FRsapLeaf
@@ -169,5 +171,5 @@ struct FRsapLeaf
 };
 
 typedef std::pair<node_morton, FRsapNode> FRsapNodePair;
-typedef Rsap::Map::ordered_map<node_morton, FRsapNode> FOctreeLayer;
-typedef Rsap::Map::ordered_map<node_morton, FRsapLeaf> FOctreeLeafNodes;
+typedef Rsap::Map::ordered_map<node_morton, FRsapNode> FRsapLayer;
+typedef Rsap::Map::ordered_map<node_morton, FRsapLeaf> FRsapLeafLayer;

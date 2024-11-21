@@ -91,15 +91,32 @@ struct FMortonUtils
 		{
 			switch (ChildIdx)
 			{
-				case 0: return ParentMortonCode;																// No offset.
-				case 1: return AddX(ParentMortonCode, ChildLayerIdx);											// X
-				case 2: return AddY(ParentMortonCode, ChildLayerIdx);											// Y
-				case 3: return AddX(ParentMortonCode, ChildLayerIdx) | AddY(ParentMortonCode, ChildLayerIdx);	// X+Y
-				case 4: return AddZ(ParentMortonCode, ChildLayerIdx);											// Z
-				case 5: return AddX(ParentMortonCode, ChildLayerIdx) | AddZ(ParentMortonCode, ChildLayerIdx);	// X+Z
-				case 6: return AddY(ParentMortonCode, ChildLayerIdx) | AddZ(ParentMortonCode, ChildLayerIdx);	// Y+Z
-				case 7: return Add(ParentMortonCode, ChildLayerIdx);											// X+Y+Z
+				case 0:  return ParentMortonCode;																// No offset.
+				case 1:  return AddX(ParentMortonCode, ChildLayerIdx);											// X
+				case 2:  return AddY(ParentMortonCode, ChildLayerIdx);											// Y
+				case 3:  return AddX(ParentMortonCode, ChildLayerIdx) | AddY(ParentMortonCode, ChildLayerIdx);	// X+Y
+				case 4:  return AddZ(ParentMortonCode, ChildLayerIdx);											// Z
+				case 5:  return AddX(ParentMortonCode, ChildLayerIdx) | AddZ(ParentMortonCode, ChildLayerIdx);	// X+Z
+				case 6:  return AddY(ParentMortonCode, ChildLayerIdx) | AddZ(ParentMortonCode, ChildLayerIdx);	// Y+Z
+				case 7:  return Add(ParentMortonCode,  ChildLayerIdx);											// X+Y+Z
 				default: return ParentMortonCode;
+			}
+		}
+
+		// Ensure that only a single bit on the 8-bit mask is set, which corresponds to the child on the parent.
+		FORCEINLINE static node_morton GetChildMCFromMask(const node_morton ParentMortonCode, const uint8 ChildMask, const layer_idx ChildLayerIdx)
+		{
+			switch (ChildMask)
+			{
+				case 1:   return ParentMortonCode;																// No offset.
+				case 2:   return AddX(ParentMortonCode, ChildLayerIdx);											// X
+				case 4:   return AddY(ParentMortonCode, ChildLayerIdx);											// Y
+				case 8:   return AddX(ParentMortonCode, ChildLayerIdx) | AddY(ParentMortonCode, ChildLayerIdx);	// X+Y
+				case 16:  return AddZ(ParentMortonCode, ChildLayerIdx);											// Z
+				case 32:  return AddX(ParentMortonCode, ChildLayerIdx) | AddZ(ParentMortonCode, ChildLayerIdx);	// X+Z
+				case 64:  return AddY(ParentMortonCode, ChildLayerIdx) | AddZ(ParentMortonCode, ChildLayerIdx);	// Y+Z
+				case 128: return Add(ParentMortonCode,  ChildLayerIdx);											// X+Y+Z
+				default:  return ParentMortonCode;
 			}
 		}
 

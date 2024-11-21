@@ -8,7 +8,7 @@
 
 
 
-inline FArchive& operator<<(FArchive& Ar, FOctreeLayer& Layer)
+inline FArchive& operator<<(FArchive& Ar, FRsapLayer& Layer)
 {
 	size_t Size = Layer.size();
 	Ar << Size;
@@ -41,7 +41,8 @@ inline FArchive& operator<<(FArchive& Ar, FOctreeLayer& Layer)
 	return Ar;
 }
 
-inline FArchive& operator<<(FArchive& Ar, FOctreeLeafNodes& LeafNodes)
+// Serializes the leaf-nodes.
+inline FArchive& operator<<(FArchive& Ar, FRsapLeafLayer& LeafNodes)
 {
 	size_t Size = LeafNodes.size();
 	Ar << Size;
@@ -74,6 +75,7 @@ inline FArchive& operator<<(FArchive& Ar, FOctreeLeafNodes& LeafNodes)
 	return Ar;
 }
 
+// Serializes the actor-entries which are used when a deserialized chunk is found to be out-of-sync.
 inline FArchive& operator<<(FArchive& Ar, Rsap::Map::flat_map<actor_key, FGuid>& ActorEntries)
 {
 	size_t Size = ActorEntries.size();
@@ -90,7 +92,7 @@ inline FArchive& operator<<(FArchive& Ar, Rsap::Map::flat_map<actor_key, FGuid>&
 			Ar << Guid;
 		}
 	}
-	else
+	else if (Ar.IsLoading())
 	{
 		for(size_t i = 0; i < Size; ++i)
 		{
@@ -107,47 +109,97 @@ inline FArchive& operator<<(FArchive& Ar, Rsap::Map::flat_map<actor_key, FGuid>&
 	return Ar;
 }
 
+inline void SaveNodes(std::vector<uint8>& Batch, const FRsapChunk& Chunk, const FRsapNode& Node, const node_morton NodeMC, const layer_idx LayerIdx)
+{
+	Batch.push_back(Node.Children);
+
+	// Leaf nodes are not serialized.
+	if(LayerIdx >= 9)
+	{
+		return;
+	}
+
+	for (const uint8 ChildMask : Node::Children::Masks)
+	{
+		if(!(Node.Children & ChildMask)) continue;
+
+		const layer_idx ChildLayerIdx = LayerIdx+1;
+		const node_morton ChildNodeMC = FMortonUtils::Node::GetChildMCFromMask(NodeMC, ChildMask, ChildLayerIdx);
+		const FRsapNode& ChildNode = Chunk.GetNode(ChildNodeMC, ChildLayerIdx, 0);
+		SaveNodes(Batch, Chunk, ChildNode, ChildNodeMC, ChildLayerIdx);
+	}
+}
+
+/**
+ * Serializes the static octree by saving the nodes recursively.
+ * Only the children-mask on the nodes are serialized, as the whole octree can be rebuild from this data.
+ * The other fields on a node are not stored as they can be recalculated efficiently.
+ */
+void SaveStaticOctree(FArchive& ChunkAr, const FRsapChunk& Chunk)
+{
+	// TArray<uint8> TestArray;
+	// TestArray.AddUninitialized(70000);
+	// for (uint8& Byte : TestArray) Byte = 0xFF; // Fill with sample data
+	// ChunkAr.Serialize(TestArray.GetData(), TestArray.Num());
+
+	std::vector<uint8> Batch;
+	Batch.reserve(Chunk.GetStaticNodeCount());
+	
+	constexpr layer_idx RootNodeMC = 0;
+	const FRsapNode& RootNode = Chunk.Octrees[0]->Layers[0]->find(RootNodeMC)->second;
+	constexpr layer_idx RootLayerIdx = 0;
+	SaveNodes(Batch, Chunk, RootNode, RootNodeMC, RootLayerIdx);
+
+	ChunkAr.Serialize(Batch.data(), Batch.size());
+}
+
+inline void LoadNodes(FArchive& ChunkAr, const FRsapChunk& Chunk, const node_morton NodeMC, const layer_idx LayerIdx)
+{
+	uint8 Children;
+	ChunkAr << Children;
+	Chunk.Octrees[0]->Layers[LayerIdx]->emplace(NodeMC, Children);
+	
+	if(LayerIdx >= 9) return;
+
+	for (const uint8 ChildMask : Node::Children::Masks)
+	{
+		if(!(Children & ChildMask)) continue;
+		
+		const layer_idx ChildLayerIdx = LayerIdx+1;
+		const node_morton ChildNodeMC = FMortonUtils::Node::GetChildMCFromMask(NodeMC, ChildMask, ChildLayerIdx);
+		LoadNodes(ChunkAr, Chunk, ChildNodeMC, ChildLayerIdx);
+	}
+}
+
+/**
+ * Deserializes the static octree by loading the nodes in the same sequence as they have been saved.
+ * We can calculate the morton-codes based on the child's index in their parent and their layer-index.
+ */
+void LoadStaticOctree(FArchive& ChunkAr, const FRsapChunk& Chunk)
+{
+	constexpr node_morton RootNodeMC = 0;
+	constexpr layer_idx RootLayerIdx = 0;
+	LoadNodes(ChunkAr, Chunk, RootNodeMC, RootLayerIdx);
+}
+
+// Serializes an FRsapChunk.
 inline FArchive& operator<<(FArchive& Ar, const FRsapChunk& Chunk)
 {
 	Ar << *Chunk.ActorEntries;
-	
-	// Only serialize the static octree.
-	for (layer_idx LayerIdx = 0; LayerIdx <= Layer::NodeDepth; ++LayerIdx)
-	{
-		Ar << *Chunk.Octrees[0]->Layers[LayerIdx];
-	}
-	Ar << *Chunk.Octrees[0]->LeafNodes;
-	
-	return Ar;
-}
 
-inline FArchive& operator<<(FArchive& Ar, FRsapNavmesh& NavMesh)
-{
-	size_t Size = NavMesh.Chunks.size();
-	Ar << Size;
-	if(Ar.IsSaving())
-	{
-		for(const auto& [MortonCode, Chunk] : NavMesh.Chunks)
-		{
-			chunk_morton ChunkMC = MortonCode;
-			Ar << ChunkMC;
-			Ar << Chunk;
-		}
-	}
-	else if (Ar.IsLoading())
-	{
-		NavMesh.Chunks.clear();
-		for(size_t i = 0; i < Size; ++i)
-		{
-			chunk_morton ChunkMC;
-			FRsapChunk Chunk = FRsapChunk();
-			
-			Ar << ChunkMC;
-			Ar << Chunk;
-			
-			NavMesh.Chunks.emplace(ChunkMC, std::move(Chunk));
-		}
-	}
+	
+	// // Only serialize the static octree.
+	// for (layer_idx LayerIdx = 0; LayerIdx <= Layer::NodeDepth; ++LayerIdx)
+	// {
+	// 	if(LayerIdx > 8) continue;
+	// 	Ar << *Chunk.Octrees[0]->Layers[LayerIdx];
+	// }
+	// // Ar << *Chunk.Octrees[0]->LeafNodes;
+
+	// (De)serialize the nodes in a sparse-octree manner.
+	if(Ar.IsSaving()) SaveStaticOctree(Ar, Chunk);
+	else if(Ar.IsLoading()) LoadStaticOctree(Ar, Chunk);
+	
 	return Ar;
 }
 
@@ -166,14 +218,14 @@ inline void SerializeChunk(const FRsapChunk& Chunk, const chunk_morton ChunkMC, 
 	if (!IFileManager::Get().DirectoryExists(*ChunkDirectory)) IFileManager::Get().MakeDirectory(*ChunkDirectory, true);
 
 	const FString ChunkFilePath = ChunkDirectory / FString::Printf(TEXT("%llu.bin"), ChunkMC & 0b111111);
-	FArchive* ChunkFileArchive = IFileManager::Get().CreateFileWriter(*ChunkFilePath);
+	FArchive* ChunkAr = IFileManager::Get().CreateFileWriter(*ChunkFilePath);
 
 	// Serialize the chunk.
-	*ChunkFileArchive << *ChunkID;
-	*ChunkFileArchive << Chunk;
+	*ChunkAr << *ChunkID;
+	*ChunkAr << Chunk;
 		
-	ChunkFileArchive->Close();
-	delete ChunkFileArchive;
+	ChunkAr->Close();
+	delete ChunkAr;
 }
 
 // Returns the path where the navmesh's chunk binary files are stored.
@@ -250,10 +302,11 @@ void FRsapNavmesh::Save()
 	// Note: The chunk IDs on the metadata should exactly correspond to the chunks on the navmesh,
 	// as they are set from the result of a generation or an update.
 	
-	// If the navmesh is regenerated, then all chunks should be serialized.
-	// Else, only serialize the chunks that have been recently updated or deleted.
+	// If the navmesh is fully regenerated, then all chunks should be serialized.
+	// Else, only serialize the chunks that have been recently updated, and remove binaries of deleted chunks.
 	
-	if(bRegenerated)
+	//if(bRegenerated) todo: set this back when done testing
+	if(true)
 	{
 		// Clear the previous binaries
 		IFileManager::Get().DeleteDirectory(*NavmeshPath, false, true);

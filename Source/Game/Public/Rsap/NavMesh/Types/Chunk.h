@@ -12,7 +12,7 @@ using namespace Rsap::NavMesh;
 
 /**
  * A Chunk stores two octrees.
- * The first octree at index 0 is static. The nodes are generated/updated within the editor, never during gameplay. Only the relations can be updated during gameplay to point to dynamic nodes, but these changes should not be serialized.
+ * The first octree at index 0 is static. The nodes are generated/updated within the editor, never during gameplay. Only the relations can be updated during gameplay to point to dynamic nodes, but these changes aren't serialized.
  * The second octree at index 1 is dynamic. The nodes are created from dynamic objects during gameplay. These will not be serialized.
  */
 struct FRsapChunk
@@ -20,16 +20,16 @@ struct FRsapChunk
 private:
 	struct FOctree
 	{
-		std::array<std::shared_ptr<FOctreeLayer>, 10> Layers;
-		std::shared_ptr<FOctreeLeafNodes> LeafNodes;
+		std::array<std::shared_ptr<FRsapLayer>, 10> Layers;
+		std::shared_ptr<FRsapLeafLayer> LeafNodes;
 
 		FOctree()
 		{
 			for (layer_idx LayerIdx = 0; LayerIdx < 10; ++LayerIdx)
 			{
-				Layers[LayerIdx] = std::make_unique<FOctreeLayer>();
+				Layers[LayerIdx] = std::make_unique<FRsapLayer>();
 			}
-			LeafNodes = std::make_unique<FOctreeLeafNodes>();
+			LeafNodes = std::make_unique<FRsapLeafLayer>();
 		}
 	};
 	
@@ -132,6 +132,16 @@ public:
 	FORCEINLINE static bool HasComponentOverlap(const UPrimitiveComponent* Component, const FRsapVector32& ChunkLocation)
 	{
 		return FRsapOverlap::Component(Component, ChunkLocation, 0, false);
+	}
+
+	FORCEINLINE uint64 GetStaticNodeCount() const
+	{
+		uint64 Count = 0;
+		for (const auto& Layer : Octrees[0]->Layers)
+		{
+			Count += Layer->size();
+		}
+		return Count;
 	}
 };
 
