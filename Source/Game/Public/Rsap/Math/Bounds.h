@@ -289,42 +289,45 @@ struct FRsapBounds
 	{
 		static_assert(std::is_invocable_v<Func, node_morton, FRsapVector32>, "'::ForEachNode' callback must be invocable with 'node_morton, FRsapVector32'");
 
-		// Floor the boundaries to the node-size of the layer.
-		// This can be used to loop over the voxels within.
-		const FRsapBounds FlooredBounds = RoundToLayer(LayerIdx);
-
+		// Round the boundaries to the node-size of the layer, and then subtract one node-size to get the boundaries we can loop over.
+		// We can't just floor the bounds because a coordinate can be an exact multiple of the node-size,
+		// which will mess up the following loop for that coordinate
+		FRsapBounds Boundaries = RoundToLayer(LayerIdx);
+		Boundaries.Max = Boundaries.Max - Node::Sizes[LayerIdx];
+		
+		
 		// Init the morton-code to the first node on the negative most corner.
-		const node_morton StartingMC = FlooredBounds.Min.ToLocalVector(FlooredBounds.Min.RoundToChunk()).ToNodeMorton();
+		const node_morton StartingMC = Boundaries.Min.ToNodeMorton();
 
-		// Loop through the nodes within these boundaries.
+		// Loop through the nodes within the boundaries.
 		// Every iteration we update the morton-code to move one node-size in that direction.
 		// At the last iteration of a loop, we reset the axis for that loop back to the start.
 		node_morton NodeMC = StartingMC;
 		FRsapVector32 NodeLocation;
-		for (NodeLocation.Z = FlooredBounds.Min.Z; NodeLocation.Z <= FlooredBounds.Max.Z; NodeLocation.Z += Node::Sizes[LayerIdx])
+		for (NodeLocation.Z = Boundaries.Min.Z; NodeLocation.Z <= Boundaries.Max.Z; NodeLocation.Z += Node::Sizes[LayerIdx])
 		{
-			for (NodeLocation.Y = FlooredBounds.Min.Y; NodeLocation.Y <= FlooredBounds.Max.Y; NodeLocation.Y += Node::Sizes[LayerIdx])
+			for (NodeLocation.Y = Boundaries.Min.Y; NodeLocation.Y <= Boundaries.Max.Y; NodeLocation.Y += Node::Sizes[LayerIdx])
 			{
-				for (NodeLocation.X = FlooredBounds.Min.X; NodeLocation.X <= FlooredBounds.Max.X; NodeLocation.X += Node::Sizes[LayerIdx])
+				for (NodeLocation.X = Boundaries.Min.X; NodeLocation.X <= Boundaries.Max.X; NodeLocation.X += Node::Sizes[LayerIdx])
 				{
 					// Run the callback.
 					Callback(NodeMC, NodeLocation);
 					
-					// Add node-size to X axis on the morton-code if we're not at the end of the loop yet.
-					// Otherwise reset the X axis back.
-					NodeMC = NodeLocation.X != FlooredBounds.Max.X
-						? FMortonUtils::Node::AddX(NodeMC, LayerIdx)
-						: FMortonUtils::Node::CopyX(NodeMC, StartingMC);
+					// Reset the X axis on the morton-code back to the start if we're at the last iteration.
+					// Otherwise add the node-size to it for the next iteration.
+					NodeMC = NodeLocation.X == Boundaries.Max.X
+						? FMortonUtils::Node::CopyX(NodeMC, StartingMC)
+						: FMortonUtils::Node::AddX(NodeMC, LayerIdx);
 				}
 
-				// Same as above, but for Y.
-				NodeMC = NodeLocation.Y != FlooredBounds.Max.Y
-					? FMortonUtils::Node::AddY(NodeMC, LayerIdx)
-					: FMortonUtils::Node::CopyY(NodeMC, StartingMC);
+				// Same as above, but for the Y axis.
+				NodeMC = NodeLocation.Y == Boundaries.Max.Y
+					? FMortonUtils::Node::CopyY(NodeMC, StartingMC)
+					: FMortonUtils::Node::AddY(NodeMC, LayerIdx);
 			}
 
 			// We don't need to reset the Z axis because this loop won't be repeated.
-			if(NodeLocation.Z != FlooredBounds.Max.Z) NodeMC = FMortonUtils::Node::AddZ(NodeMC, LayerIdx);
+			NodeMC = FMortonUtils::Node::AddZ(NodeMC, LayerIdx);
 		}
 	}
 

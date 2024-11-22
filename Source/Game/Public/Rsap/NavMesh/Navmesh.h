@@ -145,12 +145,14 @@ private:
 	 * - layer_idx The layer the node is in.
 	 * - node_morton The morton-code of the node.
 	 * - FRsapVector32 The location of the node.
+	 *
+	 * @note The chunk ptr reference can be null.
 	 */
 	template<typename TCallback>
 	void IterateIntersectingNodes(const FRsapCollisionComponent CollisionComponent, TCallback ProcessNodeCallback)
 	{
-		static_assert(std::is_invocable_v<TCallback, FRsapChunk*&, chunk_morton, layer_idx, node_morton, FRsapVector32>,
-		"Rasterize: ProcessNodeCallback signature must match (FRsapChunk*&, chunk_morton, layer_idx, node_morton, FRsapVector32&)");
+		static_assert(std::is_invocable_v<TCallback, FRsapChunk*&, chunk_morton, layer_idx, node_morton, FRsapVector32&>,
+		"IterateIntersectingNodes: argument 'TCallback ProcessNodeCallback' signature must match (FRsapChunk*&, chunk_morton, layer_idx, node_morton, FRsapVector32&)");
 
 		const FRsapBounds& AABB = CollisionComponent.CachedBoundaries;
 
@@ -161,6 +163,8 @@ private:
 		AABB.ForEachChunk([&](const chunk_morton ChunkMC, const FRsapVector32& ChunkLocation, const FRsapBounds& Intersection)
 		{
 			FRsapChunk* Chunk = FindChunk(ChunkMC);
+
+			Intersection.Draw(CollisionComponent.ComponentPtr->GetWorld(), FColor::Black, 5);
 
 			// Loop through the nodes within the intersection.
 			Intersection.ForEachNode(LayerIdx, [&](const node_morton NodeMC, const FRsapVector32& NodeLocation)

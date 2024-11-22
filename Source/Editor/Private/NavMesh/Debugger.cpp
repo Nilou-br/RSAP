@@ -184,7 +184,11 @@ void FRsapDebugger::DrawNodes(const UWorld* World, const FRsapChunk& Chunk, cons
 
 	if(!InDistance(CameraLocation, NodeCenter, LayerIdx)) return;
 	if(!bDrawSpecificLayer) Draw();
-	else if(LayerIdx == DrawLayerIdx) Draw();
+	else if(LayerIdx == DrawLayerIdx)
+	{
+		Draw();
+		return;
+	}
 
 	const layer_idx ChildLayerIdx = LayerIdx+1;
 	Node.ForEachChild(NodeMC, LayerIdx, [&](const node_morton ChildMC)

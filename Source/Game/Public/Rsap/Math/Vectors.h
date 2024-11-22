@@ -135,6 +135,16 @@ struct FRsapVector32 // todo: int64 to support SizeExponent >= 2 ?
 		return FMortonUtils::Chunk::Encode(X, Y, Z);
 	}
 
+	FORCEINLINE node_morton ToNodeMorton() const
+	{
+		using namespace Rsap::NavMesh;
+		const FRsapVector32 ChunkLocation = FloorToChunk();
+		const uint16 LocalX = static_cast<uint16>((X - ChunkLocation.X) >> SizeShift);
+		const uint16 LocalY = static_cast<uint16>((Y - ChunkLocation.Y) >> SizeShift);
+		const uint16 LocalZ = static_cast<uint16>((Z - ChunkLocation.Z) >> SizeShift);
+		return FMortonUtils::Node::Encode(LocalX, LocalY, LocalZ);
+	}
+
 	FORCEINLINE FRsapVectorU10 ToLocalVector(const FRsapVector32 ChunkLocation) const
 	{
 		using namespace Rsap::NavMesh;
@@ -306,6 +316,11 @@ struct FRsapVector32 // todo: int64 to support SizeExponent >= 2 ?
 	FORCEINLINE int32 GetLargestAxis() const
 	{
 		return FMath::Max(FMath::Max(X,Y), Z);
+	}
+
+	FORCEINLINE FRsapVector32 AddNodeSize(const layer_idx LayerIdx) const
+	{
+		return *this + Node::Sizes[LayerIdx];
 	}
 
 	explicit FRsapVector32(const FVector &InVector)
