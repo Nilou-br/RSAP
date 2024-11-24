@@ -70,27 +70,16 @@ struct FRsapNavmeshLoadResult
 };
 
 
-
-/*
- * RSAP's sound-navigation-mesh wrapper providing API for loading, saving, generating and updating the navmesh.
- * Call the load method before anything else.
- */
-class RSAPGAME_API FRsapNavmesh
+template <typename ChunkType>
+class RSAPGAME_API TRsapNavMeshBase
 {
 public:
-	
 #if WITH_EDITOR
-	Rsap::Map::ordered_map<chunk_morton, FRsapChunk> Chunks;
+	Rsap::Map::ordered_map<chunk_morton, ChunkType> Chunks;
 #else
-	Rsap::Map::flat_map<chunk_morton, FRsapChunk> Chunks;
+	Rsap::Map::flat_map<chunk_morton, ChunkType> Chunks;
 #endif
-
-	void Generate(const IRsapWorld* RsapWorld);
-	void ProcessActorChange(const FRsapActorChangedResult& ActorChange);
-
-	void Save();
-	FRsapNavmeshLoadResult Load(const IRsapWorld* RsapWorld);
-
+	
 	// Returns nullptr if it does not exist.
 	FORCEINLINE FRsapChunk* FindChunk(const chunk_morton ChunkMC)
 	{
@@ -109,6 +98,31 @@ public:
 		Chunks.clear();
 	}
 
+	void LogNodeCount() const
+	{
+		for(const auto& [ChunkMC, Chunk] : Chunks)
+		{
+			size_t NodeCount = 0;
+			for (const auto& Layer : Chunk.Octrees[0]->Layers) NodeCount += Layer->size();
+			NodeCount += Chunk.Octrees[0]->LeafNodes->size();
+			UE_LOG(LogRsap, Log, TEXT("Chunk: '%llu-%llu' has %llu nodes"), ChunkMC >> 6, ChunkMC & 0b111111, NodeCount)
+		}
+	}
+};
+
+/*
+ *The sound-navigation-mesh wrapper for loading, saving, generating and updating the navmesh.
+ * Call the load method before anything else.
+ */
+class RSAPGAME_API FRsapNavmesh : public TRsapNavMeshBase<FRsapChunk>
+{
+public:
+	void Generate(const IRsapWorld* RsapWorld);
+	void ProcessActorChange(const FRsapActorChangedResult& ActorChange);
+
+	void Save();
+	FRsapNavmeshLoadResult Load(const IRsapWorld* RsapWorld);
+
 private:
 	// Processing
 	void HandleGenerate(const FRsapActorMap& ActorMap);
@@ -126,8 +140,6 @@ private:
 	void InitNodeParents(const FRsapChunk& Chunk, chunk_morton ChunkMC, node_morton NodeMC, layer_idx LayerIdx, node_state NodeState);
 	void SetNodeRelation(const FRsapChunk& Chunk, chunk_morton ChunkMC, FRsapNode& Node, node_morton NodeMC, layer_idx LayerIdx, rsap_direction Relation);
 	void SetNodeRelations(const FRsapChunk& Chunk, chunk_morton ChunkMC, FRsapNode& Node, node_morton NodeMC, layer_idx LayerIdx, rsap_direction Relations);
-
-	void LogNodeCount() const;
 	
 	URsapNavmeshMetadata* Metadata = nullptr;
 	bool bRegenerated = false;
@@ -178,6 +190,14 @@ private:
 	}
 };
 
+/*
+ * The dirty-navmesh is used to store dirty-nodes which is used to update the actual navmesh.
+ * With this we can give update priority to specific regions, g.e. close proximity to the player and areas that are often being traversed.
+ */
+class RSAPGAME_API FRsapDirtyNavmesh : public TRsapNavMeshBase<FRsapDirtyChunk>
+{
+	
+};
 
 /**
  * Handles running certain tasks related to the navmesh asynchronously in sequence.

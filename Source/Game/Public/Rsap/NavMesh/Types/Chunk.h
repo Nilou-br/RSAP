@@ -10,29 +10,33 @@ using namespace Rsap::NavMesh;
 
 
 
-/**
- * A Chunk stores two octrees.
- * The first octree at index 0 is static. The nodes are generated/updated within the editor, never during gameplay. Only the relations can be updated during gameplay to point to dynamic nodes, but these changes aren't serialized.
- * The second octree at index 1 is dynamic. The nodes are created from dynamic objects during gameplay. These will not be serialized.
- */
-struct FRsapChunk
+template<typename NodeType>
+struct TRsapChunkBase
 {
-private:
 	struct FOctree
 	{
-		std::array<std::shared_ptr<FRsapLayer>, 10> Layers;
+		std::array<std::shared_ptr<Rsap::Map::ordered_map<node_morton, NodeType>>, 10> Layers;
 		std::shared_ptr<FRsapLeafLayer> LeafNodes;
 
 		FOctree()
 		{
 			for (layer_idx LayerIdx = 0; LayerIdx < 10; ++LayerIdx)
 			{
-				Layers[LayerIdx] = std::make_unique<FRsapLayer>();
+				Layers[LayerIdx] = std::make_unique<Rsap::Map::ordered_map<node_morton, NodeType>>();
 			}
 			LeafNodes = std::make_unique<FRsapLeafLayer>();
 		}
 	};
-	
+};
+
+/**
+ * The Chunk stores two octrees.
+ * The first octree at index 0 is static. The nodes are generated/updated within the editor, never during gameplay. Only the relations can be updated during gameplay to point to dynamic nodes, but these changes aren't serialized.
+ * The second octree at index 1 is dynamic. The nodes are created from dynamic objects during gameplay. These will not be serialized.
+ */
+struct FRsapChunk : TRsapChunkBase<FRsapNode>
+{
+private:
 	void Initialize()
 	{
 		Octrees[0] = std::make_shared<FOctree>();
@@ -145,4 +149,14 @@ public:
 	}
 };
 
-typedef std::pair<chunk_morton, FRsapChunk> FRsapChunkPair;
+struct FRsapDirtyChunk : TRsapChunkBase<FRsapDirtyNode>
+{
+private:
+	void Initialize()
+	{
+		Octree = std::make_shared<FOctree>();
+	}
+
+public:
+	std::shared_ptr<FOctree> Octree;
+};
