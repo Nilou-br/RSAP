@@ -231,3 +231,21 @@ void FRsapNavmesh::RasterizeLeaf(FRsapLeaf& LeafNode, const FRsapVector32& NodeL
 		LeafNode.Leafs |= static_cast<uint64>(GroupedLeafs) << Leaf::Children::MasksShift[LeafGroupIdx];
 	}
 }
+
+void FRsapNavmesh::LogNodeCount() const
+{
+	// DEBUG:
+	// Read amount of nodes in navmesh.
+	for(const auto& [ChunkMC, Chunk] : Chunks)
+	{
+		size_t NodeCount = 0;
+
+		for (const auto& Layer : Chunk.Octrees[0]->Layers)
+		{
+			NodeCount += Layer->size();
+		}
+		NodeCount += Chunk.Octrees[0]->LeafNodes->size();
+
+		UE_LOG(LogRsap, Log, TEXT("Chunk: '%llu-%llu' has %llu nodes"), ChunkMC >> 6, ChunkMC & 0b111111, NodeCount)
+	}
+}

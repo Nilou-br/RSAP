@@ -86,6 +86,7 @@ public:
 #endif
 
 	void Generate(const IRsapWorld* RsapWorld);
+	void ProcessActorChange(const FRsapActorChangedResult& ActorChange);
 
 	void Save();
 	FRsapNavmeshLoadResult Load(const IRsapWorld* RsapWorld);
@@ -125,6 +126,8 @@ private:
 	void InitNodeParents(const FRsapChunk& Chunk, chunk_morton ChunkMC, node_morton NodeMC, layer_idx LayerIdx, node_state NodeState);
 	void SetNodeRelation(const FRsapChunk& Chunk, chunk_morton ChunkMC, FRsapNode& Node, node_morton NodeMC, layer_idx LayerIdx, rsap_direction Relation);
 	void SetNodeRelations(const FRsapChunk& Chunk, chunk_morton ChunkMC, FRsapNode& Node, node_morton NodeMC, layer_idx LayerIdx, rsap_direction Relations);
+
+	void LogNodeCount() const;
 	
 	URsapNavmeshMetadata* Metadata = nullptr;
 	bool bRegenerated = false;
@@ -134,19 +137,19 @@ private:
 
 	
 	/**
-	 * Runs the given callback for each node in the most optimal layer intersecting the collision component.
+	 * Runs the given callback for each node, in the most optimal layer, that is intersecting the collision component.
 	 *
 	 * @param CollisionComponent The FRsapCollisionComponent to iterate over.
-	 * @param ProcessNodeCallback Callback that receives all the necessary data to rasterize the navmesh.
+	 * @param ProcessNodeCallback The callback that receives all the necessary data to process the node in any way.
 	 *
 	 * The callback will receive:
-	 * - FRsapChunk*& The chunk the node is in, which can be nullptr.
+	 * - FRsapChunk*& The chunk the node is in, which will be nullptr if it has not been initialized yet.
 	 * - chunk_morton Morton-code of the chunk.
 	 * - layer_idx The layer the node is in.
 	 * - node_morton The morton-code of the node.
 	 * - FRsapVector32 The location of the node.
 	 *
-	 * @note The chunk ptr reference can be null.
+	 * @note The chunk ptr reference can be null, and if so, init a new chunk ( if required ) into this reference so that it can be reused in the next iteration.
 	 */
 	template<typename TCallback>
 	void IterateIntersectingNodes(const FRsapCollisionComponent CollisionComponent, TCallback ProcessNodeCallback)
@@ -173,4 +176,15 @@ private:
 			});
 		});
 	}
+};
+
+
+/**
+ * Handles running certain tasks related to the navmesh asynchronously in sequence.
+ *
+ * 
+ */
+class RSAPGAME_API FRsapAsyncTaskSequencer
+{
+	
 };
