@@ -278,7 +278,7 @@ struct FRsapBounds
 	}
 
 	/**
-	 * Runs the callback for-each node in the given layer intersecting with these bounds, ordered by their morton-code.
+	 * Runs the callback for-each node intersecting with these bounds in the given layer.
 	 * 
 	 * Callback returns:
 	 * node_morton: morton-code of the node.
@@ -294,7 +294,6 @@ struct FRsapBounds
 		// which will mess up the following loop for that coordinate
 		FRsapBounds Boundaries = RoundToLayer(LayerIdx);
 		Boundaries.Max = Boundaries.Max - Node::Sizes[LayerIdx];
-		
 		
 		// Init the morton-code to the first node on the negative most corner.
 		const node_morton StartingMC = Boundaries.Min.ToNodeMorton();
@@ -329,6 +328,37 @@ struct FRsapBounds
 			// We don't need to reset the Z axis because this loop won't be repeated.
 			NodeMC = FMortonUtils::Node::AddZ(NodeMC, LayerIdx);
 		}
+	}
+
+	/**
+	 * Gets the most optimal octree-layer to start rasterizing the nodes that are intersecting with these bounds.
+	 * See docs for more info.
+	 */
+	layer_idx GetOptimalRasterizationLayer() const
+	{
+		// Get the largest dimension of this bounding-box.
+		const int32 LargestSide = GetLengths().GetLargestAxis();
+
+		// Get the first layer where at-least 3 nodes-width is required to fill the side.
+		for (layer_idx LayerIdx = Layer::Root; LayerIdx < Layer::Total; ++LayerIdx)
+		{
+			if(LargestSide / Node::Sizes[LayerIdx] <= 1) continue;
+			return LayerIdx;
+		}
+		return Layer::Leaf; // Very small boundaries, so just use the deepest layer.
+	}
+
+	/**
+	 * Gets the nodes intersecting with these boundaries within the given layer.
+	 */
+	std::set<node_morton> GetIntersectingNodes(const layer_idx LayerIdx) const
+	{
+		std::set<node_morton> Result;
+		ForEachNode(LayerIdx, [&](const node_morton NodeMC, const FRsapVector32& Location)
+		{
+			Result.emplace(NodeMC);
+		});
+		return Result;
 	}
 
 	// Returns true if the AABB overlap with the other.
@@ -390,18 +420,6 @@ struct FRsapBounds
 			FCollisionQueryParams::DefaultQueryParam,
 			FCollisionResponseParams::DefaultResponseParam
 		);
-	}
-
-	// Iterates over all nodes within these bounds.
-	template<typename OffsetType, typename Func>
-	void ForEachPoint(const OffsetType Offset, Func Callback) const {
-		for (OffsetType X = Min.X; X < Max.X; X+=Offset) {
-			for (OffsetType Y = Min.Y; Y < Max.Y; Y+=Offset) {
-				for (OffsetType Z = Min.Z; Z < Max.Z; Z+=Offset) {
-					Callback(FRsapVector32(X, Y, Z));
-				}
-			}
-		}
 	}
 };
 

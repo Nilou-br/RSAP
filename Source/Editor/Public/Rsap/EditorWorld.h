@@ -48,6 +48,7 @@ private:
 	
 	FDelegateHandle ActorSelectionChangedHandle; void HandleActorSelectionChanged(const TArray<UObject*>& Objects, bool);
 	FDelegateHandle ObjectPropertyChangedHandle; void HandleObjectPropertyChanged(UObject* Object, FPropertyChangedEvent& PropertyChangedEvent);
+	void TryCacheActor(const actor_key ActorKey, const AActor* Actor);
 
 	FDelegateHandle OnCameraMovedHandle; void HandleOnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation, ELevelViewportType LevelViewportType, int32 RandomInt);
 };

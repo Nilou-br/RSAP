@@ -25,7 +25,7 @@ void URsapEditorManager::Initialize(FSubsystemCollectionBase& Collection)
 	EditorWorld.PreMapSaved.BindUObject(this, &ThisClass::PreMapSaved);
 	EditorWorld.PostMapSaved.BindUObject(this, &ThisClass::PostMapSaved);
 
-	EditorWorld.OnActorChanged.BindUObject(this, &ThisClass::OnActorChanged);
+	EditorWorld.OnCollisionComponentChanged.BindUObject(this, &ThisClass::OnCollisionComponentChanged);
 
 	//FRsapUpdater::OnUpdateComplete.AddUObject(this, &ThisClass::OnNavMeshUpdated);
 }
@@ -38,7 +38,7 @@ void URsapEditorManager::Deinitialize()
 	EditorWorld.PreMapSaved.Unbind();
 	EditorWorld.PostMapSaved.Unbind();
 
-	EditorWorld.OnActorChanged.Unbind();
+	EditorWorld.OnCollisionComponentChanged.Unbind();
 
 	// FRsapUpdater::OnUpdateComplete.RemoveAll(this);
 
@@ -107,15 +107,15 @@ void URsapEditorManager::PostMapSaved(const bool bSuccess)
 	if(bSuccess) NavMesh.Save(); // todo: check if this also runs if a different level is saved from the one that is opened?
 }
 
-void URsapEditorManager::OnActorChanged(const FRsapActorChangedResult& ActorChangedResult)
+void URsapEditorManager::OnCollisionComponentChanged(const FRsapCollisionComponentChangedResult& ChangedResult)
 {
-	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnActorChanged"))
-	switch (ActorChangedResult.ChangedType)
+	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnCollisionComponentChanged"))
+	switch (ChangedResult.Type)
 	{
-		case ERsapActorChangedType::Added:		UE_LOG(LogRsap, Warning, TEXT("Added")); break;
-		case ERsapActorChangedType::Moved:		UE_LOG(LogRsap, Warning, TEXT("Moved")); break;
-		case ERsapActorChangedType::Deleted:	UE_LOG(LogRsap, Warning, TEXT("Deleted")); break;
-		case ERsapActorChangedType::None:		UE_LOG(LogRsap, Warning, TEXT("None")); break;
+		case ERsapCollisionComponentChangedType::Added:		UE_LOG(LogRsap, Warning, TEXT("Added")); break;
+		case ERsapCollisionComponentChangedType::Moved:		UE_LOG(LogRsap, Warning, TEXT("Moved")); break;
+		case ERsapCollisionComponentChangedType::Deleted:	UE_LOG(LogRsap, Warning, TEXT("Deleted")); break;
+		case ERsapCollisionComponentChangedType::None:		UE_LOG(LogRsap, Warning, TEXT("None")); break;
 		default: break;
 	}
 }

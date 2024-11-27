@@ -5,8 +5,3 @@
 #include <ranges>
 
 
-
-void FRsapNavmesh::ProcessActorChange(const FRsapActorChangedResult& ActorChange)
-{
-	
-}

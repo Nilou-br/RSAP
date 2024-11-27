@@ -8,8 +8,8 @@
 // Base Interface for the UWorld wrapper.
 class IRsapWorld
 {
-	DECLARE_DELEGATE_OneParam(FOnMapOpened,		const IRsapWorld* RsapWorld);
-	DECLARE_DELEGATE_OneParam(FOnActorChanged,	const FRsapActorChangedResult& ActorChangedResult);
+	DECLARE_DELEGATE_OneParam(FOnMapOpened,	const IRsapWorld* RsapWorld);
+	DECLARE_DELEGATE_OneParam(FOnCollisionComponentChanged,	const FRsapCollisionComponentChangedResult& Result);
 	
 public:
 	virtual ~IRsapWorld() = default;
@@ -24,7 +24,7 @@ public:
 	bool MarkDirty() const { return World ? World->GetOuter()->MarkPackageDirty() : false; }
 
 	FOnMapOpened	OnMapOpened;
-	FOnActorChanged	OnActorChanged;
+	FOnCollisionComponentChanged OnCollisionComponentChanged;
 	
 protected:
 	FDelegateHandle MapOpenedHandle;

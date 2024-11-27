@@ -118,7 +118,6 @@ class RSAPGAME_API FRsapNavmesh : public TRsapNavMeshBase<FRsapChunk>
 {
 public:
 	void Generate(const IRsapWorld* RsapWorld);
-	void ProcessActorChange(const FRsapActorChangedResult& ActorChange);
 
 	void Save();
 	FRsapNavmeshLoadResult Load(const IRsapWorld* RsapWorld);
@@ -164,12 +163,12 @@ private:
 	 * @note The chunk ptr reference can be null, and if so, init a new chunk ( if required ) into this reference so that it can be reused in the next iteration.
 	 */
 	template<typename TCallback>
-	void IterateIntersectingNodes(const FRsapCollisionComponent CollisionComponent, TCallback ProcessNodeCallback)
+	void IterateIntersectingNodes(const FRsapCollisionComponent& CollisionComponent, TCallback ProcessNodeCallback)
 	{
 		static_assert(std::is_invocable_v<TCallback, FRsapChunk*&, chunk_morton, layer_idx, node_morton, FRsapVector32&>,
 		"IterateIntersectingNodes: argument 'TCallback ProcessNodeCallback' signature must match (FRsapChunk*&, chunk_morton, layer_idx, node_morton, FRsapVector32&)");
 
-		const FRsapBounds& AABB = CollisionComponent.CachedBoundaries;
+		const FRsapBounds& AABB = CollisionComponent.Boundaries;
 
 		// Get the optimal iteration layer for these boundaries.
 		const layer_idx LayerIdx = CalculateOptimalIterationLayer(AABB);
@@ -179,7 +178,7 @@ private:
 		{
 			FRsapChunk* Chunk = FindChunk(ChunkMC);
 
-			Intersection.Draw(CollisionComponent.ComponentPtr->GetWorld(), FColor::Black, 5);
+			Intersection.Draw(CollisionComponent.PrimitiveComponent->GetWorld(), FColor::Black, 5);
 
 			// Loop through the nodes within the intersection.
 			Intersection.ForEachNode(LayerIdx, [&](const node_morton NodeMC, const FRsapVector32& NodeLocation)

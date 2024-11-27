@@ -40,7 +40,7 @@ private:
 	void PreMapSaved();
 	void PostMapSaved(const bool bSuccess);
 
-	void OnActorChanged(const FRsapActorChangedResult& ActorChangedResult);
+	void OnCollisionComponentChanged(const FRsapCollisionComponentChangedResult& ChangedResult);
 
 	void OnNavMeshUpdated() const;
 

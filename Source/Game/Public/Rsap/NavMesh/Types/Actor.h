@@ -3,67 +3,73 @@
 #pragma once
 
 #include <ranges>
-
 #include "Rsap/Definitions.h"
 #include "Rsap/Math/Bounds.h"
 
 
 
-// inline actor_key GetActorKey(const AActor* Actor)
-// {
-// 	return GetTypeHash(Actor->GetActorGuid());
-// }
-
 struct FRsapCollisionComponent
 {
-	TWeakObjectPtr<const UPrimitiveComponent> ComponentPtr;
+	TWeakObjectPtr<const UPrimitiveComponent> PrimitiveComponent;
 	uint16 SoundPresetID = 0;
-	
-	FRsapBounds CachedBoundaries;
-	FTransform CachedTransform;
+
+	FTransform Transform;
+	FRsapBounds Boundaries;
 
 	explicit FRsapCollisionComponent(const UPrimitiveComponent* Component)
-		: ComponentPtr(Component), CachedBoundaries(Component), CachedTransform(Component->GetComponentTransform())
+		: PrimitiveComponent(Component), Transform(Component->GetComponentTransform()), Boundaries(Component)
 	{}
 
-	bool IsValid() const { return ComponentPtr.IsValid(); }
-	const UPrimitiveComponent* operator*() const { return ComponentPtr.Get(); }
+	bool IsValid() const { return PrimitiveComponent.IsValid(); }
+	const UPrimitiveComponent* operator*() const { return PrimitiveComponent.Get(); }
 
 	bool HasMoved() const
 	{
-		if (!ComponentPtr.IsValid()) return false;
-		return !CachedTransform.Equals(ComponentPtr->GetComponentTransform());
+		if (!PrimitiveComponent.IsValid()) return false;
+		return !Transform.Equals(PrimitiveComponent->GetComponentTransform());
 	}
 
 	void UpdateCache()
 	{
-		CachedTransform = ComponentPtr->GetComponentTransform();
-		CachedBoundaries = FRsapBounds(ComponentPtr.Get());
+		Transform = PrimitiveComponent->GetComponentTransform();
+		Boundaries = FRsapBounds(PrimitiveComponent.Get());
 	}
 };
 
-typedef Rsap::Map::flat_map<const UPrimitiveComponent*, FRsapCollisionComponent> FRsapCollisionComponentMap;
+typedef Rsap::Map::flat_map<const UPrimitiveComponent*, std::shared_ptr<FRsapCollisionComponent>> FRsapCollisionComponentMap;
+typedef std::weak_ptr<FRsapCollisionComponent> FRsapCollisionComponentPtr;
 
-
-
-enum class ERsapActorChangedType
+enum class ERsapCollisionComponentChangedType
 {
 	Added, Moved, Deleted, None
 };
 
-/**
- * Holds information about an actor that had been updated.
- */
-struct FRsapActorChangedResult
+struct FRsapCollisionComponentChangedResult
 {
-	explicit FRsapActorChangedResult(const actor_key InActorKey) : ActorKey(InActorKey) {}
+	const ERsapCollisionComponentChangedType Type;
+	const FRsapCollisionComponentPtr ComponentPtr;		 // Can be used as key.
+	const std::set<node_morton> AffectedNodes; // Nodes that the actor is/was in during this change.
+	const layer_idx AffectedNodesLayerIdx;				 // The layer the affected nodes are in, which is the optimal rasterization layer.
 
-	ERsapActorChangedType ChangedType;
-	actor_key ActorKey;
-	std::vector<FRsapCollisionComponent> CollisionComponents;
-	std::vector<FRsapBounds> DirtyBoundaries;
+	FRsapCollisionComponentChangedResult(
+		const ERsapCollisionComponentChangedType InType, const FRsapCollisionComponentPtr& InComponentPtr,
+		const std::set<node_morton>& InAffectedNodes, const layer_idx InAffectedNodesLayerIdx)
+		: Type(InType), ComponentPtr(InComponentPtr), AffectedNodes(InAffectedNodes), AffectedNodesLayerIdx(InAffectedNodesLayerIdx)
+	{}
 
-	bool HadChanges() const { return DirtyBoundaries.size() || CollisionComponents.size(); }
+	static FRsapCollisionComponentChangedResult Create(const std::shared_ptr<FRsapCollisionComponent>& Component, const ERsapCollisionComponentChangedType Type)
+	{
+		const FRsapBounds& LastKnownBoundaries = Component->Boundaries;
+		const layer_idx OptimalLayer = LastKnownBoundaries.GetOptimalRasterizationLayer();
+		const std::set<node_morton> AffectedNodes = LastKnownBoundaries.GetIntersectingNodes(OptimalLayer);
+		return FRsapCollisionComponentChangedResult(Type,Component, AffectedNodes, OptimalLayer);
+	}
+
+	static FRsapCollisionComponentChangedResult Create(const std::weak_ptr<FRsapCollisionComponent>& Component, const ERsapCollisionComponentChangedType Type)
+	{
+		// The pointer should be valid, this overload is just for ease of use.
+		return Create(Component.lock(), Type);
+	}
 };
 
 /**
@@ -73,14 +79,19 @@ struct FRsapActorChangedResult
 class FRsapActor
 {
 	TWeakObjectPtr<const AActor> ActorPtr;
-	FRsapCollisionComponentMap CachedComponents;
+	FRsapCollisionComponentMap CollisionComponents;
 	bool bIsStatic = true;
 
 public:
 	explicit FRsapActor(const AActor* Actor)
 	{
 		ActorPtr = Actor;
-		CachedComponents = GetComponentsMap();
+
+		// Init the collision-components.
+		for (const UPrimitiveComponent* PrimitiveComponent : GetPrimitiveComponents())
+		{
+			CollisionComponents.emplace(PrimitiveComponent, std::make_shared<FRsapCollisionComponent>(PrimitiveComponent));
+		}
 	}
 
 	const AActor* GetActor() const { return ActorPtr.Get(); }
@@ -90,78 +101,72 @@ public:
 		return GetTypeHash(ActorPtr->GetActorGuid());
 	}
 
-	FRsapCollisionComponentMap GetComponentsMap() const
+	std::vector<const UPrimitiveComponent*> GetPrimitiveComponents() const
 	{
-		FRsapCollisionComponentMap Result;
-		
-		TArray<UActorComponent*> Components; ActorPtr->GetComponents(Components);
-		for (UActorComponent* Component : Components)
+		std::vector<const UPrimitiveComponent*> Result;
+		TArray<UActorComponent*> ActorComponents; ActorPtr->GetComponents(ActorComponents);
+		for (UActorComponent* ActorComponent : ActorComponents)
 		{
-			if (const UPrimitiveComponent* PrimitiveComponent = Cast<UPrimitiveComponent>(Component); PrimitiveComponent && PrimitiveComponent->IsCollisionEnabled())
+			if (const UPrimitiveComponent* PrimitiveComponent = Cast<UPrimitiveComponent>(ActorComponent); PrimitiveComponent && PrimitiveComponent->IsCollisionEnabled())
 			{
-				Result.emplace(PrimitiveComponent, FRsapCollisionComponent(PrimitiveComponent));
+				Result.emplace_back(PrimitiveComponent);
 			}
 		}
-
 		return Result;
 	}
 
-	std::vector<FRsapCollisionComponent> GetCachedComponents() const
+	std::vector<std::weak_ptr<FRsapCollisionComponent>> GetCollisionComponents()
 	{
-		std::vector<FRsapCollisionComponent> Result;
-		for (const auto& Component : CachedComponents | std::views::values) Result.emplace_back(Component);
+		std::vector<std::weak_ptr<FRsapCollisionComponent>> Result;
+		for (const auto& CollisionComponent : CollisionComponents | std::views::values) Result.emplace_back(CollisionComponent);
 		return Result;
 	}
 
-	bool HasAnyCollisionComponent() const { return !CachedComponents.empty(); }
-
-	/**
-	 * Detects any changes in the collision components of the actor.
-	 * @returns FRsapActorChangedResult that can be used to check if anything has changed, and can be passed to the navmesh to update it.
-	 */
-	FRsapActorChangedResult DetectAndUpdateChanges()
+	bool HasAnyCollisionComponent() const { return !CollisionComponents.empty(); }
+	
+	std::vector<FRsapCollisionComponentChangedResult> DetectAndUpdateChanges()
 	{
-		FRsapActorChangedResult Result(GetActorKey());
-		if (!ActorPtr.IsValid()) return Result;
+	    std::vector<FRsapCollisionComponentChangedResult> ChangedResults;
+
+	    if (!ActorPtr.IsValid())
+	    {
+	    	// Actor is invalid so we can pass all components to the result as 'deleted'.
+	        for (const auto& CollisionComponent : CollisionComponents | std::views::values)
+	        {
+	            ChangedResults.emplace_back(FRsapCollisionComponentChangedResult::Create(CollisionComponent, ERsapCollisionComponentChangedType::Deleted));
+	        }
+
+	        CollisionComponents.clear();
+	        return ChangedResults;
+	    }
+
+		// Check the cached collision-components for any changes.
+	    for (const auto& CollisionComponent : CollisionComponents | std::views::values)
+	    {
+	    	// Check if the wrapped primitive has been deleted.
+		    if(!CollisionComponent->PrimitiveComponent.IsValid())
+		    {
+		    	ChangedResults.emplace_back(FRsapCollisionComponentChangedResult::Create(CollisionComponent, ERsapCollisionComponentChangedType::Deleted));
+		    	continue;
+		    }
+
+	    	// Check if the transform has changed.
+	    	const UPrimitiveComponent* PrimitiveComponent = CollisionComponent.get()->PrimitiveComponent.Get();
+	    	const FTransform PrimitiveTransform = PrimitiveComponent->GetComponentTransform();
+	    	if(CollisionComponent->Transform.Equals(PrimitiveTransform)) continue; // todo: Later try switching to checking the boundaries instead, and see if it still accurately updates the navmesh.
+	    	CollisionComponent->Transform = PrimitiveTransform;
+	    	ChangedResults.emplace_back(FRsapCollisionComponentChangedResult::Create(CollisionComponent, ERsapCollisionComponentChangedType::Moved));
+	    }
+
+		// Check if there are any new components with collision.
+	    for (const UPrimitiveComponent* PrimitiveComponent : GetPrimitiveComponents())
+	    {
+	    	if(CollisionComponents.contains(PrimitiveComponent)) continue;
+	    	const auto& NewComponent = CollisionComponents.emplace(PrimitiveComponent, std::make_shared<FRsapCollisionComponent>(PrimitiveComponent)).first->second;
+	    	ChangedResults.emplace_back(FRsapCollisionComponentChangedResult::Create(NewComponent, ERsapCollisionComponentChangedType::Added));
+	    }
 		
-		FRsapCollisionComponentMap CurrentComponents = GetComponentsMap();
-
-		// Check the cached components for if any have been moved / removed.
-		for (auto& [Ptr, CachedComponent] : CachedComponents)
-		{
-			if (const auto& Iterator = CurrentComponents.find(Ptr); Iterator == CurrentComponents.end())
-			{
-				// Component was removed, so remove it from the cache and add it's last known bounds to the dirty-bounds.
-				Result.DirtyBoundaries.push_back(CachedComponent.CachedBoundaries);
-				CachedComponents.erase(Ptr);
-			}
-			else if (CachedComponent.HasMoved())
-			{
-				// Component has moved, so add it's cached bounds to the dirty-bounds, and update the component to reflect the changes.
-				Result.DirtyBoundaries.push_back(CachedComponent.CachedBoundaries);
-				CachedComponent.UpdateCache();
-				Result.CollisionComponents.push_back(CachedComponent);
-			}
-		}
-
-		// Check the current components on the actor and see if any of them are not yet in the cached components.
-		for (const auto& [Ptr, CurrentComponent] : CurrentComponents)
-		{
-			if (const auto Iterator = CachedComponents.find(Ptr); Iterator == CachedComponents.end())
-			{
-				// The component is not yet in the cache.
-				CachedComponents.emplace(Ptr, CurrentComponent);
-
-				// Add this to the result as well.
-				Result.CollisionComponents.push_back(CurrentComponent);
-			}
-		}
-
-		// Set the event type based on the results.
-		if(Result.CollisionComponents.empty())  Result.ChangedType = ERsapActorChangedType::Deleted; // No components means that there is no collision anymore.
-		else if(Result.DirtyBoundaries.empty()) Result.ChangedType = ERsapActorChangedType::Added;	 // This should not be reached, but it will still work if it does.
-		else Result.ChangedType									   = ERsapActorChangedType::Moved;   // Both populated means it has moved.
-		return Result;
+	    return ChangedResults;
 	}
 };
 

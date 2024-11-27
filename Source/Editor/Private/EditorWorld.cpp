@@ -1,6 +1,9 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #include "Rsap/EditorWorld.h"
+
+#include <unordered_set>
+
 #include "LevelEditor.h"
 #include "Engine/StaticMeshActor.h"
 #include "Kismet/GameplayStatics.h"
@@ -71,6 +74,10 @@ void FRsapEditorWorld::HandlePostMapSaved(UWorld*, FObjectPostSaveContext PostSa
 	if(PostMapSaved.IsBound()) PostMapSaved.Execute(PostSaveContext.SaveSucceeded());
 }
 
+/**
+ * This event can deduce if one or more actors have been added/deleted.
+ * Will update the cached RsapActors, and broadcast OnCollisionComponentChanged, if there are any changes.
+ */
 void FRsapEditorWorld::HandleActorSelectionChanged(const TArray<UObject*>& Objects, bool)
 {
 	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::HandleActorSelectionChanged"))
@@ -78,7 +85,8 @@ void FRsapEditorWorld::HandleActorSelectionChanged(const TArray<UObject*>& Objec
 	
 	const std::vector<actor_key> PrevSelectedActors = std::move(SelectedActors);
 
-	// Loop through the objects.
+	// Update the SelectedActors, and check if any actor has not yet been cached.
+	// Cache the actor if they have valid collision.
 	for (UObject* Object : Objects)
 	{
 		// Skip anything that is not an AActor.
@@ -91,73 +99,72 @@ void FRsapEditorWorld::HandleActorSelectionChanged(const TArray<UObject*>& Objec
 		// If this actor is not yet cached, then it has just been added to the world, or it did not have any collision component.
 		if(RsapActors.find(ActorKey) == RsapActors.end())
 		{
-			const auto RsapActor = std::make_shared<FRsapActor>(Actor);
-			if(!RsapActor->HasAnyCollisionComponent()) continue;
-		
-			// The actor has collision so update the entry.
-			RsapActors[ActorKey] = RsapActor;
-
-			// Broadcast the actor-added event passing the actor's components.
-			FRsapActorChangedResult ActorChangedResult(ActorKey);
-			ActorChangedResult.ChangedType = ERsapActorChangedType::Added;
-			ActorChangedResult.CollisionComponents = RsapActor->GetCachedComponents();
-			OnActorChanged.Execute(FRsapActorChangedResult(ActorKey));
+			TryCacheActor(ActorKey, Actor);
 		}
 	}
 
-	// Loop through remaining 'previous selected actors', and check their alive state.
-	// Actors that are invalid are deleted from the viewport, so we can clear it from the cache and broadcast this change.
+	// Loop through the previous selected-actors, and check their alive state.
+	// If an actor is invalid, then it has been deleted, so we can remove it from the cache, and broadcast this change.
 	for (auto PrevActorKey : PrevSelectedActors)
 	{
 		const auto Iterator = RsapActors.find(PrevActorKey);
 		if(Iterator == RsapActors.end()) continue; // Not in the list, so it probably did not have collision.
-		if(IsValid(Iterator->second->GetActor())) continue; // The actor is still valid.
+		if(IsValid(Iterator->second->GetActor())) continue;
 
-		// Remove it from the map, but keep a copy for the delegate.
-		const auto RsapActor = std::move(Iterator->second);
-		RsapActors.erase(Iterator);
-
-		// Broadcast the actor-delete event passing each cached component's boundaries to the dirty bounds.
-		FRsapActorChangedResult ActorChangedResult(PrevActorKey);
-		ActorChangedResult.ChangedType = ERsapActorChangedType::Deleted;
-		for (const FRsapCollisionComponent& Component : RsapActor->GetCachedComponents())
+		// The actor has been deleted, broadcast the event for each component.
+		const auto RsapActor = Iterator->second;
+		for (const FRsapCollisionComponentPtr& Component : RsapActor->GetCollisionComponents())
 		{
-			ActorChangedResult.DirtyBoundaries.push_back(Component.CachedBoundaries);
+			OnCollisionComponentChanged.Execute(FRsapCollisionComponentChangedResult::Create(Component, ERsapCollisionComponentChangedType::Deleted));
 		}
-		OnActorChanged.Execute(ActorChangedResult);
+		
+		RsapActors.erase(Iterator);
 	}
 }
 
-// Checks the type of object, and what property has changed. If it was an actor's transform that has changed, then the OnActorMoved will be broadcast.
+/**
+ * Checks if there are any changes in the actor's collision-components.
+ * Will update the cached actors, and broadcast OnCollisionComponentChanged, if true.
+ */
 void FRsapEditorWorld::HandleObjectPropertyChanged(UObject* Object, FPropertyChangedEvent& PropertyChangedEvent)
 {
-	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::HandleObjectPropertyChanged"))
 	const AActor* Actor = Cast<AActor>(Object);
 	if(!Actor) return;
-
-	// Get the cached bounds for this actor.
+	
 	const actor_key ActorKey = GetTypeHash(Actor->GetActorGuid());
 	const auto Iterator = RsapActors.find(ActorKey);
 	if(Iterator == RsapActors.end())
 	{
 		// This actor is not cached, so it either has been dropped in the viewport, or the user has triggered an "undo" operation on a deleted actor.
-		const auto& RsapActor = std::make_shared<FRsapActor>(Actor);
-
-		// Only cache if it has collision
-		if(!RsapActor->HasAnyCollisionComponent()) return;
-
-		// Cache the actor, and broadcast actor-added.
-		RsapActors[ActorKey] = RsapActor;
-		FRsapActorChangedResult ActorChangedResult(RsapActor->GetActorKey());
-		ActorChangedResult.ChangedType = ERsapActorChangedType::Added;
-		ActorChangedResult.CollisionComponents = RsapActor->GetCachedComponents();
-		OnActorChanged.Execute(ActorChangedResult);
+		TryCacheActor(ActorKey, Actor);
 		return;
 	}
-	
-	const auto& RsapActor = Iterator->second;
-	const FRsapActorChangedResult ActorChangedResult = RsapActor->DetectAndUpdateChanges();
-	if(ActorChangedResult.HadChanges()) OnActorChanged.Execute(ActorChangedResult);
+
+	// The actor is cached, so try to detect any changes in its collision-components.
+	for (const FRsapCollisionComponentChangedResult& Result : Iterator->second->DetectAndUpdateChanges())
+	{
+		OnCollisionComponentChanged.Execute(Result);
+	}
+}
+
+/**
+ * Will cache the actor if it has any collision-components.
+ * Broadcasts OnCollisionComponentChanged for each collision-component.
+ */
+void FRsapEditorWorld::TryCacheActor(const actor_key ActorKey, const AActor* Actor)
+{
+	// Convert it to an RsapActor which will init any data we need.
+	const auto RsapActor = std::make_shared<FRsapActor>(Actor);
+	if(!RsapActor->HasAnyCollisionComponent()) return;
+		
+	// The actor has collision so update the entry.
+	RsapActors[ActorKey] = RsapActor;
+
+	// Call the event for each collision-component on the actor. This could be done in bulk, but this is easier.
+	for (const FRsapCollisionComponentPtr& Component : RsapActor->GetCollisionComponents())
+	{
+		OnCollisionComponentChanged.Execute(FRsapCollisionComponentChangedResult::Create(Component, ERsapCollisionComponentChangedType::Added));
+	}
 }
 
 void FRsapEditorWorld::HandleOnCameraMoved(const FVector& CameraLocation, const FRotator& CameraRotation, ELevelViewportType LevelViewportType, int32 RandomInt)

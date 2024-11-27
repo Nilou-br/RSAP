@@ -41,14 +41,15 @@ void FRsapNavmesh::HandleGenerate(const FRsapActorMap& ActorMap)
 	for (const auto& RsapActor : ActorMap | std::views::values)
 	{
 		std::unordered_set<chunk_morton> OccludedChunks;
-		for (const FRsapCollisionComponent& CollisionComponent : RsapActor->GetCachedComponents())
+		for (const FRsapCollisionComponentPtr& ComponentPtr : RsapActor->GetCollisionComponents())
 		{
-			if(!CollisionComponent.IsValid()) continue;
+			if(ComponentPtr.expired()) continue;
+			FRsapCollisionComponent CollisionComponent = *ComponentPtr.lock().get();
 			// todo: maybe find thread-safer way to handle the collision component?
 			// todo: maybe different ExecuteRead overload that takes scene instead?
 			// todo: or use the component body ptr directly.
 
-			FPhysicsCommand::ExecuteRead(CollisionComponent.ComponentPtr->BodyInstance.ActorHandle, [&](const FPhysicsActorHandle& ActorHandle)
+			FPhysicsCommand::ExecuteRead(CollisionComponent.PrimitiveComponent->BodyInstance.ActorHandle, [&](const FPhysicsActorHandle& ActorHandle)
 			{
 				// todo: variable determining the minimum size a component needs to be for it to be used for rasterization?
 				IterateIntersectingNodes(CollisionComponent, [&](FRsapChunk*& Chunk, const chunk_morton ChunkMC, const layer_idx LayerIdx, const node_morton NodeMC, const FRsapVector32& NodeLocation)
