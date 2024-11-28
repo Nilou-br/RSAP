@@ -118,6 +118,8 @@ void URsapEditorManager::OnCollisionComponentChanged(const FRsapCollisionCompone
 		case ERsapCollisionComponentChangedType::None:		UE_LOG(LogRsap, Warning, TEXT("None")); break;
 		default: break;
 	}
+	
+	ChangedResult.ComponentPtr.lock()->DebugDrawIntersections();
 }
 
 FVector Transform(const FVector& Location, const FTransform& ActorTransform)

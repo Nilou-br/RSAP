@@ -169,8 +169,6 @@ private:
 		"IterateIntersectingNodes: argument 'TCallback ProcessNodeCallback' signature must match (FRsapChunk*&, chunk_morton, layer_idx, node_morton, FRsapVector32&)");
 
 		const FRsapBounds& AABB = CollisionComponent.Boundaries;
-
-		// Get the optimal iteration layer for these boundaries.
 		const layer_idx LayerIdx = CalculateOptimalIterationLayer(AABB);
 
 		// Loop through the chunks intersecting these component's AABB. This also returns the intersection of the AABB with the chunk.
@@ -189,7 +187,7 @@ private:
 	}
 };
 
-/*
+/**
  * The dirty-navmesh is used to store dirty-nodes which is used to update the actual navmesh.
  * With this we can give update priority to specific regions, g.e. close proximity to the player and areas that are often being traversed.
  */

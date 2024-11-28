@@ -1,9 +1,6 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #include "Rsap/EditorWorld.h"
-
-#include <unordered_set>
-
 #include "LevelEditor.h"
 #include "Engine/StaticMeshActor.h"
 #include "Kismet/GameplayStatics.h"
@@ -99,7 +96,7 @@ void FRsapEditorWorld::HandleActorSelectionChanged(const TArray<UObject*>& Objec
 		// If this actor is not yet cached, then it has just been added to the world, or it did not have any collision component.
 		if(RsapActors.find(ActorKey) == RsapActors.end())
 		{
-			TryCacheActor(ActorKey, Actor);
+			CacheActor(ActorKey, Actor);
 		}
 	}
 
@@ -115,7 +112,7 @@ void FRsapEditorWorld::HandleActorSelectionChanged(const TArray<UObject*>& Objec
 		const auto RsapActor = Iterator->second;
 		for (const FRsapCollisionComponentPtr& Component : RsapActor->GetCollisionComponents())
 		{
-			OnCollisionComponentChanged.Execute(FRsapCollisionComponentChangedResult::Create(Component, ERsapCollisionComponentChangedType::Deleted));
+			OnCollisionComponentChanged.Execute(FRsapCollisionComponentChangedResult(ERsapCollisionComponentChangedType::Deleted, Component));
 		}
 		
 		RsapActors.erase(Iterator);
@@ -136,7 +133,7 @@ void FRsapEditorWorld::HandleObjectPropertyChanged(UObject* Object, FPropertyCha
 	if(Iterator == RsapActors.end())
 	{
 		// This actor is not cached, so it either has been dropped in the viewport, or the user has triggered an "undo" operation on a deleted actor.
-		TryCacheActor(ActorKey, Actor);
+		CacheActor(ActorKey, Actor);
 		return;
 	}
 
@@ -151,7 +148,7 @@ void FRsapEditorWorld::HandleObjectPropertyChanged(UObject* Object, FPropertyCha
  * Will cache the actor if it has any collision-components.
  * Broadcasts OnCollisionComponentChanged for each collision-component.
  */
-void FRsapEditorWorld::TryCacheActor(const actor_key ActorKey, const AActor* Actor)
+void FRsapEditorWorld::CacheActor(const actor_key ActorKey, const AActor* Actor)
 {
 	// Convert it to an RsapActor which will init any data we need.
 	const auto RsapActor = std::make_shared<FRsapActor>(Actor);
@@ -163,7 +160,7 @@ void FRsapEditorWorld::TryCacheActor(const actor_key ActorKey, const AActor* Act
 	// Call the event for each collision-component on the actor. This could be done in bulk, but this is easier.
 	for (const FRsapCollisionComponentPtr& Component : RsapActor->GetCollisionComponents())
 	{
-		OnCollisionComponentChanged.Execute(FRsapCollisionComponentChangedResult::Create(Component, ERsapCollisionComponentChangedType::Added));
+		OnCollisionComponentChanged.Execute(FRsapCollisionComponentChangedResult(ERsapCollisionComponentChangedType::Added, Component));
 	}
 }
 

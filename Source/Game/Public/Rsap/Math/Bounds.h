@@ -2,6 +2,7 @@
 
 #pragma once
 #include <set>
+#include <unordered_set>
 #include "Rsap/Math/Vectors.h"
 
 using namespace Rsap::NavMesh;
@@ -77,6 +78,12 @@ struct FRsapBounds
 	{
 		const FRsapVector32 ChunkLocation = FRsapVector32::FromChunkMorton(ChunkMC);
 		return FRsapBounds(ChunkLocation, ChunkLocation + Chunk::Size);
+	}
+
+	static FRsapBounds FromNodeMorton(const node_morton NodeMC, const layer_idx LayerIdx, const FRsapVector32 ChunkLocation)
+	{
+		const FRsapVector32 NodeLocation = FRsapVector32::FromNodeMorton(NodeMC, ChunkLocation);
+		return FRsapBounds(NodeLocation, NodeLocation + Node::Sizes[LayerIdx]);
 	}
 	
 	FORCEINLINE bool Equals(const FRsapBounds& Other) const
@@ -351,9 +358,9 @@ struct FRsapBounds
 	/**
 	 * Gets the nodes intersecting with these boundaries within the given layer.
 	 */
-	std::set<node_morton> GetIntersectingNodes(const layer_idx LayerIdx) const
+	std::unordered_set<node_morton> GetIntersectingNodes(const layer_idx LayerIdx) const
 	{
-		std::set<node_morton> Result;
+		std::unordered_set<node_morton> Result;
 		ForEachNode(LayerIdx, [&](const node_morton NodeMC, const FRsapVector32& Location)
 		{
 			Result.emplace(NodeMC);

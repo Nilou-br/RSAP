@@ -149,6 +149,9 @@ public:
 	}
 };
 
+/**
+ * Stores a single octree meant for 
+ */
 struct FRsapDirtyChunk : TRsapChunkBase<FRsapDirtyNode>
 {
 private:

@@ -3,6 +3,7 @@
 #pragma once
 
 #include <ranges>
+#include <unordered_set>
 #include "Rsap/Definitions.h"
 #include "Rsap/Math/Bounds.h"
 
@@ -16,23 +17,99 @@ struct FRsapCollisionComponent
 	FTransform Transform;
 	FRsapBounds Boundaries;
 
+	// For storing the nodes within a chunk that are intersecting with this component.
+	struct FIntersectedChunk
+	{
+		const chunk_morton ChunkMC;
+		layer_idx NodesLayer = Layer::Empty;
+		std::unordered_set<node_morton> IntersectedNodes;
+
+		FIntersectedChunk(const chunk_morton InChunkMC, const layer_idx InNodesLayer, const FRsapBounds& ChunkIntersection)
+			: ChunkMC(InChunkMC), NodesLayer(InNodesLayer)
+		{
+			IntersectedNodes = ChunkIntersection.GetIntersectingNodes(NodesLayer);
+		}
+	};
+	
+	std::vector<FIntersectedChunk> IntersectedChunks;
+	std::vector<FIntersectedChunk> PreviousIntersectedChunks;
+
 	explicit FRsapCollisionComponent(const UPrimitiveComponent* Component)
 		: PrimitiveComponent(Component), Transform(Component->GetComponentTransform()), Boundaries(Component)
-	{}
+	{
+		SetIntersectedChunks();
+	}
 
 	bool IsValid() const { return PrimitiveComponent.IsValid(); }
 	const UPrimitiveComponent* operator*() const { return PrimitiveComponent.Get(); }
 
-	bool HasMoved() const
+	// Synchronizes the values with the PrimitiveComponent.
+	void Sync()
 	{
-		if (!PrimitiveComponent.IsValid()) return false;
-		return !Transform.Equals(PrimitiveComponent->GetComponentTransform());
+		ClearIntersectedChunks();
+		
+		if(PrimitiveComponent.IsValid())
+		{
+			Transform = PrimitiveComponent->GetComponentTransform();
+			Boundaries = FRsapBounds(PrimitiveComponent.Get());
+			SetIntersectedChunks();
+			return;
+		}
+		
+		Transform = FTransform::Identity;
+		Boundaries = FRsapBounds();
 	}
 
-	void UpdateCache()
+	// Returns true if there was a change.
+	bool DetectAndSyncChanges()
 	{
-		Transform = PrimitiveComponent->GetComponentTransform();
-		Boundaries = FRsapBounds(PrimitiveComponent.Get());
+		if(!PrimitiveComponent.IsValid())
+		{
+			Sync();
+			return true;
+		}
+		
+		if(Transform.Equals(PrimitiveComponent->GetComponentTransform())) return false; // todo: Later try switching to checking the boundaries instead, and see if it still accurately updates the navmesh.
+		Sync();
+		return true;
+	}
+
+	void DebugDrawIntersections() const
+	{
+		if(!PrimitiveComponent.IsValid()) return;
+
+		const UWorld* World = PrimitiveComponent->GetWorld();
+		FlushPersistentDebugLines(World);
+
+		auto DrawIntersections = [&](const std::vector<FIntersectedChunk>& Chunks, const FColor Color)
+		{
+			for (const auto& IntersectedChunk : Chunks)
+			{
+				const FRsapVector32 ChunkLocation = FRsapVector32::FromChunkMorton(IntersectedChunk.ChunkMC);
+				for (const node_morton NodeMC : IntersectedChunk.IntersectedNodes)
+				{
+					FRsapBounds::FromNodeMorton(NodeMC, IntersectedChunk.NodesLayer, ChunkLocation).Draw(World, Color, 3);
+				}
+			}
+		};
+
+		DrawIntersections(PreviousIntersectedChunks, FColor::Orange);
+		DrawIntersections(IntersectedChunks, FColor::Green);
+	}
+
+private:
+	void SetIntersectedChunks()
+	{
+		const layer_idx OptimalLayer = Boundaries.GetOptimalRasterizationLayer();
+		Boundaries.ForEachChunk([&](const chunk_morton ChunkMC, const FRsapVector32& ChunkLocation, const FRsapBounds& Intersection)
+		{
+			IntersectedChunks.emplace_back(ChunkMC, OptimalLayer, Intersection);
+		});
+	}
+	
+	void ClearIntersectedChunks()
+	{
+		PreviousIntersectedChunks = std::move(IntersectedChunks);
 	}
 };
 
@@ -47,29 +124,12 @@ enum class ERsapCollisionComponentChangedType
 struct FRsapCollisionComponentChangedResult
 {
 	const ERsapCollisionComponentChangedType Type;
-	const FRsapCollisionComponentPtr ComponentPtr;		 // Can be used as key.
-	const std::set<node_morton> AffectedNodes; // Nodes that the actor is/was in during this change.
-	const layer_idx AffectedNodesLayerIdx;				 // The layer the affected nodes are in, which is the optimal rasterization layer.
+	const FRsapCollisionComponentPtr ComponentPtr;
 
 	FRsapCollisionComponentChangedResult(
-		const ERsapCollisionComponentChangedType InType, const FRsapCollisionComponentPtr& InComponentPtr,
-		const std::set<node_morton>& InAffectedNodes, const layer_idx InAffectedNodesLayerIdx)
-		: Type(InType), ComponentPtr(InComponentPtr), AffectedNodes(InAffectedNodes), AffectedNodesLayerIdx(InAffectedNodesLayerIdx)
+		const ERsapCollisionComponentChangedType InType, const FRsapCollisionComponentPtr& InComponentPtr)
+		: Type(InType), ComponentPtr(InComponentPtr)
 	{}
-
-	static FRsapCollisionComponentChangedResult Create(const std::shared_ptr<FRsapCollisionComponent>& Component, const ERsapCollisionComponentChangedType Type)
-	{
-		const FRsapBounds& LastKnownBoundaries = Component->Boundaries;
-		const layer_idx OptimalLayer = LastKnownBoundaries.GetOptimalRasterizationLayer();
-		const std::set<node_morton> AffectedNodes = LastKnownBoundaries.GetIntersectingNodes(OptimalLayer);
-		return FRsapCollisionComponentChangedResult(Type,Component, AffectedNodes, OptimalLayer);
-	}
-
-	static FRsapCollisionComponentChangedResult Create(const std::weak_ptr<FRsapCollisionComponent>& Component, const ERsapCollisionComponentChangedType Type)
-	{
-		// The pointer should be valid, this overload is just for ease of use.
-		return Create(Component.lock(), Type);
-	}
 };
 
 /**
@@ -133,7 +193,8 @@ public:
 	    	// Actor is invalid so we can pass all components to the result as 'deleted'.
 	        for (const auto& CollisionComponent : CollisionComponents | std::views::values)
 	        {
-	            ChangedResults.emplace_back(FRsapCollisionComponentChangedResult::Create(CollisionComponent, ERsapCollisionComponentChangedType::Deleted));
+	        	CollisionComponent->Sync();
+	            ChangedResults.emplace_back(FRsapCollisionComponentChangedResult(ERsapCollisionComponentChangedType::Deleted, CollisionComponent));
 	        }
 
 	        CollisionComponents.clear();
@@ -146,16 +207,16 @@ public:
 	    	// Check if the wrapped primitive has been deleted.
 		    if(!CollisionComponent->PrimitiveComponent.IsValid())
 		    {
-		    	ChangedResults.emplace_back(FRsapCollisionComponentChangedResult::Create(CollisionComponent, ERsapCollisionComponentChangedType::Deleted));
+		    	CollisionComponent->Sync();
+		    	ChangedResults.emplace_back(FRsapCollisionComponentChangedResult(ERsapCollisionComponentChangedType::Deleted, CollisionComponent));
 		    	continue;
 		    }
 
 	    	// Check if the transform has changed.
-	    	const UPrimitiveComponent* PrimitiveComponent = CollisionComponent.get()->PrimitiveComponent.Get();
-	    	const FTransform PrimitiveTransform = PrimitiveComponent->GetComponentTransform();
-	    	if(CollisionComponent->Transform.Equals(PrimitiveTransform)) continue; // todo: Later try switching to checking the boundaries instead, and see if it still accurately updates the navmesh.
-	    	CollisionComponent->Transform = PrimitiveTransform;
-	    	ChangedResults.emplace_back(FRsapCollisionComponentChangedResult::Create(CollisionComponent, ERsapCollisionComponentChangedType::Moved));
+	    	if(CollisionComponent->DetectAndSyncChanges())
+	    	{
+	    		ChangedResults.emplace_back(FRsapCollisionComponentChangedResult(ERsapCollisionComponentChangedType::Moved, CollisionComponent));
+	    	}
 	    }
 
 		// Check if there are any new components with collision.
@@ -163,7 +224,7 @@ public:
 	    {
 	    	if(CollisionComponents.contains(PrimitiveComponent)) continue;
 	    	const auto& NewComponent = CollisionComponents.emplace(PrimitiveComponent, std::make_shared<FRsapCollisionComponent>(PrimitiveComponent)).first->second;
-	    	ChangedResults.emplace_back(FRsapCollisionComponentChangedResult::Create(NewComponent, ERsapCollisionComponentChangedType::Added));
+	    	ChangedResults.emplace_back(FRsapCollisionComponentChangedResult(ERsapCollisionComponentChangedType::Added, NewComponent));
 	    }
 		
 	    return ChangedResults;
