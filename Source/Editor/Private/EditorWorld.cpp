@@ -110,7 +110,7 @@ void FRsapEditorWorld::HandleActorSelectionChanged(const TArray<UObject*>& Objec
 
 		// The actor has been deleted, broadcast the event for each component.
 		const auto RsapActor = Iterator->second;
-		for (const FRsapCollisionComponentPtr& Component : RsapActor->GetCollisionComponents())
+		for (const auto& Component : RsapActor->GetCollisionComponents())
 		{
 			OnCollisionComponentChanged.Execute(FRsapCollisionComponentChangedResult(ERsapCollisionComponentChangedType::Deleted, Component));
 		}
@@ -138,7 +138,7 @@ void FRsapEditorWorld::HandleObjectPropertyChanged(UObject* Object, FPropertyCha
 	}
 
 	// The actor is cached, so try to detect any changes in its collision-components.
-	for (const FRsapCollisionComponentChangedResult& Result : Iterator->second->DetectAndUpdateChanges())
+	for (const FRsapCollisionComponentChangedResult& Result : Iterator->second->DetectAndSyncChanges())
 	{
 		OnCollisionComponentChanged.Execute(Result);
 	}
@@ -158,7 +158,7 @@ void FRsapEditorWorld::CacheActor(const actor_key ActorKey, const AActor* Actor)
 	RsapActors[ActorKey] = RsapActor;
 
 	// Call the event for each collision-component on the actor. This could be done in bulk, but this is easier.
-	for (const FRsapCollisionComponentPtr& Component : RsapActor->GetCollisionComponents())
+	for (const auto& Component : RsapActor->GetCollisionComponents())
 	{
 		OnCollisionComponentChanged.Execute(FRsapCollisionComponentChangedResult(ERsapCollisionComponentChangedType::Added, Component));
 	}

@@ -215,9 +215,9 @@ struct FRsapBounds
 	/**
 	 * Returns a set of morton-codes for each chunk that these boundaries are in.
 	 */
-	std::set<chunk_morton> GetChunks() const
+	std::unordered_set<chunk_morton> GetChunks() const
 	{
-		std::set<chunk_morton> ChunkKeys;
+		std::unordered_set<chunk_morton> ChunkKeys;
 		const FRsapBounds Rounded = RoundToChunk();
 		
 		for (int32 GlobalX = Rounded.Min.X; GlobalX < Rounded.Max.X; GlobalX+=Chunk::Size){
@@ -276,7 +276,7 @@ struct FRsapBounds
 					const FRsapVector32 ChunkLocation = FRsapVector32(GlobalX, GlobalY, GlobalZ);
 					const FRsapBounds ChunkBounds(ChunkLocation, ChunkLocation + Chunk::Size);
 
-					// Get the intersection by clamping the bounds to the chunk, and run the callback if it has any volume.
+					// Get the intersection by clamping the bounds to the chunk.
 					const FRsapBounds Intersection = Clamp(ChunkBounds);
 					if(Intersection.HasVolume()) Callback(ChunkLocation.ToChunkMorton(), ChunkLocation, Intersection);
 				}
@@ -321,13 +321,13 @@ struct FRsapBounds
 					
 					// Reset the X axis on the morton-code back to the start if we're at the last iteration.
 					// Otherwise add the node-size to it for the next iteration.
-					NodeMC = NodeLocation.X == Boundaries.Max.X
+					NodeMC = NodeLocation.X >= Boundaries.Max.X
 						? FMortonUtils::Node::CopyX(NodeMC, StartingMC)
 						: FMortonUtils::Node::AddX(NodeMC, LayerIdx);
 				}
 
 				// Same as above, but for the Y axis.
-				NodeMC = NodeLocation.Y == Boundaries.Max.Y
+				NodeMC = NodeLocation.Y >= Boundaries.Max.Y
 					? FMortonUtils::Node::CopyY(NodeMC, StartingMC)
 					: FMortonUtils::Node::AddY(NodeMC, LayerIdx);
 			}
@@ -363,7 +363,21 @@ struct FRsapBounds
 		std::unordered_set<node_morton> Result;
 		ForEachNode(LayerIdx, [&](const node_morton NodeMC, const FRsapVector32& Location)
 		{
+			// todo: remove the debug part.
+			// FRsapBounds(Location, Location + Node::Sizes[LayerIdx]).Draw(GEditor->GetEditorWorldContext().World(), FColor::Green, 5);
+			// this->FromNodeMorton(NodeMC, LayerIdx, Location.FloorToChunk()).Draw(GEditor->GetEditorWorldContext().World(), FColor::Red, 5);
+			
 			Result.emplace(NodeMC);
+		});
+		return Result;
+	}
+
+	std::vector<FRsapVector32> GetIntersectingNodeLocations(const layer_idx LayerIdx) const
+	{
+		std::vector<FRsapVector32> Result;
+		ForEachNode(LayerIdx, [&](const node_morton NodeMC, const FRsapVector32& Location)
+		{
+			Result.emplace_back(Location);
 		});
 		return Result;
 	}

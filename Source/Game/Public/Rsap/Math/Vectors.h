@@ -135,24 +135,19 @@ struct FRsapVector32 // todo: int64 to support SizeExponent >= 2 ?
 		return FMortonUtils::Chunk::Encode(X, Y, Z);
 	}
 
-	FORCEINLINE node_morton ToNodeMorton() const
-	{
-		using namespace Rsap::NavMesh;
-		const FRsapVector32 ChunkLocation = FloorToChunk();
-		const uint16 LocalX = static_cast<uint16>((X - ChunkLocation.X) >> SizeShift);
-		const uint16 LocalY = static_cast<uint16>((Y - ChunkLocation.Y) >> SizeShift);
-		const uint16 LocalZ = static_cast<uint16>((Z - ChunkLocation.Z) >> SizeShift);
-		return FMortonUtils::Node::Encode(LocalX, LocalY, LocalZ);
-	}
-
-	FORCEINLINE FRsapVectorU10 ToLocalVector(const FRsapVector32 ChunkLocation) const
+	FORCEINLINE FRsapVectorU10 ToLocalVector() const
 	{
 		using namespace Rsap::NavMesh;
 		return FRsapVectorU10(
-			static_cast<uint16>((ChunkLocation.X + X) >> SizeShift),
-			static_cast<uint16>((ChunkLocation.Y + Y) >> SizeShift),
-			static_cast<uint16>((ChunkLocation.Z + Z) >> SizeShift)
+		((X >= 0) ? (X & Chunk::LocalMask) : ((X + Chunk::SignOffset) & Chunk::LocalMask)) >> SizeShift,
+		((Y >= 0) ? (Y & Chunk::LocalMask) : ((Y + Chunk::SignOffset) & Chunk::LocalMask)) >> SizeShift,
+		((Z >= 0) ? (Z & Chunk::LocalMask) : ((Z + Chunk::SignOffset) & Chunk::LocalMask)) >> SizeShift
 		);
+	}
+
+	FORCEINLINE node_morton ToNodeMorton() const
+	{
+		return ToLocalVector().ToNodeMorton();
 	}
 	
 	static FRsapVector32 FromChunkMorton(const chunk_morton ChunkMorton)
@@ -164,20 +159,56 @@ struct FRsapVector32 // todo: int64 to support SizeExponent >= 2 ?
 
 	static FRsapVector32 FromNodeMorton(const node_morton NodeMorton, const FRsapVector32& ChunkLocation)
 	{
-		return ChunkLocation + FRsapVectorU10::FromNodeMorton(NodeMorton);
-	}
-
-	FORCEINLINE FRsapVector32 RoundToChunk() const
-	{
-		return *this & Rsap::NavMesh::Chunk::SizeMask;
-	}
-
-	FORCEINLINE FRsapVector32 RoundToLayer(const layer_idx LayerIdx) const // todo: incorrect for unsigned values
-	{
-		return *this & Rsap::NavMesh::Node::SizesMask[LayerIdx];
+		const FRsapVectorU10 LocalLocation = FRsapVectorU10::FromNodeMorton(NodeMorton);
+		return ChunkLocation + FRsapVector32(
+			static_cast<int32>(LocalLocation.X) << SizeShift,
+			static_cast<int32>(LocalLocation.Y) << SizeShift,
+			static_cast<int32>(LocalLocation.Z) << SizeShift
+		);
 	}
 
 	FORCEINLINE FRsapVector32 FloorToLayer(const layer_idx LayerIdx) const
+	{
+		const int32 NodeMask = Node::SizesMask[LayerIdx];
+		return FRsapVector32(
+			(X >= 0) ? (X & NodeMask) : ((X + Chunk::SignOffset) & NodeMask) - Chunk::SignOffset,
+			(Y >= 0) ? (Y & NodeMask) : ((Y + Chunk::SignOffset) & NodeMask) - Chunk::SignOffset,
+			(Z >= 0) ? (Z & NodeMask) : ((Z + Chunk::SignOffset) & NodeMask) - Chunk::SignOffset
+		);
+	}
+	
+	FORCEINLINE FRsapVector32 CeilToLayer(const layer_idx LayerIdx) const
+	{
+		const int32 NodeSize = Node::Sizes[LayerIdx];
+		const int32 NodeMask = Node::SizesMask[LayerIdx];
+		return FRsapVector32(
+			(X >= 0) ? ((X + NodeSize - 1) & NodeMask) : ((X + Chunk::SignOffset + NodeSize - 1) & NodeMask) - Chunk::SignOffset,
+			(Y >= 0) ? ((Y + NodeSize - 1) & NodeMask) : ((Y + Chunk::SignOffset + NodeSize - 1) & NodeMask) - Chunk::SignOffset,
+			(Z >= 0) ? ((Z + NodeSize - 1) & NodeMask) : ((Z + Chunk::SignOffset + NodeSize - 1) & NodeMask) - Chunk::SignOffset
+		);
+	}
+	
+	FORCEINLINE FRsapVector32 FloorToChunk() const
+	{
+		return FRsapVector32(
+			(X >= 0) ? (X & Chunk::SizeMask) : ((X + Chunk::SignOffset) & Chunk::SizeMask) - Chunk::SignOffset,
+			(Y >= 0) ? (Y & Chunk::SizeMask) : ((Y + Chunk::SignOffset) & Chunk::SizeMask) - Chunk::SignOffset,
+			(Z >= 0) ? (Z & Chunk::SizeMask) : ((Z + Chunk::SignOffset) & Chunk::SizeMask) - Chunk::SignOffset
+		);
+	}
+
+	FORCEINLINE FRsapVector32 CeilToChunk() const
+	{
+		constexpr int32 Mask = Chunk::SizeMask;
+		return FRsapVector32(
+			(X >= 0) ? ((X + Chunk::Size - 1) & Mask) : (((X + Chunk::SignOffset + Chunk::Size - 1) & Mask) - Chunk::SignOffset),
+			(Y >= 0) ? ((Y + Chunk::Size - 1) & Mask) : (((Y + Chunk::SignOffset + Chunk::Size - 1) & Mask) - Chunk::SignOffset),
+			(Z >= 0) ? ((Z + Chunk::Size - 1) & Mask) : (((Z + Chunk::SignOffset + Chunk::Size - 1) & Mask) - Chunk::SignOffset)
+		);
+	}
+
+
+	FORCEINLINE FRsapVector32 FloorToLayerOld(const layer_idx LayerIdx) const
 	{
 		const int32 NodeSize = Node::Sizes[LayerIdx];
 		return FRsapVector32(
@@ -187,7 +218,7 @@ struct FRsapVector32 // todo: int64 to support SizeExponent >= 2 ?
 		);
 	}
 
-	FORCEINLINE FRsapVector32 CeilToLayer(const layer_idx LayerIdx) const
+	FORCEINLINE FRsapVector32 CeilToLayerOld(const layer_idx LayerIdx) const
 	{
 		const int32 NodeSize = Node::Sizes[LayerIdx];
 		return FRsapVector32(
@@ -197,16 +228,16 @@ struct FRsapVector32 // todo: int64 to support SizeExponent >= 2 ?
 		);
 	}
 
-	FORCEINLINE FRsapVector32 FloorToChunk() const
+	FORCEINLINE FRsapVector32 FloorToChunkOld() const
 	{
 		return FRsapVector32(
-			(X >= 0) ? (X / Chunk::Size) * Chunk::Size : ((X - Chunk::Size) / Chunk::Size) * Chunk::Size,
-			(Y >= 0) ? (Y / Chunk::Size) * Chunk::Size : ((Y - Chunk::Size) / Chunk::Size) * Chunk::Size,
-			(Z >= 0) ? (Z / Chunk::Size) * Chunk::Size : ((Z - Chunk::Size) / Chunk::Size) * Chunk::Size
+		(X >= 0) ? (X / Chunk::Size) * Chunk::Size : ((X - Chunk::Size) / Chunk::Size) * Chunk::Size,
+		(Y >= 0) ? (Y / Chunk::Size) * Chunk::Size : ((Y - Chunk::Size) / Chunk::Size) * Chunk::Size,
+		(Z >= 0) ? (Z / Chunk::Size) * Chunk::Size : ((Z - Chunk::Size) / Chunk::Size) * Chunk::Size
 		);
 	}
 
-	FORCEINLINE FRsapVector32 CeilToChunk() const
+	FORCEINLINE FRsapVector32 CeilToChunkOld() const
 	{
 		return FRsapVector32(
 			(X >= 0) ? ((X + Chunk::Size - 1) / Chunk::Size) * Chunk::Size : (X / Chunk::Size) * Chunk::Size,

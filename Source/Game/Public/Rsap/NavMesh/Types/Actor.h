@@ -9,55 +9,103 @@
 
 
 
-struct FRsapCollisionComponent
+class FRsapCollisionComponent
 {
+	friend class FRsapActor; // Owns the components.
+	friend class FRsapNavmeshUpdater; // Co-owner if processing dirty nodes.
+	
 	TWeakObjectPtr<const UPrimitiveComponent> PrimitiveComponent;
 	uint16 SoundPresetID = 0;
 
 	FTransform Transform;
 	FRsapBounds Boundaries;
 
-	// For storing the nodes within a chunk that are intersecting with this component.
-	struct FIntersectedChunk
+	// Stores nodes associated with this component within a chunk.
+	struct FChunk
 	{
-		const chunk_morton ChunkMC;
-		layer_idx NodesLayer = Layer::Empty;
+		typedef Rsap::Map::flat_map<layer_idx, std::unordered_set<node_morton>> FLayer;
+		
+		layer_idx IntersectedNodesLayer = Layer::Empty;
 		std::unordered_set<node_morton> IntersectedNodes;
 
-		FIntersectedChunk(const chunk_morton InChunkMC, const layer_idx InNodesLayer, const FRsapBounds& ChunkIntersection)
-			: ChunkMC(InChunkMC), NodesLayer(InNodesLayer)
+		// Holds the owning-nodes, which are the nodes that were intersecting with the component's boundaries at the moment said nodes were being rasterized.
+		FLayer OwningLayers;
+
+		// Holds the dirty-nodes, which exists of the owning nodes + the latest intersected nodes, which need to be processed/re-rasterized by the updater.
+		FLayer DirtyLayers;
+		
+		// These nodes are the nodes that have been staged on the dirty-navmesh, but can be removed from it since they don't have to be processed anymore.
+		// Explanation: when a component moves, any non-owning dirty-nodes that don't intersect with the component anymore can be cleared from the dirty-navmesh. This is because they don't have to be processed/re-rasterized by the updater anymore.
+		// This makes it so that a single object that moves a lot, won't cause large portions of the navmesh to become and 'stay' dirty. This keeps the update time constant to how many objects 'have' moved instead of how 'much' the objects have moved in total.
+		// Note that other components can own the same node. Just the reference to this component on said node on the dirty-navmesh will be removed, and said node will be cleared from it if it holds no references to any components.
+		FLayer StagedNodesToClear;
+
+		FChunk(const std::unordered_set<node_morton>& IntersectedNodes, const layer_idx LayerIdx)
 		{
-			IntersectedNodes = ChunkIntersection.GetIntersectingNodes(NodesLayer);
+			SetIntersectedNodes(IntersectedNodes, LayerIdx);
+		}
+
+		// Updates the intersecting-nodes and in-turn updates the different type of layers.
+		void SetIntersectedNodes(const std::unordered_set<node_morton>& NewIntersectedNodes, const layer_idx LayerIdx)
+		{
+			// Update intersected-nodes and clear the current dirty-layers.
+			IntersectedNodes = NewIntersectedNodes;
+			IntersectedNodesLayer = LayerIdx;
+			auto OldDirtyLayers = std::move(DirtyLayers);
+
+			// Set the dirty-layers to be the same as the owning-layers + the new intersected-nodes.
+			DirtyLayers = OwningLayers;
+			if(!NewIntersectedNodes.empty()) DirtyLayers[LayerIdx].insert(IntersectedNodes.begin(), IntersectedNodes.end());
+
+			// Any non-owning dirty-nodes can be staged for removal from the dirty-navmesh.
+			// To get these we simply check the dirty-nodes in the old-layers, and stage the ones that do not exist on any new-layers.
+			for (const auto& [OldLayerIdx, OldDirtyNodes] : OldDirtyLayers)
+			{
+				const auto Iterator = DirtyLayers.find(OldLayerIdx);
+				if(Iterator == DirtyLayers.end())
+				{
+					// The new-layer doesn't exist, so all the dirty-nodes in this old-layer can be staged for removal.
+					StagedNodesToClear[OldLayerIdx] = OldDirtyNodes;
+					continue;
+				}
+
+				// The new-layer exists, so check each dirty-node in the old-layer, and stage it for removal if it does not exist in the new-layer.
+				const auto& DirtyLayer = Iterator->second;
+				for (const node_morton NodeMC : OldDirtyNodes)
+				{
+					if(!DirtyLayer.contains(NodeMC)) StagedNodesToClear[OldLayerIdx].insert(NodeMC);
+				}
+			}
+		}
+
+		// Clears the intersecting-nodes and in-turn updates the different type of layers.
+		void ClearIntersectedNodes()
+		{
+			SetIntersectedNodes(std::unordered_set<node_morton>(), Layer::Empty);
+		}
+
+		bool IsEmpty() const
+		{
+			return IntersectedNodes.empty() && OwningLayers.empty() &&
+				   DirtyLayers.empty() && StagedNodesToClear.empty();
 		}
 	};
-	
-	std::vector<FIntersectedChunk> IntersectedChunks;
-	std::vector<FIntersectedChunk> PreviousIntersectedChunks;
-
-	explicit FRsapCollisionComponent(const UPrimitiveComponent* Component)
-		: PrimitiveComponent(Component), Transform(Component->GetComponentTransform()), Boundaries(Component)
-	{
-		SetIntersectedChunks();
-	}
-
-	bool IsValid() const { return PrimitiveComponent.IsValid(); }
-	const UPrimitiveComponent* operator*() const { return PrimitiveComponent.Get(); }
+	Rsap::Map::flat_map<chunk_morton, FChunk> TrackedChunks;
 
 	// Synchronizes the values with the PrimitiveComponent.
 	void Sync()
 	{
-		ClearIntersectedChunks();
-		
 		if(PrimitiveComponent.IsValid())
 		{
 			Transform = PrimitiveComponent->GetComponentTransform();
 			Boundaries = FRsapBounds(PrimitiveComponent.Get());
-			SetIntersectedChunks();
+			UpdateTrackedChunks();
 			return;
 		}
 		
 		Transform = FTransform::Identity;
 		Boundaries = FRsapBounds();
+		UpdateTrackedChunks();
 	}
 
 	// Returns true if there was a change.
@@ -74,48 +122,110 @@ struct FRsapCollisionComponent
 		return true;
 	}
 
-	void DebugDrawIntersections() const
+	void UpdateTrackedChunks()
+	{
+		const layer_idx OptimalLayer = Boundaries.GetOptimalRasterizationLayer();
+		std::unordered_set<chunk_morton> IntersectedChunks;
+
+		FlushPersistentDebugLines(GEditor->GetEditorWorldContext().World());// todo remove
+
+		// For each new-chunk the boundaries are intersecting.
+		Boundaries.ForEachChunk([&](const chunk_morton ChunkMC, const FRsapVector32& ChunkLocation, const FRsapBounds& Intersection)
+		{
+			IntersectedChunks.emplace(ChunkMC);
+			
+			const auto& TrackedChunkIterator = TrackedChunks.find(ChunkMC);
+			const auto IntersectedNodes = Intersection.GetIntersectingNodes(OptimalLayer);
+
+			// todo this is debug so remove
+			FRsapBounds::FromChunkMorton(ChunkMC).Draw(GEditor->GetEditorWorldContext().World(), FColor::Black, 5);
+			
+			if(TrackedChunkIterator == TrackedChunks.end())
+			{
+				// This chunk is not yet tracked.
+				TrackedChunks.emplace(ChunkMC, FChunk(IntersectedNodes, OptimalLayer));
+				return;
+			}
+
+			// Already tracked, so update it with the new intersected-nodes.
+			TrackedChunkIterator->second.SetIntersectedNodes(IntersectedNodes, OptimalLayer); 
+		});
+
+		// Clear the intersected-nodes on each tracked-chunk that is not currently intersected.
+		for (auto It = TrackedChunks.begin(); It != TrackedChunks.end();)
+		{
+			if (!IntersectedChunks.contains(It->first))
+			{
+				auto& TrackedChunk = It->second;
+				TrackedChunk.ClearIntersectedNodes();
+
+				// Remove the chunk if it is empty.
+				if (TrackedChunk.IsEmpty())
+				{
+					It = TrackedChunks.erase(It);
+					continue;
+				}
+			}
+			++It;
+		}
+	}
+
+public:
+	explicit FRsapCollisionComponent(const UPrimitiveComponent* Component)
+		: PrimitiveComponent(Component), Transform(Component->GetComponentTransform()), Boundaries(Component)
+	{
+		const layer_idx OptimalLayer = Boundaries.GetOptimalRasterizationLayer();
+		Boundaries.ForEachChunk([&](const chunk_morton ChunkMC, const FRsapVector32& ChunkLocation, const FRsapBounds& Intersection)
+		{
+			TrackedChunks.emplace(ChunkMC, FChunk(Intersection.GetIntersectingNodes(OptimalLayer), OptimalLayer));
+		});
+	}
+
+	// bool IsValid() const { return PrimitiveComponent.IsValid(); }
+	const UPrimitiveComponent* operator*() const { return PrimitiveComponent.Get(); }
+
+	void DebugDrawLayers() const
 	{
 		if(!PrimitiveComponent.IsValid()) return;
 
 		const UWorld* World = PrimitiveComponent->GetWorld();
 		FlushPersistentDebugLines(World);
 
-		auto DrawIntersections = [&](const std::vector<FIntersectedChunk>& Chunks, const FColor Color)
+		auto DrawLayers = [&](const Rsap::Map::flat_map<layer_idx, std::unordered_set<node_morton>>& Layers, const FRsapVector32& ChunkLocation, const FColor Color)
 		{
-			for (const auto& IntersectedChunk : Chunks)
+			for (const auto& [LayerIdx, Nodes] : Layers)
 			{
-				const FRsapVector32 ChunkLocation = FRsapVector32::FromChunkMorton(IntersectedChunk.ChunkMC);
-				for (const node_morton NodeMC : IntersectedChunk.IntersectedNodes)
+				for (const node_morton NodeMC : Nodes)
 				{
-					FRsapBounds::FromNodeMorton(NodeMC, IntersectedChunk.NodesLayer, ChunkLocation).Draw(World, Color, 3);
+					FRsapBounds::FromNodeMorton(NodeMC, LayerIdx, ChunkLocation).Draw(World, Color, 10);
 				}
 			}
 		};
-
-		DrawIntersections(PreviousIntersectedChunks, FColor::Orange);
-		DrawIntersections(IntersectedChunks, FColor::Green);
-	}
-
-private:
-	void SetIntersectedChunks()
-	{
-		const layer_idx OptimalLayer = Boundaries.GetOptimalRasterizationLayer();
-		Boundaries.ForEachChunk([&](const chunk_morton ChunkMC, const FRsapVector32& ChunkLocation, const FRsapBounds& Intersection)
+		
+		for (const auto& [ChunkMC, Chunk] : TrackedChunks)
 		{
-			IntersectedChunks.emplace_back(ChunkMC, OptimalLayer, Intersection);
-		});
+			const FRsapVector32 ChunkLocation = FRsapVector32::FromChunkMorton(ChunkMC);
+			DrawLayers(Chunk.StagedNodesToClear, ChunkLocation, FColor::Red);
+			DrawLayers(Chunk.DirtyLayers,		 ChunkLocation, FColor::Orange);
+			DrawLayers(Chunk.OwningLayers,		 ChunkLocation, FColor::Black);
+
+			FRsapBounds::FromChunkMorton(ChunkMC).Draw(World, FColor::Green, 3);
+
+			for (const auto NodeMC : Chunk.IntersectedNodes)
+			{
+				FRsapBounds::FromNodeMorton(NodeMC, Chunk.IntersectedNodesLayer, ChunkLocation).Draw(World, FColor::Green, 3);
+			}
+		}
 	}
-	
-	void ClearIntersectedChunks()
-	{
-		PreviousIntersectedChunks = std::move(IntersectedChunks);
-	}
+
+	const FRsapBounds& GetBoundaries() const { return Boundaries; }
+	const UPrimitiveComponent* GetPrimitive() const { return PrimitiveComponent.Get(); }
 };
 
 typedef Rsap::Map::flat_map<const UPrimitiveComponent*, std::shared_ptr<FRsapCollisionComponent>> FRsapCollisionComponentMap;
 typedef std::weak_ptr<FRsapCollisionComponent> FRsapCollisionComponentPtr;
 
+// The action that has happened on the wrapped primitive-component.
 enum class ERsapCollisionComponentChangedType
 {
 	Added, Moved, Deleted, None
@@ -124,16 +234,16 @@ enum class ERsapCollisionComponentChangedType
 struct FRsapCollisionComponentChangedResult
 {
 	const ERsapCollisionComponentChangedType Type;
-	const FRsapCollisionComponentPtr ComponentPtr;
+	const std::shared_ptr<FRsapCollisionComponent> Component;
 
 	FRsapCollisionComponentChangedResult(
-		const ERsapCollisionComponentChangedType InType, const FRsapCollisionComponentPtr& InComponentPtr)
-		: Type(InType), ComponentPtr(InComponentPtr)
+		const ERsapCollisionComponentChangedType InType, const std::shared_ptr<FRsapCollisionComponent>& InComponent)
+		: Type(InType), Component(InComponent)
 	{}
 };
 
 /**
- * Wrapper for the AActor class used by the plugin.
+ * Wrapper for the AActor class.
  * Stores useful data that can still be accessed if the actor has become invalid.
  */
 class FRsapActor
@@ -175,16 +285,16 @@ public:
 		return Result;
 	}
 
-	std::vector<std::weak_ptr<FRsapCollisionComponent>> GetCollisionComponents()
+	std::vector<std::shared_ptr<FRsapCollisionComponent>> GetCollisionComponents()
 	{
-		std::vector<std::weak_ptr<FRsapCollisionComponent>> Result;
+		std::vector<std::shared_ptr<FRsapCollisionComponent>> Result;
 		for (const auto& CollisionComponent : CollisionComponents | std::views::values) Result.emplace_back(CollisionComponent);
 		return Result;
 	}
 
 	bool HasAnyCollisionComponent() const { return !CollisionComponents.empty(); }
 	
-	std::vector<FRsapCollisionComponentChangedResult> DetectAndUpdateChanges()
+	std::vector<FRsapCollisionComponentChangedResult> DetectAndSyncChanges()
 	{
 	    std::vector<FRsapCollisionComponentChangedResult> ChangedResults;
 

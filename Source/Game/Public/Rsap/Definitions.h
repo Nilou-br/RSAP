@@ -41,6 +41,7 @@ namespace Rsap::NavMesh::Chunk
 	static inline constexpr uint8  SizeBits		= BaseSizeBits + SizeShift;
 	static inline constexpr int32  Size			= 1 << SizeBits;
 	static inline constexpr uint32 SizeMask		= ~(Size - 1);
+	static inline constexpr uint32 LocalMask	= Size - 1;
 
 	// To convert any global coordinates to positive values.
 	static inline constexpr uint64 SignOffset = ((1ULL << 20) - 1) << SizeBits;

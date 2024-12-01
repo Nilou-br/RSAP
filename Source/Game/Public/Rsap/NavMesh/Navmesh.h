@@ -168,15 +168,13 @@ private:
 		static_assert(std::is_invocable_v<TCallback, FRsapChunk*&, chunk_morton, layer_idx, node_morton, FRsapVector32&>,
 		"IterateIntersectingNodes: argument 'TCallback ProcessNodeCallback' signature must match (FRsapChunk*&, chunk_morton, layer_idx, node_morton, FRsapVector32&)");
 
-		const FRsapBounds& AABB = CollisionComponent.Boundaries;
+		const FRsapBounds& AABB = CollisionComponent.GetBoundaries();
 		const layer_idx LayerIdx = CalculateOptimalIterationLayer(AABB);
 
 		// Loop through the chunks intersecting these component's AABB. This also returns the intersection of the AABB with the chunk.
 		AABB.ForEachChunk([&](const chunk_morton ChunkMC, const FRsapVector32& ChunkLocation, const FRsapBounds& Intersection)
 		{
 			FRsapChunk* Chunk = FindChunk(ChunkMC);
-
-			Intersection.Draw(CollisionComponent.PrimitiveComponent->GetWorld(), FColor::Black, 5);
 
 			// Loop through the nodes within the intersection.
 			Intersection.ForEachNode(LayerIdx, [&](const node_morton NodeMC, const FRsapVector32& NodeLocation)

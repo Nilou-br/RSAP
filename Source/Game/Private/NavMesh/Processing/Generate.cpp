@@ -41,21 +41,19 @@ void FRsapNavmesh::HandleGenerate(const FRsapActorMap& ActorMap)
 	for (const auto& RsapActor : ActorMap | std::views::values)
 	{
 		std::unordered_set<chunk_morton> OccludedChunks;
-		for (const FRsapCollisionComponentPtr& ComponentPtr : RsapActor->GetCollisionComponents())
+		for (const auto& CollisionComponent : RsapActor->GetCollisionComponents())
 		{
-			if(ComponentPtr.expired()) continue;
-			FRsapCollisionComponent CollisionComponent = *ComponentPtr.lock().get();
 			// todo: maybe find thread-safer way to handle the collision component?
 			// todo: maybe different ExecuteRead overload that takes scene instead?
 			// todo: or use the component body ptr directly.
 
-			FPhysicsCommand::ExecuteRead(CollisionComponent.PrimitiveComponent->BodyInstance.ActorHandle, [&](const FPhysicsActorHandle& ActorHandle)
+			FPhysicsCommand::ExecuteRead(CollisionComponent->GetPrimitive()->BodyInstance.ActorHandle, [&](const FPhysicsActorHandle& ActorHandle)
 			{
 				// todo: variable determining the minimum size a component needs to be for it to be used for rasterization?
-				IterateIntersectingNodes(CollisionComponent, [&](FRsapChunk*& Chunk, const chunk_morton ChunkMC, const layer_idx LayerIdx, const node_morton NodeMC, const FRsapVector32& NodeLocation)
+				IterateIntersectingNodes(*CollisionComponent, [&](FRsapChunk*& Chunk, const chunk_morton ChunkMC, const layer_idx LayerIdx, const node_morton NodeMC, const FRsapVector32& NodeLocation)
 				{
 					// Check if the component overlaps this voxel.
-					if(!FRsapNode::HasComponentOverlap(*CollisionComponent, NodeLocation, LayerIdx, true)) return;
+					if(!FRsapNode::HasComponentOverlap(CollisionComponent->GetPrimitive(), NodeLocation, LayerIdx, true)) return;
 					if(!Chunk) Chunk = &InitChunk(ChunkMC);
 					
 					// The component is occluding at-least one voxel within this chunk, so add this chunk to the set.
@@ -63,7 +61,7 @@ void FRsapNavmesh::HandleGenerate(const FRsapActorMap& ActorMap)
 					
 					// Get/init the node, and also init/update any missing parent.
 					FRsapNode& Node = InitNode(*Chunk, ChunkMC, NodeMC, LayerIdx, 0, Direction::Negative::XYZ);
-					RasterizeNode(*Chunk, ChunkMC, Node, NodeMC, NodeLocation, LayerIdx, CollisionComponent, false);
+					RasterizeNode(*Chunk, ChunkMC, Node, NodeMC, NodeLocation, LayerIdx, *CollisionComponent, false);
 					
 					// if(LayerIdx < Layer::NodeDepth)
 					// {

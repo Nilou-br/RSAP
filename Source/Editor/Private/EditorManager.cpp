@@ -119,7 +119,7 @@ void URsapEditorManager::OnCollisionComponentChanged(const FRsapCollisionCompone
 		default: break;
 	}
 	
-	ChangedResult.ComponentPtr.lock()->DebugDrawIntersections();
+	ChangedResult.Component->DebugDrawLayers();
 }
 
 FVector Transform(const FVector& Location, const FTransform& ActorTransform)
