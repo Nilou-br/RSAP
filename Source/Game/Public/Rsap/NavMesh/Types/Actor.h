@@ -65,7 +65,7 @@ class FRsapCollisionComponent
 				if(Iterator == DirtyLayers.end())
 				{
 					// The new-layer doesn't exist, so all the dirty-nodes in this old-layer can be staged for removal.
-					StagedNodesToClear[OldLayerIdx] = OldDirtyNodes;
+					StagedNodesToClear[OldLayerIdx].insert(OldDirtyNodes.begin(), OldDirtyNodes.end());
 					continue;
 				}
 
@@ -209,7 +209,7 @@ public:
 			DrawLayers(Chunk.DirtyLayers,		 ChunkLocation, FColor::Orange);
 			DrawLayers(Chunk.OwningLayers,		 ChunkLocation, FColor::Black);
 
-			FRsapBounds::FromChunkMorton(ChunkMC).Draw(World, FColor::Green, 3);
+			FRsapBounds::FromChunkMorton(ChunkMC).Draw(World, FColor::Black, 20);
 
 			for (const auto NodeMC : Chunk.IntersectedNodes)
 			{
