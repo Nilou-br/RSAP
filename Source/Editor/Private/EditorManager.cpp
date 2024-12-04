@@ -120,6 +120,8 @@ void URsapEditorManager::OnCollisionComponentChanged(const FRsapCollisionCompone
 	}
 	
 	ChangedResult.Component->DebugDrawLayers();
+
+	// Notify dirty-navmesh.
 }
 
 FVector Transform(const FVector& Location, const FTransform& ActorTransform)

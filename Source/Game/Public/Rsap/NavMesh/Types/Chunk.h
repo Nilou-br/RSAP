@@ -10,47 +10,83 @@ using namespace Rsap::NavMesh;
 
 
 
+/**
+ * Sparse voxel octree with a depth of 10, storing nodes in a hashmap where morton-codes are used as the key.
+ */
 template<typename NodeType>
-struct TRsapChunkBase
+struct TLowResSparseOctree
 {
-	struct FOctree
-	{
-		std::array<std::shared_ptr<Rsap::Map::ordered_map<node_morton, NodeType>>, 10> Layers;
-		std::shared_ptr<FRsapLeafLayer> LeafNodes;
+	// todo to unique?
+	std::array<std::shared_ptr<Rsap::Map::ordered_map<node_morton, NodeType>>, 10> Layers;
 
-		FOctree()
+	TLowResSparseOctree()
+	{
+		for (layer_idx LayerIdx = 0; LayerIdx < 10; ++LayerIdx)
 		{
-			for (layer_idx LayerIdx = 0; LayerIdx < 10; ++LayerIdx)
-			{
-				Layers[LayerIdx] = std::make_unique<Rsap::Map::ordered_map<node_morton, NodeType>>();
-			}
-			LeafNodes = std::make_unique<FRsapLeafLayer>();
+			Layers[LayerIdx] = std::make_shared<Rsap::Map::ordered_map<node_morton, NodeType>>();
 		}
-	};
+	}
 };
 
 /**
- * The Chunk stores two octrees.
+ * Extends the low-resolution sparse-octree by adding leaf-nodes which multiply the max resolution by 64.
+ */
+template<typename NodeType>
+struct THighResSparseOctree : TLowResSparseOctree<NodeType>
+{
+	// todo to unique?
+	std::shared_ptr<FRsapLeafLayer> LeafNodes;
+
+	THighResSparseOctree()
+	{
+		LeafNodes = std::make_shared<FRsapLeafLayer>();
+	}
+};
+
+template<typename OctreeType>
+struct TRsapChunkBase
+{
+protected:
+	OctreeType* Octree = nullptr;
+};
+
+enum class EOctreeType
+{
+	Static = 0, Dynamic = 1
+};
+
+/**
+ * Chunk used for 3D pathfinding.
  * The first octree at index 0 is static. The nodes are generated/updated within the editor, never during gameplay. Only the relations can be updated during gameplay to point to dynamic nodes, but these changes aren't serialized.
  * The second octree at index 1 is dynamic. The nodes are created from dynamic objects during gameplay. These will not be serialized.
+ *
+ * Call ::SetActiveOctree to set one of the two active.
  */
-struct FRsapChunk : TRsapChunkBase<FRsapNode>
+struct FRsapChunk : TRsapChunkBase<THighResSparseOctree<FRsapNode>>
 {
-private:
-	void Initialize()
-	{
-		Octrees[0] = std::make_shared<FOctree>();
-		Octrees[1] = std::make_shared<FOctree>();
-		ActorEntries = new Rsap::Map::flat_map<actor_key, FGuid>();
-	}
-	
-public:
-	std::array<std::shared_ptr<FOctree>, 2> Octrees; // Accessed using a node-state, 0 static, 1 dynamic.
+	std::array<THighResSparseOctree<FRsapNode>*, 2> Octrees; // Accessed using a node-state, 0 static, 1 dynamic.
 	Rsap::Map::flat_map<actor_key, FGuid>* ActorEntries;
+	uint8 ActiveOctreeType = Node::State::Static;
 
 	FRsapChunk()
 	{
-		Initialize();
+		Octrees[0] = new THighResSparseOctree<FRsapNode>;
+		Octrees[1] = new THighResSparseOctree<FRsapNode>;
+		SetActiveOctree(EOctreeType::Static);
+		
+		ActorEntries = new Rsap::Map::flat_map<actor_key, FGuid>();
+	}
+
+	~FRsapChunk()
+	{
+		delete Octrees[0];
+		delete Octrees[1];
+		delete ActorEntries;
+	}
+
+	void SetActiveOctree(const EOctreeType OctreeType)
+	{
+		Octree = Octrees[static_cast<uint8>(OctreeType)];
 	}
 
 	// Adds/updates this actor to the entry with a new unique FGuid.
@@ -62,7 +98,7 @@ public:
 	// Use only when you are certain it exists.
 	FORCEINLINE FRsapNode& GetNode(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
 	{
-		return Octrees[NodeState]->Layers[LayerIdx]->find(NodeMC)->second;
+		return Octrees[ActiveOctreeType]->Layers[LayerIdx]->find(NodeMC)->second;
 	}
 	// Use only when you are certain it exists.
 	FORCEINLINE FRsapLeaf& GetLeafNode(const node_morton NodeMC, const node_state NodeState) const
@@ -70,7 +106,6 @@ public:
 		return Octrees[NodeState]->LeafNodes->find(NodeMC)->second;
 	}
 	
-	// Returns true if the node exists.
 	FORCEINLINE bool FindNode(FRsapNode& OutNode, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
 	{
 		const auto& Iterator = Octrees[NodeState]->Layers[LayerIdx]->find(NodeMC);
@@ -78,7 +113,6 @@ public:
 		OutNode = Iterator->second;
 		return true;
 	}
-	// Returns true if the leaf node exists.
 	FORCEINLINE bool FindLeafNode(FRsapLeaf& OutLeafNode, const node_morton NodeMC, const node_state NodeState) const
 	{
 		const auto& Iterator = Octrees[NodeState]->LeafNodes->find(NodeMC);
@@ -87,24 +121,21 @@ public:
 		return true;
 	}
 	
-	// Returns a reference to this node. Will initialize one if it does not exist yet.
 	FORCEINLINE FRsapNode& TryInitNode(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
 	{
 		return Octrees[NodeState]->Layers[LayerIdx]->try_emplace(NodeMC).first->second;
 	}
-	// Returns a reference to this node. Will initialize one if it does not exist yet. Has additional boolean for checking insertion.
 	FORCEINLINE FRsapNode& TryInitNode(bool& bOutInserted, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
 	{
 		const auto [NodePair, bInserted] = Octrees[NodeState]->Layers[LayerIdx]->try_emplace(NodeMC);
 		bOutInserted = bInserted;
 		return NodePair->second;
 	}
-	// Returns a reference to this leaf node. Will initialize one if it does not exist yet.
+	
 	FORCEINLINE FRsapLeaf& TryInitLeafNode(const node_morton NodeMC, const node_state NodeState) const
 	{
 		return Octrees[NodeState]->LeafNodes->try_emplace(NodeMC).first->second;
 	}
-	// Returns a reference to this leaf node. Will initialize one if it does not exist yet. Has additional boolean for checking insertion.
 	FORCEINLINE FRsapLeaf& TryInitLeafNode(bool& bOutInserted, const node_morton NodeMC, const node_state NodeState) const
 	{
 		const auto [NodePair, bInserted] = Octrees[NodeState]->LeafNodes->try_emplace(NodeMC);
@@ -112,12 +143,10 @@ public:
 		return NodePair->second;
 	}
 
-	// Remove this node from the chunk.
 	FORCEINLINE void EraseNode(const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState) const
 	{
 		Octrees[NodeState]->Layers[LayerIdx]->erase(NodeMC);
 	}
-	// Remove this leaf node from the chunk.
 	FORCEINLINE void EraseLeafNode(const node_morton NodeMC, const node_state NodeState) const
 	{
 		Octrees[NodeState]->LeafNodes->erase(NodeMC);
@@ -150,16 +179,58 @@ public:
 };
 
 /**
- * Stores a single octree meant for 
+ * Used within the dirty-navmesh for updating the real navmesh.
+ * Initializes the nodes similarly to FRsapChunk.
  */
-struct FRsapDirtyChunk : TRsapChunkBase<FRsapDirtyNode>
+struct FRsapDirtyChunk
 {
-private:
-	void Initialize()
+	TLowResSparseOctree<FRsapDirtyNode>* Octree;
+
+	FRsapDirtyChunk()
 	{
-		Octree = std::make_shared<FOctree>();
+		Octree = new TLowResSparseOctree<FRsapDirtyNode>;
+	}
+	
+	~FRsapDirtyChunk()
+	{
+		delete Octree;
 	}
 
-public:
-	std::shared_ptr<FOctree> Octree;
+	// Use only when you are certain it exists.
+	FORCEINLINE FRsapDirtyNode& GetNode(const node_morton NodeMC, const layer_idx LayerIdx) const
+	{
+		return Octree->Layers[LayerIdx]->find(NodeMC)->second;
+	}
+	FORCEINLINE bool FindNode(FRsapDirtyNode& OutNode, const node_morton NodeMC, const layer_idx LayerIdx) const
+	{
+		const auto& Iterator = Octree->Layers[LayerIdx]->find(NodeMC);
+		if(Iterator == Octree->Layers[LayerIdx]->end()) return false;
+		OutNode = Iterator->second;
+		return true;
+	}
+	FORCEINLINE FRsapDirtyNode& TryInitNode(const node_morton NodeMC, const layer_idx LayerIdx) const
+	{
+		return Octree->Layers[LayerIdx]->try_emplace(NodeMC).first->second;
+	}
+	FORCEINLINE FRsapDirtyNode& TryInitNode(bool& bOutInserted, const node_morton NodeMC, const layer_idx LayerIdx) const
+	{
+		const auto [NodePair, bInserted] = Octree->Layers[LayerIdx]->try_emplace(NodeMC);
+		bOutInserted = bInserted;
+		return NodePair->second;
+	}
+	
+	FORCEINLINE void InitNodeParents(const node_morton NodeMC, const layer_idx LayerIdx)
+	{
+		const layer_idx ParentLayerIdx = LayerIdx-1;
+		const node_morton ParentNodeMC = FMortonUtils::Node::GetParent(NodeMC, ParentLayerIdx);
+
+		// If this parent was inserted, then continue recursion. Stop if we reached the root node.
+		bool bWasInserted;
+		FRsapDirtyNode& ParentNode = TryInitNode(bWasInserted, ParentNodeMC, ParentLayerIdx);
+		if(bWasInserted && ParentLayerIdx > 0) InitNodeParents(ParentNodeMC, ParentLayerIdx);
+
+		// Update the Children mask on the parent to know this child exists and is occluding.
+		const child_idx ChildIdx = FMortonUtils::Node::GetChildIndex(NodeMC, LayerIdx);
+		ParentNode.SetChildActive(ChildIdx);
+	}
 };

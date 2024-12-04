@@ -142,6 +142,9 @@ void SaveStaticOctree(FArchive& ChunkAr, const FRsapChunk& Chunk)
 	// for (uint8& Byte : TestArray) Byte = 0xFF; // Fill with sample data
 	// ChunkAr.Serialize(TestArray.GetData(), TestArray.Num());
 
+	// todo: this could just loop through the layers instead if everything is sorted, maybe preprocessor '#if WITH_EDITOR'
+	// todo: then put it around this method and SaveNodes, and the #else has its own SaveStaticOctree that just loops.
+
 	std::vector<uint8> Batch;
 	Batch.reserve(Chunk.GetStaticNodeCount());
 	

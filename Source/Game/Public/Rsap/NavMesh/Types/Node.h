@@ -165,7 +165,7 @@ struct FRsapNode : IRsapNodeBase
 
 struct FRsapDirtyNode : IRsapNodeBase
 {
-	std::vector<FRsapCollisionComponent*> Components;
+	std::unordered_set<std::shared_ptr<FRsapCollisionComponent>> Components;
 };
 
 struct FRsapLeaf

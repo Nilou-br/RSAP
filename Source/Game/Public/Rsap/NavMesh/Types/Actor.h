@@ -218,6 +218,24 @@ public:
 		}
 	}
 
+	template<typename TCallback>
+	FORCEINLINE void ForEachDirtyNode(const TCallback& Callback)
+	{
+		static_assert(std::is_invocable_v<TCallback, chunk_morton, node_morton, layer_idx>,
+		"ForEachDirtyNode: TCallback signature must match (chunk_morton, node_morton, layer_idx)");
+
+		for (auto& [ChunkMC, TrackedChunk] : TrackedChunks)
+		{
+			for (auto& [LayerIdx, DirtyLayer] : TrackedChunk.DirtyLayers)
+			{
+				for (node_morton NodeMC : DirtyLayer)
+				{
+					Callback(ChunkMC, NodeMC, LayerIdx);
+				}
+			}
+		}
+	}
+
 	const FRsapBounds& GetBoundaries() const { return Boundaries; }
 	const UPrimitiveComponent* GetPrimitive() const { return PrimitiveComponent.Get(); }
 };

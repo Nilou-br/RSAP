@@ -81,14 +81,14 @@ public:
 #endif
 	
 	// Returns nullptr if it does not exist.
-	FORCEINLINE FRsapChunk* FindChunk(const chunk_morton ChunkMC)
+	FORCEINLINE ChunkType* FindChunk(const chunk_morton ChunkMC)
 	{
 		const auto Iterator = Chunks.find(ChunkMC);
 		if(Iterator == Chunks.end()) return nullptr;
 		return &Iterator->second;
 	}
 
-	FORCEINLINE FRsapChunk& InitChunk(const chunk_morton ChunkMC)
+	FORCEINLINE ChunkType& InitChunk(const chunk_morton ChunkMC)
 	{
 		return Chunks.try_emplace(ChunkMC).first->second;
 	}
@@ -129,11 +129,9 @@ private:
 	void RasterizeNode(FRsapChunk& Chunk, chunk_morton ChunkMC, FRsapNode& Node,
 	                   node_morton NodeMC, const FRsapVector32& NodeLocation, layer_idx LayerIdx,
 	                   const FRsapCollisionComponent& CollisionComponent, bool bIsAABBContained);
-	void RasterizeLeaf(FRsapLeaf& LeafNode, const FRsapVector32& NodeLocation,
+	static void RasterizeLeaf(FRsapLeaf& LeafNode, const FRsapVector32& NodeLocation,
 	                   const FRsapCollisionComponent& CollisionComponent, bool bIsAABBContained);
-
-
-	static layer_idx CalculateOptimalIterationLayer(const FRsapBounds& Bounds);
+	
 	FRsapNode& InitNode(const FRsapChunk& Chunk, chunk_morton ChunkMC, node_morton NodeMC, layer_idx LayerIdx, node_state NodeState, rsap_direction RelationsToSet);
 	FRsapLeaf& InitLeaf(const FRsapChunk& Chunk, chunk_morton ChunkMC, node_morton NodeMC, node_state NodeState);
 	void InitNodeParents(const FRsapChunk& Chunk, chunk_morton ChunkMC, node_morton NodeMC, layer_idx LayerIdx, node_state NodeState);
@@ -169,7 +167,7 @@ private:
 		"IterateIntersectingNodes: argument 'TCallback ProcessNodeCallback' signature must match (FRsapChunk*&, chunk_morton, layer_idx, node_morton, FRsapVector32&)");
 
 		const FRsapBounds& AABB = CollisionComponent.GetBoundaries();
-		const layer_idx LayerIdx = CalculateOptimalIterationLayer(AABB);
+		const layer_idx LayerIdx = AABB.GetOptimalRasterizationLayer();
 
 		// Loop through the chunks intersecting these component's AABB. This also returns the intersection of the AABB with the chunk.
 		AABB.ForEachChunk([&](const chunk_morton ChunkMC, const FRsapVector32& ChunkLocation, const FRsapBounds& Intersection)
@@ -182,6 +180,26 @@ private:
 				ProcessNodeCallback(Chunk, ChunkMC, LayerIdx, NodeMC, NodeLocation);
 			});
 		});
+	}
+
+	bool IsSorted() const
+	{
+		for (const auto& Chunk : Chunks | std::views::values)
+		{
+			for (const auto& Layer : Chunk.Octrees[0]->Layers)
+			{
+				node_morton LastNodeMC = 0;
+				for (const node_morton NodeMC : *Layer.get() | std::views::keys)
+				{
+					if(NodeMC < LastNodeMC)
+					{
+						return false;
+					}
+					LastNodeMC = NodeMC;
+				}
+			}
+		}
+		return true;
 	}
 };
 

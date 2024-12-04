@@ -5,32 +5,6 @@
 
 
 
-/**
- * Calculates the most optimal layer to iterate over. Used as the starting layer to rasterize the nodes around an object.
- * It's the most optimal layer because it will avoid unnecessary iterations on layers holding too large/small nodes intersecting this object.
- *
- * It won't return a layer where the node-size will definitely occlude the whole actor, which will always return true for occlusion tests anyway.
- * It also won't return a layer where lots of nodes are required to encapsulate the whole actor, which is not efficient to loop through because it will have lots of iterations.
- * 
- * The optimal layer would be the first layer where 3 nodes are required to fill the largest side of the boundaries,
- * which is the first layer holding nodes within the boundaries that have a chance to not collide with any hitbox.
- */
-layer_idx FRsapNavmesh::CalculateOptimalIterationLayer(const FRsapBounds& Bounds)
-{
-	// Get the largest dimension of this bounding-box.
-	const int32 LargestSide = Bounds.GetLengths().GetLargestAxis();
-
-	// Get the first layer where at-least 3 nodes are required to fill the side.
-	for (layer_idx LayerIdx = Layer::Root; LayerIdx < Layer::Total; ++LayerIdx)
-	{
-		if(LargestSide / Node::Sizes[LayerIdx] <= 1) continue;
-		return LayerIdx;
-	}
-
-	// Very small object, so just use the deepest layer.
-	return Layer::Leaf;
-}
-
 // todo: maybe add bool to init parents?
 // Returns a reference to this node. Will initialize one if it does not exist yet. Will also init any parents of this node that do not exist yet, and set it's relations.
 FRsapNode& FRsapNavmesh::InitNode(const FRsapChunk& Chunk, const chunk_morton ChunkMC, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState, const rsap_direction RelationsToSet = Direction::Negative::XYZ)

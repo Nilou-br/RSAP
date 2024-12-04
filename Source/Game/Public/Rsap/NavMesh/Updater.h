@@ -19,13 +19,27 @@ class RSAPGAME_API FRsapNavmeshUpdater
 	FRsapNavmesh& Navmesh;
 	FRsapDirtyNavmesh DirtyNavmesh;
 	
-	Rsap::Map::flat_map<FRsapCollisionComponentPtr, std::vector<FRsapFlatChunk>> StagedComponentEntries;
+	std::unordered_set<std::shared_ptr<FRsapCollisionComponent>> StagedComponents;
 
 public:
 	explicit FRsapNavmeshUpdater(FRsapNavmesh& InNavmesh) : Navmesh(InNavmesh){}
 
-	void StageComponent(const FRsapCollisionComponentPtr& ComponentPtr, const std::vector<FRsapFlatChunk>& IntersectedChunks)
+	void StageComponent(const std::shared_ptr<FRsapCollisionComponent>& Component)
 	{
-		
+		// todo: mutex?
+		StagedComponents.insert(Component);
+		std::weak_ptr ComponentPtr = Component;
+
+		Component->ForEachDirtyNode([&DirtyNavmesh = DirtyNavmesh, &ComponentPtr = ComponentPtr](const chunk_morton ChunkMC, const node_morton NodeMC, const layer_idx LayerIdx)
+		{
+			FRsapDirtyChunk* DirtyChunk = DirtyNavmesh.FindChunk(ChunkMC);
+			if(!DirtyChunk) DirtyChunk = &DirtyNavmesh.InitChunk(ChunkMC);
+
+			bool bWasInserted;
+			FRsapDirtyNode& DirtyNode = DirtyChunk->TryInitNode(bWasInserted, NodeMC, LayerIdx);
+			if(bWasInserted) DirtyChunk->InitNodeParents(NodeMC, LayerIdx);
+
+			DirtyNode.Components.insert(ComponentPtr);
+		});
 	}
 };
