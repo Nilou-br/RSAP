@@ -24,11 +24,6 @@
 			"Name": "RsapEditor",
 			"Type": "Editor",
 			"LoadingPhase": "Default"
-		},
-		{
-			"Name": "RsapShaders",
-			"Type": "Runtime",
-			"LoadingPhase": "PostConfigInit"
 		}
 	]
 }

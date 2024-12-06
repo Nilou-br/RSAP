@@ -7,8 +7,7 @@
 #include "Rsap/NavMesh/Debugger.h"
 #include "Rsap/NavMesh/Update/Updater.h"
 #include "Engine/World.h"
-#include "Editor.h"
-
+#include "Voxelization/Voxelization.h"
 
 
 void URsapEditorManager::Initialize(FSubsystemCollectionBase& Collection)
@@ -119,9 +118,14 @@ void URsapEditorManager::OnCollisionComponentChanged(const FRsapCollisionCompone
 		default: break;
 	}
 	
-	ChangedResult.Component->DebugDrawLayers();
+	//ChangedResult.Component->DebugDrawLayers();
 
-	// Notify dirty-navmesh.
+
+	const FVoxelizationDispatchParams Params(5, 5, 1);
+	FVoxelizationInterface::Dispatch(Params, [](int OutputVal)
+	{
+		UE_LOG(LogRsap, Log, TEXT("FVoxelizationInterface: %i"), OutputVal)
+	});
 }
 
 FVector Transform(const FVector& Location, const FTransform& ActorTransform)

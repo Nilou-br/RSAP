@@ -31,7 +31,8 @@ public class RsapEditor : ModuleRules
 				"Projects",
 				"EditorStyle",
 				"EditorSubsystem",
-				"RsapGame"
+				"RsapGame",
+				"RsapShaders"
 			}
 		);
 	}
