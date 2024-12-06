@@ -64,7 +64,6 @@ public:
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
 	{
 		const FPermutationDomain PermutationVector(Parameters.PermutationId);
-		
 		return true;
 	}
 
@@ -101,87 +100,80 @@ IMPLEMENT_GLOBAL_SHADER(FVoxelization, "/RsapShadersShaders/Voxelization/Voxeliz
 
 void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHICmdList, FVoxelizationDispatchParams Params, TFunction<void(int OutputVal)> AsyncCallback) {
 	FRDGBuilder GraphBuilder(RHICmdList);
-
 	{
 		SCOPE_CYCLE_COUNTER(STAT_Voxelization_Execute);
 		DECLARE_GPU_STAT(Voxelization)
 		RDG_EVENT_SCOPE(GraphBuilder, "Voxelization");
 		RDG_GPU_STAT_SCOPE(GraphBuilder, Voxelization);
 		
-		typename FVoxelization::FPermutationDomain PermutationVector;
+		const FVoxelization::FPermutationDomain PermutationVector;
 		
 		// Add any static permutation options here
 		// PermutationVector.Set<FVoxelization::FMyPermutationName>(12345);
 
 		TShaderMapRef<FVoxelization> ComputeShader(GetGlobalShaderMap(GMaxRHIFeatureLevel), PermutationVector);
+
+		if (!ComputeShader.IsValid())
+		{
+			#if WITH_EDITOR
+				GEngine->AddOnScreenDebugMessage(static_cast<uint64>(42145125184), 6.f, FColor::Red, FString(TEXT("The compute shader has a problem.")));
+			#endif
+			return; // We exit here as we don't want to crash the game if the shader is not found or has an error.
+		}
+		
+		FVoxelization::FParameters* PassParameters = GraphBuilder.AllocParameters<FVoxelization::FParameters>();
+		
+		const void* RawData = static_cast<void*>(Params.Input);
+		constexpr int NumInputs = 2;
+		constexpr int InputSize = sizeof(int);
+		const FRDGBufferRef InputBuffer = CreateUploadBuffer(GraphBuilder, TEXT("InputBuffer"), InputSize, NumInputs, RawData, InputSize * NumInputs);
+
+		PassParameters->Input = GraphBuilder.CreateSRV(FRDGBufferSRVDesc(InputBuffer, PF_R32_SINT));
+
+		const FRDGBufferRef OutputBuffer = GraphBuilder.CreateBuffer(
+			FRDGBufferDesc::CreateBufferDesc(sizeof(int32), 1),
+			TEXT("OutputBuffer")
+		);
+
+		PassParameters->Output = GraphBuilder.CreateUAV(FRDGBufferUAVDesc(OutputBuffer, PF_R32_SINT));
 		
 
-		bool bIsShaderValid = ComputeShader.IsValid();
+		auto GroupCount = FComputeShaderUtils::GetGroupCount(FIntVector(Params.X, Params.Y, Params.Z), FComputeShaderUtils::kGolden2DGroupSize);
+		GraphBuilder.AddPass(
+			RDG_EVENT_NAME("ExecuteVoxelization"),
+			PassParameters,
+			ERDGPassFlags::AsyncCompute,
+			[&PassParameters, ComputeShader, GroupCount](FRHIComputeCommandList& RHICmdList)
+		{
+			FComputeShaderUtils::Dispatch(RHICmdList, ComputeShader, *PassParameters, GroupCount);
+		});
+		
+		FRHIGPUBufferReadback* GPUBufferReadback = new FRHIGPUBufferReadback(TEXT("ExecuteVoxelizationOutput"));
+		AddEnqueueCopyPass(GraphBuilder, GPUBufferReadback, OutputBuffer, 0u);
 
-		if (bIsShaderValid) {
-			FVoxelization::FParameters* PassParameters = GraphBuilder.AllocParameters<FVoxelization::FParameters>();
+		auto RunnerFunc = [GPUBufferReadback, AsyncCallback](auto&& RunnerFunc) -> void {
+			if (GPUBufferReadback->IsReady()) {
+				
+				const int32* Buffer = static_cast<int32*>(GPUBufferReadback->Lock(1));
+				int OutVal = Buffer[0];
+				
+				GPUBufferReadback->Unlock();
 
-			
-			const void* RawData = (void*)Params.Input;
-			int NumInputs = 2;
-			int InputSize = sizeof(int);
-			FRDGBufferRef InputBuffer = CreateUploadBuffer(GraphBuilder, TEXT("InputBuffer"), InputSize, NumInputs, RawData, InputSize * NumInputs);
+				AsyncTask(ENamedThreads::GameThread, [AsyncCallback, OutVal]() {
+					AsyncCallback(OutVal);
+				});
 
-			PassParameters->Input = GraphBuilder.CreateSRV(FRDGBufferSRVDesc(InputBuffer, PF_R32_SINT));
+				delete GPUBufferReadback;
+			} else {
+				AsyncTask(ENamedThreads::ActualRenderingThread, [RunnerFunc]() {
+					RunnerFunc(RunnerFunc);
+				});
+			}
+		};
 
-			FRDGBufferRef OutputBuffer = GraphBuilder.CreateBuffer(
-				FRDGBufferDesc::CreateBufferDesc(sizeof(int32), 1),
-				TEXT("OutputBuffer"));
-
-			PassParameters->Output = GraphBuilder.CreateUAV(FRDGBufferUAVDesc(OutputBuffer, PF_R32_SINT));
-			
-
-			auto GroupCount = FComputeShaderUtils::GetGroupCount(FIntVector(Params.X, Params.Y, Params.Z), FComputeShaderUtils::kGolden2DGroupSize);
-			GraphBuilder.AddPass(
-				RDG_EVENT_NAME("ExecuteVoxelization"),
-				PassParameters,
-				ERDGPassFlags::AsyncCompute,
-				[&PassParameters, ComputeShader, GroupCount](FRHIComputeCommandList& RHICmdList)
-			{
-				FComputeShaderUtils::Dispatch(RHICmdList, ComputeShader, *PassParameters, GroupCount);
-			});
-
-			
-			FRHIGPUBufferReadback* GPUBufferReadback = new FRHIGPUBufferReadback(TEXT("ExecuteVoxelizationOutput"));
-			AddEnqueueCopyPass(GraphBuilder, GPUBufferReadback, OutputBuffer, 0u);
-
-			auto RunnerFunc = [GPUBufferReadback, AsyncCallback](auto&& RunnerFunc) -> void {
-				if (GPUBufferReadback->IsReady()) {
-					
-					int32* Buffer = (int32*)GPUBufferReadback->Lock(1);
-					int OutVal = Buffer[0];
-					
-					GPUBufferReadback->Unlock();
-
-					AsyncTask(ENamedThreads::GameThread, [AsyncCallback, OutVal]() {
-						AsyncCallback(OutVal);
-					});
-
-					delete GPUBufferReadback;
-				} else {
-					AsyncTask(ENamedThreads::ActualRenderingThread, [RunnerFunc]() {
-						RunnerFunc(RunnerFunc);
-					});
-				}
-			};
-
-			AsyncTask(ENamedThreads::ActualRenderingThread, [RunnerFunc]() {
-				RunnerFunc(RunnerFunc);
-			});
-			
-		} else {
-			#if WITH_EDITOR
-				GEngine->AddOnScreenDebugMessage((uint64)42145125184, 6.f, FColor::Red, FString(TEXT("The compute shader has a problem.")));
-			#endif
-
-			// We exit here as we don't want to crash the game if the shader is not found or has an error.
-			
-		}
+		AsyncTask(ENamedThreads::ActualRenderingThread, [RunnerFunc]() {
+			RunnerFunc(RunnerFunc);
+		});
 	}
 
 	GraphBuilder.Execute();

@@ -41,6 +41,7 @@ private:
 	void PostMapSaved(const bool bSuccess);
 
 	void OnCollisionComponentChanged(const FRsapCollisionComponentChangedResult& ChangedResult);
+	void ShaderOutput(const int OutputVal);
 
 	void OnNavMeshUpdated() const;
 

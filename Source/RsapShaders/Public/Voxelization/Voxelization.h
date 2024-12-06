@@ -2,30 +2,21 @@
 
 #include "CoreMinimal.h"
 #include "GenericPlatform/GenericPlatformMisc.h"
-#include "Kismet/BlueprintAsyncActionBase.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Materials/MaterialRenderProxy.h"
 
-#include "Voxelization.generated.h"
+
 
 struct RSAPSHADERS_API FVoxelizationDispatchParams
 {
-	int X;
-	int Y;
-	int Z;
-
+	int X, Y, Z;
 	
-	int Input[2];
-	int Output;
+	int Input[2] = {0, 0};
+	int Output = 0;
 	
-	
-
-	FVoxelizationDispatchParams(int x, int y, int z)
-		: X(x)
-		, Y(y)
-		, Z(z)
-	{
-	}
+	FVoxelizationDispatchParams(const int InX, const int InY, const int InZ)
+		: X(InX), Y(InY), Z(InZ)
+	{}
 };
 
 // This is a public interface that we define so outside code can invoke our compute shader.
@@ -53,60 +44,17 @@ public:
 
 	// Dispatches this shader. Can be called from any thread
 	static void Dispatch(
-		FVoxelizationDispatchParams Params,
-		TFunction<void(int OutputVal)> AsyncCallback
+		const FVoxelizationDispatchParams& Params,
+		const TFunction<void(int OutputVal)>& AsyncCallback
 	)
 	{
-		if (IsInRenderingThread()) {
+		if (IsInRenderingThread())
+		{
 			DispatchRenderThread(GetImmediateCommandList_ForRenderCommand(), Params, AsyncCallback);
-		}else{
+		}
+		else
+		{
 			DispatchGameThread(Params, AsyncCallback);
 		}
 	}
-};
-
-
-
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnVoxelizationLibrary_AsyncExecutionCompleted, const int, Value);
-
-
-UCLASS() // Change the _API to match your project
-class RSAPSHADERS_API UVoxelizationLibrary_AsyncExecution : public UBlueprintAsyncActionBase
-{
-	GENERATED_BODY()
-
-public:
-	
-	// Execute the actual load
-	virtual void Activate() override {
-		// Create a dispatch parameters struct and fill it the input array with our args
-		FVoxelizationDispatchParams Params(1, 1, 1);
-		Params.Input[0] = Arg1;
-		Params.Input[1] = Arg2;
-
-		// Dispatch the compute shader and wait until it completes
-		FVoxelizationInterface::Dispatch(Params, [this](int OutputVal) {
-			this->Completed.Broadcast(OutputVal);
-		});
-	}
-	
-	
-	
-	UFUNCTION(BlueprintCallable, meta = (BlueprintInternalUseOnly = "true", Category = "ComputeShader", WorldContext = "WorldContextObject"))
-	static UVoxelizationLibrary_AsyncExecution* ExecuteBaseComputeShader(UObject* WorldContextObject, int Arg1, int Arg2) {
-		UVoxelizationLibrary_AsyncExecution* Action = NewObject<UVoxelizationLibrary_AsyncExecution>();
-		Action->Arg1 = Arg1;
-		Action->Arg2 = Arg2;
-		Action->RegisterWithGameInstance(WorldContextObject);
-
-		return Action;
-	}
-
-	UPROPERTY(BlueprintAssignable)
-	FOnVoxelizationLibrary_AsyncExecutionCompleted Completed;
-
-	
-	int Arg1;
-	int Arg2;
-	
 };

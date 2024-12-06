@@ -119,13 +119,19 @@ void URsapEditorManager::OnCollisionComponentChanged(const FRsapCollisionCompone
 	}
 	
 	//ChangedResult.Component->DebugDrawLayers();
-
-
-	const FVoxelizationDispatchParams Params(5, 5, 1);
-	FVoxelizationInterface::Dispatch(Params, [](int OutputVal)
+	
+	FVoxelizationDispatchParams Params(1, 1, 1);
+	Params.Input[0] = 2;
+	Params.Input[1] = 3;
+	FVoxelizationInterface::Dispatch(Params, [this](int OutputVal)
 	{
-		UE_LOG(LogRsap, Log, TEXT("FVoxelizationInterface: %i"), OutputVal)
+		ShaderOutput(OutputVal);
 	});
+}
+
+void URsapEditorManager::ShaderOutput(const int OutputVal)
+{
+	UE_LOG(LogRsap, Log, TEXT("FVoxelizationInterface: %i"), OutputVal);
 }
 
 FVector Transform(const FVector& Location, const FTransform& ActorTransform)
