@@ -66,17 +66,17 @@ void URsapEditorManager::OnMapOpened(const IRsapWorld* RsapWorld)
 {
 	Debugger->Stop();
 	
-	switch (const auto [Result, MismatchedActors] = NavMesh.Load(RsapWorld); Result) {
-		case ERsapNavmeshLoadResult::Success: break;
-		case ERsapNavmeshLoadResult::NotFound:
-			NavMesh.Generate(RsapWorld);
-			if(RsapWorld->MarkDirty()) UE_LOG(LogRsap, Log, TEXT("Generation complete. The sound-navigation-mesh will be cached when you save the map."))
-			break;
-		case ERsapNavmeshLoadResult::MisMatch:
-			// NavMesh.Regenerate(RsapWorld, MismatchedActors);
-			// if(RsapWorld->MarkDirty()) UE_LOG(LogRsap, Log, TEXT("Regenerated out-of-sync areas. The sound-navigation-mesh will be cached when you save the map."))
-			break;
-	}
+	// switch (const auto [Result, MismatchedActors] = NavMesh.Load(RsapWorld); Result) {
+	// 	case ERsapNavmeshLoadResult::Success: break;
+	// 	case ERsapNavmeshLoadResult::NotFound:
+	// 		NavMesh.Generate(RsapWorld);
+	// 		if(RsapWorld->MarkDirty()) UE_LOG(LogRsap, Log, TEXT("Generation complete. The sound-navigation-mesh will be cached when you save the map."))
+	// 		break;
+	// 	case ERsapNavmeshLoadResult::MisMatch:
+	// 		// NavMesh.Regenerate(RsapWorld, MismatchedActors);
+	// 		// if(RsapWorld->MarkDirty()) UE_LOG(LogRsap, Log, TEXT("Regenerated out-of-sync areas. The sound-navigation-mesh will be cached when you save the map."))
+	// 		break;
+	// }
 
 	Debugger->Start();
 
@@ -103,7 +103,7 @@ void URsapEditorManager::PreMapSaved()
 
 void URsapEditorManager::PostMapSaved(const bool bSuccess)
 {
-	if(bSuccess) NavMesh.Save(); // todo: check if this also runs if a different level is saved from the one that is opened?
+	// if(bSuccess) NavMesh.Save(); // todo: check if this also runs if a different level is saved from the one that is opened?
 }
 
 void URsapEditorManager::OnCollisionComponentChanged(const FRsapCollisionComponentChangedResult& ChangedResult)

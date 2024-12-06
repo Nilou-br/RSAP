@@ -16,7 +16,7 @@ void FRsapNavmesh::Generate(const IRsapWorld* RsapWorld)
 {
 	if(!RsapWorld->GetWorld()) return;
 	
-	Metadata->Chunks.Empty();
+	// Metadata->Chunks.Empty();
 	Chunks.clear();
 	UpdatedChunkMCs.clear();
 	DeletedChunkMCs.clear();
@@ -25,12 +25,12 @@ void FRsapNavmesh::Generate(const IRsapWorld* RsapWorld)
 	HandleGenerate(RsapWorld->GetActors());
 
 	// Store all the morton-codes of the generated chunks in the metadata.
-	for (const auto& ChunkMC : Chunks | std::views::keys)
-	{
-		Metadata->Chunks.Emplace(ChunkMC, FGuid::NewGuid());
-	}
+	// for (const auto& ChunkMC : Chunks | std::views::keys)
+	// {
+	// 	Metadata->Chunks.Emplace(ChunkMC, FGuid::NewGuid());
+	// }
 	
-	Metadata->Save(RsapWorld->GetWorld());
+	// Metadata->Save(RsapWorld->GetWorld());
 	bRegenerated = true;
 }
 
