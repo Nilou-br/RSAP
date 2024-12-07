@@ -1,36 +1,30 @@
-#include "Voxelization.h"
-#include "RsapShaders/Public/Voxelization/Voxelization.h"
-#include "PixelShaderUtils.h"
-#include "MeshPassProcessor.inl"
-#include "StaticMeshResources.h"
-#include "DynamicMeshBuilder.h"
-#include "RenderGraphResources.h"
+﻿#include "Multiply.h"
+#include "RsapShaders/Public/Multiply/Multiply.h"
 #include "GlobalShader.h"
-#include "UnifiedBuffer.h"
-#include "CanvasTypes.h"
-#include "MeshDrawShaderBindings.h"
+#include "MeshPassProcessor.inl"
+#include "RenderGraphResources.h"
 #include "RHIGPUReadback.h"
-#include "MeshPassUtils.h"
-#include "MaterialShader.h"
+#include "StaticMeshResources.h"
+#include "UnifiedBuffer.h"
 
-DECLARE_STATS_GROUP(TEXT("Voxelization"), STATGROUP_Voxelization, STATCAT_Advanced);
-DECLARE_CYCLE_STAT(TEXT("Voxelization Execute"), STAT_Voxelization_Execute, STATGROUP_Voxelization);
+DECLARE_STATS_GROUP(TEXT("MultiplyShader"), STATGROUP_MultiplyShader, STATCAT_Advanced);
+DECLARE_CYCLE_STAT(TEXT("MultiplyShader Execute"), STAT_MultiplyShader_Execute, STATGROUP_MultiplyShader);
+
+
 
 // This class carries our parameter declarations and acts as the bridge between cpp and HLSL.
-class RSAPSHADERS_API FVoxelization: public FGlobalShader
+class RSAPSHADERS_API FMultiplyShader: public FGlobalShader
 {
 public:
-	
-	DECLARE_GLOBAL_SHADER(FVoxelization);
-	SHADER_USE_PARAMETER_STRUCT(FVoxelization, FGlobalShader);
-	
-	
-	class FVoxelization_Perm_TEST : SHADER_PERMUTATION_INT("TEST", 1);
-	using FPermutationDomain = TShaderPermutationDomain<
-		FVoxelization_Perm_TEST
-	>;
 
+	DECLARE_GLOBAL_SHADER(FMultiplyShader);
+	SHADER_USE_PARAMETER_STRUCT(FMultiplyShader, FGlobalShader);
+
+	class FMultiplyShader_Perm_Test : SHADER_PERMUTATION_INT("TEST", 1);
+	using FPermutationDomain = TShaderPermutationDomain<FMultiplyShader_Perm_Test>;
+	
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+	
 		/*
 		* Here's where you define one or more of the input parameters for your shader.
 		* Some examples:
@@ -53,13 +47,12 @@ public:
 
 		// SHADER_PARAMETER_STRUCT_REF(FMyCustomStruct, MyCustomStruct)
 
-		
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<int>, Input)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer<int>, Output)
-		
 
 	END_SHADER_PARAMETER_STRUCT()
 
+	
 public:
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
 	{
@@ -82,36 +75,37 @@ public:
 		/*
 		* These defines are used in the thread count section of our shader
 		*/
-		OutEnvironment.SetDefine(TEXT("THREADS_X"), NUM_THREADS_Voxelization_X);
-		OutEnvironment.SetDefine(TEXT("THREADS_Y"), NUM_THREADS_Voxelization_Y);
-		OutEnvironment.SetDefine(TEXT("THREADS_Z"), NUM_THREADS_Voxelization_Z);
+		OutEnvironment.SetDefine(TEXT("THREADS_X"), NUM_THREADS_MULTIPLY_X);
+		OutEnvironment.SetDefine(TEXT("THREADS_Y"), NUM_THREADS_MULTIPLY_Y);
+		OutEnvironment.SetDefine(TEXT("THREADS_Z"), NUM_THREADS_MULTIPLY_Z);
 
 		// This shader must support typed UAV load and we are testing if it is supported at runtime using RHIIsTypedUAVLoadSupported
 		//OutEnvironment.CompilerFlags.Add(CFLAG_AllowTypedUAVLoads);
 
 		// FForwardLightingParameters::ModifyCompilationEnvironment(Parameters.Platform, OutEnvironment);
 	}
-private:
 };
 
 // This will tell the engine to create the shader and where the shader entry point is.
 // ShaderType | ShaderPath | Shader function name | Type
-IMPLEMENT_GLOBAL_SHADER(FVoxelization, "/RsapShadersShaders/Voxelization/Voxelization.usf", "Voxelization", SF_Compute);
+IMPLEMENT_GLOBAL_SHADER(FMultiplyShader, "/RsapShadersShaders/Multiply/Multiply.usf", "MultiplyShader", SF_Compute);
 
-void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHICmdList, FVoxelizationDispatchParams Params, TFunction<void(int OutputVal)> AsyncCallback) {
+void FMultiplyShaderInterface::DispatchRenderThread(FRHICommandListImmediate& RHICmdList, FMultiplyShaderDispatchParams Params, TFunction<void(int OutputVal)> AsyncCallback)
+{
 	FRDGBuilder GraphBuilder(RHICmdList);
-	{
-		SCOPE_CYCLE_COUNTER(STAT_Voxelization_Execute);
-		DECLARE_GPU_STAT(Voxelization)
-		RDG_EVENT_SCOPE(GraphBuilder, "Voxelization");
-		RDG_GPU_STAT_SCOPE(GraphBuilder, Voxelization);
-		
-		const FVoxelization::FPermutationDomain PermutationVector;
-		
-		// Add any static permutation options here
-		// PermutationVector.Set<FVoxelization::FMyPermutationName>(12345);
 
-		TShaderMapRef<FVoxelization> ComputeShader(GetGlobalShaderMap(GMaxRHIFeatureLevel), PermutationVector);
+	{
+		SCOPE_CYCLE_COUNTER(STAT_MultiplyShader_Execute);
+		DECLARE_GPU_STAT(MultiplyShader)
+		RDG_EVENT_SCOPE(GraphBuilder, "MultiplyShader");
+		RDG_GPU_STAT_SCOPE(GraphBuilder, MultiplyShader);
+
+		const FMultiplyShader::FPermutationDomain PermutationVector;
+
+		// Add any static permutation options here
+		// PermutationVector.Set<FMultiplyShader::FMyPermutationName>(12345);
+
+		TShaderMapRef<FMultiplyShader> ComputeShader(GetGlobalShaderMap(GMaxRHIFeatureLevel), PermutationVector);
 
 		if (!ComputeShader.IsValid())
 		{
@@ -120,9 +114,9 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 			#endif
 			return; // We exit here as we don't want to crash the game if the shader is not found or has an error.
 		}
-		
-		FVoxelization::FParameters* PassParameters = GraphBuilder.AllocParameters<FVoxelization::FParameters>();
-		
+
+		FMultiplyShader::FParameters* PassParameters = GraphBuilder.AllocParameters<FMultiplyShader::FParameters>();
+
 		const void* RawData = static_cast<void*>(Params.Input);
 		constexpr int NumInputs = 2;
 		constexpr int InputSize = sizeof(int);
@@ -134,21 +128,21 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 			TEXT("OutputBuffer")
 		);
 		PassParameters->Output = GraphBuilder.CreateUAV(FRDGBufferUAVDesc(OutputBuffer, PF_R32_SINT));
-		
+
 		auto GroupCount = FComputeShaderUtils::GetGroupCount(FIntVector(Params.X, Params.Y, Params.Z), FComputeShaderUtils::kGolden2DGroupSize);
 		GraphBuilder.AddPass(
-			RDG_EVENT_NAME("ExecuteVoxelization"),
+			RDG_EVENT_NAME("ExecuteMultiplyShader"),
 			PassParameters,
 			ERDGPassFlags::AsyncCompute,
-			[&PassParameters, ComputeShader, GroupCount](FRHIComputeCommandList& RHICmdList)
+			[&PassParameters, ComputeShader, GroupCount](FRHIComputeCommandList& RHICommandList)
 		{
-			FComputeShaderUtils::Dispatch(RHICmdList, ComputeShader, *PassParameters, GroupCount);
+			FComputeShaderUtils::Dispatch(RHICommandList, ComputeShader, *PassParameters, GroupCount);
 		});
-		
-		FRHIGPUBufferReadback* GPUBufferReadback = new FRHIGPUBufferReadback(TEXT("ExecuteVoxelizationOutput"));
+
+		FRHIGPUBufferReadback* GPUBufferReadback = new FRHIGPUBufferReadback(TEXT("ExecuteMultiplyShaderOutput"));
 		AddEnqueueCopyPass(GraphBuilder, GPUBufferReadback, OutputBuffer, 0u);
 
-		auto RunnerFunc = [GPUBufferReadback, AsyncCallback](auto&& RunnerFunc) -> void {
+		auto RunnerFunc = [GPUBufferReadback, AsyncCallback](auto&& RunnerFunction) -> void {
 			if (GPUBufferReadback->IsReady()) {
 				
 				const int32* Buffer = static_cast<int32*>(GPUBufferReadback->Lock(1));
@@ -162,8 +156,8 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 
 				delete GPUBufferReadback;
 			} else {
-				AsyncTask(ENamedThreads::ActualRenderingThread, [RunnerFunc]() {
-					RunnerFunc(RunnerFunc);
+				AsyncTask(ENamedThreads::ActualRenderingThread, [RunnerFunction]() {
+					RunnerFunction(RunnerFunction);
 				});
 			}
 		};

@@ -7,6 +7,7 @@
 #include "Rsap/NavMesh/Debugger.h"
 #include "Rsap/NavMesh/Update/Updater.h"
 #include "Engine/World.h"
+#include "Multiply/Multiply.h"
 #include "Voxelization/Voxelization.h"
 
 
@@ -119,19 +120,31 @@ void URsapEditorManager::OnCollisionComponentChanged(const FRsapCollisionCompone
 	}
 	
 	//ChangedResult.Component->DebugDrawLayers();
+
+	const UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(ChangedResult.Component->GetPrimitive());
+	const FStaticMeshLODResources& LODResources = StaticMeshComponent->GetStaticMesh()->GetLODForExport(0);
+	
+	const FPositionVertexBuffer* VertexBuffer = &LODResources.VertexBuffers.PositionVertexBuffer;
+	const FIndexArrayView IndexBuffer = LODResources.IndexBuffer.GetArrayView();
 	
 	FVoxelizationDispatchParams Params(1, 1, 1);
-	Params.Input[0] = 2;
-	Params.Input[1] = 3;
-	FVoxelizationInterface::Dispatch(Params, [this](int OutputVal)
+	Params.Input[0] = 5;
+	Params.Input[1] = 5;
+	FVoxelizationInterface::Dispatch(Params, [this](const int OutputVal)
 	{
-		ShaderOutput(OutputVal);
+		UE_LOG(LogRsap, Log, TEXT("FVoxelizationInterface: %i"), OutputVal);
+	});
+
+	const FMultiplyShaderDispatchParams MultiplyParams(8, 8);
+	FMultiplyShaderInterface::Dispatch(MultiplyParams, [this](const int OutputVal)
+	{
+		UE_LOG(LogRsap, Log, TEXT("FMultiplyShaderInterface: %i"), OutputVal);
 	});
 }
 
 void URsapEditorManager::ShaderOutput(const int OutputVal)
 {
-	UE_LOG(LogRsap, Log, TEXT("FVoxelizationInterface: %i"), OutputVal);
+	UE_LOG(LogRsap, Log, TEXT("FShaderResult: %i"), OutputVal);
 }
 
 FVector Transform(const FVector& Location, const FTransform& ActorTransform)
