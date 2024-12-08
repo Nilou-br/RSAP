@@ -8,6 +8,7 @@
 #include "Rsap/NavMesh/Update/Updater.h"
 #include "Engine/World.h"
 #include "Multiply/Multiply.h"
+#include "Rendering/SkeletalMeshLODRenderData.h"
 #include "Voxelization/Voxelization.h"
 
 
@@ -122,24 +123,25 @@ void URsapEditorManager::OnCollisionComponentChanged(const FRsapCollisionCompone
 	//ChangedResult.Component->DebugDrawLayers();
 
 	const UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(ChangedResult.Component->GetPrimitive());
-	const FStaticMeshLODResources& LODResources = StaticMeshComponent->GetStaticMesh()->GetLODForExport(0);
-	
-	const FPositionVertexBuffer* VertexBuffer = &LODResources.VertexBuffers.PositionVertexBuffer;
-	const FIndexArrayView IndexBuffer = LODResources.IndexBuffer.GetArrayView();
-	
-	FVoxelizationDispatchParams Params(1, 1, 1);
-	Params.Input[0] = 5;
-	Params.Input[1] = 5;
-	FVoxelizationInterface::Dispatch(Params, [this](const int OutputVal)
-	{
-		UE_LOG(LogRsap, Log, TEXT("FVoxelizationInterface: %i"), OutputVal);
-	});
+	const FStaticMeshRenderData* RenderData = StaticMeshComponent->GetStaticMesh()->GetRenderData();
+	const FStaticMeshLODResources& LODResources = RenderData->LODResources[0];
 
+	const FStaticMeshVertexBuffer& VertexBuffer = LODResources.VertexBuffers.StaticMeshVertexBuffer;
+	const FPositionVertexBuffer& PositionVertexBuffer = LODResources.VertexBuffers.PositionVertexBuffer;
+	const FRawStaticIndexBuffer& IndexBuffer = LODResources.IndexBuffer;
+	
+	//
+	
 	const FMultiplyShaderDispatchParams MultiplyParams(8, 8);
 	FMultiplyShaderInterface::Dispatch(MultiplyParams, [this](const int OutputVal)
 	{
 		UE_LOG(LogRsap, Log, TEXT("FMultiplyShaderInterface: %i"), OutputVal);
 	});
+
+	//
+
+	const FVoxelizationDispatchParams Params(LODResources);
+	FVoxelizationInterface::Dispatch(Params);
 }
 
 void URsapEditorManager::ShaderOutput(const int OutputVal)

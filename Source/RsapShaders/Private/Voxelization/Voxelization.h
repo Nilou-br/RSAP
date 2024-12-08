@@ -25,6 +25,6 @@
 #include "RenderGraphResources.h"
 #include "Runtime/Engine/Classes/Engine/TextureRenderTarget2D.h"
 
-#define NUM_THREADS_Voxelization_X 1
-#define NUM_THREADS_Voxelization_Y 1
-#define NUM_THREADS_Voxelization_Z 1
+#define NUM_THREADS_VOXELIZATION_X 1
+#define NUM_THREADS_VOXELIZATION_Y 1
+#define NUM_THREADS_VOXELIZATION_Z 1

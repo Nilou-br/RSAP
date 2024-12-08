@@ -1,13 +1,16 @@
 #include "/Engine/Public/Platform.ush"
 
-Buffer<int> Input;
-RWBuffer<int> Output;
+StructuredBuffer<float3> VertexBuffer : register(t0);
+RWStructuredBuffer<float3> OutputBuffer : register(u0);
 
-[numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
-void Voxelization(
-	uint3 DispatchThreadId : SV_DispatchThreadID,
-	uint GroupIndex : SV_GroupIndex )
+[numthreads(64, 1, 1)]
+void Voxelization(uint3 DispatchThreadID : SV_DispatchThreadID)
 {
-	// Outputs one number
-	Output[0] = Input[0] * Input[1];
+	// const uint VertexIdx = DispatchThreadID.x;
+	// if (VertexIdx >= NumVertices) return;
+	//
+	// float3 LocalPos = VertexBuffer[VertexIdx];
+	// float4 GlobalPos = mul(float4(LocalPos, 1.0), LocalToWorld);
+	//
+	// OutputBuffer[VertexIdx] = GlobalPos.xyz;
 }

@@ -2,20 +2,15 @@
 
 #include "CoreMinimal.h"
 #include "GenericPlatform/GenericPlatformMisc.h"
-#include "Engine/TextureRenderTarget2D.h"
-#include "Materials/MaterialRenderProxy.h"
 
 
 
 struct RSAPSHADERS_API FVoxelizationDispatchParams
 {
-	int X, Y, Z;
+	const FStaticMeshLODResources& LODResources;
 	
-	int Input[2] = {0, 0};
-	int Output = 0;
-	
-	FVoxelizationDispatchParams(const int InX, const int InY, const int InZ)
-		: X(InX), Y(InY), Z(InZ)
+	FVoxelizationDispatchParams(const FStaticMeshLODResources& InLODResources)
+		: LODResources(InLODResources)
 	{}
 };
 
@@ -23,38 +18,30 @@ struct RSAPSHADERS_API FVoxelizationDispatchParams
 class RSAPSHADERS_API FVoxelizationInterface {
 public:
 	// Executes this shader on the render thread
-	static void DispatchRenderThread(
-		FRHICommandListImmediate& RHICmdList,
-		FVoxelizationDispatchParams Params,
-		TFunction<void(int OutputVal)> AsyncCallback
-	);
+	static void DispatchRenderThread(FRHICommandListImmediate& RHICmdList,const FVoxelizationDispatchParams& Params);
 
 	// Executes this shader on the render thread from the game thread via EnqueueRenderThreadCommand
-	static void DispatchGameThread(
-		FVoxelizationDispatchParams Params,
-		TFunction<void(int OutputVal)> AsyncCallback
-	)
+	static void DispatchGameThread(FVoxelizationDispatchParams Params)
 	{
 		ENQUEUE_RENDER_COMMAND(SceneDrawCompletion)(
-		[Params, AsyncCallback](FRHICommandListImmediate& RHICmdList)
+		[Params](FRHICommandListImmediate& RHICmdList)
 		{
-			DispatchRenderThread(RHICmdList, Params, AsyncCallback);
+			DispatchRenderThread(RHICmdList, Params);
 		});
 	}
 
 	// Dispatches this shader. Can be called from any thread
 	static void Dispatch(
-		const FVoxelizationDispatchParams& Params,
-		const TFunction<void(int OutputVal)>& AsyncCallback
+		const FVoxelizationDispatchParams& Params
 	)
 	{
 		if (IsInRenderingThread())
 		{
-			DispatchRenderThread(GetImmediateCommandList_ForRenderCommand(), Params, AsyncCallback);
+			DispatchRenderThread(GetImmediateCommandList_ForRenderCommand(), Params);
 		}
 		else
 		{
-			DispatchGameThread(Params, AsyncCallback);
+			DispatchGameThread(Params);
 		}
 	}
 };
