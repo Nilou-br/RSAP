@@ -27,7 +27,7 @@ public:
 	using FPermutationDomain = TShaderPermutationDomain<FVoxelization_Perm_Test>;
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
-		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<float3>, VertexBuffer)
+		SHADER_PARAMETER_SRV(Buffer<float4>, VertexBuffer)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<float3>, OutputBuffer)
 	END_SHADER_PARAMETER_STRUCT()
 
@@ -76,21 +76,30 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
     
     FVoxelization::FParameters* PassParameters = GraphBuilder.AllocParameters<FVoxelization::FParameters>();
 
-	const FPositionVertexBuffer& VertexBuffer = Params.LODResources.VertexBuffers.PositionVertexBuffer;
-	const uint32 NumVertices = VertexBuffer.GetNumVertices();
-	void* VertexBufferData = RHICmdList.LockBuffer(VertexBuffer.VertexBufferRHI, 0, VertexBuffer.GetNumVertices() * VertexBuffer.GetStride(), RLM_WriteOnly);
-	FMemory::Memcpy(VertexBufferData, VertexBuffer.GetVertexData(), VertexBuffer.GetNumVertices() * VertexBuffer.GetStride());
-	RHICmdList.UnlockBuffer(VertexBuffer.VertexBufferRHI);
-
+	// This code just fetched the CPU side vertex-buffer, got a copy of this buffer stored on the gpu, and moved the GPU. It was unnecessary, but could be useful for when geometry was edited?
+	// const FPositionVertexBuffer& VertexBuffer = Params.LODResources.VertexBuffers.PositionVertexBuffer;
+	// const uint32 NumVertices = VertexBuffer.GetNumVertices();
+	// void* VertexBufferData = RHICmdList.LockBuffer(VertexBuffer.VertexBufferRHI, 0, VertexBuffer.GetNumVertices() * VertexBuffer.GetStride(), RLM_WriteOnly);
+	// FMemory::Memcpy(VertexBufferData, VertexBuffer.GetVertexData(), VertexBuffer.GetNumVertices() * VertexBuffer.GetStride());
+	// RHICmdList.UnlockBuffer(VertexBuffer.VertexBufferRHI);
+	//
 	// Create an RDG buffer
-	const FRDGBufferRef VertexBufferRef = GraphBuilder.CreateBuffer(
-		FRDGBufferDesc::CreateBufferDesc(sizeof(FVector), NumVertices),
-		TEXT("VertexBuffer")
-	);
+	// const FRDGBufferRef VertexBufferRef = GraphBuilder.CreateBuffer(
+	// 	FRDGBufferDesc::CreateBufferDesc(sizeof(FVector), NumVertices),
+	// 	TEXT("VertexBuffer")
+	// );
+	//
+	// // Upload the buffer to GPU
+	// GraphBuilder.QueueBufferUpload(VertexBufferRef, VertexBufferData, VertexBuffer.GetAllocatedSize());
+	// PassParameters->VertexBuffer = VertexBuffer.VertexBufferRHI;
 
-	// Upload the buffer to GPU
-	GraphBuilder.QueueBufferUpload(VertexBufferRef, VertexBufferData, VertexBuffer.GetAllocatedSize());
-	PassParameters->VertexBuffer = GraphBuilder.CreateSRV(VertexBufferRef, PF_R32G32B32F);
+	const FPositionVertexBuffer& PositionVertexBuffer = Params.LODResources.VertexBuffers.PositionVertexBuffer;
+	FRHIBuffer* Buffer = PositionVertexBuffer.VertexBufferRHI;
+	FRHIViewDesc::FBufferSRV::FInitializer Initializer = FRHIViewDesc::CreateBufferSRV();
+	Initializer.SetType(FRHIViewDesc::EBufferType::Typed);
+	Initializer.SetFormat(PF_R32G32B32F);
+	FRHIShaderResourceView* VertexBufferSRV = RHICmdList.CreateShaderResourceView(Buffer, Initializer);
+	PassParameters->VertexBuffer = VertexBufferSRV;
 
 	// Create output buffer
 	const FRDGBufferRef OutputBuffer = GraphBuilder.CreateBuffer(
@@ -99,9 +108,8 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 	);
 	PassParameters->OutputBuffer = GraphBuilder.CreateUAV(OutputBuffer, PF_R32G32B32F);
 
-
 	// Dispatch compute shader
-	FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(FIntVector(NumVertices, 1, 1), FIntVector(64, 1, 1));
+	FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(FIntVector(1, 1, 1), FIntVector(64, 1, 1));
 	GraphBuilder.AddPass(
 		RDG_EVENT_NAME("ExecuteVoxelization"),
 		PassParameters,
