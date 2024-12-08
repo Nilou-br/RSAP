@@ -123,12 +123,12 @@ void URsapEditorManager::OnCollisionComponentChanged(const FRsapCollisionCompone
 	//ChangedResult.Component->DebugDrawLayers();
 
 	const UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(ChangedResult.Component->GetPrimitive());
+	if(!StaticMeshComponent->GetStaticMesh()->HasValidRenderData()) return;
 	const FStaticMeshRenderData* RenderData = StaticMeshComponent->GetStaticMesh()->GetRenderData();
 	const FStaticMeshLODResources& LODResources = RenderData->LODResources[0];
 
 	const FStaticMeshVertexBuffer& VertexBuffer = LODResources.VertexBuffers.StaticMeshVertexBuffer;
-	const FPositionVertexBuffer& PositionVertexBuffer = LODResources.VertexBuffers.PositionVertexBuffer;
-	const FRawStaticIndexBuffer& IndexBuffer = LODResources.IndexBuffer;
+	UE_LOG(LogRsap, Log, TEXT("NumVertices: %i"), VertexBuffer.GetNumVertices());
 	
 	//
 	

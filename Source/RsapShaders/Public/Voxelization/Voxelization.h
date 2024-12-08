@@ -9,7 +9,7 @@ struct RSAPSHADERS_API FVoxelizationDispatchParams
 {
 	const FStaticMeshLODResources& LODResources;
 	
-	FVoxelizationDispatchParams(const FStaticMeshLODResources& InLODResources)
+	explicit FVoxelizationDispatchParams(const FStaticMeshLODResources& InLODResources)
 		: LODResources(InLODResources)
 	{}
 };

@@ -27,7 +27,9 @@ public:
 	using FPermutationDomain = TShaderPermutationDomain<FVoxelization_Perm_Test>;
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
-		SHADER_PARAMETER_SRV(Buffer<float4>, VertexBuffer)
+		SHADER_PARAMETER_SRV(Buffer<float3>, VertexBuffer)
+		SHADER_PARAMETER(uint32, NumVertices)
+		SHADER_PARAMETER(FVector3f, FixedTransform)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<float3>, OutputBuffer)
 	END_SHADER_PARAMETER_STRUCT()
 
@@ -101,19 +103,23 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 	FRHIShaderResourceView* VertexBufferSRV = RHICmdList.CreateShaderResourceView(Buffer, Initializer);
 	PassParameters->VertexBuffer = VertexBufferSRV;
 
+	const uint32 NumVertices = PositionVertexBuffer.GetNumVertices();
+	PassParameters->NumVertices = NumVertices;
+	PassParameters->FixedTransform = FVector3f(10.0f, 10.0f, 10.0f);
+
 	// Create output buffer
 	const FRDGBufferRef OutputBuffer = GraphBuilder.CreateBuffer(
-		FRDGBufferDesc::CreateStructuredDesc(sizeof(int), 1),
+		FRDGBufferDesc::CreateStructuredDesc(sizeof(FVector3f), NumVertices),
 		TEXT("OutputBuffer")
 	);
 	PassParameters->OutputBuffer = GraphBuilder.CreateUAV(OutputBuffer, PF_R32G32B32F);
 
 	// Dispatch compute shader
-	FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(FIntVector(1, 1, 1), FIntVector(64, 1, 1));
+	FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(NumVertices, 64);
 	GraphBuilder.AddPass(
 		RDG_EVENT_NAME("ExecuteVoxelization"),
 		PassParameters,
-		ERDGPassFlags::AsyncCompute,
+		ERDGPassFlags::Compute,
 		[ComputeShader, PassParameters, GroupCount](FRHIComputeCommandList& RHICommandList)
 		{
 			FComputeShaderUtils::Dispatch(RHICommandList, ComputeShader, *PassParameters, GroupCount);
@@ -125,4 +131,31 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 	AddEnqueueCopyPass(GraphBuilder, GPUBufferReadback, OutputBuffer, 0);
 
 	GraphBuilder.Execute();
+	RHICmdList.BlockUntilGPUIdle();
+
+	// Fetch the data back to the CPU
+	if (GPUBufferReadback->IsReady())
+	{
+		void* MappedData = GPUBufferReadback->Lock(0);
+		const FVector3f* TransformedVertices = static_cast<FVector3f*>(MappedData);
+	
+		// Log the transformed vertices for verification
+		for (uint32 i = 0; i < NumVertices; ++i)
+		{
+			UE_LOG(LogTemp, Log, TEXT("Transformed Vertex %d: %s"), i, *TransformedVertices[i].ToString());
+		}
+	
+		GPUBufferReadback->Unlock();
+	}
+
+	//Test GPU
+	void* MappedVertexBufferData = RHICmdList.LockBuffer(PositionVertexBuffer.VertexBufferRHI, 0, NumVertices * PositionVertexBuffer.GetStride(), RLM_ReadOnly);
+	const FVector3f* VertexData = static_cast<FVector3f*>(MappedVertexBufferData);
+	for (uint32 i = 0; i < NumVertices; ++i)
+	{
+		UE_LOG(LogTemp, Log, TEXT("Input Vertex %d: %s"), i, *VertexData[i].ToString());
+	}
+	RHICmdList.UnlockBuffer(PositionVertexBuffer.VertexBufferRHI);
+
+	UE_LOG(LogTemp, Log, TEXT("Stride: %d"), PositionVertexBuffer.GetStride());
 }
