@@ -14,7 +14,7 @@ class FRsapCollisionComponent
 	friend class FRsapActor; // Owns the components.
 	friend class FRsapNavmeshUpdater; // Co-owner if processing dirty nodes.
 	
-	TWeakObjectPtr<const UPrimitiveComponent> PrimitiveComponent;
+	TWeakObjectPtr<UPrimitiveComponent> PrimitiveComponent;
 	uint16 SoundPresetID = 0;
 
 	FTransform Transform;
@@ -171,7 +171,7 @@ class FRsapCollisionComponent
 	}
 
 public:
-	explicit FRsapCollisionComponent(const UPrimitiveComponent* Component)
+	explicit FRsapCollisionComponent(UPrimitiveComponent* Component)
 		: PrimitiveComponent(Component), Transform(Component->GetComponentTransform()), Boundaries(Component)
 	{
 		const layer_idx OptimalLayer = Boundaries.GetOptimalRasterizationLayer();
@@ -237,7 +237,7 @@ public:
 	}
 
 	const FRsapBounds& GetBoundaries() const { return Boundaries; }
-	const UPrimitiveComponent* GetPrimitive() const { return PrimitiveComponent.Get(); }
+	UPrimitiveComponent* GetPrimitive() const { return PrimitiveComponent.Get(); }
 };
 
 typedef Rsap::Map::flat_map<const UPrimitiveComponent*, std::shared_ptr<FRsapCollisionComponent>> FRsapCollisionComponentMap;
@@ -276,7 +276,7 @@ public:
 		ActorPtr = Actor;
 
 		// Init the collision-components.
-		for (const UPrimitiveComponent* PrimitiveComponent : GetPrimitiveComponents())
+		for (UPrimitiveComponent* PrimitiveComponent : GetPrimitiveComponents())
 		{
 			CollisionComponents.emplace(PrimitiveComponent, std::make_shared<FRsapCollisionComponent>(PrimitiveComponent));
 		}
@@ -289,13 +289,13 @@ public:
 		return GetTypeHash(ActorPtr->GetActorGuid());
 	}
 
-	std::vector<const UPrimitiveComponent*> GetPrimitiveComponents() const
+	std::vector<UPrimitiveComponent*> GetPrimitiveComponents() const
 	{
-		std::vector<const UPrimitiveComponent*> Result;
+		std::vector<UPrimitiveComponent*> Result;
 		TArray<UActorComponent*> ActorComponents; ActorPtr->GetComponents(ActorComponents);
 		for (UActorComponent* ActorComponent : ActorComponents)
 		{
-			if (const UPrimitiveComponent* PrimitiveComponent = Cast<UPrimitiveComponent>(ActorComponent); PrimitiveComponent && PrimitiveComponent->IsCollisionEnabled())
+			if (UPrimitiveComponent* PrimitiveComponent = Cast<UPrimitiveComponent>(ActorComponent); PrimitiveComponent && PrimitiveComponent->IsCollisionEnabled())
 			{
 				Result.emplace_back(PrimitiveComponent);
 			}
@@ -348,7 +348,7 @@ public:
 	    }
 
 		// Check if there are any new components with collision.
-	    for (const UPrimitiveComponent* PrimitiveComponent : GetPrimitiveComponents())
+	    for (UPrimitiveComponent* PrimitiveComponent : GetPrimitiveComponents())
 	    {
 	    	if(CollisionComponents.contains(PrimitiveComponent)) continue;
 	    	const auto& NewComponent = CollisionComponents.emplace(PrimitiveComponent, std::make_shared<FRsapCollisionComponent>(PrimitiveComponent)).first->second;

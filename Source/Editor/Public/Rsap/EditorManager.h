@@ -35,13 +35,14 @@ public:
 private:
 	FRsapNavmesh NavMesh;
 	FRsapDebugger* Debugger;
+	TArray<TObjectPtr<UStaticMeshComponent>> ComponentChangedResults;
 
 	void OnMapOpened(const IRsapWorld* RsapWorld);
 	void PreMapSaved();
 	void PostMapSaved(const bool bSuccess);
 
 	void OnCollisionComponentChanged(const FRsapCollisionComponentChangedResult& ChangedResult);
-	void ShaderOutput(const int OutputVal);
+	void OnWorldPostActorTick(UWorld* World, ELevelTick TickType, float DeltaSeconds);
 
 	void OnNavMeshUpdated() const;
 

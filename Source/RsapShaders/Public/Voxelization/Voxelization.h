@@ -7,10 +7,10 @@
 
 struct RSAPSHADERS_API FVoxelizationDispatchParams
 {
-	const FStaticMeshLODResources& LODResources;
+	TArray<TObjectPtr<UStaticMeshComponent>> ChangedSMComponents;
 	
-	explicit FVoxelizationDispatchParams(const FStaticMeshLODResources& InLODResources)
-		: LODResources(InLODResources)
+	explicit FVoxelizationDispatchParams(TArray<TObjectPtr<UStaticMeshComponent>>&& InChangedSMComponents)
+		: ChangedSMComponents(MoveTemp(InChangedSMComponents))
 	{}
 };
 

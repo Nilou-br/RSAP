@@ -4,11 +4,16 @@ Buffer<float3> VertexBuffer : register(t0);
 RWStructuredBuffer<float3> OutputBuffer : register(u0);
 
 uint NumVertices;
-float3 FixedTransform;
+float4x4 TransformMatrix;
 
 [numthreads(64, 1, 1)]
 void Voxelization(uint3 DispatchThreadID : SV_DispatchThreadID)
 {
     const uint VertexIdx = DispatchThreadID.x;
-    if (VertexIdx < NumVertices) OutputBuffer[VertexIdx] = VertexBuffer[VertexIdx];
+    if (VertexIdx >= NumVertices) return;
+
+    const float3 LocalPosition = VertexBuffer[VertexIdx];
+    const float4 LocalPosition4 = float4(LocalPosition, 1.0f);
+    const float4 GlobalPosition4 = mul(TransformMatrix, LocalPosition4);
+    OutputBuffer[VertexIdx] = GlobalPosition4.xyz;
 }

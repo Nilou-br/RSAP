@@ -28,6 +28,8 @@ void URsapEditorManager::Initialize(FSubsystemCollectionBase& Collection)
 
 	EditorWorld.OnCollisionComponentChanged.BindUObject(this, &ThisClass::OnCollisionComponentChanged);
 
+	FWorldDelegates::OnWorldPostActorTick.AddUObject(this, &ThisClass::OnWorldPostActorTick);
+
 	//FRsapUpdater::OnUpdateComplete.AddUObject(this, &ThisClass::OnNavMeshUpdated);
 }
 
@@ -119,34 +121,14 @@ void URsapEditorManager::OnCollisionComponentChanged(const FRsapCollisionCompone
 		case ERsapCollisionComponentChangedType::None:		UE_LOG(LogRsap, Warning, TEXT("None")); break;
 		default: break;
 	}
-	
-	//ChangedResult.Component->DebugDrawLayers();
 
-	const UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(ChangedResult.Component->GetPrimitive());
-	if(!StaticMeshComponent->GetStaticMesh()->HasValidRenderData()) return;
-	const FStaticMeshRenderData* RenderData = StaticMeshComponent->GetStaticMesh()->GetRenderData();
-	const FStaticMeshLODResources& LODResources = RenderData->LODResources[0];
-
-	const FStaticMeshVertexBuffer& VertexBuffer = LODResources.VertexBuffers.StaticMeshVertexBuffer;
-	UE_LOG(LogRsap, Log, TEXT("NumVertices: %i"), VertexBuffer.GetNumVertices());
-	
-	//
-	
-	const FMultiplyShaderDispatchParams MultiplyParams(8, 8);
-	FMultiplyShaderInterface::Dispatch(MultiplyParams, [this](const int OutputVal)
-	{
-		UE_LOG(LogRsap, Log, TEXT("FMultiplyShaderInterface: %i"), OutputVal);
-	});
-
-	//
-
-	const FVoxelizationDispatchParams Params(LODResources);
-	FVoxelizationInterface::Dispatch(Params);
+	ComponentChangedResults.Add(Cast<UStaticMeshComponent>(ChangedResult.Component->GetPrimitive()));
 }
 
-void URsapEditorManager::ShaderOutput(const int OutputVal)
+void URsapEditorManager::OnWorldPostActorTick(UWorld* World, ELevelTick TickType, float DeltaSeconds)
 {
-	UE_LOG(LogRsap, Log, TEXT("FShaderResult: %i"), OutputVal);
+	if (ComponentChangedResults.IsEmpty()) return;
+	FVoxelizationInterface::Dispatch(FVoxelizationDispatchParams(MoveTemp(ComponentChangedResults)));
 }
 
 FVector Transform(const FVector& Location, const FTransform& ActorTransform)
