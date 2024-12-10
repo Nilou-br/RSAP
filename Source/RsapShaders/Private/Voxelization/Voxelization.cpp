@@ -71,7 +71,7 @@ private:
 // ShaderType | ShaderPath | Shader function name | Type
 IMPLEMENT_GLOBAL_SHADER(FVoxelization, "/RsapShadersShaders/Voxelization/Voxelization.usf", "Voxelization", SF_Compute);
 
-void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHICmdList, const FVoxelizationDispatchParams& Params)
+void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHICmdList, const FVoxelizationDispatchParams& Params, const TFunction<void(const TArray<FVector3f>&)>& Callback)
 {
 	FRDGBuilder GraphBuilder(RHICmdList);
     TShaderMapRef<FVoxelization> ComputeShader(GetGlobalShaderMap(GMaxRHIFeatureLevel), FVoxelization::FPermutationDomain());
@@ -86,8 +86,6 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 	for (const TObjectPtr<UStaticMeshComponent>& StaticMeshComponent : Params.ChangedSMComponents)
 	{
 		++Idx;
-		if(!StaticMeshComponent->GetStaticMesh()->HasValidRenderData()) continue;
-		
 		const FStaticMeshRenderData* RenderData = StaticMeshComponent->GetStaticMesh()->GetRenderData();
 		const FStaticMeshLODResources& LODResources = RenderData->LODResources[0];
 		const FPositionVertexBuffer& PositionVertexBuffer = LODResources.VertexBuffers.PositionVertexBuffer;
@@ -97,7 +95,7 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 		FVoxelization::FParameters* PassParameters = GraphBuilder.AllocParameters<FVoxelization::FParameters>();
 		PassParameters->VertexBuffer = VertexBufferSRV;
 		PassParameters->NumVertices = NumVertices;
-		PassParameters->TransformMatrix = FMatrix44f(StaticMeshComponent->GetComponentTransform().ToMatrixWithScale());
+		PassParameters->TransformMatrix = FMatrix44f(StaticMeshComponent->GetComponentTransform().ToMatrixWithScale().GetTransposed());
 
 		// Create output buffer
 		const FRDGBufferRef OutputBuffer = GraphBuilder.CreateBuffer(
@@ -120,15 +118,6 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 		FRHIGPUBufferReadback* GPUBufferReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.Voxelization.Output.Readback.%i"), Idx));
 		AddEnqueueCopyPass(GraphBuilder, GPUBufferReadback, OutputBuffer, NumVertices*PositionVertexBuffer.GetStride());
 		GPUBufferReadbacks.Add(GPUBufferReadback);
-
-		// Test GPU
-		// void* MappedVertexBufferData = RHICmdList.LockBuffer(PositionVertexBuffer.VertexBufferRHI, 0, NumVertices * PositionVertexBuffer.GetStride(), RLM_ReadOnly);
-		// const FVector3f* VertexData = static_cast<FVector3f*>(MappedVertexBufferData);
-		// for (uint32 i = 0; i < NumVertices; ++i)
-		// {
-		// 	UE_LOG(LogTemp, Log, TEXT("Input Vertex %d: %s"), i, *VertexData[i].ToString());
-		// }
-		// RHICmdList.UnlockBuffer(PositionVertexBuffer.VertexBufferRHI);
 	}
 
 	if(GPUBufferReadbacks.IsEmpty()) return;
@@ -136,29 +125,18 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 	GraphBuilder.Execute();
 	RHICmdList.BlockUntilGPUIdle();
 
+	TArray<FVector3f> Vertices;
+
 	// Fetch the data back to the CPU
 	for (FRHIGPUBufferReadback* Readback : GPUBufferReadbacks)
 	{
 		void* MappedData = Readback->Lock(0);
 		const uint32 NumElements = Readback->GetGPUSizeBytes() / sizeof(FVector3f);
 		const FVector3f* TransformedVertices = static_cast<FVector3f*>(MappedData);
-		
-		for (uint32 i = 0; i < NumElements; ++i)
-		{
-			UE_LOG(LogTemp, Log, TEXT("Transformed Vertex %d: %s"), i, *TransformedVertices[i].ToString());
-		}
-	
+		for (uint32 i = 0; i < NumElements; ++i) Vertices.Emplace(TransformedVertices[i]);
 		Readback->Unlock();
+		delete Readback;
 	}
 
-	// //Test GPU
-	// void* MappedVertexBufferData = RHICmdList.LockBuffer(PositionVertexBuffer.VertexBufferRHI, 0, NumVertices * PositionVertexBuffer.GetStride(), RLM_ReadOnly);
-	// const FVector3f* VertexData = static_cast<FVector3f*>(MappedVertexBufferData);
-	// for (uint32 i = 0; i < NumVertices; ++i)
-	// {
-	// 	UE_LOG(LogTemp, Log, TEXT("Input Vertex %d: %s"), i, *VertexData[i].ToString());
-	// }
-	// RHICmdList.UnlockBuffer(PositionVertexBuffer.VertexBufferRHI);
-	//
-	// UE_LOG(LogTemp, Log, TEXT("Stride: %d"), PositionVertexBuffer.GetStride());
+	Callback(Vertices);
 }

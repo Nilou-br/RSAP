@@ -122,13 +122,26 @@ void URsapEditorManager::OnCollisionComponentChanged(const FRsapCollisionCompone
 		default: break;
 	}
 
+	if(ChangedResult.Type == ERsapCollisionComponentChangedType::Deleted) return;
 	ComponentChangedResults.Add(Cast<UStaticMeshComponent>(ChangedResult.Component->GetPrimitive()));
 }
 
 void URsapEditorManager::OnWorldPostActorTick(UWorld* World, ELevelTick TickType, float DeltaSeconds)
 {
 	if (ComponentChangedResults.IsEmpty()) return;
-	FVoxelizationInterface::Dispatch(FVoxelizationDispatchParams(MoveTemp(ComponentChangedResults)));
+	FVoxelizationInterface::Dispatch(FVoxelizationDispatchParams(MoveTemp(ComponentChangedResults)), [this](const TArray<FVector3f>& Vertices)
+	{
+		VoxelizationCallback(Vertices);
+	});
+}
+
+void URsapEditorManager::VoxelizationCallback(const TArray<FVector3f>& Vertices)
+{
+	FlushPersistentDebugLines(GEditor->GetEditorWorldContext().World());
+	for (FVector3f Vertex : Vertices)
+	{
+		DrawDebugSphere(GEditor->GetEditorWorldContext().World(), FVector(Vertex), 10, 10, FColor::Blue, true);
+	}
 }
 
 FVector Transform(const FVector& Location, const FTransform& ActorTransform)

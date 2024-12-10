@@ -18,30 +18,28 @@ struct RSAPSHADERS_API FVoxelizationDispatchParams
 class RSAPSHADERS_API FVoxelizationInterface {
 public:
 	// Executes this shader on the render thread
-	static void DispatchRenderThread(FRHICommandListImmediate& RHICmdList,const FVoxelizationDispatchParams& Params);
+	static void DispatchRenderThread(FRHICommandListImmediate& RHICmdList,const FVoxelizationDispatchParams& Params, const TFunction<void(const TArray<FVector3f>&)>& Callback);
 
 	// Executes this shader on the render thread from the game thread via EnqueueRenderThreadCommand
-	static void DispatchGameThread(FVoxelizationDispatchParams Params)
+	static void DispatchGameThread(FVoxelizationDispatchParams Params, TFunction<void(const TArray<FVector3f>&)> Callback)
 	{
 		ENQUEUE_RENDER_COMMAND(SceneDrawCompletion)(
-		[Params](FRHICommandListImmediate& RHICmdList)
+		[Params, Callback](FRHICommandListImmediate& RHICmdList)
 		{
-			DispatchRenderThread(RHICmdList, Params);
+			DispatchRenderThread(RHICmdList, Params, Callback);
 		});
 	}
 
 	// Dispatches this shader. Can be called from any thread
-	static void Dispatch(
-		const FVoxelizationDispatchParams& Params
-	)
+	static void Dispatch(const FVoxelizationDispatchParams& Params, const TFunction<void(const TArray<FVector3f>&)>& Callback)
 	{
 		if (IsInRenderingThread())
 		{
-			DispatchRenderThread(GetImmediateCommandList_ForRenderCommand(), Params);
+			DispatchRenderThread(GetImmediateCommandList_ForRenderCommand(), Params, Callback);
 		}
 		else
 		{
-			DispatchGameThread(Params);
+			DispatchGameThread(Params, Callback);
 		}
 	}
 };
