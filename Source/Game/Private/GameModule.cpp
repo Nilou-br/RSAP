@@ -14,4 +14,4 @@ void FRsapGameModule::ShutdownModule() {}
 
 #undef LOCTEXT_NAMESPACE
 	
-IMPLEMENT_MODULE(FRsapGameModule, Rsap)
+IMPLEMENT_MODULE(FRsapGameModule, RsapGame)

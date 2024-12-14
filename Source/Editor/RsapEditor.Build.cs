@@ -10,7 +10,9 @@ public class RsapEditor : ModuleRules
 		PublicDependencyModuleNames.AddRange(
 			new string[]
 			{
-				"Core"
+				"Core",
+				"RsapShared",
+				"RsapShaders"
 			}
 		);
 
@@ -30,9 +32,7 @@ public class RsapEditor : ModuleRules
 				"LevelEditor",
 				"Projects",
 				"EditorStyle",
-				"EditorSubsystem",
-				"RsapGame",
-				"RsapShaders"
+				"EditorSubsystem"
 			}
 		);
 	}

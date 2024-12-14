@@ -13,7 +13,7 @@ using namespace Rsap::NavMesh;
 
 
 
-struct IRsapNodeBase
+struct RSAPSHARED_API IRsapNodeBase
 {
 	uint8 Children = 0b00000000; // Occluding/initialized (1) or empty/uninitialized (0).
 
@@ -100,7 +100,7 @@ struct IRsapNodeBase
  * - ChildStates: bitmask indicating the node type for this node's children.
  * - SoundPresetID: Identifier to a preset of attenuation settings for the collision component this node is occluding.
  */
-struct FRsapNode : IRsapNodeBase
+struct RSAPSHARED_API FRsapNode : IRsapNodeBase
 {
 	FRsapRelations  Relations;
 	uint8 ChildrenTypes = 0b00000000;	// Static (0) or dynamic (1).
@@ -163,12 +163,12 @@ struct FRsapNode : IRsapNodeBase
 	}
 };
 
-struct FRsapDirtyNode : IRsapNodeBase
+struct RSAPSHARED_API FRsapDirtyNode : IRsapNodeBase
 {
 	std::unordered_set<std::shared_ptr<FRsapCollisionComponent>> Components;
 };
 
-struct FRsapLeaf
+struct RSAPSHARED_API FRsapLeaf
 {
 	uint64 Leafs = 0;
 

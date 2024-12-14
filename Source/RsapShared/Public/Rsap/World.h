@@ -6,7 +6,7 @@
 
 
 // Base Interface for the UWorld wrapper.
-class IRsapWorld
+class RSAPSHARED_API IRsapWorld
 {
 	DECLARE_DELEGATE_OneParam(FOnMapOpened,	const IRsapWorld* RsapWorld);
 	DECLARE_DELEGATE_OneParam(FOnCollisionComponentChanged,	const FRsapCollisionComponentChangedResult& Result);

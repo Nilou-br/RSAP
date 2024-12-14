@@ -1,12 +1,11 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-#include <unordered_set>
 #include "Engine/AssetUserData.h"
 #include "Rsap/Definitions.h"
 #include "Rsap/NavMesh/Types/Chunk.h"
 #include "Types/Actor.h"
-#include "Navmesh.generated.h"
+#include <unordered_set>
 
 class IRsapWorld;
 
@@ -16,43 +15,43 @@ class IRsapWorld;
  * Metadata for Rsap's navmesh.
  * Used to locate the binaries, and to check for validity in them.
  */
-UCLASS()
-class RSAPGAME_API URsapNavmeshMetadata : public UAssetUserData
-{
-	GENERATED_BODY()
-
-public:
-	// ID of the navmesh, used to locate the binaries.
-	UPROPERTY(VisibleAnywhere, Category="RSAP | NavigationMesh")
-	FGuid ID;
-
-	// Chunks that have been serialized. The ID is used to check if the binaries for a given chunk is in-sync with the world.
-	UPROPERTY(VisibleAnywhere, Category="RSAP | NavigationMesh")
-	TMap<uint64, FGuid> Chunks;
-
-	URsapNavmeshMetadata()
-	{
-		ID = FGuid::NewGuid();
-	}
-
-	static URsapNavmeshMetadata* Init(const UWorld* World)
-	{
-		URsapNavmeshMetadata* Metadata = NewObject<URsapNavmeshMetadata>(World->PersistentLevel, StaticClass());
-		return Metadata;
-	}
-
-	static URsapNavmeshMetadata* Load(const UWorld* World)
-	{
-		URsapNavmeshMetadata* Metadata = World->PersistentLevel->GetAssetUserData<URsapNavmeshMetadata>();
-		if(!Metadata) Metadata = Init(World);
-		return Metadata;
-	}
-
-	void Save(const UWorld* World)
-	{
-		World->PersistentLevel->AddAssetUserData(this);
-	}
-};
+// UCLASS()
+// class RSAPSHARED_API URsapNavmeshMetadata : public UAssetUserData
+// {
+// 	GENERATED_BODY()
+//
+// public:
+// 	// ID of the navmesh, used to locate the binaries.
+// 	UPROPERTY(VisibleAnywhere, Category="RSAP | NavigationMesh")
+// 	FGuid ID;
+//
+// 	// Chunks that have been serialized. The ID is used to check if the binaries for a given chunk is in-sync with the world.
+// 	UPROPERTY(VisibleAnywhere, Category="RSAP | NavigationMesh")
+// 	TMap<uint64, FGuid> Chunks;
+//
+// 	URsapNavmeshMetadata()
+// 	{
+// 		ID = FGuid::NewGuid();
+// 	}
+//
+// 	static URsapNavmeshMetadata* Init(const UWorld* World)
+// 	{
+// 		URsapNavmeshMetadata* Metadata = NewObject<URsapNavmeshMetadata>(World->PersistentLevel, StaticClass());
+// 		return Metadata;
+// 	}
+//
+// 	static URsapNavmeshMetadata* Load(const UWorld* World)
+// 	{
+// 		URsapNavmeshMetadata* Metadata = World->PersistentLevel->GetAssetUserData<URsapNavmeshMetadata>();
+// 		if(!Metadata) Metadata = Init(World);
+// 		return Metadata;
+// 	}
+//
+// 	void Save(const UWorld* World)
+// 	{
+// 		World->PersistentLevel->AddAssetUserData(this);
+// 	}
+// };
 
 
 
@@ -71,7 +70,7 @@ struct FRsapNavmeshLoadResult
 
 
 template <typename ChunkType>
-class RSAPGAME_API TRsapNavMeshBase
+class RSAPSHARED_API TRsapNavMeshBase
 {
 public:
 #if WITH_EDITOR
@@ -114,7 +113,7 @@ public:
  *The sound-navigation-mesh wrapper for loading, saving, generating and updating the navmesh.
  * Call the load method before anything else.
  */
-class RSAPGAME_API FRsapNavmesh : public TRsapNavMeshBase<FRsapChunk>
+class RSAPSHARED_API FRsapNavmesh : public TRsapNavMeshBase<FRsapChunk>
 {
 public:
 	void Generate(const IRsapWorld* RsapWorld);
@@ -138,7 +137,7 @@ private:
 	void SetNodeRelation(const FRsapChunk& Chunk, chunk_morton ChunkMC, FRsapNode& Node, node_morton NodeMC, layer_idx LayerIdx, rsap_direction Relation);
 	void SetNodeRelations(const FRsapChunk& Chunk, chunk_morton ChunkMC, FRsapNode& Node, node_morton NodeMC, layer_idx LayerIdx, rsap_direction Relations);
 	
-	URsapNavmeshMetadata* Metadata = nullptr;
+	//URsapNavmeshMetadata* Metadata = nullptr;
 	bool bRegenerated = false;
 	std::unordered_set<chunk_morton> UpdatedChunkMCs;
 	std::unordered_set<chunk_morton> DeletedChunkMCs;
@@ -207,7 +206,7 @@ private:
  * The dirty-navmesh is used to store dirty-nodes which is used to update the actual navmesh.
  * With this we can give update priority to specific regions, g.e. close proximity to the player and areas that are often being traversed.
  */
-class RSAPGAME_API FRsapDirtyNavmesh : public TRsapNavMeshBase<FRsapDirtyChunk>
+class RSAPSHARED_API FRsapDirtyNavmesh : public TRsapNavMeshBase<FRsapDirtyChunk>
 {
 	
 };
@@ -217,7 +216,7 @@ class RSAPGAME_API FRsapDirtyNavmesh : public TRsapNavMeshBase<FRsapDirtyChunk>
  *
  * 
  */
-class RSAPGAME_API FRsapAsyncTaskSequencer
+class RSAPSHARED_API FRsapAsyncTaskSequencer
 {
 	
 };

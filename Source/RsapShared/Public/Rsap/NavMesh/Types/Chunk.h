@@ -14,7 +14,7 @@ using namespace Rsap::NavMesh;
  * Sparse voxel octree with a depth of 10, storing nodes in a hashmap where morton-codes are used as the key.
  */
 template<typename NodeType>
-struct TLowResSparseOctree
+struct RSAPSHARED_API TLowResSparseOctree
 {
 	// todo to unique?
 	std::array<std::shared_ptr<Rsap::Map::ordered_map<node_morton, NodeType>>, 10> Layers;
@@ -32,7 +32,7 @@ struct TLowResSparseOctree
  * Extends the low-resolution sparse-octree by adding leaf-nodes which multiply the max resolution by 64.
  */
 template<typename NodeType>
-struct THighResSparseOctree : TLowResSparseOctree<NodeType>
+struct RSAPSHARED_API THighResSparseOctree : TLowResSparseOctree<NodeType>
 {
 	// todo to unique?
 	std::shared_ptr<FRsapLeafLayer> LeafNodes;
@@ -44,7 +44,7 @@ struct THighResSparseOctree : TLowResSparseOctree<NodeType>
 };
 
 template<typename OctreeType>
-struct TRsapChunkBase
+struct RSAPSHARED_API TRsapChunkBase
 {
 protected:
 	OctreeType* Octree = nullptr;
@@ -62,7 +62,7 @@ enum class EOctreeType
  *
  * Call ::SetActiveOctree to set one of the two active.
  */
-struct FRsapChunk : TRsapChunkBase<THighResSparseOctree<FRsapNode>>
+struct RSAPSHARED_API FRsapChunk : TRsapChunkBase<THighResSparseOctree<FRsapNode>>
 {
 	std::array<THighResSparseOctree<FRsapNode>*, 2> Octrees; // Accessed using a node-state, 0 static, 1 dynamic.
 	Rsap::Map::flat_map<actor_key, FGuid>* ActorEntries;
@@ -182,7 +182,7 @@ struct FRsapChunk : TRsapChunkBase<THighResSparseOctree<FRsapNode>>
  * Used within the dirty-navmesh for updating the real navmesh.
  * Initializes the nodes similarly to FRsapChunk.
  */
-struct FRsapDirtyChunk
+struct RSAPSHARED_API FRsapDirtyChunk
 {
 	TLowResSparseOctree<FRsapDirtyNode>* Octree;
 

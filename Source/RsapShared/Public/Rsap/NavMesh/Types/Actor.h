@@ -9,7 +9,7 @@
 
 
 
-class FRsapCollisionComponent
+class RSAPSHARED_API FRsapCollisionComponent
 {
 	friend class FRsapActor; // Owns the components.
 	friend class FRsapNavmeshUpdater; // Co-owner if processing dirty nodes.
@@ -249,7 +249,7 @@ enum class ERsapCollisionComponentChangedType
 	Added, Moved, Deleted, None
 };
 
-struct FRsapCollisionComponentChangedResult
+struct RSAPSHARED_API FRsapCollisionComponentChangedResult
 {
 	const ERsapCollisionComponentChangedType Type;
 	const std::shared_ptr<FRsapCollisionComponent> Component;
@@ -264,7 +264,7 @@ struct FRsapCollisionComponentChangedResult
  * Wrapper for the AActor class.
  * Stores useful data that can still be accessed if the actor has become invalid.
  */
-class FRsapActor
+class RSAPSHARED_API FRsapActor
 {
 	TWeakObjectPtr<const AActor> ActorPtr;
 	FRsapCollisionComponentMap CollisionComponents;

@@ -1,17 +1,16 @@
-using System.IO;
+﻿using System.IO;
 using UnrealBuildTool;
 
-public class RsapGame : ModuleRules
+public class RsapShared : ModuleRules
 {
-	public RsapGame(ReadOnlyTargetRules Target) : base(Target)
+	public RsapShared(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
         
 		PublicDependencyModuleNames.AddRange(
 			new string[]
 			{
-				"Core",
-				"RsapShared"
+				"Core"
 			}
 		);
         

@@ -4,7 +4,7 @@
 	"VersionName": "1.0",
 	"FriendlyName": "RSAP",
 	"Description": "Realistic Sound Attenuation and Pathfinding",
-	"Category": "Sound.Pathfinding",
+	"Category": "Sound",
 	"CreatedBy": "Melvin Brink",
 	"CreatedByURL": "https://www.melvinbrink.com",
 	"DocsURL": "",
@@ -15,6 +15,11 @@
 	"IsExperimentalVersion": false,
 	"Installed": false,
 	"Modules": [
+		{
+			"Name": "RsapShared",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
 		{
 			"Name": "RsapGame",
 			"Type": "Runtime",

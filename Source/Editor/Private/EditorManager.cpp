@@ -5,10 +5,7 @@
 #include <ranges>
 #include "Rsap/EditorWorld.h"
 #include "Rsap/NavMesh/Debugger.h"
-#include "Rsap/NavMesh/Update/Updater.h"
 #include "Engine/World.h"
-#include "Multiply/Multiply.h"
-#include "Rendering/SkeletalMeshLODRenderData.h"
 #include "Voxelization/Voxelization.h"
 
 
@@ -123,7 +120,9 @@ void URsapEditorManager::OnCollisionComponentChanged(const FRsapCollisionCompone
 	}
 
 	if(ChangedResult.Type == ERsapCollisionComponentChangedType::Deleted) return;
-	ComponentChangedResults.Add(Cast<UStaticMeshComponent>(ChangedResult.Component->GetPrimitive()));
+	UStaticMeshComponent* SM = Cast<UStaticMeshComponent>(ChangedResult.Component->GetPrimitive());
+	if(!SM || !SM->GetStaticMesh()) return;
+	ComponentChangedResults.Add(SM);
 }
 
 void URsapEditorManager::OnWorldPostActorTick(UWorld* World, ELevelTick TickType, float DeltaSeconds)

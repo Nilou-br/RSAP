@@ -14,7 +14,7 @@
  *
  * Pause the updater when you want to use the navmesh to avoid race conditions.
  */
-class RSAPGAME_API FRsapNavmeshUpdater
+class RSAPSHARED_API FRsapNavmeshUpdater
 {
 	FRsapNavmesh& Navmesh;
 	FRsapDirtyNavmesh DirtyNavmesh;

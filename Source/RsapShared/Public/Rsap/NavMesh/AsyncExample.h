@@ -12,7 +12,7 @@
  * ::IsRunning	- To know whether there is anny ongoing update.
  * ::StageData	- To add data that is used to update the navmesh.
  */
-class RSAPGAME_API FRsapAsyncExample final : public FTickableGameObject
+class RSAPSHARED_API FRsapAsyncExample final : public FTickableGameObject
 {
 	DECLARE_DELEGATE(FOnNavMeshUpdatedDelegate);
 
