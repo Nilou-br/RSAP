@@ -128,18 +128,20 @@ void URsapEditorManager::OnCollisionComponentChanged(const FRsapCollisionCompone
 void URsapEditorManager::OnWorldPostActorTick(UWorld* World, ELevelTick TickType, float DeltaSeconds)
 {
 	if (ComponentChangedResults.IsEmpty()) return;
-	FVoxelizationInterface::Dispatch(FVoxelizationDispatchParams(MoveTemp(ComponentChangedResults)), [this](const TArray<FVector3f>& Vertices)
+	FVoxelizationInterface::Dispatch(FVoxelizationDispatchParams(MoveTemp(ComponentChangedResults)), [this](const TArray<FUintVector3>& Vertices)
 	{
 		VoxelizationCallback(Vertices);
 	});
 }
 
-void URsapEditorManager::VoxelizationCallback(const TArray<FVector3f>& Vertices)
+void URsapEditorManager::VoxelizationCallback(const TArray<FUintVector3>& Vertices)
 {
 	FlushPersistentDebugLines(GEditor->GetEditorWorldContext().World());
-	for (FVector3f Vertex : Vertices)
+	for (const FUintVector3& Vertex : Vertices)
 	{
-		DrawDebugSphere(GEditor->GetEditorWorldContext().World(), FVector(Vertex), 10, 10, FColor::Blue, true);
+		const FColor RandomColor = FColor::MakeRandomColor();
+		// UE_LOG(LogRsap, Log, TEXT("%s"), *Vertex.ToString());
+		DrawDebugSphere(GEditor->GetEditorWorldContext().World(), FVector(Vertex.X, Vertex.Y, Vertex.Z), 10, 10, RandomColor, true);
 	}
 }
 

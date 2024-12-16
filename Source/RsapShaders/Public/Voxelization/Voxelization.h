@@ -18,10 +18,10 @@ struct RSAPSHADERS_API FVoxelizationDispatchParams
 class RSAPSHADERS_API FVoxelizationInterface {
 public:
 	// Executes this shader on the render thread
-	static void DispatchRenderThread(FRHICommandListImmediate& RHICmdList,const FVoxelizationDispatchParams& Params, const TFunction<void(const TArray<FVector3f>&)>& Callback);
+	static void DispatchRenderThread(FRHICommandListImmediate& RHICmdList,const FVoxelizationDispatchParams& Params, const TFunction<void(const TArray<FUintVector3>&)>& Callback);
 
 	// Executes this shader on the render thread from the game thread via EnqueueRenderThreadCommand
-	static void DispatchGameThread(FVoxelizationDispatchParams Params, TFunction<void(const TArray<FVector3f>&)> Callback)
+	static void DispatchGameThread(FVoxelizationDispatchParams Params, TFunction<void(const TArray<FUintVector3>&)> Callback)
 	{
 		ENQUEUE_RENDER_COMMAND(SceneDrawCompletion)(
 		[Params, Callback](FRHICommandListImmediate& RHICmdList)
@@ -31,7 +31,7 @@ public:
 	}
 
 	// Dispatches this shader. Can be called from any thread
-	static void Dispatch(const FVoxelizationDispatchParams& Params, const TFunction<void(const TArray<FVector3f>&)>& Callback)
+	static void Dispatch(const FVoxelizationDispatchParams& Params, const TFunction<void(const TArray<FUintVector3>&)>& Callback)
 	{
 		if (IsInRenderingThread())
 		{

@@ -1,19 +1,44 @@
 #include "/Engine/Public/Platform.ush"
 
 Buffer<float3> VertexBuffer : register(t0);
-RWStructuredBuffer<float3> OutputBuffer : register(u0);
+Buffer<uint>  IndexBuffer  : register(t1);
+RWStructuredBuffer<uint3> OutputBuffer : register(u0);
 
 uint NumVertices;
+uint NumTriangles;
 float4x4 TransformMatrix;
 
 [numthreads(64, 1, 1)]
 void Voxelization(uint3 DispatchThreadID : SV_DispatchThreadID)
 {
-    const uint VertexIdx = DispatchThreadID.x;
-    if (VertexIdx >= NumVertices) return;
+    // const uint VertexIdx = DispatchThreadID.x;
+    // if (VertexIdx >= NumVertices) return;
+    //
+    // const float3 LocalPosition = VertexBuffer[VertexIdx];
+    // const float4 LocalPosition4 = float4(LocalPosition, 1.0f);
+    // const float4 GlobalPosition4 = mul(TransformMatrix, LocalPosition4);
+    // OutputBuffer[VertexIdx] = GlobalPosition4.xyz;
 
-    const float3 LocalPosition = VertexBuffer[VertexIdx];
-    const float4 LocalPosition4 = float4(LocalPosition, 1.0f);
-    const float4 GlobalPosition4 = mul(TransformMatrix, LocalPosition4);
-    OutputBuffer[VertexIdx] = GlobalPosition4.xyz;
+    const uint TriangleIdx = DispatchThreadID.x;
+    if (TriangleIdx >= NumTriangles) return;
+
+    // Fetch local vertex positions
+    const float3 LocalVertex0 = VertexBuffer[IndexBuffer[TriangleIdx * 3 + 0]];
+    const float3 LocalVertex1 = VertexBuffer[IndexBuffer[TriangleIdx * 3 + 1]];
+    const float3 LocalVertex2 = VertexBuffer[IndexBuffer[TriangleIdx * 3 + 2]];
+
+    // Transform vertices to global space
+    const float4 GlobalVertex0 = mul(TransformMatrix, float4(LocalVertex0, 1.0f));
+    const float4 GlobalVertex1 = mul(TransformMatrix, float4(LocalVertex1, 1.0f));
+    const float4 GlobalVertex2 = mul(TransformMatrix, float4(LocalVertex2, 1.0f));
+
+    // Convert to uint3 (truncating or rounding float3 to integers)
+    const uint3 TransformedVertex0 = (uint3)GlobalVertex0.xyz;
+    const uint3 TransformedVertex1 = (uint3)GlobalVertex1.xyz;
+    const uint3 TransformedVertex2 = (uint3)GlobalVertex2.xyz;
+
+    // Write the triangle (three vertices) to the output buffer
+    OutputBuffer[TriangleIdx * 3 + 0] = TransformedVertex0;
+    OutputBuffer[TriangleIdx * 3 + 1] = TransformedVertex1;
+    OutputBuffer[TriangleIdx * 3 + 2] = TransformedVertex2;
 }

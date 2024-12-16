@@ -3,20 +3,16 @@
 #include "PixelShaderUtils.h"
 #include "MeshPassProcessor.inl"
 #include "StaticMeshResources.h"
-#include "DynamicMeshBuilder.h"
 #include "RenderGraphResources.h"
 #include "GlobalShader.h"
 #include "UnifiedBuffer.h"
-#include "CanvasTypes.h"
-#include "MeshDrawShaderBindings.h"
 #include "RHIGPUReadback.h"
-#include "MeshPassUtils.h"
-#include "MaterialShader.h"
+
+
 
 DECLARE_STATS_GROUP(TEXT("Voxelization"), STATGROUP_Voxelization, STATCAT_Advanced);
 DECLARE_CYCLE_STAT(TEXT("Voxelization Execute"), STAT_Voxelization_Execute, STATGROUP_Voxelization);
 
-// This class carries our parameter declarations and acts as the bridge between cpp and HLSL.
 class RSAPSHADERS_API FVoxelization: public FGlobalShader
 {
 public:
@@ -28,12 +24,16 @@ public:
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		SHADER_PARAMETER_SRV(Buffer<float3>, VertexBuffer)
+		SHADER_PARAMETER_SRV(Buffer<uint>, IndexBuffer)
 		SHADER_PARAMETER(uint32, NumVertices)
+		SHADER_PARAMETER(uint32, NumTriangles)
+		SHADER_PARAMETER(uint32, bIsIndex32Bit)
 		SHADER_PARAMETER(FMatrix44f, TransformMatrix)
-		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<float3>, OutputBuffer)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<uint3>, OutputBuffer)
 	END_SHADER_PARAMETER_STRUCT()
 
-public:
+
+	
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
 	{
 		const FPermutationDomain PermutationVector(Parameters.PermutationId);
@@ -43,70 +43,80 @@ public:
 	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
 	{
 		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
-
+		
 		const FPermutationDomain PermutationVector(Parameters.PermutationId);
 
-		/*
-		* Here you define constants that can be used statically in the shader code.
-		* Example:
-		*/
 		// OutEnvironment.SetDefine(TEXT("MY_CUSTOM_CONST"), TEXT("1"));
 
-		/*
-		* These defines are used in the thread count section of our shader
-		*/
 		OutEnvironment.SetDefine(TEXT("THREADS_X"), NUM_THREADS_VOXELIZATION_X);
 		OutEnvironment.SetDefine(TEXT("THREADS_Y"), NUM_THREADS_VOXELIZATION_Y);
 		OutEnvironment.SetDefine(TEXT("THREADS_Z"), NUM_THREADS_VOXELIZATION_Z);
-
-		// This shader must support typed UAV load and we are testing if it is supported at runtime using RHIIsTypedUAVLoadSupported
-		//OutEnvironment.CompilerFlags.Add(CFLAG_AllowTypedUAVLoads);
-
-		// FForwardLightingParameters::ModifyCompilationEnvironment(Parameters.Platform, OutEnvironment);
 	}
-private:
 };
 
 // This will tell the engine to create the shader and where the shader entry point is.
 // ShaderType | ShaderPath | Shader function name | Type
 IMPLEMENT_GLOBAL_SHADER(FVoxelization, "/RsapShadersShaders/Voxelization/Voxelization.usf", "Voxelization", SF_Compute);
 
-void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHICmdList, const FVoxelizationDispatchParams& Params, const TFunction<void(const TArray<FVector3f>&)>& Callback)
+void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHICmdList, const FVoxelizationDispatchParams& Params, const TFunction<void(const TArray<FUintVector3>&)>& Callback)
 {
 	FRDGBuilder GraphBuilder(RHICmdList);
     TShaderMapRef<FVoxelization> ComputeShader(GetGlobalShaderMap(GMaxRHIFeatureLevel), FVoxelization::FPermutationDomain());
 	TArray<FRHIGPUBufferReadback*> GPUBufferReadbacks;
 
-	// The VertexBufferSRV initializer.
-	FRHIViewDesc::FBufferSRV::FInitializer SRVInitializer = FRHIViewDesc::CreateBufferSRV();
-	SRVInitializer.SetType(FRHIViewDesc::EBufferType::Typed);
-	SRVInitializer.SetFormat(PF_R32G32B32F);
+	// See 'FRHIBufferDesc' and 'EBufferUsageFlags' to create own buffer.
+	
+	FRHIViewDesc::FBufferSRV::FInitializer VertexBufferInitializer = FRHIViewDesc::CreateBufferSRV();
+	VertexBufferInitializer.SetType(FRHIViewDesc::EBufferType::Typed);
+	VertexBufferInitializer.SetFormat(PF_R32G32B32F);
 
-	uint32 Idx = 0; // For giving each pass a unique identifier.
+	FRHIViewDesc::FBufferSRV::FInitializer IndexBuffer16Initializer = FRHIViewDesc::CreateBufferSRV();
+	IndexBuffer16Initializer.SetType(FRHIViewDesc::EBufferType::Typed);
+	IndexBuffer16Initializer.SetFormat(PF_R16_UINT);
+	
+	FRHIViewDesc::FBufferSRV::FInitializer IndexBuffer32Initializer = FRHIViewDesc::CreateBufferSRV();
+	IndexBuffer32Initializer.SetType(FRHIViewDesc::EBufferType::Typed);
+	IndexBuffer32Initializer.SetFormat(PF_R32_UINT);
+
+	uint32 PassIdx = 0;
 	for (const TObjectPtr<UStaticMeshComponent>& StaticMeshComponent : Params.ChangedSMComponents)
 	{
-		++Idx;
+		++PassIdx;
 		const FStaticMeshRenderData* RenderData = StaticMeshComponent->GetStaticMesh()->GetRenderData();
 		const FStaticMeshLODResources& LODResources = RenderData->LODResources[0];
+		
 		const FPositionVertexBuffer& PositionVertexBuffer = LODResources.VertexBuffers.PositionVertexBuffer;
-		const uint32 NumVertices = PositionVertexBuffer.GetNumVertices();
-		FRHIShaderResourceView* VertexBufferSRV = RHICmdList.CreateShaderResourceView(PositionVertexBuffer.VertexBufferRHI, SRVInitializer);
+		const FIndexBuffer& IndexBuffer = LODResources.IndexBuffer;
 
+		FRHIShaderResourceView* VertexBufferSRV = RHICmdList.CreateShaderResourceView(PositionVertexBuffer.VertexBufferRHI, VertexBufferInitializer);
+		
+		const FBufferRHIRef& IndexBufferRHI = IndexBuffer.GetRHI();
+		const uint32 IndexStride = IndexBuffer.IndexBufferRHI->GetStride();
+		const bool bIsIndex32Bit = IndexStride == 4;
+		FRHIShaderResourceView* IndexBufferSRV = RHICmdList.CreateShaderResourceView(IndexBufferRHI, bIsIndex32Bit ? IndexBuffer32Initializer : IndexBuffer16Initializer);
+		
+		const uint32 NumVertices = LODResources.GetNumVertices();
+		const uint32 NumTriangles = LODResources.GetNumTriangles();
+
+		// Input
 		FVoxelization::FParameters* PassParameters = GraphBuilder.AllocParameters<FVoxelization::FParameters>();
 		PassParameters->VertexBuffer = VertexBufferSRV;
+		PassParameters->IndexBuffer = IndexBufferSRV;
 		PassParameters->NumVertices = NumVertices;
+		PassParameters->NumTriangles = NumTriangles;
 		PassParameters->TransformMatrix = FMatrix44f(StaticMeshComponent->GetComponentTransform().ToMatrixWithScale().GetTransposed());
 
-		// Create output buffer
+		// Output
 		const FRDGBufferRef OutputBuffer = GraphBuilder.CreateBuffer(
-			FRDGBufferDesc::CreateStructuredDesc(sizeof(FVector3f), NumVertices),
-			*FString::Printf(TEXT("Rsap.Voxelization.Output.Buffer.%i"), Idx)
+			FRDGBufferDesc::CreateStructuredDesc(sizeof(FUintVector3), NumTriangles * 3),
+			*FString::Printf(TEXT("Rsap.Voxelization.Output.Buffer.%i"), PassIdx)
 		);
-		PassParameters->OutputBuffer = GraphBuilder.CreateUAV(OutputBuffer, PF_R32G32B32F);
+		PassParameters->OutputBuffer = GraphBuilder.CreateUAV(OutputBuffer, PF_R32_UINT);
 
-		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(NumVertices, 64);
+		// One triangle per thread.
+		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(NumTriangles, 64);
 		GraphBuilder.AddPass(
-			RDG_EVENT_NAME("%s", *FString::Printf(TEXT("Rsap.Voxelization.Dispatch.%i"), Idx)),
+			RDG_EVENT_NAME("%s", *FString::Printf(TEXT("Rsap.Voxelization.Dispatch.%i"), PassIdx)),
 			PassParameters,
 			ERDGPassFlags::Compute,
 			[ComputeShader, PassParameters, GroupCount](FRHIComputeCommandList& RHICommandList)
@@ -115,8 +125,8 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 			}
 		);
 		
-		FRHIGPUBufferReadback* GPUBufferReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.Voxelization.Output.Readback.%i"), Idx));
-		AddEnqueueCopyPass(GraphBuilder, GPUBufferReadback, OutputBuffer, NumVertices*PositionVertexBuffer.GetStride());
+		FRHIGPUBufferReadback* GPUBufferReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.Voxelization.Output.Readback.%i"), PassIdx));
+		AddEnqueueCopyPass(GraphBuilder, GPUBufferReadback, OutputBuffer, NumTriangles * 3 * sizeof(FUintVector3));
 		GPUBufferReadbacks.Add(GPUBufferReadback);
 	}
 
@@ -124,16 +134,21 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 	
 	GraphBuilder.Execute();
 	RHICmdList.BlockUntilGPUIdle();
-
-	TArray<FVector3f> Vertices;
-
+	
 	// Fetch the data back to the CPU
+	TArray<FUintVector3> Vertices;
 	for (FRHIGPUBufferReadback* Readback : GPUBufferReadbacks)
 	{
 		void* MappedData = Readback->Lock(0);
-		const uint32 NumElements = Readback->GetGPUSizeBytes() / sizeof(FVector3f);
-		const FVector3f* TransformedVertices = static_cast<FVector3f*>(MappedData);
-		for (uint32 i = 0; i < NumElements; ++i) Vertices.Emplace(TransformedVertices[i]);
+		const uint32 NumElements = Readback->GetGPUSizeBytes() / sizeof(FUintVector3); // Total uint3 entries
+		const FUintVector3* VertexData = static_cast<FUintVector3*>(MappedData);
+
+		for (uint32 i = 0; i < NumElements; ++i)
+		{
+			UE_LOG(LogTemp, Log, TEXT("%s"), *VertexData[i].ToString());
+			Vertices.Emplace(VertexData[i]);
+		}
+
 		Readback->Unlock();
 		delete Readback;
 	}

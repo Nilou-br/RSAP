@@ -43,7 +43,7 @@ private:
 
 	void OnCollisionComponentChanged(const FRsapCollisionComponentChangedResult& ChangedResult);
 	void OnWorldPostActorTick(UWorld* World, ELevelTick TickType, float DeltaSeconds);
-	void VoxelizationCallback(const TArray<FVector3f>& Vertices);
+	void VoxelizationCallback(const TArray<FUintVector3>& Vertices);
 
 	void OnNavMeshUpdated() const;
 
