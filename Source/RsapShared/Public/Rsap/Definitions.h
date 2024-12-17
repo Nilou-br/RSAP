@@ -70,6 +70,9 @@ namespace Rsap::NavMesh::Node
 		Sizes[8]/2, Sizes[9]/2, Sizes[10]/2, Sizes[11]/2, Sizes[12]/2
 	};
 
+	static inline constexpr int32 SmallestNode = Sizes[Layer::NodeDepth];
+	static inline constexpr int32 SmallestLeaf = Sizes[Layer::Leaf];
+
 	namespace Children
 	{
 		// Mask the child using the child's index within it's parent.

@@ -5,10 +5,74 @@
 #include "StaticMeshResources.h"
 #include "RenderGraphResources.h"
 #include "GlobalShader.h"
-#include "UnifiedBuffer.h"
 #include "RHIGPUReadback.h"
 
 
+
+struct F2DProjectedVertex
+{
+	int X = 0;
+	int Y = 0;
+	int MajorAxisValue = 0;
+};
+
+struct FTriangle3D
+{
+	FIntVector Vertex0;
+	FIntVector Vertex1;
+	FIntVector Vertex2;
+};
+
+struct F2DProjectedTriangle
+{
+	F2DProjectedVertex Vertex0;
+	F2DProjectedVertex Vertex1;
+	F2DProjectedVertex Vertex2;
+	uint32 MajorAxis;
+
+	FTriangle3D GetTriangle3D() const
+	{
+		FTriangle3D Triangle3D;
+		switch (MajorAxis)
+		{
+		case 0:
+			Triangle3D.Vertex0.X = Vertex0.MajorAxisValue;
+			Triangle3D.Vertex1.X = Vertex1.MajorAxisValue;
+			Triangle3D.Vertex2.X = Vertex2.MajorAxisValue;
+			Triangle3D.Vertex0.Y = Vertex0.X;
+			Triangle3D.Vertex1.Y = Vertex1.X;
+			Triangle3D.Vertex2.Y = Vertex2.X;
+			Triangle3D.Vertex0.Z = Vertex0.Y;
+			Triangle3D.Vertex1.Z = Vertex1.Y;
+			Triangle3D.Vertex2.Z = Vertex2.Y;
+			break;
+		case 1:
+			Triangle3D.Vertex0.X = Vertex0.X;
+			Triangle3D.Vertex1.X = Vertex1.X;
+			Triangle3D.Vertex2.X = Vertex2.X;
+			Triangle3D.Vertex0.Y = Vertex0.MajorAxisValue;
+			Triangle3D.Vertex1.Y = Vertex1.MajorAxisValue;
+			Triangle3D.Vertex2.Y = Vertex2.MajorAxisValue;
+			Triangle3D.Vertex0.Z = Vertex0.Y;
+			Triangle3D.Vertex1.Z = Vertex1.Y;
+			Triangle3D.Vertex2.Z = Vertex2.Y;
+			break;
+		case 2:
+			Triangle3D.Vertex0.X = Vertex0.X;
+			Triangle3D.Vertex1.X = Vertex1.X;
+			Triangle3D.Vertex2.X = Vertex2.X;
+			Triangle3D.Vertex0.Y = Vertex0.Y;
+			Triangle3D.Vertex1.Y = Vertex1.Y;
+			Triangle3D.Vertex2.Y = Vertex2.Y;
+			Triangle3D.Vertex0.Z = Vertex0.MajorAxisValue;
+			Triangle3D.Vertex1.Z = Vertex1.MajorAxisValue;
+			Triangle3D.Vertex2.Z = Vertex2.MajorAxisValue;
+			break;
+		default: break;
+		}
+		return Triangle3D;
+	}
+};
 
 DECLARE_STATS_GROUP(TEXT("Voxelization"), STATGROUP_Voxelization, STATCAT_Advanced);
 DECLARE_CYCLE_STAT(TEXT("Voxelization Execute"), STAT_Voxelization_Execute, STATGROUP_Voxelization);
@@ -28,8 +92,9 @@ public:
 		SHADER_PARAMETER(uint32, NumVertices)
 		SHADER_PARAMETER(uint32, NumTriangles)
 		SHADER_PARAMETER(uint32, bIsIndex32Bit)
-		SHADER_PARAMETER(FMatrix44f, TransformMatrix)
-		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<uint3>, OutputBuffer)
+		SHADER_PARAMETER(FMatrix44f, GlobalTransformMatrix)
+		SHADER_PARAMETER(FUintVector, ChunkLocation)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<F2DProjectedTriangle>, OutputBuffer)
 	END_SHADER_PARAMETER_STRUCT()
 
 
@@ -46,7 +111,12 @@ public:
 		
 		const FPermutationDomain PermutationVector(Parameters.PermutationId);
 
-		// OutEnvironment.SetDefine(TEXT("MY_CUSTOM_CONST"), TEXT("1"));
+		// Major axis enum
+		OutEnvironment.SetDefine(TEXT("AXIS_X"), 0);
+		OutEnvironment.SetDefine(TEXT("AXIS_Y"), 1);
+		OutEnvironment.SetDefine(TEXT("AXIS_Z"), 2);
+
+		OutEnvironment.SetDefine(TEXT("VOXEL_SIZE"), 8);
 
 		OutEnvironment.SetDefine(TEXT("THREADS_X"), NUM_THREADS_VOXELIZATION_X);
 		OutEnvironment.SetDefine(TEXT("THREADS_Y"), NUM_THREADS_VOXELIZATION_Y);
@@ -104,14 +174,15 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 		PassParameters->IndexBuffer = IndexBufferSRV;
 		PassParameters->NumVertices = NumVertices;
 		PassParameters->NumTriangles = NumTriangles;
-		PassParameters->TransformMatrix = FMatrix44f(StaticMeshComponent->GetComponentTransform().ToMatrixWithScale().GetTransposed());
+		PassParameters->GlobalTransformMatrix = FMatrix44f(StaticMeshComponent->GetComponentTransform().ToMatrixWithScale().GetTransposed());
+		PassParameters->ChunkLocation = FUintVector(0, 0, 0);
 
 		// Output
 		const FRDGBufferRef OutputBuffer = GraphBuilder.CreateBuffer(
-			FRDGBufferDesc::CreateStructuredDesc(sizeof(FUintVector3), NumTriangles * 3),
+			FRDGBufferDesc::CreateStructuredDesc(sizeof(F2DProjectedTriangle), NumTriangles),
 			*FString::Printf(TEXT("Rsap.Voxelization.Output.Buffer.%i"), PassIdx)
 		);
-		PassParameters->OutputBuffer = GraphBuilder.CreateUAV(OutputBuffer, PF_R32_UINT);
+		PassParameters->OutputBuffer = GraphBuilder.CreateUAV(OutputBuffer);
 
 		// One triangle per thread.
 		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(NumTriangles, 64);
@@ -126,7 +197,7 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 		);
 		
 		FRHIGPUBufferReadback* GPUBufferReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.Voxelization.Output.Readback.%i"), PassIdx));
-		AddEnqueueCopyPass(GraphBuilder, GPUBufferReadback, OutputBuffer, NumTriangles * 3 * sizeof(FUintVector3));
+		AddEnqueueCopyPass(GraphBuilder, GPUBufferReadback, OutputBuffer, NumTriangles * sizeof(F2DProjectedTriangle));
 		GPUBufferReadbacks.Add(GPUBufferReadback);
 	}
 
@@ -134,24 +205,49 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 	
 	GraphBuilder.Execute();
 	RHICmdList.BlockUntilGPUIdle();
+
+#include "DrawDebugHelpers.h"
+#include "Async/Async.h"
 	
 	// Fetch the data back to the CPU
-	TArray<FUintVector3> Vertices;
+	//TArray<FUintVector3> Vertices;
+	TArray<FTriangle3D> Triangles3D;
 	for (FRHIGPUBufferReadback* Readback : GPUBufferReadbacks)
 	{
-		void* MappedData = Readback->Lock(0);
-		const uint32 NumElements = Readback->GetGPUSizeBytes() / sizeof(FUintVector3); // Total uint3 entries
-		const FUintVector3* VertexData = static_cast<FUintVector3*>(MappedData);
+		void* TriangleData = Readback->Lock(0);
+		const uint32 NumElements = Readback->GetGPUSizeBytes() / sizeof(F2DProjectedTriangle); // Total uint3 entries
+		const F2DProjectedTriangle* Triangles = static_cast<F2DProjectedTriangle*>(TriangleData);
 
 		for (uint32 i = 0; i < NumElements; ++i)
 		{
-			UE_LOG(LogTemp, Log, TEXT("%s"), *VertexData[i].ToString());
-			Vertices.Emplace(VertexData[i]);
+			Triangles3D.Emplace(Triangles[i].GetTriangle3D());
+			// UE_LOG(LogTemp, Log, TEXT("Triangle: '%i'"), i);
+			// UE_LOG(LogTemp, Log, TEXT("Vertex-0: X: %i, Y: %i, Z: %i"), Triangle3D.Vertex0.X, Triangle3D.Vertex0.Y, Triangle3D.Vertex0.Z);
+			// UE_LOG(LogTemp, Log, TEXT("Vertex-1: X: %i, Y: %i, Z: %i"), Triangle3D.Vertex1.X, Triangle3D.Vertex1.Y, Triangle3D.Vertex1.Z);
+			// UE_LOG(LogTemp, Log, TEXT("Vertex-2: X: %i, Y: %i, Z: %i"), Triangle3D.Vertex2.X, Triangle3D.Vertex2.Y, Triangle3D.Vertex2.Z);
 		}
 
 		Readback->Unlock();
 		delete Readback;
 	}
 
-	Callback(Vertices);
+	AsyncTask(ENamedThreads::GameThread, [Triangles3D]()
+   {
+	   const UWorld* World = GEngine->GetWorldFromContextObjectChecked(GEditor->GetEditorWorldContext().World());
+	   if (!World) return;
+
+	   for (const auto& Triangle : Triangles3D)
+	   {
+	   		// Draw the edges of the triangle
+		   const FColor LineColor = FColor::Green;
+		   constexpr float Thickness = 10.0f;
+
+		   DrawDebugLine(World, FVector(Triangle.Vertex0), FVector(Triangle.Vertex1), LineColor, true, -1, 0, Thickness);
+		   DrawDebugLine(World, FVector(Triangle.Vertex1), FVector(Triangle.Vertex2), LineColor, true, -1, 0, Thickness);
+		   DrawDebugLine(World, FVector(Triangle.Vertex2), FVector(Triangle.Vertex0), LineColor, true, -1, 0, Thickness);
+	   }
+		
+   });
+
+	//Callback(Vertices);
 }
