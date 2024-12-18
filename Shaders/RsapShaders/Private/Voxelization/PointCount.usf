@@ -2,7 +2,7 @@
 
 Buffer<float3> VertexBuffer : register(t0);
 Buffer<uint>  IndexBuffer  : register(t1);
-// RWStructuredBuffer<uint3> OutputBuffer : register(u0);
+//RWStructuredBuffer<uint> OutputBuffer : register(u0);
 
 uint NumVertices;
 uint NumTriangles;
@@ -11,8 +11,15 @@ uint3 ChunkLocation;
 
 
 
-int ClampDown(int Value) { return (Value / VOXEL_SIZE) * VOXEL_SIZE; }
-int ClampUp(int Value) { return ((Value + VOXEL_SIZE - 1) / VOXEL_SIZE) * VOXEL_SIZE; }
+int ClampDown(int Value)
+{
+    return Value - (Value % VOXEL_SIZE); // Align down to nearest voxel grid
+}
+
+int ClampUp(int Value)
+{
+    return Value + (VOXEL_SIZE - (Value % VOXEL_SIZE)); // Align up to nearest voxel grid
+}
 
 struct FAABB2D
 {
@@ -20,7 +27,9 @@ struct FAABB2D
     int2 Max;
 };
 
-struct F2DProjectedVertex
+RWStructuredBuffer<FAABB2D> OutputBuffer : register(u0);
+
+struct FProjectedVertex
 {
     int X;
     int Y;
@@ -33,19 +42,18 @@ struct F2DProjectedVertex
     }
 };
 
-struct F2DProjectedTriangle
+struct FProjectedTriangle
 {
-    F2DProjectedVertex Vertex0;
-    F2DProjectedVertex Vertex1;
-    F2DProjectedVertex Vertex2;
+    FProjectedVertex Vertex0;
+    FProjectedVertex Vertex1;
+    FProjectedVertex Vertex2;
     uint MajorAxis;
+    FAABB2D Bounds;
 };
 
-RWStructuredBuffer<F2DProjectedTriangle> OutputBuffer : register(u0);
-
-F2DProjectedTriangle ProjectTriangleTo2D(int3 Vertex0, int3 Vertex1, int3 Vertex2)
+FProjectedTriangle ProjectTriangleTo2D(int3 Vertex0, int3 Vertex1, int3 Vertex2)
 {
-    F2DProjectedTriangle Triangle2D;
+    FProjectedTriangle Triangle2D = (FProjectedTriangle)0;
     
     // Determine the major axis
     const int3 MinValues = min(Vertex0, min(Vertex1, Vertex2));
@@ -93,39 +101,50 @@ F2DProjectedTriangle ProjectTriangleTo2D(int3 Vertex0, int3 Vertex1, int3 Vertex
         Triangle2D.Vertex1.SetXY(Vertex1.x, Vertex1.y);
         Triangle2D.Vertex2.SetXY(Vertex2.x, Vertex2.y);
     }
+
+    // Calculate the AABB.
+    Triangle2D.Bounds.Min.x = min(Triangle2D.Vertex0.X, min(Triangle2D.Vertex1.X, Triangle2D.Vertex2.X));
+    Triangle2D.Bounds.Max.x = max(Triangle2D.Vertex0.X, max(Triangle2D.Vertex1.X, Triangle2D.Vertex2.X));
+    Triangle2D.Bounds.Min.y = min(Triangle2D.Vertex0.Y, min(Triangle2D.Vertex1.Y, Triangle2D.Vertex2.Y));
+    Triangle2D.Bounds.Max.y = max(Triangle2D.Vertex0.Y, max(Triangle2D.Vertex1.Y, Triangle2D.Vertex2.Y));
     
     return Triangle2D;
 }
 
-// uint GetVoxelCount(const F2DProjectedTriangle& Triangle2D)
-// {
-//     // Get the bounds.
-//     FAABB2D Bounds;
-//     Bounds.Min = min(Triangle2D.Vertex0, min(Triangle2D.Vertex1, Triangle2D.Vertex2));
-//     Bounds.Max = max(Triangle2D.Vertex0, max(Triangle2D.Vertex1, Triangle2D.Vertex2));
-//         
-//     // Clamp to voxel grid
-//     ClampedBounds.Min = int2(ClampDown(Bounds.Min.x), ClampDown(Bounds.Min.y));
-//     ClampedBounds.Max = int2(ClampUp(Bounds.Max.x), ClampUp(Bounds.Max.y));
-//
-//     // Get count
-//     int Width = (ClampedBounds.Max.x - ClampedBounds.Min.x) / VOXEL_SIZE;
-//     int Height = (ClampedBounds.Max.y - ClampedBounds.Min.y) / VOXEL_SIZE;
-//     return Width * Height;
-// }
+uint GetVoxelCount(const FProjectedTriangle ProjectedTriangle)
+{
+    const FAABB2D Bounds = ProjectedTriangle.Bounds;
+
+    const int AlignedMinX = ClampDown(Bounds.Min.x);
+    const int AlignedMaxX = ClampUp(Bounds.Max.x);
+    const int AlignedMinY = ClampDown(Bounds.Min.y);
+    const int AlignedMaxY = ClampUp(Bounds.Max.y);
+
+    // Validate bounds
+    if (AlignedMaxX <= AlignedMinX || AlignedMaxY <= AlignedMinY)
+    {
+        return 0;
+    }
+
+    int Width = (AlignedMaxX - AlignedMinX) / VOXEL_SIZE;
+    int Height = (AlignedMaxY - AlignedMinY) / VOXEL_SIZE;
+
+    return max(1, Width * Height);
+}
 
 [numthreads(64, 1, 1)]
-void Voxelization(uint3 DispatchThreadID : SV_DispatchThreadID)
+void GetPointCountPerTriangle(uint3 DispatchThreadID : SV_DispatchThreadID)
 {
     const uint TriangleIdx = DispatchThreadID.x;
     if (TriangleIdx >= NumTriangles) return;
     const uint TriangleIdxOffset = TriangleIdx * 3;
 
-    // Get triangle in global space, reinterpreted as integer
+    // Get triangle in global space, reinterpreted as integer.
     const int3 GlobalVertex0 = (int3)mul(GlobalTransformMatrix, float4(VertexBuffer[IndexBuffer[TriangleIdxOffset + 0]], 1.0f)).xyz;
     const int3 GlobalVertex1 = (int3)mul(GlobalTransformMatrix, float4(VertexBuffer[IndexBuffer[TriangleIdxOffset + 1]], 1.0f)).xyz;
     const int3 GlobalVertex2 = (int3)mul(GlobalTransformMatrix, float4(VertexBuffer[IndexBuffer[TriangleIdxOffset + 2]], 1.0f)).xyz;
 
-    const F2DProjectedTriangle Triangle2D = ProjectTriangleTo2D(GlobalVertex0, GlobalVertex1, GlobalVertex2);
-    OutputBuffer[TriangleIdx] = Triangle2D;
+    const FProjectedTriangle Triangle2D = ProjectTriangleTo2D(GlobalVertex0, GlobalVertex1, GlobalVertex2);
+    // OutputBuffer[TriangleIdx] = uint2(GetVoxelCount(Triangle2D), Triangle2D.MajorAxis);
+    OutputBuffer[TriangleIdx] = Triangle2D.Bounds;
 }
