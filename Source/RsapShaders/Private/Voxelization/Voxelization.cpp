@@ -9,11 +9,45 @@
 
 
 
+struct FAABB2D
+{
+	FIntVector2 Min;
+	FIntVector2 Max;
+
+	FAABB2D(const FIntVector2& InMin, const FIntVector2& InMax)
+		: Min(InMin), Max(InMax)
+	{}
+
+	uint32 GetWidth()  const { return Max.X - Min.X; }
+	uint32 GetHeight() const { return Max.Y - Min.Y; }
+
+	void ClampToGrid(const int32 GridSize)
+	{
+		Min.X = (Min.X / GridSize) * GridSize;
+		Min.Y = (Min.Y / GridSize) * GridSize;
+		Max.X = ((Max.X + GridSize - 1) / GridSize) * GridSize;
+		Max.Y = ((Max.Y + GridSize - 1) / GridSize) * GridSize;
+	}
+
+	uint32 GetPointCount(const int32 GridSize = 8)
+	{
+		// Clamp to the grid size first
+		ClampToGrid(GridSize);
+
+		// Calculate points in both dimensions
+		int PointsX = GetWidth() / GridSize;
+		int PointsY = GetHeight() / GridSize;
+
+		// Return total points
+		return static_cast<uint32>(PointsX * PointsY);
+	}
+};
+
 struct F2DProjectedVertex
 {
-	int X = 0;
-	int Y = 0;
-	int MajorAxisValue = 0;
+	int32 X = 0;
+	int32 Y = 0;
+	uint32 MajorAxisValue = 0;
 };
 
 struct FTriangle3D
@@ -29,6 +63,15 @@ struct F2DProjectedTriangle
 	F2DProjectedVertex Vertex1;
 	F2DProjectedVertex Vertex2;
 	uint32 MajorAxis;
+
+	FAABB2D GetAABB()
+	{
+		const int32 MinX = std::min({Vertex0.X, Vertex1.X, Vertex2.X});
+		const int32 MinY = std::min({Vertex0.Y, Vertex1.Y, Vertex2.Y});
+		const int32 MaxX = std::max({Vertex0.X, Vertex1.X, Vertex2.X});
+		const int32 MaxY = std::max({Vertex0.Y, Vertex1.Y, Vertex2.Y});
+		return FAABB2D(FIntVector2(MinX, MinY), FIntVector2(MaxX, MaxY));
+	}
 
 	FTriangle3D GetTriangle3D() const
 	{
@@ -212,39 +255,53 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 	// Fetch the data back to the CPU
 	//TArray<FUintVector3> Vertices;
 	TArray<FTriangle3D> Triangles3D;
+	TArray<FAABB2D> BoundsList;
 	for (FRHIGPUBufferReadback* Readback : GPUBufferReadbacks)
 	{
 		void* TriangleData = Readback->Lock(0);
 		const uint32 NumElements = Readback->GetGPUSizeBytes() / sizeof(F2DProjectedTriangle); // Total uint3 entries
-		const F2DProjectedTriangle* Triangles = static_cast<F2DProjectedTriangle*>(TriangleData);
+		F2DProjectedTriangle* Triangles = static_cast<F2DProjectedTriangle*>(TriangleData);
 
 		for (uint32 i = 0; i < NumElements; ++i)
 		{
 			Triangles3D.Emplace(Triangles[i].GetTriangle3D());
-			// UE_LOG(LogTemp, Log, TEXT("Triangle: '%i'"), i);
-			// UE_LOG(LogTemp, Log, TEXT("Vertex-0: X: %i, Y: %i, Z: %i"), Triangle3D.Vertex0.X, Triangle3D.Vertex0.Y, Triangle3D.Vertex0.Z);
-			// UE_LOG(LogTemp, Log, TEXT("Vertex-1: X: %i, Y: %i, Z: %i"), Triangle3D.Vertex1.X, Triangle3D.Vertex1.Y, Triangle3D.Vertex1.Z);
-			// UE_LOG(LogTemp, Log, TEXT("Vertex-2: X: %i, Y: %i, Z: %i"), Triangle3D.Vertex2.X, Triangle3D.Vertex2.Y, Triangle3D.Vertex2.Z);
+			FAABB2D Bounds = Triangles[i].GetAABB();
+			Bounds.ClampToGrid(8);
+			BoundsList.Emplace(Bounds);
+			UE_LOG(LogTemp, Log, TEXT("Count: %i"), Bounds.GetPointCount())
 		}
 
 		Readback->Unlock();
 		delete Readback;
 	}
 
-	AsyncTask(ENamedThreads::GameThread, [Triangles3D]()
+	AsyncTask(ENamedThreads::GameThread, [Triangles3D, BoundsList]()
    {
 	   const UWorld* World = GEngine->GetWorldFromContextObjectChecked(GEditor->GetEditorWorldContext().World());
 	   if (!World) return;
 
-	   for (const auto& Triangle : Triangles3D)
-	   {
-	   		// Draw the edges of the triangle
-		   const FColor LineColor = FColor::Green;
-		   constexpr float Thickness = 10.0f;
+	   // for (const auto& [Vertex0, Vertex1, Vertex2] : Triangles3D)
+	   // {
+		  //  const FColor LineColor = FColor::MakeRandomColor();
+		  //  constexpr float Thickness = 10.0f;
+		  //  DrawDebugLine(World, FVector(Vertex0), FVector(Vertex1), LineColor, true, -1, 0, Thickness);
+		  //  DrawDebugLine(World, FVector(Vertex1), FVector(Vertex2), LineColor, true, -1, 0, Thickness);
+		  //  DrawDebugLine(World, FVector(Vertex2), FVector(Vertex0), LineColor, true, -1, 0, Thickness);
+	   // }
 
-		   DrawDebugLine(World, FVector(Triangle.Vertex0), FVector(Triangle.Vertex1), LineColor, true, -1, 0, Thickness);
-		   DrawDebugLine(World, FVector(Triangle.Vertex1), FVector(Triangle.Vertex2), LineColor, true, -1, 0, Thickness);
-		   DrawDebugLine(World, FVector(Triangle.Vertex2), FVector(Triangle.Vertex0), LineColor, true, -1, 0, Thickness);
+	   for (const auto& Bounds : BoundsList)
+	   {
+			const FColor LineColor = FColor::MakeRandomColor();
+	   		constexpr float Thickness = 10.0f;
+			FVector TopLeft(Bounds.Min.X, Bounds.Min.Y, 0);
+			FVector TopRight(Bounds.Max.X, Bounds.Min.Y, 0);
+			FVector BottomLeft(Bounds.Min.X, Bounds.Max.Y, 0);
+			FVector BottomRight(Bounds.Max.X, Bounds.Max.Y, 0);
+
+			DrawDebugLine(World, TopLeft, TopRight, LineColor, true, -1, 0, Thickness);
+			DrawDebugLine(World, TopLeft, BottomLeft, LineColor, true, -1, 0, Thickness);
+			DrawDebugLine(World, TopRight, BottomRight, LineColor, true, -1, 0, Thickness);
+			DrawDebugLine(World, BottomLeft, BottomRight, LineColor, true, -1, 0, Thickness);
 	   }
 		
    });
