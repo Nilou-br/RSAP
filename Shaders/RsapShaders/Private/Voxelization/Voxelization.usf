@@ -8,19 +8,25 @@ uint NumTriangles;
 float4x4 GlobalTransformMatrix;
 uint3 ChunkLocation;
 
+struct FProjectionResult
+{
+    uint PointCount;
+    uint ProjectedAxis;
+};
+
+RWStructuredBuffer<FProjectionResult> OutputBuffer : register(u0);
+
+
+
 struct FTriangle
 {
     int3 Vertex0, Vertex1, Vertex2;
 };
 
-RWStructuredBuffer<FTriangle> OutputBuffer : register(u0);
-
 struct FTriangle2D
 {
     int2 Vertex0, Vertex1, Vertex2;
 };
-
-
 
 // Get this threads triangle in global space
 FTriangle GetTriangle(const uint TriangleIdx)
@@ -156,6 +162,9 @@ void Voxelization(uint3 DispatchThreadID : SV_DispatchThreadID)
     const uint MajorAxis = GetMajorAxis(Triangle);
     const FTriangle ProjectedTriangle = ProjectTriangle(Triangle, MajorAxis);
     const FTriangle2D ProjectedTriangle2D = ProjectTriangle2D(Triangle, MajorAxis);
-    const uint PointCount = GetPointCount(ProjectedTriangle2D);
-    OutputBuffer[TriangleIdx] = ProjectedTriangle;
+    
+    FProjectionResult Result;
+    Result.PointCount = GetPointCount(ProjectedTriangle2D);
+    Result.ProjectedAxis = MajorAxis;
+    OutputBuffer[DispatchThreadID.x] = Result;
 }

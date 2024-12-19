@@ -20,6 +20,12 @@ struct FTriangle
 	}
 };
 
+struct FProjectionResult
+{
+	uint32 PointCount;
+	uint32 ProjectedAxis;
+};
+
 DECLARE_STATS_GROUP(TEXT("Voxelization"), STATGROUP_Voxelization, STATCAT_Advanced);
 DECLARE_CYCLE_STAT(TEXT("Voxelization Execute"), STAT_Voxelization_Execute, STATGROUP_Voxelization);
 
@@ -40,7 +46,7 @@ public:
 		SHADER_PARAMETER(uint32, bIsIndex32Bit)
 		SHADER_PARAMETER(FMatrix44f, GlobalTransformMatrix)
 		SHADER_PARAMETER(FUintVector, ChunkLocation)
-		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<F2DProjectedTriangle>, OutputBuffer)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<FProjectionResult>, OutputBuffer)
 	END_SHADER_PARAMETER_STRUCT()
 
 
@@ -125,7 +131,7 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 
 		// Output
 		const FRDGBufferRef OutputBuffer = GraphBuilder.CreateBuffer(
-			FRDGBufferDesc::CreateStructuredDesc(sizeof(FTriangle), 1),
+			FRDGBufferDesc::CreateStructuredDesc(sizeof(FProjectionResult), NumTriangles),
 			*FString::Printf(TEXT("Rsap.Voxelization.Output.Buffer.%i"), PassIdx)
 		);
 		PassParameters->OutputBuffer = GraphBuilder.CreateUAV(OutputBuffer);
@@ -143,7 +149,7 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 		);
 		
 		FRHIGPUBufferReadback* GPUBufferReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.Voxelization.Output.Readback.%i"), PassIdx));
-		AddEnqueueCopyPass(GraphBuilder, GPUBufferReadback, OutputBuffer, 1 * sizeof(FTriangle));
+		AddEnqueueCopyPass(GraphBuilder, GPUBufferReadback, OutputBuffer, NumTriangles * sizeof(FProjectionResult));
 		GPUBufferReadbacks.Add(GPUBufferReadback);
 	}
 
@@ -151,42 +157,59 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 	
 	GraphBuilder.Execute();
 	RHICmdList.BlockUntilGPUIdle();
-
-#include "DrawDebugHelpers.h"
-#include "Async/Async.h"
 	
-	// Fetch the data back to the CPU
-	//TArray<FUintVector3> Vertices;
-	TArray<FTriangle> Triangles;
 	for (FRHIGPUBufferReadback* Readback : GPUBufferReadbacks)
 	{
 		void* TriangleData = Readback->Lock(0);
-		const uint32 NumElements = Readback->GetGPUSizeBytes() / sizeof(FTriangle); // Total uint3 entries
-		FTriangle* TrianglesData = static_cast<FTriangle*>(TriangleData);
+		const uint32 NumElements = Readback->GetGPUSizeBytes() / sizeof(FProjectionResult);
+		FProjectionResult* Results = static_cast<FProjectionResult*>(TriangleData);
 
+		uint32 TotalCount = 0;
 		for (uint32 i = 0; i < NumElements; ++i)
 		{
-			Triangles.Emplace(TrianglesData[i]);
+			const auto [PointCount, ProjectedAxis] = Results[i];
+			TotalCount+=PointCount;
+			UE_LOG(LogTemp, Log, TEXT("Count: %i, ProjectedAxis: %i"), PointCount, ProjectedAxis)
 		}
-
+		UE_LOG(LogTemp, Log, TEXT("Total-Count: %i,"), TotalCount)
+	
 		Readback->Unlock();
 		delete Readback;
 	}
 
-	AsyncTask(ENamedThreads::GameThread, [Triangles]()
-   {
-	   const UWorld* World = GEngine->GetWorldFromContextObjectChecked(GEditor->GetEditorWorldContext().World());
-	   if (!World) return;
-
-	   for (const auto& [Vertex0, Vertex1, Vertex2] : Triangles)
-	   {
-		   const FColor LineColor = FColor::MakeRandomColor();
-		   constexpr float Thickness = 10.0f;
-		   DrawDebugLine(World, FVector(Vertex0), FVector(Vertex1), LineColor, true, -1, 0, Thickness);
-		   DrawDebugLine(World, FVector(Vertex1), FVector(Vertex2), LineColor, true, -1, 0, Thickness);
-		   DrawDebugLine(World, FVector(Vertex2), FVector(Vertex0), LineColor, true, -1, 0, Thickness);
-	   }
-   });
+// #include "DrawDebugHelpers.h"
+// #include "Async/Async.h"
+// 	
+// 	TArray<FTriangle> Triangles;
+// 	for (FRHIGPUBufferReadback* Readback : GPUBufferReadbacks)
+// 	{
+// 		void* Data = Readback->Lock(0);
+// 		const uint32 NumElements = Readback->GetGPUSizeBytes() / sizeof(FTriangle); // Total uint3 entries
+// 		FTriangle* TrianglesData = static_cast<FTriangle*>(Data);
+//
+// 		for (uint32 i = 0; i < NumElements; ++i)
+// 		{
+// 			Triangles.Emplace(TrianglesData[i]);
+// 		}
+//
+// 		Readback->Unlock();
+// 		delete Readback;
+// 	}
+//
+// 	AsyncTask(ENamedThreads::GameThread, [Triangles]()
+// 	{
+// 		const UWorld* World = GEngine->GetWorldFromContextObjectChecked(GEditor->GetEditorWorldContext().World());
+// 		if (!World) return;
+//
+// 		for (const auto& [Vertex0, Vertex1, Vertex2] : Triangles)
+// 		{
+// 			const FColor LineColor = FColor::MakeRandomColor();
+// 			constexpr float Thickness = 10.0f;
+// 			DrawDebugLine(World, FVector(Vertex0), FVector(Vertex1), LineColor, true, -1, 0, Thickness);
+// 			DrawDebugLine(World, FVector(Vertex1), FVector(Vertex2), LineColor, true, -1, 0, Thickness);
+// 			DrawDebugLine(World, FVector(Vertex2), FVector(Vertex0), LineColor, true, -1, 0, Thickness);
+// 		}
+// 	});
 
 	//Callback(Vertices);
 }
