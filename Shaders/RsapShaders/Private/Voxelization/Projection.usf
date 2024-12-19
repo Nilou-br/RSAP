@@ -1,0 +1,170 @@
+#include "/Engine/Public/Platform.ush"
+
+Buffer<float3> VertexBuffer : register(t0);
+Buffer<uint>  IndexBuffer  : register(t1);
+
+uint NumVertices;
+uint NumTriangles;
+float4x4 GlobalTransformMatrix;
+uint3 ChunkLocation;
+
+struct FProjectionResult
+{
+    uint PointCount;
+    uint ProjectedAxis;
+};
+
+RWStructuredBuffer<FProjectionResult> OutputBuffer : register(u0);
+
+
+
+struct FTriangle
+{
+    int3 Vertex0, Vertex1, Vertex2;
+};
+
+struct FTriangle2D
+{
+    int2 Vertex0, Vertex1, Vertex2;
+};
+
+// Get this threads triangle in global space
+FTriangle GetTriangle(const uint TriangleIdx)
+{
+    FTriangle Triangle;
+    Triangle.Vertex0 = (int3)mul(GlobalTransformMatrix, float4(VertexBuffer[IndexBuffer[TriangleIdx + 0]], 1.0f)).xyz;
+    Triangle.Vertex1 = (int3)mul(GlobalTransformMatrix, float4(VertexBuffer[IndexBuffer[TriangleIdx + 1]], 1.0f)).xyz;
+    Triangle.Vertex2 = (int3)mul(GlobalTransformMatrix, float4(VertexBuffer[IndexBuffer[TriangleIdx + 2]], 1.0f)).xyz;
+    return Triangle;
+}
+
+int3 ComputeNormal(const FTriangle Triangle)
+{
+    const int3 Edge1 = Triangle.Vertex1 - Triangle.Vertex0;
+    const int3 Edge2 = Triangle.Vertex2 - Triangle.Vertex0;
+    return cross(Edge1, Edge2);
+}
+
+uint GetMajorAxis(const FTriangle Triangle)
+{
+    // Compute the triangle's normal vector
+    int3 Normal = ComputeNormal(Triangle);
+
+    // Determine the major axis based on the normal's absolute values
+    const int AbsX = abs(Normal.x);
+    const int AbsY = abs(Normal.y);
+    const int AbsZ = abs(Normal.z);
+
+    if (AbsX >= AbsY && AbsX >= AbsZ) return AXIS_X;
+    if (AbsY >= AbsX && AbsY >= AbsZ) return AXIS_Y;
+    return AXIS_Z;
+}
+
+// Project the triangle onto the axis
+FTriangle ProjectTriangle(const FTriangle Triangle, const uint Axis)
+{
+    FTriangle Result;
+
+    if (Axis == AXIS_X)
+    {
+        // Project onto YZ
+        Result.Vertex0 = int3(0, Triangle.Vertex0.y, Triangle.Vertex0.z);
+        Result.Vertex1 = int3(0, Triangle.Vertex1.y, Triangle.Vertex1.z);
+        Result.Vertex2 = int3(0, Triangle.Vertex2.y, Triangle.Vertex2.z);
+    }
+    else if (Axis == AXIS_Y)
+    {
+        // Project onto XZ
+        Result.Vertex0 = int3(Triangle.Vertex0.x, 0, Triangle.Vertex0.z);
+        Result.Vertex1 = int3(Triangle.Vertex1.x, 0, Triangle.Vertex1.z);
+        Result.Vertex2 = int3(Triangle.Vertex2.x, 0, Triangle.Vertex2.z);
+    }
+    else
+    {
+        // Project onto XY
+        Result.Vertex0 = int3(Triangle.Vertex0.x, Triangle.Vertex0.y, 0);
+        Result.Vertex1 = int3(Triangle.Vertex1.x, Triangle.Vertex1.y, 0);
+        Result.Vertex2 = int3(Triangle.Vertex2.x, Triangle.Vertex2.y, 0);
+    }
+
+    return Result;
+}
+
+// Project the triangle onto the axis
+FTriangle2D ProjectTriangle2D(const FTriangle Triangle, const uint Axis)
+{
+    FTriangle2D Result;
+
+    if (Axis == AXIS_X)
+    {
+        // Project onto YZ
+        Result.Vertex0 = int2(Triangle.Vertex0.y, Triangle.Vertex0.z);
+        Result.Vertex1 = int2(Triangle.Vertex1.y, Triangle.Vertex1.z);
+        Result.Vertex2 = int2(Triangle.Vertex2.y, Triangle.Vertex2.z);
+    }
+    else if (Axis == AXIS_Y)
+    {
+        // Project onto XZ
+        Result.Vertex0 = int2(Triangle.Vertex0.x, Triangle.Vertex0.z);
+        Result.Vertex1 = int2(Triangle.Vertex1.x, Triangle.Vertex1.z);
+        Result.Vertex2 = int2(Triangle.Vertex2.x, Triangle.Vertex2.z);
+    }
+    else
+    {
+        // Project onto XY
+        Result.Vertex0 = int2(Triangle.Vertex0.x, Triangle.Vertex0.y);
+        Result.Vertex1 = int2(Triangle.Vertex1.x, Triangle.Vertex1.y);
+        Result.Vertex2 = int2(Triangle.Vertex2.x, Triangle.Vertex2.y);
+    }
+
+    return Result;
+}
+
+int ClampDown(int Value) { return (Value / VOXEL_SIZE) * VOXEL_SIZE; }
+int ClampUp(int Value) { return ((Value + VOXEL_SIZE - 1) / VOXEL_SIZE) * VOXEL_SIZE; }
+
+uint GetPointCount(const FTriangle2D Triangle)
+{
+    int2 MinPoint = int2(
+        min(Triangle.Vertex0.x, min(Triangle.Vertex1.x, Triangle.Vertex2.x)),
+        min(Triangle.Vertex0.y, min(Triangle.Vertex1.y, Triangle.Vertex2.y))
+    );
+
+    int2 MaxPoint = int2(
+        max(Triangle.Vertex0.x, max(Triangle.Vertex1.x, Triangle.Vertex2.x)),
+        max(Triangle.Vertex0.y, max(Triangle.Vertex1.y, Triangle.Vertex2.y))
+    );
+
+    // Align AABB to voxel grid
+    MinPoint.x = ClampDown(MinPoint.x);
+    MinPoint.y = ClampDown(MinPoint.y);
+    MaxPoint.x = ClampUp(MaxPoint.x);
+    MaxPoint.y = ClampUp(MaxPoint.y);
+
+    // Compute the width and height of the AABB
+    int Width = MaxPoint.x - MinPoint.x;
+    int Height = MaxPoint.y - MinPoint.y;
+
+    // Calculate the number of voxels along each axis
+    int VoxelsX = Width / VOXEL_SIZE;
+    int VoxelsY = Height / VOXEL_SIZE;
+
+    // Return the total number of voxels
+    return VoxelsX * VoxelsY;
+}
+
+[numthreads(64, 1, 1)]
+void Main(uint3 DispatchThreadID : SV_DispatchThreadID)
+{
+    if (DispatchThreadID.x >= NumTriangles) return;
+    const uint TriangleIdx = DispatchThreadID.x * 3;
+    const FTriangle Triangle = GetTriangle(TriangleIdx);
+    const uint MajorAxis = GetMajorAxis(Triangle);
+    const FTriangle ProjectedTriangle = ProjectTriangle(Triangle, MajorAxis);
+    const FTriangle2D ProjectedTriangle2D = ProjectTriangle2D(Triangle, MajorAxis);
+    
+    FProjectionResult Result;
+    Result.PointCount = GetPointCount(ProjectedTriangle2D);
+    Result.ProjectedAxis = MajorAxis;
+    OutputBuffer[DispatchThreadID.x] = Result;
+}
