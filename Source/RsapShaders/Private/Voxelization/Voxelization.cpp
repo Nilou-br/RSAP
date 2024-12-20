@@ -110,15 +110,15 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 		
 		const uint32 NumVertices = LODResources.GetNumVertices();
 		const uint32 NumTriangles = LODResources.GetNumTriangles();
-
-		const FRDGBufferRef ProjectionResultBuffer = FProjectionShaderInterface::AddPass(GraphBuilder, VertexBufferSRV, IndexBufferSRV, NumVertices, NumTriangles, ComponentTransform, PassIdx);
+		
+		const FProjectionShaderResult ProjectionResult = FProjectionShaderInterface::AddPass(GraphBuilder, VertexBufferSRV, IndexBufferSRV, NumVertices, NumTriangles, ComponentTransform, PassIdx);
 		FRHIGPUBufferReadback* ProjectionResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.Projection.Output.Readback.%i"), PassIdx));
-		AddEnqueueCopyPass(GraphBuilder, ProjectionResultReadback, ProjectionResultBuffer, NumTriangles * sizeof(FProjectionResult));
+		AddEnqueueCopyPass(GraphBuilder, ProjectionResultReadback, ProjectionResult.CountsBuffer, NumTriangles * sizeof(uint32));
 		ProjectionResults.Add(ProjectionResultReadback);
 
-		const FRDGBufferRef PrefixSumResultBuffer = FPrefixSumShaderInterface::AddPass(GraphBuilder, ProjectionResultBuffer, NumTriangles, PassIdx);
+		const FRDGBufferRef PrefixSumResultBuffer = FPrefixSumShaderInterface::AddPass(GraphBuilder, ProjectionResult.CountsBuffer, NumTriangles, PassIdx);
 		FRHIGPUBufferReadback* PrefixSumResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
-		AddEnqueueCopyPass(GraphBuilder, PrefixSumResultReadback, PrefixSumResultBuffer, (NumTriangles / NUM_THREAD_GROUP_SIZE) * sizeof(uint32));
+		AddEnqueueCopyPass(GraphBuilder, PrefixSumResultReadback, PrefixSumResultBuffer, NumTriangles * sizeof(uint32));
 		PrefixSumResults.Add(PrefixSumResultReadback);
 	}
 	
@@ -128,15 +128,15 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 	for (FRHIGPUBufferReadback* Readback : ProjectionResults)
 	{
 		void* ProjectionResultData = Readback->Lock(0);
-		const uint32 NumElements = Readback->GetGPUSizeBytes() / sizeof(FProjectionResult);
-		FProjectionResult* Buffer = static_cast<FProjectionResult*>(ProjectionResultData);
+		const uint32 NumElements = Readback->GetGPUSizeBytes() / sizeof(uint32);
+		uint32* Buffer = static_cast<uint32*>(ProjectionResultData);
 
 		uint32 TotalCount = 0;
 		for (uint32 i = 0; i < NumElements; ++i)
 		{
-			const auto [PointCount, ProjectedAxis] = Buffer[i];
-			TotalCount+=PointCount;
-			UE_LOG(LogTemp, Log, TEXT("Count: %i, ProjectedAxis: %i"), PointCount, ProjectedAxis)
+			const uint32 Count = Buffer[i];
+			TotalCount+=Count;
+			UE_LOG(LogTemp, Log, TEXT("Index: %i, Count: %i"), i, Count)
 		}
 		UE_LOG(LogTemp, Log, TEXT("Total-Count: %i,"), TotalCount)
 	
@@ -154,7 +154,7 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 		{
 			// const auto [Sum, ProjectedAxis] = Buffer[i];
 			// UE_LOG(LogTemp, Log, TEXT("Sum: %i, ProjectedAxis: %i"), Sum, ProjectedAxis)
-			UE_LOG(LogTemp, Log, TEXT("Value: %i"), Buffer[i])
+			UE_LOG(LogTemp, Log, TEXT("Index: %i, Sum: %i"), i, Buffer[i])
 		}
 	
 		Readback->Unlock();

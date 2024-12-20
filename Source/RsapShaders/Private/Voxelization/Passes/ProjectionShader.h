@@ -33,9 +33,6 @@ class RSAPSHADERS_API FProjectionShader: public FGlobalShader
 public:
 	DECLARE_GLOBAL_SHADER(FProjectionShader);
 	SHADER_USE_PARAMETER_STRUCT(FProjectionShader, FGlobalShader);
-	
-	class FProjectionShader_Perm_Test : SHADER_PERMUTATION_INT("TEST", 1);
-	using FPermutationDomain = TShaderPermutationDomain<FProjectionShader_Perm_Test>;
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		SHADER_PARAMETER_SRV(Buffer<float3>, VertexBuffer)
@@ -45,7 +42,8 @@ public:
 		SHADER_PARAMETER(uint32, bIsIndex32Bit)
 		SHADER_PARAMETER(FMatrix44f, GlobalTransformMatrix)
 		SHADER_PARAMETER(FUintVector, ChunkLocation)
-		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<FProjectionResult>, OutputBuffer)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<uint32>, CountsBuffer)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<uint32>, ProjectedAxisBuffer)
 	END_SHADER_PARAMETER_STRUCT()
 	
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
@@ -71,11 +69,26 @@ public:
 
 IMPLEMENT_GLOBAL_SHADER(FProjectionShader, "/RsapShadersShaders/Voxelization/Projection.usf", "Main", SF_Compute);
 
+struct FProjectionShaderResult
+{
+	FRDGBufferRef CountsBuffer; // 2D points per triangle's AABB.
+	FRDGBufferRef AxisBuffer;   // Major axis projected to.
+};
+
 struct FProjectionShaderInterface
 {
-	static FRDGBufferRef AddPass(FRDGBuilder& GraphBuilder, FRHIShaderResourceView* VertexBufferSRV, FRHIShaderResourceView* IndexBufferSRV, const uint32 NumVertices, const uint32 NumTriangles, const FMatrix44f& ComponentTransform, const uint32 PassIdx)
+	static FProjectionShaderResult AddPass(FRDGBuilder& GraphBuilder, FRHIShaderResourceView* VertexBufferSRV, FRHIShaderResourceView* IndexBufferSRV, const uint32 NumVertices, const uint32 NumTriangles, const FMatrix44f& ComponentTransform, const uint32 PassIdx)
 	{
 		TShaderMapRef<FProjectionShader> Shader(GetGlobalShaderMap(GMaxRHIFeatureLevel), FProjectionShader::FPermutationDomain());
+
+		const FRDGBufferRef CountsBuffer = GraphBuilder.CreateBuffer(
+			FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), NumTriangles),
+			*FString::Printf(TEXT("Rsap.ProjectionShader.%i.CountsBuffer"), PassIdx)
+		);
+		const FRDGBufferRef ProjectedAxisBuffer = GraphBuilder.CreateBuffer(
+			FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), NumTriangles),
+			*FString::Printf(TEXT("Rsap.ProjectionShader.%i.ProjectedAxisBuffer"), PassIdx)
+		);
 		
 		FProjectionShader::FParameters* PassParameters = GraphBuilder.AllocParameters<FProjectionShader::FParameters>();
 		PassParameters->VertexBuffer = VertexBufferSRV;
@@ -84,12 +97,8 @@ struct FProjectionShaderInterface
 		PassParameters->NumTriangles = NumTriangles;
 		PassParameters->GlobalTransformMatrix = ComponentTransform;
 		PassParameters->ChunkLocation = FUintVector(0, 0, 0);
-		
-		const FRDGBufferRef OutputBuffer = GraphBuilder.CreateBuffer(
-			FRDGBufferDesc::CreateStructuredDesc(sizeof(FProjectionResult), NumTriangles),
-			*FString::Printf(TEXT("Rsap.ProjectionShader.%i.Output"), PassIdx)
-		);
-		PassParameters->OutputBuffer = GraphBuilder.CreateUAV(OutputBuffer);
+		PassParameters->CountsBuffer = GraphBuilder.CreateUAV(CountsBuffer);
+		PassParameters->ProjectedAxisBuffer = GraphBuilder.CreateUAV(ProjectedAxisBuffer);
 
 		// One triangle per thread.
 		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(NumTriangles, NUM_THREADS_PROJECTION_X);
@@ -103,6 +112,6 @@ struct FProjectionShaderInterface
 			}
 		);
 
-		return OutputBuffer;
+		return {CountsBuffer, ProjectedAxisBuffer};
 	}
 };
