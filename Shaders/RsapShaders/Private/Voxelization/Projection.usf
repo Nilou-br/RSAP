@@ -153,7 +153,7 @@ uint GetPointCount(const FTriangle2D Triangle)
     return VoxelsX * VoxelsY;
 }
 
-[numthreads(64, 1, 1)]
+[numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
 void Main(uint3 DispatchThreadID : SV_DispatchThreadID)
 {
     if (DispatchThreadID.x >= NumTriangles) return;

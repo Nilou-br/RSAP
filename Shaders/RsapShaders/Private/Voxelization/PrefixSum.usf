@@ -1,0 +1,35 @@
+#include "/Engine/Public/Platform.ush"
+
+StructuredBuffer<uint2> InputBuffer		: register(t0);
+RWStructuredBuffer<uint> OutPrefixSums  : register(u0);
+RWStructuredBuffer<uint> OutGroupSums	: register(u1);
+uint NumTriangles;
+
+groupshared uint SharedData[THREAD_GROUP_SIZE];
+
+[numthreads(THREAD_GROUP_SIZE, 1, 1)]
+void Main(uint3 ThreadID : SV_DispatchThreadID, uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupThreadID)
+{
+	// // Load data into shared memory
+	// uint Idx = GroupID.x * THREAD_GROUP_SIZE + GroupThreadID.x;
+	// if (Idx >= NumTriangles) return;
+	//
+	// SharedData[GroupThreadID.x] = InputBuffer[Idx].x; // Point-count
+	// GroupMemoryBarrierWithGroupSync();
+	//
+	// // Reduce phase (binary tree reduction)
+	// for (uint Stride = 1; Stride < THREAD_GROUP_SIZE; Stride *= 2)
+	// {
+	// 	if (GroupThreadID.x >= Stride)
+	// 	{
+	// 		SharedData[GroupThreadID.x] += SharedData[GroupThreadID.x - Stride];
+	// 	}
+	// 	GroupMemoryBarrierWithGroupSync();
+	// }
+	//
+	// // Store block sum to auxiliary buffer
+	// if (GroupThreadID.x == THREAD_GROUP_SIZE - 1)
+	// {
+	// 	BlockSums[GroupID.x] = SharedData[GroupThreadID.x];
+	// }
+}

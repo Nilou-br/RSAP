@@ -1,12 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "RsapShaders/Public/RsapShaders.h"
-#include "MeshPassProcessor.h"
 #include "RHICommandList.h"
 #include "RenderGraphBuilder.h"
-#include "RenderTargetPool.h"
-#include "MeshMaterialShader.h"
 #include "ShaderParameterUtils.h"
 #include "RHIStaticStates.h"
 #include "Shader.h"
@@ -22,7 +18,7 @@
 #include "RenderResource.h"
 #include "RenderGraphResources.h"
 
-#define NUM_THREADS_PROJECTION_X 1
+#define NUM_THREADS_PROJECTION_X 64
 #define NUM_THREADS_PROJECTION_Y 1
 #define NUM_THREADS_PROJECTION_Z 1
 
@@ -96,7 +92,7 @@ struct FProjectionShaderInterface
 		PassParameters->OutputBuffer = GraphBuilder.CreateUAV(OutputBuffer);
 
 		// One triangle per thread.
-		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(NumTriangles, 64);
+		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(NumTriangles, NUM_THREADS_PROJECTION_X);
 		GraphBuilder.AddPass(
 			RDG_EVENT_NAME("%s", *FString::Printf(TEXT("Rsap.ProjectionShader.%i.Dispatch"), PassIdx)),
 			PassParameters,

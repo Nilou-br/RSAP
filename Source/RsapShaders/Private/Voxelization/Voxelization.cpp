@@ -6,6 +6,7 @@
 #include "RenderGraphResources.h"
 #include "GlobalShader.h"
 #include "RHIGPUReadback.h"
+#include "Passes/PrefixSumShader.h"
 #include "Passes/ProjectionShader.h"
 
 
@@ -69,12 +70,13 @@ public:
 
 // This will tell the engine to create the shader and where the shader entry point is.
 // ShaderType | ShaderPath | Shader function name | Type
-IMPLEMENT_GLOBAL_SHADER(FVoxelization, "/RsapShadersShaders/Voxelization/Voxelization.usf", "Voxelization", SF_Compute);
+//IMPLEMENT_GLOBAL_SHADER(FVoxelization, "/RsapShadersShaders/Voxelization/Voxelization.usf", "Voxelization", SF_Compute);
 
 void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHICmdList, const FVoxelizationDispatchParams& Params, const TFunction<void(const TArray<FUintVector3>&)>& Callback)
 {
 	FRDGBuilder GraphBuilder(RHICmdList);
-	TArray<FRHIGPUBufferReadback*> GPUBufferReadbacks;
+	TArray<FRHIGPUBufferReadback*> ProjectionResults;
+	TArray<FRHIGPUBufferReadback*> PrefixSumResults;
 	
 	FRHIViewDesc::FBufferSRV::FInitializer VertexBufferInitializer = FRHIViewDesc::CreateBufferSRV();
 	VertexBufferInitializer.SetType(FRHIViewDesc::EBufferType::Typed);
@@ -109,32 +111,51 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 		const uint32 NumVertices = LODResources.GetNumVertices();
 		const uint32 NumTriangles = LODResources.GetNumTriangles();
 
-		const FRDGBufferRef ProjectionResult = FProjectionShaderInterface::AddPass(GraphBuilder, VertexBufferSRV, IndexBufferSRV, NumVertices, NumTriangles, ComponentTransform, PassIdx);
-		
-		FRHIGPUBufferReadback* GPUBufferReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.Voxelization.Output.Readback.%i"), PassIdx));
-		AddEnqueueCopyPass(GraphBuilder, GPUBufferReadback, ProjectionResult, NumTriangles * sizeof(FProjectionResult));
-		GPUBufferReadbacks.Add(GPUBufferReadback);
-	}
+		const FRDGBufferRef ProjectionResultBuffer = FProjectionShaderInterface::AddPass(GraphBuilder, VertexBufferSRV, IndexBufferSRV, NumVertices, NumTriangles, ComponentTransform, PassIdx);
+		FRHIGPUBufferReadback* ProjectionResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.Projection.Output.Readback.%i"), PassIdx));
+		AddEnqueueCopyPass(GraphBuilder, ProjectionResultReadback, ProjectionResultBuffer, NumTriangles * sizeof(FProjectionResult));
+		ProjectionResults.Add(ProjectionResultReadback);
 
-	if(GPUBufferReadbacks.IsEmpty()) return;
+		const FRDGBufferRef PrefixSumResultBuffer = FPrefixSumShaderInterface::AddPass(GraphBuilder, ProjectionResultBuffer, NumTriangles, PassIdx);
+		FRHIGPUBufferReadback* PrefixSumResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
+		AddEnqueueCopyPass(GraphBuilder, PrefixSumResultReadback, PrefixSumResultBuffer, (NumTriangles / NUM_THREAD_GROUP_SIZE) * sizeof(uint32));
+		PrefixSumResults.Add(PrefixSumResultReadback);
+	}
 	
 	GraphBuilder.Execute();
 	RHICmdList.BlockUntilGPUIdle();
 	
-	for (FRHIGPUBufferReadback* Readback : GPUBufferReadbacks)
+	for (FRHIGPUBufferReadback* Readback : ProjectionResults)
 	{
-		void* TriangleData = Readback->Lock(0);
+		void* ProjectionResultData = Readback->Lock(0);
 		const uint32 NumElements = Readback->GetGPUSizeBytes() / sizeof(FProjectionResult);
-		FProjectionResult* Results = static_cast<FProjectionResult*>(TriangleData);
+		FProjectionResult* Buffer = static_cast<FProjectionResult*>(ProjectionResultData);
 
 		uint32 TotalCount = 0;
 		for (uint32 i = 0; i < NumElements; ++i)
 		{
-			const auto [PointCount, ProjectedAxis] = Results[i];
+			const auto [PointCount, ProjectedAxis] = Buffer[i];
 			TotalCount+=PointCount;
 			UE_LOG(LogTemp, Log, TEXT("Count: %i, ProjectedAxis: %i"), PointCount, ProjectedAxis)
 		}
 		UE_LOG(LogTemp, Log, TEXT("Total-Count: %i,"), TotalCount)
+	
+		Readback->Unlock();
+		delete Readback;
+	}
+
+	for (FRHIGPUBufferReadback* Readback : PrefixSumResults)
+	{
+		void* PrefixSumResultsData = Readback->Lock(0);
+		const uint32 NumElements = Readback->GetGPUSizeBytes() / sizeof(uint32);
+		uint32* Buffer = static_cast<uint32*>(PrefixSumResultsData);
+
+		for (uint32 i = 0; i < NumElements; ++i)
+		{
+			// const auto [Sum, ProjectedAxis] = Buffer[i];
+			// UE_LOG(LogTemp, Log, TEXT("Sum: %i, ProjectedAxis: %i"), Sum, ProjectedAxis)
+			UE_LOG(LogTemp, Log, TEXT("Value: %i"), Buffer[i])
+		}
 	
 		Readback->Unlock();
 		delete Readback;
