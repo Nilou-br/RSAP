@@ -1,0 +1,26 @@
+#include "/Engine/Public/Platform.ush"
+
+StructuredBuffer<uint> InitialPrefixSums	: register(t0);
+StructuredBuffer<uint> GroupPrefixSums		: register(t1);
+RWStructuredBuffer<uint> OutPrefixSums		: register(u0);
+uint NumElements;
+
+[numthreads(THREAD_GROUP_SIZE, 1, 1)]
+void Main(uint3 GlobalThreadID : SV_DispatchThreadID, uint3 GroupThreadID : SV_GroupThreadID, uint3 GroupID : SV_GroupID)
+{
+	const uint GlobalIdx = GlobalThreadID.x;
+	if (GlobalIdx >= NumElements) return;
+
+	// Determine the group index of the current element in InitialPrefixSums
+	const uint GroupSize = THREAD_GROUP_SIZE; // The size of each group
+	const uint GroupIdx = GlobalIdx / GroupSize; // Which group this element belongs to
+
+	// Fetch the corresponding cumulative sum from the GroupPrefixSums
+	const uint GroupSum = GroupPrefixSums[GroupIdx];
+
+	// Apply the group sum to the prefix sum of the current element
+	const uint AdjustedPrefixSum = InitialPrefixSums[GlobalIdx] + GroupSum;
+
+	// Write the final result
+	OutPrefixSums[GlobalIdx] = AdjustedPrefixSum;
+}

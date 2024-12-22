@@ -1,0 +1,42 @@
+#include "/Engine/Public/Platform.ush"
+
+StructuredBuffer<uint>   InputBuffer	: register(t0);
+RWStructuredBuffer<uint> OutPrefixSums	: register(u0);
+uint NumElements;
+
+groupshared uint SharedData[THREAD_GROUP_SIZE];
+
+[numthreads(THREAD_GROUP_SIZE, 1, 1)]
+void Main(uint3 GlobalThreadID : SV_DispatchThreadID, uint3 GroupThreadID : SV_GroupThreadID)
+{
+	const uint GlobalIdx = GlobalThreadID.x;
+
+	// Load data into shared memory for this group's range
+	if(GlobalIdx == 0)
+	{
+		// First element is always 0.
+		SharedData[GroupThreadID.x] = 0;
+	}
+	else
+	{
+		// Every global element on [i-1] gets cached to shared [i]. This will cutoff the last element
+		SharedData[GroupThreadID.x] = (GlobalIdx < NumElements) ? InputBuffer[GlobalIdx-1] : 0;
+	}
+	GroupMemoryBarrierWithGroupSync();
+
+	// Calculate prefix-sum on shared-memory
+	for (uint Offset = 1; Offset < THREAD_GROUP_SIZE; Offset *= 2)
+	{
+		const uint Temp = (GroupThreadID.x >= Offset) ? SharedData[GroupThreadID.x - Offset] : 0;
+		GroupMemoryBarrierWithGroupSync();
+
+		SharedData[GroupThreadID.x] += Temp;
+		GroupMemoryBarrierWithGroupSync();
+	}
+
+	// Write back
+	if (GlobalIdx < NumElements)
+	{
+		OutPrefixSums[GlobalIdx] = SharedData[GroupThreadID.x];
+	}
+}

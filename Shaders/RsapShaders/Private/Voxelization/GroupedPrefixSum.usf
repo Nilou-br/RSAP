@@ -3,22 +3,30 @@
 StructuredBuffer<uint>   InputBuffer	: register(t0);
 RWStructuredBuffer<uint> OutPrefixSums	: register(u0);
 RWStructuredBuffer<uint> OutGroupSums	: register(u1);
-uint NumTriangles;
+uint NumElements;
 
 groupshared uint SharedData[THREAD_GROUP_SIZE];
 
 [numthreads(THREAD_GROUP_SIZE, 1, 1)]
-void Main(uint3 DispatchThreadID : SV_DispatchThreadID, uint3 GroupThreadID : SV_GroupThreadID, uint3 GroupID : SV_GroupID)
+void Main(uint3 GlobalThreadID : SV_DispatchThreadID, uint3 GroupThreadID : SV_GroupThreadID, uint3 GroupID : SV_GroupID)
 {
-	const uint StartIdx = GroupID.x * THREAD_GROUP_SIZE;
-	const uint GlobalIdx = StartIdx + GroupThreadID.x;
+	const uint GlobalIdx = GlobalThreadID.x;
 	const bool bLastThreadInGroup = GroupThreadID.x == (THREAD_GROUP_SIZE - 1);
 
 	// Load data into shared memory for this group's range
-	SharedData[GroupThreadID.x] = (GlobalIdx < NumTriangles) ? InputBuffer[GlobalIdx] : 0;
+	if(GlobalIdx == 0)
+	{
+		// First element is always 0.
+		SharedData[GroupThreadID.x] = 0;
+	}
+	else
+	{
+		// Every global element on [i-1] gets cached to shared [i]. This will cutoff the last element
+		SharedData[GroupThreadID.x] = (GlobalIdx < NumElements) ? InputBuffer[GlobalIdx-1] : 0;
+	}
 	GroupMemoryBarrierWithGroupSync();
 
-	// Perform local prefix sum in shared memory
+	// Calculate prefix-sum on shared-memory
 	for (uint Offset = 1; Offset < THREAD_GROUP_SIZE; Offset *= 2)
 	{
 		const uint Temp = (GroupThreadID.x >= Offset) ? SharedData[GroupThreadID.x - Offset] : 0;
@@ -28,8 +36,8 @@ void Main(uint3 DispatchThreadID : SV_DispatchThreadID, uint3 GroupThreadID : SV
 		GroupMemoryBarrierWithGroupSync();
 	}
 
-	// Write results to global buffers
-	if (GlobalIdx < NumTriangles)
+	// Write back
+	if (GlobalIdx < NumElements)
 	{
 		OutPrefixSums[GlobalIdx] = SharedData[GroupThreadID.x];
 	}
