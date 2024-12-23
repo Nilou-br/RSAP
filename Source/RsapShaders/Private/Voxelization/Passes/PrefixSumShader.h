@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+
 #include "CoreMinimal.h"
 #include "RHICommandList.h"
 #include "RenderGraphBuilder.h"
@@ -111,8 +113,9 @@ IMPLEMENT_GLOBAL_SHADER(FApplyGroupSumsShader, "/RsapShadersShaders/Voxelization
 
 struct FPrefixSumDebugResult
 {
-	TArray<FRDGBufferRef> PrefixSums;
-	TArray<FRDGBufferRef> GroupSums;
+	std::array<FRDGBufferRef, 3> PrefixSums;
+	std::array<FRDGBufferRef, 3> GroupSums;
+	std::array<FRDGBufferRef, 3> AppliedSums;
 };
 
 struct FPrefixSumShaderInterface
@@ -200,10 +203,15 @@ private:
 		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(NumElements, NUM_THREAD_GROUP_SIZE);
 		TShaderMapRef<FApplyGroupSumsShader> Shader(GetGlobalShaderMap(GMaxRHIFeatureLevel), FApplyGroupSumsShader::FPermutationDomain());
 
+		const FRDGBufferRef AppliedSums = GraphBuilder.CreateBuffer(
+			FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), NumElements),
+			*FString::Printf(TEXT("Rsap.Applied-Sums-Buffer"))
+		);
+
 		FApplyGroupSumsShader::FParameters* Parameters = GraphBuilder.AllocParameters<FApplyGroupSumsShader::FParameters>();
 		Parameters->InitialPrefixSums = GraphBuilder.CreateSRV(InitialPrefixSums,	PF_R32_UINT);
 		Parameters->GroupPrefixSums   = GraphBuilder.CreateSRV(GroupPrefixSum,		PF_R32_UINT);
-		Parameters->OutPrefixSums     = GraphBuilder.CreateUAV(InitialPrefixSums,	PF_R32_UINT);
+		Parameters->OutPrefixSums     = GraphBuilder.CreateUAV(AppliedSums,	PF_R32_UINT);
 		Parameters->NumElements		  = NumElements;
 
 		GraphBuilder.AddPass(
@@ -216,7 +224,7 @@ private:
 			}
 		);
 
-		return InitialPrefixSums;
+		return AppliedSums;
 	}
 
 	static FRDGBufferRef PerformRecursivePass(FRDGBuilder& GraphBuilder, const FRDGBufferRef InputBuffer, const uint32 NumElements, FPrefixSumDebugResult& DebugResult, const uint32 IterationIdx = 0)
@@ -224,21 +232,21 @@ private:
 		if(NumElements <= NUM_THREAD_GROUP_SIZE)
 		{
 			// The input fits in a single thread group, so a single pass would make it a complete prefix sum.
-			DebugResult.PrefixSums.EmplaceAt(IterationIdx, AddSinglePrefixSumPass(GraphBuilder, InputBuffer, NumElements, IterationIdx));
+			DebugResult.PrefixSums[IterationIdx] = AddSinglePrefixSumPass(GraphBuilder, InputBuffer, NumElements, IterationIdx);
 			return DebugResult.PrefixSums[IterationIdx];
 		}
 
 		// We require more than one thread group, so add a grouped-prefix-sum pass where which also returns a group-sums buffer.
 		const auto [PrefixSums, GroupSums, GroupCount] = AddGroupedPrefixSumPass(GraphBuilder, InputBuffer, NumElements, IterationIdx);
 
-		DebugResult.PrefixSums.EmplaceAt(IterationIdx, PrefixSums);
-		DebugResult.GroupSums.EmplaceAt(IterationIdx, GroupSums);
+		DebugResult.PrefixSums[IterationIdx] = PrefixSums;
+		DebugResult.GroupSums[IterationIdx] = GroupSums;
 
 		// Recursively create another prefix-sum for the group-sums.
 		const FRDGBufferRef GroupPrefixSums = PerformRecursivePass(GraphBuilder, GroupSums, GroupCount, DebugResult, IterationIdx+1);
 
-		return PrefixSums;
 		// Apply the group-sums to each element in the corresponding group in the initial prefix-sums.
-		//return ApplyGroupSumsPass(GraphBuilder, PrefixSums, NumElements, GroupPrefixSums, IterationIdx);
+		DebugResult.AppliedSums[IterationIdx] = ApplyGroupSumsPass(GraphBuilder, PrefixSums, NumElements, GroupPrefixSums, IterationIdx);
+		return DebugResult.AppliedSums[IterationIdx];
 	}
 };
