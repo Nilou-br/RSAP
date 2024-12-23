@@ -128,7 +128,7 @@ struct FPrefixSumShaderInterface
 private:
 	static FRDGBufferRef AddSinglePrefixSumPass(FRDGBuilder& GraphBuilder, const FRDGBufferRef InputBuffer, const uint32 NumElements, const uint32 IterationIdx)
 	{
-		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(NumElements, NUM_THREAD_GROUP_SIZE);
+		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(NumElements, NUM_THREAD_GROUP_SIZE * NUM_TASKS_PER_THREAD);
 		TShaderMapRef<FSinglePrefixSumShader> Shader(GetGlobalShaderMap(GMaxRHIFeatureLevel), FSinglePrefixSumShader::FPermutationDomain());
 		const FRDGBufferSRVRef InputBufferSRV = GraphBuilder.CreateSRV(InputBuffer, PF_R32_UINT);
 
@@ -165,7 +165,7 @@ private:
 	static FIntermediateResult AddGroupedPrefixSumPass(FRDGBuilder& GraphBuilder, const FRDGBufferRef InputBuffer, const uint32 NumElements, const uint32 IterationIdx)
 	{
 		FIntermediateResult Result;
-		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(NumElements, NUM_THREAD_GROUP_SIZE);
+		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(NumElements, NUM_THREAD_GROUP_SIZE * NUM_TASKS_PER_THREAD);
 		Result.GroupCount = GroupCount.X;
 		TShaderMapRef<FGroupedPrefixSumShader> Shader(GetGlobalShaderMap(GMaxRHIFeatureLevel), FGroupedPrefixSumShader::FPermutationDomain());
 		const FRDGBufferSRVRef InputBufferSRV = GraphBuilder.CreateSRV(InputBuffer, PF_R32_UINT);
@@ -200,7 +200,7 @@ private:
 	
 	static FRDGBufferRef ApplyGroupSumsPass(FRDGBuilder& GraphBuilder, const FRDGBufferRef& InitialPrefixSums, const uint32 NumElements, const FRDGBufferRef& GroupPrefixSum, const uint32 IterationIdx)
 	{
-		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(NumElements, NUM_THREAD_GROUP_SIZE);
+		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(NumElements, NUM_THREAD_GROUP_SIZE * NUM_TASKS_PER_THREAD);
 		TShaderMapRef<FApplyGroupSumsShader> Shader(GetGlobalShaderMap(GMaxRHIFeatureLevel), FApplyGroupSumsShader::FPermutationDomain());
 
 		const FRDGBufferRef AppliedSums = GraphBuilder.CreateBuffer(
@@ -211,7 +211,7 @@ private:
 		FApplyGroupSumsShader::FParameters* Parameters = GraphBuilder.AllocParameters<FApplyGroupSumsShader::FParameters>();
 		Parameters->InitialPrefixSums = GraphBuilder.CreateSRV(InitialPrefixSums,	PF_R32_UINT);
 		Parameters->GroupPrefixSums   = GraphBuilder.CreateSRV(GroupPrefixSum,		PF_R32_UINT);
-		Parameters->OutPrefixSums     = GraphBuilder.CreateUAV(AppliedSums,	PF_R32_UINT);
+		Parameters->OutPrefixSums     = GraphBuilder.CreateUAV(AppliedSums,			PF_R32_UINT);
 		Parameters->NumElements		  = NumElements;
 
 		GraphBuilder.AddPass(
