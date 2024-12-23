@@ -13,30 +13,35 @@ void Main(uint3 GlobalThreadID : SV_DispatchThreadID, uint3 GroupThreadID : SV_G
 	const uint GlobalIdx = GlobalThreadID.x;
 	const bool bLastThreadInGroup = GroupThreadID.x == (THREAD_GROUP_SIZE - 1);
 
-	// Load data into shared memory for this group's range
-	if(GlobalIdx == 0)
+	// Initialize shared memory
+	if (GlobalIdx < NumElements)
 	{
-		// First element is always 0.
-		SharedData[GroupThreadID.x] = 0;
+		// Load valid elements into shared memory
+		SharedData[GroupThreadID.x] = (GlobalIdx > 0) ? InputBuffer[GlobalIdx - 1] : 0;
 	}
 	else
 	{
-		// Every global element on [i-1] gets cached to shared [i]. This will cutoff the last element
-		SharedData[GroupThreadID.x] = (GlobalIdx < NumElements) ? InputBuffer[GlobalIdx-1] : 0;
+		// Zero out unused threads
+		SharedData[GroupThreadID.x] = 0;
 	}
 	GroupMemoryBarrierWithGroupSync();
 
-	// Calculate prefix-sum on shared-memory
+	// Compute prefix sum within shared memory
 	for (uint Offset = 1; Offset < THREAD_GROUP_SIZE; Offset *= 2)
 	{
-		const uint Temp = (GroupThreadID.x >= Offset) ? SharedData[GroupThreadID.x - Offset] : 0;
+		uint Temp = 0;
+		if (GroupThreadID.x >= Offset)
+		{
+			Temp = SharedData[GroupThreadID.x - Offset];
+		}
 		GroupMemoryBarrierWithGroupSync();
 
+		// Update shared memory for current thread
 		SharedData[GroupThreadID.x] += Temp;
 		GroupMemoryBarrierWithGroupSync();
 	}
 
-	// Write back
+	// Write back the results to the output buffer
 	if (GlobalIdx < NumElements)
 	{
 		OutPrefixSums[GlobalIdx] = SharedData[GroupThreadID.x];

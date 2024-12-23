@@ -21,7 +21,7 @@
 #include "RenderGraphResources.h"
 
 #define NUM_TASKS_PER_THREAD 1
-#define NUM_THREAD_GROUP_SIZE 4
+#define NUM_THREAD_GROUP_SIZE 8
 
 
 
@@ -232,13 +232,13 @@ private:
 		if(NumElements <= NUM_THREAD_GROUP_SIZE)
 		{
 			// The input fits in a single thread group, so a single pass would make it a complete prefix sum.
-			DebugResult.PrefixSums[IterationIdx] = AddSinglePrefixSumPass(GraphBuilder, InputBuffer, NumElements, IterationIdx);
-			return DebugResult.PrefixSums[IterationIdx];
+			const auto Result = AddSinglePrefixSumPass(GraphBuilder, InputBuffer, NumElements, IterationIdx);
+			DebugResult.PrefixSums[IterationIdx] = Result;
+			return Result;
 		}
 
 		// We require more than one thread group, so add a grouped-prefix-sum pass where which also returns a group-sums buffer.
 		const auto [PrefixSums, GroupSums, GroupCount] = AddGroupedPrefixSumPass(GraphBuilder, InputBuffer, NumElements, IterationIdx);
-
 		DebugResult.PrefixSums[IterationIdx] = PrefixSums;
 		DebugResult.GroupSums[IterationIdx] = GroupSums;
 
@@ -246,7 +246,6 @@ private:
 		const FRDGBufferRef GroupPrefixSums = PerformRecursivePass(GraphBuilder, GroupSums, GroupCount, DebugResult, IterationIdx+1);
 
 		// Apply the group-sums to each element in the corresponding group in the initial prefix-sums.
-		DebugResult.AppliedSums[IterationIdx] = ApplyGroupSumsPass(GraphBuilder, PrefixSums, NumElements, GroupPrefixSums, IterationIdx);
-		return DebugResult.AppliedSums[IterationIdx];
+		return ApplyGroupSumsPass(GraphBuilder, PrefixSums, NumElements, GroupPrefixSums, IterationIdx);
 	}
 };

@@ -119,24 +119,27 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 		AddEnqueueCopyPass(GraphBuilder, ProjectionResultReadback, ProjectionResult.CountsBuffer, NumTriangles * sizeof(uint32));
 		ProjectionResults.Add(ProjectionResultReadback);
 
+		std::array<uint32, 3> Divider = {1, 8, 64};
+		std::array<uint32, 3> Divider2 = {8, 64, 1};
 		FPrefixSumDebugResult DebugResult;
 		const FRDGBufferRef PrefixSumResultBuffer = FPrefixSumShaderInterface::AddPass(GraphBuilder, ProjectionResult.CountsBuffer, NumTriangles, DebugResult);
-		for (int i = 0; i < 3; ++i)
+		for (int i = 0; i < 2; ++i)
 		{
-			const uint32 Shift = i*2;
-			const uint32 AppliedShift = 16 >> Shift;
-			FRHIGPUBufferReadback* PrefixSumResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
-			AddEnqueueCopyPass(GraphBuilder, PrefixSumResultReadback, DebugResult.PrefixSums[i], NumTriangles / (1 << Shift) * sizeof(uint32));
-			PrefixSumResults.Add(PrefixSumResultReadback);
-
-			if(i==2) continue;
-
-			FRHIGPUBufferReadback* AppliedSumResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
-			AddEnqueueCopyPass(GraphBuilder, AppliedSumResultReadback, DebugResult.AppliedSums[i], NumTriangles / (1 << Shift) * sizeof(uint32));
-			AppliedSumResults.Add(AppliedSumResultReadback);
+			const uint32 GroupSize = FMath::DivideAndRoundUp(NumTriangles, Divider[i]);
 			
+			FRHIGPUBufferReadback* PrefixSumResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
+			AddEnqueueCopyPass(GraphBuilder, PrefixSumResultReadback, DebugResult.PrefixSums[i], GroupSize * sizeof(uint32));
+			PrefixSumResults.Add(PrefixSumResultReadback);
+		
+			if(i==1) continue;
+			//
+			// FRHIGPUBufferReadback* AppliedSumResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
+			// AddEnqueueCopyPass(GraphBuilder, AppliedSumResultReadback, DebugResult.AppliedSums[i], NumTriangles / (1 << Shift) * sizeof(uint32));
+			// AppliedSumResults.Add(AppliedSumResultReadback);
+			//
+			const uint32 GroupSize2 = FMath::DivideAndRoundUp(NumTriangles, Divider2[i]);
 			FRHIGPUBufferReadback* GroupSumResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
-			AddEnqueueCopyPass(GraphBuilder, GroupSumResultReadback, DebugResult.GroupSums[i], NumTriangles / (4 << Shift) * sizeof(uint32));
+			AddEnqueueCopyPass(GraphBuilder, GroupSumResultReadback, DebugResult.GroupSums[i], GroupSize2 * sizeof(uint32));
 			GroupSumResults.Add(GroupSumResultReadback);
 		}
 
@@ -167,39 +170,39 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 		delete Readback;
 	}
 
-	// uint32 PrefixSumIteration = 0;
-	// for (FRHIGPUBufferReadback* Readback : PrefixSumResults)
-	// {
-	// 	void* PrefixSumResultsData = Readback->Lock(0);
-	// 	const uint32 NumElements = Readback->GetGPUSizeBytes() / sizeof(uint32);
-	// 	uint32* Buffer = static_cast<uint32*>(PrefixSumResultsData);
-	//
-	// 	UE_LOG(LogTemp, Log, TEXT("Prefix-sum-iteration: %i"), PrefixSumIteration)
-	// 	for (uint32 i = 0; i < NumElements; ++i)
-	// 	{
-	// 		UE_LOG(LogTemp, Log, TEXT("Index: %i, Prefix-sum: %i"), i, Buffer[i])
-	// 	}
-	//
-	// 	Readback->Unlock();
-	// 	delete Readback;
-	//
-	// 	++PrefixSumIteration;
-	// }
+	uint32 PrefixSumIteration = 0;
+	for (FRHIGPUBufferReadback* Readback : PrefixSumResults)
+	{
+		void* PrefixSumResultsData = Readback->Lock(0);
+		const uint32 NumElements = Readback->GetGPUSizeBytes() / sizeof(uint32);
+		uint32* Buffer = static_cast<uint32*>(PrefixSumResultsData);
+	
+		UE_LOG(LogTemp, Log, TEXT("Prefix-sum-iteration: %i"), PrefixSumIteration)
+		for (uint32 i = 0; i < NumElements; ++i)
+		{
+			UE_LOG(LogTemp, Log, TEXT("Index: %i, Prefix-sum: %i"), i, Buffer[i])
+		}
+	
+		Readback->Unlock();
+		delete Readback;
+	
+		++PrefixSumIteration;
+	}
 
-	// for (FRHIGPUBufferReadback* Readback : GroupSumResults)
-	// {
-	// 	void* PrefixSumResultsData = Readback->Lock(0);
-	// 	const uint32 NumElements = Readback->GetGPUSizeBytes() / sizeof(uint32);
-	// 	uint32* Buffer = static_cast<uint32*>(PrefixSumResultsData);
-	//
-	// 	for (uint32 i = 0; i < NumElements; ++i)
-	// 	{
-	// 		UE_LOG(LogTemp, Log, TEXT("Index: %i, Group-sum: %i"), i, Buffer[i])
-	// 	}
-	//
-	// 	Readback->Unlock();
-	// 	delete Readback;
-	// }
+	for (FRHIGPUBufferReadback* Readback : GroupSumResults)
+	{
+		void* PrefixSumResultsData = Readback->Lock(0);
+		const uint32 NumElements = Readback->GetGPUSizeBytes() / sizeof(uint32);
+		uint32* Buffer = static_cast<uint32*>(PrefixSumResultsData);
+	
+		for (uint32 i = 0; i < NumElements; ++i)
+		{
+			UE_LOG(LogTemp, Log, TEXT("Index: %i, Group-sum: %i"), i, Buffer[i])
+		}
+	
+		Readback->Unlock();
+		delete Readback;
+	}
 
 	// for (FRHIGPUBufferReadback* Readback : AppliedSumResults)
 	// {
@@ -221,7 +224,7 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 		void* PrefixSumResultsData = Readback->Lock(0);
 		const uint32 NumElements = Readback->GetGPUSizeBytes() / sizeof(uint32);
 		uint32* Buffer = static_cast<uint32*>(PrefixSumResultsData);
-
+	
 		for (uint32 i = 0; i < NumElements; ++i)
 		{
 			UE_LOG(LogTemp, Log, TEXT("Index: %i, Complete-prefix-sum: %i"), i, Buffer[i])

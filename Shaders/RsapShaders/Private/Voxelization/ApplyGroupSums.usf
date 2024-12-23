@@ -1,8 +1,8 @@
 #include "/Engine/Public/Platform.ush"
 
-StructuredBuffer<uint> InitialPrefixSums	: register(t0);
-StructuredBuffer<uint> GroupPrefixSums		: register(t1);
-RWStructuredBuffer<uint> OutPrefixSums		: register(u0);
+StructuredBuffer<uint> InitialPrefixSums : register(t0);
+StructuredBuffer<uint> GroupPrefixSums   : register(t1);
+RWStructuredBuffer<uint> OutPrefixSums   : register(u0);
 uint NumElements;
 
 [numthreads(THREAD_GROUP_SIZE, 1, 1)]
@@ -10,9 +10,17 @@ void Main(uint3 GlobalThreadID : SV_DispatchThreadID, uint3 GroupThreadID : SV_G
 {
 	uint Idx = GlobalThreadID.x; // Global index for this thread
 
-	// Determine which group this element belongs to
-	uint GroupIndex = Idx / THREAD_GROUP_SIZE;
+	if (Idx < NumElements) // Ensure thread only processes valid data
+		{
+		// Determine which group this element belongs to
+		uint GroupIndex = Idx / THREAD_GROUP_SIZE;
 
-	// Add the corresponding group sum to this element
-	OutPrefixSums[Idx] = InitialPrefixSums[Idx] + GroupPrefixSums[GroupIndex];
+		// Add the corresponding group sum to this element
+		OutPrefixSums[Idx] = InitialPrefixSums[Idx] + GroupPrefixSums[GroupIndex];
+		}
+	else
+	{
+		// Optional: Zero-out or provide default value for unused threads
+		OutPrefixSums[Idx] = 0;
+	}
 }
