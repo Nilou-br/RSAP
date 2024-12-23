@@ -119,29 +119,29 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 		AddEnqueueCopyPass(GraphBuilder, ProjectionResultReadback, ProjectionResult.CountsBuffer, NumTriangles * sizeof(uint32));
 		ProjectionResults.Add(ProjectionResultReadback);
 
-		std::array<uint32, 3> Divider = {1, 8, 64};
-		std::array<uint32, 3> Divider2 = {8, 64, 1};
+		std::array<uint32, 3> Divider = {1, 32, 1024};
+		std::array<uint32, 3> Divider2 = {32, 1024, 1};
 		FPrefixSumDebugResult DebugResult;
 		const FRDGBufferRef PrefixSumResultBuffer = FPrefixSumShaderInterface::AddPass(GraphBuilder, ProjectionResult.CountsBuffer, NumTriangles, DebugResult);
-		for (int i = 0; i < 2; ++i)
-		{
-			const uint32 GroupSize = FMath::DivideAndRoundUp(NumTriangles, Divider[i]);
-			
-			FRHIGPUBufferReadback* PrefixSumResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
-			AddEnqueueCopyPass(GraphBuilder, PrefixSumResultReadback, DebugResult.PrefixSums[i], GroupSize * sizeof(uint32));
-			PrefixSumResults.Add(PrefixSumResultReadback);
-		
-			if(i==1) continue;
-			//
-			// FRHIGPUBufferReadback* AppliedSumResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
-			// AddEnqueueCopyPass(GraphBuilder, AppliedSumResultReadback, DebugResult.AppliedSums[i], NumTriangles / (1 << Shift) * sizeof(uint32));
-			// AppliedSumResults.Add(AppliedSumResultReadback);
-			//
-			const uint32 GroupSize2 = FMath::DivideAndRoundUp(NumTriangles, Divider2[i]);
-			FRHIGPUBufferReadback* GroupSumResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
-			AddEnqueueCopyPass(GraphBuilder, GroupSumResultReadback, DebugResult.GroupSums[i], GroupSize2 * sizeof(uint32));
-			GroupSumResults.Add(GroupSumResultReadback);
-		}
+		// for (int i = 0; i < 2; ++i)
+		// {
+		// 	const uint32 GroupSize = FMath::DivideAndRoundUp(NumTriangles, Divider[i]);
+		// 	
+		// 	FRHIGPUBufferReadback* PrefixSumResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
+		// 	AddEnqueueCopyPass(GraphBuilder, PrefixSumResultReadback, DebugResult.PrefixSums[i], GroupSize * sizeof(uint32));
+		// 	PrefixSumResults.Add(PrefixSumResultReadback);
+		//
+		// 	if(i==1) continue;
+		// 	//
+		// 	// FRHIGPUBufferReadback* AppliedSumResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
+		// 	// AddEnqueueCopyPass(GraphBuilder, AppliedSumResultReadback, DebugResult.AppliedSums[i], NumTriangles / (1 << Shift) * sizeof(uint32));
+		// 	// AppliedSumResults.Add(AppliedSumResultReadback);
+		// 	//
+		// 	const uint32 GroupSize2 = FMath::DivideAndRoundUp(NumTriangles, Divider2[i]);
+		// 	FRHIGPUBufferReadback* GroupSumResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
+		// 	AddEnqueueCopyPass(GraphBuilder, GroupSumResultReadback, DebugResult.GroupSums[i], GroupSize2 * sizeof(uint32));
+		// 	GroupSumResults.Add(GroupSumResultReadback);
+		// }
 
 		FRHIGPUBufferReadback* CompleteResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
 		AddEnqueueCopyPass(GraphBuilder, CompleteResultReadback, PrefixSumResultBuffer, NumTriangles * sizeof(uint32));

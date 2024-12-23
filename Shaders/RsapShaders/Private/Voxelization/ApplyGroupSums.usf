@@ -8,19 +8,17 @@ uint NumElements;
 [numthreads(THREAD_GROUP_SIZE, 1, 1)]
 void Main(uint3 GlobalThreadID : SV_DispatchThreadID, uint3 GroupThreadID : SV_GroupThreadID, uint3 GroupID : SV_GroupID)
 {
-	uint Idx = GlobalThreadID.x; // Global index for this thread
+    uint Idx = GlobalThreadID.x; // Global index for this thread
+    uint GroupIndex = Idx / THREAD_GROUP_SIZE; // Calculate the group this thread belongs to
 
-	if (Idx < NumElements) // Ensure thread only processes valid data
-		{
-		// Determine which group this element belongs to
-		uint GroupIndex = Idx / THREAD_GROUP_SIZE;
-
-		// Add the corresponding group sum to this element
-		OutPrefixSums[Idx] = InitialPrefixSums[Idx] + GroupPrefixSums[GroupIndex];
-		}
-	else
-	{
-		// Optional: Zero-out or provide default value for unused threads
-		OutPrefixSums[Idx] = 0;
-	}
+    if (Idx < NumElements)
+    {
+        // Add the corresponding group sum to this element
+        OutPrefixSums[Idx] = InitialPrefixSums[Idx] + GroupPrefixSums[GroupIndex];
+    }
+    else
+    {
+        // Zero out unused threads
+        OutPrefixSums[Idx] = 0;
+    }
 }
