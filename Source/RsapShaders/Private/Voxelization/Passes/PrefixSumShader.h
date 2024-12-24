@@ -20,7 +20,7 @@
 #include "RenderResource.h"
 #include "RenderGraphResources.h"
 
-#define NUM_TASKS_PER_THREAD 1
+#define NUM_TASKS_PER_THREAD 8
 #define NUM_THREAD_GROUP_SIZE 128
 
 

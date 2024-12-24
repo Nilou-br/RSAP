@@ -10,17 +10,21 @@ groupshared uint SharedData[THREAD_GROUP_SIZE];
 [numthreads(THREAD_GROUP_SIZE, 1, 1)]
 void Main(uint3 GlobalThreadID : SV_DispatchThreadID, uint3 GroupThreadID : SV_GroupThreadID, uint3 GroupID : SV_GroupID)
 {
-	const uint GlobalIdx = GlobalThreadID.x;
-	const bool bLastThreadInGroup = GroupThreadID.x == (THREAD_GROUP_SIZE - 1);
+	const uint GlobalThreadIdx = GlobalThreadID.x;
+	const uint GroupThreadIdx = GroupThreadID.x;
+	const uint GroupIdx = GroupID.x;
+	const bool bLastThreadInGroup = GroupThreadIdx == (THREAD_GROUP_SIZE - 1);
+
+	//const uint ScopedThreadIdx = GlobalThreadIdx * TASKS_PER_THREAD;
 
 	// Initialize shared memory
-	if (GlobalIdx < NumElements)
+	if (GlobalThreadIdx < NumElements)
 	{
-		SharedData[GroupThreadID.x] = (GlobalIdx > 0) ? InputBuffer[GlobalIdx - 1] : 0;
+		SharedData[GroupThreadIdx] = (GlobalThreadIdx > 0) ? InputBuffer[GlobalThreadIdx - 1] : 0;
 	}
 	else
 	{
-		SharedData[GroupThreadID.x] = 0; // Zero out unused threads
+		SharedData[GroupThreadIdx] = 0; // Zero out unused threads
 	}
 	GroupMemoryBarrierWithGroupSync();
 
@@ -28,32 +32,32 @@ void Main(uint3 GlobalThreadID : SV_DispatchThreadID, uint3 GroupThreadID : SV_G
 	for (uint Offset = 1; Offset < THREAD_GROUP_SIZE; Offset *= 2)
 	{
 		uint Temp = 0;
-		if (GroupThreadID.x >= Offset && GroupThreadID.x < THREAD_GROUP_SIZE && GlobalIdx < NumElements)
+		if (GroupThreadIdx >= Offset && GroupThreadIdx < THREAD_GROUP_SIZE && GlobalThreadIdx < NumElements)
 		{
-			Temp = SharedData[GroupThreadID.x - Offset];
+			Temp = SharedData[GroupThreadIdx - Offset];
 		}
 		GroupMemoryBarrierWithGroupSync();
 
-		if (GlobalIdx < NumElements)
+		if (GlobalThreadIdx < NumElements)
 		{
-			SharedData[GroupThreadID.x] += Temp;
+			SharedData[GroupThreadIdx] += Temp;
 		}
 		GroupMemoryBarrierWithGroupSync();
 	}
 
 	// Write back the results to the output buffer
-	if (GlobalIdx < NumElements)
+	if (GlobalThreadIdx < NumElements)
 	{
-		OutPrefixSums[GlobalIdx] = SharedData[GroupThreadID.x];
+		OutPrefixSums[GlobalThreadIdx] = SharedData[GroupThreadIdx];
 	}
 	else
 	{
-		OutPrefixSums[GlobalIdx] = 0; // Zero out unused threads
+		OutPrefixSums[GlobalThreadIdx] = 0; // Zero out unused threads
 	}
 
 	// Store group sum
-	if (bLastThreadInGroup && GlobalIdx < NumElements)
+	if (bLastThreadInGroup && GlobalThreadIdx < NumElements)
 	{
-		OutGroupSums[GroupID.x] = SharedData[GroupThreadID.x];
+		OutGroupSums[GroupIdx] = SharedData[GroupThreadIdx];
 	}
 }
