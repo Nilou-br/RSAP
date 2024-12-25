@@ -8,17 +8,16 @@ uint NumElements;
 [numthreads(THREAD_GROUP_SIZE, 1, 1)]
 void Main(uint3 GlobalThreadID : SV_DispatchThreadID, uint3 GroupThreadID : SV_GroupThreadID, uint3 GroupID : SV_GroupID)
 {
-    uint Idx = GlobalThreadID.x; // Global index for this thread
-    uint GroupIndex = Idx / THREAD_GROUP_SIZE; // Calculate the group this thread belongs to
-
-    if (Idx < NumElements)
+    const uint GlobalThreadIdx = GlobalThreadID.x;
+    if (GlobalThreadIdx >= NumElements) return;
+    
+    const uint GroupIdx = GroupID.x;
+    const uint GlobalTaskOffset = GlobalThreadIdx * TASKS_PER_THREAD;
+    
+    for (uint TaskIdx = 0; TaskIdx < TASKS_PER_THREAD; ++TaskIdx)
     {
         // Add the corresponding group sum to this element
-        OutPrefixSums[Idx] = InitialPrefixSums[Idx] + GroupPrefixSums[GroupIndex];
-    }
-    else
-    {
-        // Zero out unused threads
-        OutPrefixSums[Idx] = 0;
+        const uint GlobalTaskIdx = GlobalTaskOffset + TaskIdx;
+        OutPrefixSums[GlobalTaskIdx] = InitialPrefixSums[GlobalTaskIdx] + GroupPrefixSums[GroupIdx];
     }
 }

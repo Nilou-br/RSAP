@@ -204,7 +204,7 @@ private:
 	
 	static FRDGBufferRef ApplyGroupSumsPass(FRDGBuilder& GraphBuilder, const FRDGBufferRef& InitialPrefixSums, const uint32 NumElements, const FRDGBufferRef& GroupPrefixSum, const uint32 IterationIdx)
 	{
-		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(NumElements, NUM_THREAD_GROUP_SIZE);
+		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(NumElements, NUM_GROUP_TOTAL_TASKS);
 		TShaderMapRef<FApplyGroupSumsShader> Shader(GetGlobalShaderMap(GMaxRHIFeatureLevel), FApplyGroupSumsShader::FPermutationDomain());
 
 		const FRDGBufferRef AppliedSums = GraphBuilder.CreateBuffer(
