@@ -5,7 +5,7 @@ RWStructuredBuffer<uint> OutPrefixSums	: register(u0);
 RWStructuredBuffer<uint> OutGroupSums	: register(u1);
 uint NumElements;
 
-groupshared uint SharedData[THREAD_GROUP_SIZE];
+groupshared uint SharedData[GROUP_TOTAL_TASKS];
 
 [numthreads(THREAD_GROUP_SIZE, 1, 1)]
 void Main(uint3 GlobalThreadID : SV_DispatchThreadID, uint3 GroupThreadID : SV_GroupThreadID, uint3 GroupID : SV_GroupID)
@@ -15,49 +15,78 @@ void Main(uint3 GlobalThreadID : SV_DispatchThreadID, uint3 GroupThreadID : SV_G
 	const uint GroupIdx = GroupID.x;
 	const bool bLastThreadInGroup = GroupThreadIdx == (THREAD_GROUP_SIZE - 1);
 
-	//const uint ScopedThreadIdx = GlobalThreadIdx * TASKS_PER_THREAD;
+	// Each thread has a number of tasks to handle. So these mark the offset for the thread to access the buffers.
+	const uint GlobalTaskOffset = GlobalThreadIdx * TASKS_PER_THREAD;
+	const uint GroupTaskOffset = GroupThreadIdx * TASKS_PER_THREAD;
 
 	// Initialize shared memory
-	if (GlobalThreadIdx < NumElements)
+	for (uint TaskIdx = 0; TaskIdx < TASKS_PER_THREAD; ++TaskIdx)
 	{
-		SharedData[GroupThreadIdx] = (GlobalThreadIdx > 0) ? InputBuffer[GlobalThreadIdx - 1] : 0;
-	}
-	else
-	{
-		SharedData[GroupThreadIdx] = 0; // Zero out unused threads
+		const uint GlobalTaskIdx = GlobalTaskOffset + TaskIdx;
+		const uint GroupTaskIdx  = GroupTaskOffset  + TaskIdx;
+		
+		if (GlobalTaskIdx < NumElements)
+		{
+			SharedData[GroupTaskIdx] = GlobalTaskIdx > 0 ? InputBuffer[GlobalTaskIdx - 1] : 0;
+			continue;
+		}
+		
+		// Unused thread
+		SharedData[GroupTaskIdx] = 0;
 	}
 	GroupMemoryBarrierWithGroupSync();
-
-	// Compute prefix sum within shared memory
-	for (uint Offset = 1; Offset < THREAD_GROUP_SIZE; Offset *= 2)
+	
+	// Prefix sum calculation in shared memory
+	uint Temps[8];
+	for (uint Offset = 1; Offset < GROUP_TOTAL_TASKS; Offset *= 2)
 	{
-		uint Temp = 0;
-		if (GroupThreadIdx >= Offset && GroupThreadIdx < THREAD_GROUP_SIZE && GlobalThreadIdx < NumElements)
+		for (uint TaskIdx = 0; TaskIdx < TASKS_PER_THREAD; ++TaskIdx)
 		{
-			Temp = SharedData[GroupThreadIdx - Offset];
+			const uint GlobalTaskIdx = GlobalTaskOffset + TaskIdx;
+			const uint GroupTaskIdx  = GroupTaskOffset  + TaskIdx;
+			
+			if (GroupTaskIdx >= Offset && GroupTaskIdx < GROUP_TOTAL_TASKS && GlobalTaskIdx < NumElements)
+			{
+				Temps[TaskIdx] = SharedData[GroupTaskIdx - Offset];
+				continue;
+			}
+			Temps[TaskIdx] = 0;
 		}
 		GroupMemoryBarrierWithGroupSync();
 
-		if (GlobalThreadIdx < NumElements)
+		for (uint TaskIdx = 0; TaskIdx < TASKS_PER_THREAD; ++TaskIdx)
 		{
-			SharedData[GroupThreadIdx] += Temp;
+			const uint GlobalTaskIdx = GlobalTaskOffset + TaskIdx;
+			const uint GroupTaskIdx  = GroupTaskOffset  + TaskIdx;
+			
+			if (GlobalTaskIdx < NumElements)
+			{
+				SharedData[GroupTaskIdx] += Temps[TaskIdx];
+			}
 		}
 		GroupMemoryBarrierWithGroupSync();
 	}
-
-	// Write back the results to the output buffer
-	if (GlobalThreadIdx < NumElements)
+	
+	// Write back from shared to global output
+	for (uint TaskIdx = 0; TaskIdx < TASKS_PER_THREAD; ++TaskIdx)
 	{
-		OutPrefixSums[GlobalThreadIdx] = SharedData[GroupThreadIdx];
+		const uint GlobalTaskIdx = GlobalTaskOffset + TaskIdx;
+		const uint GroupTaskIdx  = GroupTaskOffset  + TaskIdx;
+		
+		// Write back the results to the output buffer
+		if (GlobalTaskIdx < NumElements)
+		{
+			OutPrefixSums[GlobalTaskIdx] = SharedData[GroupTaskIdx];
+		}
+		else
+		{
+			OutPrefixSums[GlobalTaskIdx] = 0; // Zero out unused threads
+		}
 	}
-	else
-	{
-		OutPrefixSums[GlobalThreadIdx] = 0; // Zero out unused threads
-	}
 
-	// Store group sum
-	if (bLastThreadInGroup && GlobalThreadIdx < NumElements)
+	// Store group sum.
+	if(bLastThreadInGroup && (GlobalThreadIdx + TASKS_PER_THREAD - 1) < NumElements)
 	{
-		OutGroupSums[GroupIdx] = SharedData[GroupThreadIdx];
+		OutGroupSums[GroupIdx] = SharedData[GroupTaskOffset + TASKS_PER_THREAD - 1];
 	}
 }

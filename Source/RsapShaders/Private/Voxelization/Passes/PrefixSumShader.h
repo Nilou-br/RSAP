@@ -22,6 +22,7 @@
 
 #define NUM_TASKS_PER_THREAD 8
 #define NUM_THREAD_GROUP_SIZE 128
+#define NUM_GROUP_TOTAL_TASKS NUM_TASKS_PER_THREAD * NUM_THREAD_GROUP_SIZE
 
 
 
@@ -46,8 +47,9 @@ public:
 	{
 		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
 
-		OutEnvironment.SetDefine(TEXT("TASKS_PER_THREAD"), NUM_TASKS_PER_THREAD);
-		OutEnvironment.SetDefine(TEXT("THREAD_GROUP_SIZE"), NUM_THREAD_GROUP_SIZE);
+		OutEnvironment.SetDefine(TEXT("TASKS_PER_THREAD"),	NUM_TASKS_PER_THREAD);
+		OutEnvironment.SetDefine(TEXT("THREAD_GROUP_SIZE"),NUM_THREAD_GROUP_SIZE);
+		OutEnvironment.SetDefine(TEXT("GROUP_TOTAL_TASKS"),NUM_GROUP_TOTAL_TASKS);
 	}
 };
 IMPLEMENT_GLOBAL_SHADER(FSinglePrefixSumShader, "/RsapShadersShaders/Voxelization/SinglePrefixSum.usf", "Main", SF_Compute);
@@ -76,7 +78,8 @@ public:
 		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
 
 		OutEnvironment.SetDefine(TEXT("TASKS_PER_THREAD"), NUM_TASKS_PER_THREAD);
-		OutEnvironment.SetDefine(TEXT("THREAD_GROUP_SIZE"), NUM_THREAD_GROUP_SIZE);
+		OutEnvironment.SetDefine(TEXT("THREAD_GROUP_SIZE"),NUM_THREAD_GROUP_SIZE);
+		OutEnvironment.SetDefine(TEXT("GROUP_TOTAL_TASKS"),NUM_GROUP_TOTAL_TASKS);
 	}
 };
 IMPLEMENT_GLOBAL_SHADER(FGroupedPrefixSumShader, "/RsapShadersShaders/Voxelization/GroupedPrefixSum.usf", "Main", SF_Compute);
@@ -105,7 +108,8 @@ public:
 		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
 
 		OutEnvironment.SetDefine(TEXT("TASKS_PER_THREAD"), NUM_TASKS_PER_THREAD);
-		OutEnvironment.SetDefine(TEXT("THREAD_GROUP_SIZE"), NUM_THREAD_GROUP_SIZE);
+		OutEnvironment.SetDefine(TEXT("THREAD_GROUP_SIZE"),NUM_THREAD_GROUP_SIZE);
+		OutEnvironment.SetDefine(TEXT("GROUP_TOTAL_TASKS"),NUM_GROUP_TOTAL_TASKS);
 	}
 };
 IMPLEMENT_GLOBAL_SHADER(FApplyGroupSumsShader, "/RsapShadersShaders/Voxelization/ApplyGroupSums.usf", "Main", SF_Compute);
@@ -128,7 +132,7 @@ struct FPrefixSumShaderInterface
 private:
 	static FRDGBufferRef AddSinglePrefixSumPass(FRDGBuilder& GraphBuilder, const FRDGBufferRef InputBuffer, const uint32 NumElements, const uint32 IterationIdx)
 	{
-		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(NumElements, NUM_THREAD_GROUP_SIZE);
+		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(NumElements, NUM_GROUP_TOTAL_TASKS);
 		TShaderMapRef<FSinglePrefixSumShader> Shader(GetGlobalShaderMap(GMaxRHIFeatureLevel), FSinglePrefixSumShader::FPermutationDomain());
 		const FRDGBufferSRVRef InputBufferSRV = GraphBuilder.CreateSRV(InputBuffer, PF_R32_UINT);
 
@@ -165,7 +169,7 @@ private:
 	static FIntermediateResult AddGroupedPrefixSumPass(FRDGBuilder& GraphBuilder, const FRDGBufferRef InputBuffer, const uint32 NumElements, const uint32 IterationIdx)
 	{
 		FIntermediateResult Result;
-		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(NumElements, NUM_THREAD_GROUP_SIZE);
+		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(NumElements, NUM_GROUP_TOTAL_TASKS);
 		Result.GroupCount = GroupCount.X;
 		TShaderMapRef<FGroupedPrefixSumShader> Shader(GetGlobalShaderMap(GMaxRHIFeatureLevel), FGroupedPrefixSumShader::FPermutationDomain());
 		const FRDGBufferSRVRef InputBufferSRV = GraphBuilder.CreateSRV(InputBuffer, PF_R32_UINT);
@@ -229,7 +233,7 @@ private:
 
 	static FRDGBufferRef PerformRecursivePass(FRDGBuilder& GraphBuilder, const FRDGBufferRef InputBuffer, const uint32 NumElements, FPrefixSumDebugResult& DebugResult, const uint32 IterationIdx = 0)
 	{
-		if(NumElements <= NUM_THREAD_GROUP_SIZE)
+		if(NumElements <= NUM_GROUP_TOTAL_TASKS)
 		{
 			// The input fits in a single thread group, so a single pass would make it a complete prefix sum.
 			const auto Result = AddSinglePrefixSumPass(GraphBuilder, InputBuffer, NumElements, IterationIdx);

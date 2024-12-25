@@ -119,8 +119,8 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 		AddEnqueueCopyPass(GraphBuilder, ProjectionResultReadback, ProjectionResult.CountsBuffer, NumTriangles * sizeof(uint32));
 		ProjectionResults.Add(ProjectionResultReadback);
 
-		std::array<uint32, 3> Divider = {1, 32, 1024};
-		std::array<uint32, 3> Divider2 = {32, 1024, 1};
+		std::array<uint32, 3> Divider = {1, 1024, 1024};
+		std::array<uint32, 3> Divider2 = {1024, 1024, 1};
 		FPrefixSumDebugResult DebugResult;
 		const FRDGBufferRef PrefixSumResultBuffer = FPrefixSumShaderInterface::AddPass(GraphBuilder, ProjectionResult.CountsBuffer, NumTriangles, DebugResult);
 		// for (int i = 0; i < 2; ++i)
@@ -131,7 +131,7 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 		// 	AddEnqueueCopyPass(GraphBuilder, PrefixSumResultReadback, DebugResult.PrefixSums[i], GroupSize * sizeof(uint32));
 		// 	PrefixSumResults.Add(PrefixSumResultReadback);
 		//
-		// 	if(i==1) continue;
+		// 	if(i==0) continue;
 		// 	//
 		// 	// FRHIGPUBufferReadback* AppliedSumResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
 		// 	// AddEnqueueCopyPass(GraphBuilder, AppliedSumResultReadback, DebugResult.AppliedSums[i], NumTriangles / (1 << Shift) * sizeof(uint32));
