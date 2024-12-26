@@ -1,6 +1,6 @@
 #include "/Engine/Public/Platform.ush"
 
-Buffer<float3> VertexBuffer : register(t0);
+Buffer<float> VertexBuffer : register(t0);
 Buffer<uint>  IndexBuffer  : register(t1);
 
 uint NumVertices;
@@ -33,9 +33,34 @@ struct FTriangle2D
 FTriangle GetTriangle(const uint TriangleIdx)
 {
     FTriangle Triangle;
-    Triangle.Vertex0 = (int3)mul(GlobalTransformMatrix, float4(VertexBuffer[IndexBuffer[TriangleIdx + 0]], 1.0f)).xyz;
-    Triangle.Vertex1 = (int3)mul(GlobalTransformMatrix, float4(VertexBuffer[IndexBuffer[TriangleIdx + 1]], 1.0f)).xyz;
-    Triangle.Vertex2 = (int3)mul(GlobalTransformMatrix, float4(VertexBuffer[IndexBuffer[TriangleIdx + 2]], 1.0f)).xyz;
+
+    // Each vertex has 3 floats: x, y, z
+    const uint BaseIdx0 = IndexBuffer[TriangleIdx + 0] * 3;
+    const uint BaseIdx1 = IndexBuffer[TriangleIdx + 1] * 3;
+    const uint BaseIdx2 = IndexBuffer[TriangleIdx + 2] * 3;
+
+    // Transform each vertex to global space
+    Triangle.Vertex0 = (int3)mul(GlobalTransformMatrix, float4(
+        VertexBuffer[BaseIdx0 + 0],
+        VertexBuffer[BaseIdx0 + 1],
+        VertexBuffer[BaseIdx0 + 2],
+        1.0f
+    )).xyz;
+
+    Triangle.Vertex1 = (int3)mul(GlobalTransformMatrix, float4(
+        VertexBuffer[BaseIdx1 + 0],
+        VertexBuffer[BaseIdx1 + 1],
+        VertexBuffer[BaseIdx1 + 2],
+        1.0f
+    )).xyz;
+
+    Triangle.Vertex2 = (int3)mul(GlobalTransformMatrix, float4(
+        VertexBuffer[BaseIdx2 + 0],
+        VertexBuffer[BaseIdx2 + 1],
+        VertexBuffer[BaseIdx2 + 2],
+        1.0f
+    )).xyz;
+
     return Triangle;
 }
 

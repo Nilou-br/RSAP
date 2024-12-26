@@ -80,10 +80,6 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 	TArray<FRHIGPUBufferReadback*> GroupSumResults;
 	TArray<FRHIGPUBufferReadback*> AppliedSumResults;
 	TArray<FRHIGPUBufferReadback*> CompletePrefixSumResults;
-	
-	FRHIViewDesc::FBufferSRV::FInitializer VertexBufferInitializer = FRHIViewDesc::CreateBufferSRV();
-	VertexBufferInitializer.SetType(FRHIViewDesc::EBufferType::Typed);
-	VertexBufferInitializer.SetFormat(PF_R32G32B32F);
 
 	FRHIViewDesc::FBufferSRV::FInitializer IndexBuffer16Initializer = FRHIViewDesc::CreateBufferSRV();
 	IndexBuffer16Initializer.SetType(FRHIViewDesc::EBufferType::Typed);
@@ -103,8 +99,6 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 		
 		const FPositionVertexBuffer& PositionVertexBuffer = LODResources.VertexBuffers.PositionVertexBuffer;
 		const FIndexBuffer& IndexBuffer = LODResources.IndexBuffer;
-
-		FRHIShaderResourceView* VertexBufferSRV = RHICmdList.CreateShaderResourceView(PositionVertexBuffer.VertexBufferRHI, VertexBufferInitializer);
 		
 		const FBufferRHIRef& IndexBufferRHI = IndexBuffer.GetRHI();
 		const uint32 IndexStride = IndexBuffer.IndexBufferRHI->GetStride();
@@ -114,38 +108,38 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 		const uint32 NumVertices = LODResources.GetNumVertices();
 		const uint32 NumTriangles = LODResources.GetNumTriangles();
 		
-		const FProjectionShaderResult ProjectionResult = FProjectionShaderInterface::AddPass(GraphBuilder, VertexBufferSRV, IndexBufferSRV, NumVertices, NumTriangles, ComponentTransform, PassIdx);
+		const FProjectionShaderResult ProjectionResult = FProjectionShaderInterface::AddPass(GraphBuilder, PositionVertexBuffer.GetSRV(), IndexBufferSRV, NumVertices, NumTriangles, ComponentTransform, PassIdx);
 		FRHIGPUBufferReadback* ProjectionResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.Projection.Output.Readback.%i"), PassIdx));
 		AddEnqueueCopyPass(GraphBuilder, ProjectionResultReadback, ProjectionResult.CountsBuffer, NumTriangles * sizeof(uint32));
 		ProjectionResults.Add(ProjectionResultReadback);
 
-		std::array<uint32, 3> Divider = {1, 1024, 1024};
-		std::array<uint32, 3> Divider2 = {1024, 1024, 1};
-		FPrefixSumDebugResult DebugResult;
-		const FRDGBufferRef PrefixSumResultBuffer = FPrefixSumShaderInterface::AddPass(GraphBuilder, ProjectionResult.CountsBuffer, NumTriangles, DebugResult);
-		// for (int i = 0; i < 2; ++i)
-		// {
-		// 	const uint32 GroupSize = FMath::DivideAndRoundUp(NumTriangles, Divider[i]);
-		// 	
-		// 	FRHIGPUBufferReadback* PrefixSumResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
-		// 	AddEnqueueCopyPass(GraphBuilder, PrefixSumResultReadback, DebugResult.PrefixSums[i], GroupSize * sizeof(uint32));
-		// 	PrefixSumResults.Add(PrefixSumResultReadback);
+		// std::array<uint32, 3> Divider = {1, 1024, 1024};
+		// std::array<uint32, 3> Divider2 = {1024, 1024, 1};
+		// FPrefixSumDebugResult DebugResult;
+		// const FRDGBufferRef PrefixSumResultBuffer = FPrefixSumShaderInterface::AddPass(GraphBuilder, ProjectionResult.CountsBuffer, NumTriangles, DebugResult);
+		// // for (int i = 0; i < 2; ++i)
+		// // {
+		// // 	const uint32 GroupSize = FMath::DivideAndRoundUp(NumTriangles, Divider[i]);
+		// // 	
+		// // 	FRHIGPUBufferReadback* PrefixSumResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
+		// // 	AddEnqueueCopyPass(GraphBuilder, PrefixSumResultReadback, DebugResult.PrefixSums[i], GroupSize * sizeof(uint32));
+		// // 	PrefixSumResults.Add(PrefixSumResultReadback);
+		// //
+		// // 	if(i==0) continue;
+		// // 	//
+		// // 	// FRHIGPUBufferReadback* AppliedSumResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
+		// // 	// AddEnqueueCopyPass(GraphBuilder, AppliedSumResultReadback, DebugResult.AppliedSums[i], NumTriangles / (1 << Shift) * sizeof(uint32));
+		// // 	// AppliedSumResults.Add(AppliedSumResultReadback);
+		// // 	//
+		// // 	const uint32 GroupSize2 = FMath::DivideAndRoundUp(NumTriangles, Divider2[i]);
+		// // 	FRHIGPUBufferReadback* GroupSumResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
+		// // 	AddEnqueueCopyPass(GraphBuilder, GroupSumResultReadback, DebugResult.GroupSums[i], GroupSize2 * sizeof(uint32));
+		// // 	GroupSumResults.Add(GroupSumResultReadback);
+		// // }
 		//
-		// 	if(i==0) continue;
-		// 	//
-		// 	// FRHIGPUBufferReadback* AppliedSumResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
-		// 	// AddEnqueueCopyPass(GraphBuilder, AppliedSumResultReadback, DebugResult.AppliedSums[i], NumTriangles / (1 << Shift) * sizeof(uint32));
-		// 	// AppliedSumResults.Add(AppliedSumResultReadback);
-		// 	//
-		// 	const uint32 GroupSize2 = FMath::DivideAndRoundUp(NumTriangles, Divider2[i]);
-		// 	FRHIGPUBufferReadback* GroupSumResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
-		// 	AddEnqueueCopyPass(GraphBuilder, GroupSumResultReadback, DebugResult.GroupSums[i], GroupSize2 * sizeof(uint32));
-		// 	GroupSumResults.Add(GroupSumResultReadback);
-		// }
-
-		FRHIGPUBufferReadback* CompleteResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
-		AddEnqueueCopyPass(GraphBuilder, CompleteResultReadback, PrefixSumResultBuffer, NumTriangles * sizeof(uint32));
-		CompletePrefixSumResults.Add(CompleteResultReadback);
+		// FRHIGPUBufferReadback* CompleteResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
+		// AddEnqueueCopyPass(GraphBuilder, CompleteResultReadback, PrefixSumResultBuffer, NumTriangles * sizeof(uint32));
+		// CompletePrefixSumResults.Add(CompleteResultReadback);
 	}
 	
 	GraphBuilder.Execute();

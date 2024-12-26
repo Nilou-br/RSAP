@@ -185,8 +185,8 @@ private:
 
 		FGroupedPrefixSumShader::FParameters* Parameters = GraphBuilder.AllocParameters<FGroupedPrefixSumShader::FParameters>();
 		Parameters->InputBuffer   = InputBufferSRV;
-		Parameters->OutPrefixSums = GraphBuilder.CreateUAV(Result.PrefixSums,	PF_R32_UINT);
-		Parameters->OutGroupSums  = GraphBuilder.CreateUAV(Result.GroupSums,	PF_R32_UINT);
+		Parameters->OutPrefixSums = GraphBuilder.CreateUAV(Result.PrefixSums,PF_R32_UINT);
+		Parameters->OutGroupSums  = GraphBuilder.CreateUAV(Result.GroupSums, PF_R32_UINT);
 		Parameters->NumElements   = NumElements;
 
 		GraphBuilder.AddPass(
@@ -213,9 +213,9 @@ private:
 		);
 
 		FApplyGroupSumsShader::FParameters* Parameters = GraphBuilder.AllocParameters<FApplyGroupSumsShader::FParameters>();
-		Parameters->InitialPrefixSums = GraphBuilder.CreateSRV(InitialPrefixSums,	PF_R32_UINT);
-		Parameters->GroupPrefixSums   = GraphBuilder.CreateSRV(GroupPrefixSum,		PF_R32_UINT);
-		Parameters->OutPrefixSums     = GraphBuilder.CreateUAV(AppliedSums,	PF_R32_UINT);
+		Parameters->InitialPrefixSums = GraphBuilder.CreateSRV(InitialPrefixSums, PF_R32_UINT);
+		Parameters->GroupPrefixSums   = GraphBuilder.CreateSRV(GroupPrefixSum,	  PF_R32_UINT);
+		Parameters->OutPrefixSums     = GraphBuilder.CreateUAV(AppliedSums,		  PF_R32_UINT);
 		Parameters->NumElements		  = NumElements;
 
 		GraphBuilder.AddPass(

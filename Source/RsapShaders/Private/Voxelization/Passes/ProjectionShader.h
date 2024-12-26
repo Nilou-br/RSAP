@@ -97,8 +97,8 @@ struct FProjectionShaderInterface
 		PassParameters->NumTriangles = NumTriangles;
 		PassParameters->GlobalTransformMatrix = ComponentTransform;
 		PassParameters->ChunkLocation = FUintVector(0, 0, 0);
-		PassParameters->CountsBuffer = GraphBuilder.CreateUAV(CountsBuffer);
-		PassParameters->ProjectedAxisBuffer = GraphBuilder.CreateUAV(ProjectedAxisBuffer);
+		PassParameters->CountsBuffer = GraphBuilder.CreateUAV(CountsBuffer, PF_R32_UINT);
+		PassParameters->ProjectedAxisBuffer = GraphBuilder.CreateUAV(ProjectedAxisBuffer, PF_R32_UINT);
 
 		// One triangle per thread.
 		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(NumTriangles, NUM_THREADS_PROJECTION_X);
