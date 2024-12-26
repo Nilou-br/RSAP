@@ -124,9 +124,9 @@ struct FPrefixSumDebugResult
 
 struct FPrefixSumShaderInterface
 {
-	static FRDGBufferRef AddPass(FRDGBuilder& GraphBuilder, const FRDGBufferRef InputBuffer, const uint32 NumElements, FPrefixSumDebugResult& DebugResult)
+	static FRDGBufferRef AddPass(FRDGBuilder& GraphBuilder, const FRDGBufferRef InputBuffer, const uint32 NumElements)
 	{
-		return PerformRecursivePass(GraphBuilder, InputBuffer, NumElements, DebugResult);
+		return PerformRecursivePass(GraphBuilder, InputBuffer, NumElements);
 	}
 
 private:
@@ -231,23 +231,19 @@ private:
 		return AppliedSums;
 	}
 
-	static FRDGBufferRef PerformRecursivePass(FRDGBuilder& GraphBuilder, const FRDGBufferRef InputBuffer, const uint32 NumElements, FPrefixSumDebugResult& DebugResult, const uint32 IterationIdx = 0)
+	static FRDGBufferRef PerformRecursivePass(FRDGBuilder& GraphBuilder, const FRDGBufferRef InputBuffer, const uint32 NumElements, const uint32 IterationIdx = 0)
 	{
 		if(NumElements <= NUM_GROUP_TOTAL_TASKS)
 		{
 			// The input fits in a single thread group, so a single pass would make it a complete prefix sum.
-			const auto Result = AddSinglePrefixSumPass(GraphBuilder, InputBuffer, NumElements, IterationIdx);
-			DebugResult.PrefixSums[IterationIdx] = Result;
-			return Result;
+			return AddSinglePrefixSumPass(GraphBuilder, InputBuffer, NumElements, IterationIdx);
 		}
 
 		// We require more than one thread group, so add a grouped-prefix-sum pass where which also returns a group-sums buffer.
 		const auto [PrefixSums, GroupSums, GroupCount] = AddGroupedPrefixSumPass(GraphBuilder, InputBuffer, NumElements, IterationIdx);
-		DebugResult.PrefixSums[IterationIdx] = PrefixSums;
-		DebugResult.GroupSums[IterationIdx] = GroupSums;
 
 		// Recursively create another prefix-sum for the group-sums.
-		const FRDGBufferRef GroupPrefixSums = PerformRecursivePass(GraphBuilder, GroupSums, GroupCount, DebugResult, IterationIdx+1);
+		const FRDGBufferRef GroupPrefixSums = PerformRecursivePass(GraphBuilder, GroupSums, GroupCount, IterationIdx+1);
 
 		// Apply the group-sums to each element in the corresponding group in the initial prefix-sums.
 		return ApplyGroupSumsPass(GraphBuilder, PrefixSums, NumElements, GroupPrefixSums, IterationIdx);
