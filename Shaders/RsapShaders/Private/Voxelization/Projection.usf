@@ -3,7 +3,6 @@
 Buffer<float> VertexBuffer : register(t0);
 Buffer<uint>  IndexBuffer  : register(t1);
 
-uint NumVertices;
 uint NumTriangles;
 float4x4 GlobalTransformMatrix;
 uint3 ChunkLocation;

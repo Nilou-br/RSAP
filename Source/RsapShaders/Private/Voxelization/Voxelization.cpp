@@ -90,29 +90,49 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 	for (const TObjectPtr<UStaticMeshComponent>& StaticMeshComponent : Params.ChangedSMComponents)
 	{
 		++PassIdx;
+
+		// Get required data.
 		const FStaticMeshRenderData* RenderData = StaticMeshComponent->GetStaticMesh()->GetRenderData();
 		const FStaticMeshLODResources& LODResources = RenderData->LODResources[0];
 		const FMatrix44f ComponentTransform(StaticMeshComponent->GetComponentTransform().ToMatrixWithScale().GetTransposed());
 		
 		const FPositionVertexBuffer& PositionVertexBuffer = LODResources.VertexBuffers.PositionVertexBuffer;
-		const FIndexBuffer& IndexBuffer = LODResources.IndexBuffer;
-		
-		const FBufferRHIRef& IndexBufferRHI = IndexBuffer.GetRHI();
-		const uint32 IndexStride = IndexBuffer.IndexBufferRHI->GetStride();
-		const bool bIsIndex32Bit = IndexStride == 4;
-		FRHIShaderResourceView* IndexBufferSRV = RHICmdList.CreateShaderResourceView(IndexBufferRHI, bIsIndex32Bit ? IndexBuffer32Initializer : IndexBuffer16Initializer);
+		const FBufferRHIRef& IndexBufferRHI = LODResources.IndexBuffer.GetRHI();
+		const bool bIsIndexBuffer32Bit = IndexBufferRHI->GetStride() == 4;
+
+		FRHIShaderResourceView* VertexBufferSRV = PositionVertexBuffer.GetSRV();
+		FRHIShaderResourceView* IndexBufferSRV= RHICmdList.CreateShaderResourceView(IndexBufferRHI, bIsIndexBuffer32Bit ? IndexBuffer32Initializer : IndexBuffer16Initializer);
 		
 		const uint32 NumVertices = LODResources.GetNumVertices();
 		const uint32 NumTriangles = LODResources.GetNumTriangles();
+
 		
-		const auto [CountsBuffer, AxisBuffer] = FProjectionShaderInterface::AddPass(GraphBuilder, PositionVertexBuffer.GetSRV(), IndexBufferSRV, NumVertices, NumTriangles, ComponentTransform, PassIdx);
-		FRHIGPUBufferReadback* ProjectionResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.Projection.Output.Readback.%i"), PassIdx));
-		AddEnqueueCopyPass(GraphBuilder, ProjectionResultReadback, CountsBuffer, NumTriangles * sizeof(uint32));
-		ProjectionResults.Add(ProjectionResultReadback);
+		// Create buffers and resource/access-views
+
+		// This buffer is reused between multiple passes. The num-elements and stride stay the same between them, and the RDG handles dependencies.
+		const FRDGBufferRef SharedBuffer = GraphBuilder.CreateBuffer(
+			FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), NumTriangles),
+			*FString::Printf(TEXT("Rsap.Voxelization.SharedBuffer.%i"), PassIdx)
+		);
+		FRDGBufferSRVRef SharedBufferSRV = GraphBuilder.CreateSRV(SharedBuffer, PF_R32_UINT);
+		FRDGBufferUAVRef SharedBufferUAV = GraphBuilder.CreateUAV(SharedBuffer, PF_R32_UINT);
 		
-		const FRDGBufferRef PrefixSumResultBuffer = FPrefixSumShaderInterface::AddPass(GraphBuilder, CountsBuffer, NumTriangles);
+		const FRDGBufferRef ProjectedAxisBuffer = GraphBuilder.CreateBuffer(
+			FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), NumTriangles),
+			*FString::Printf(TEXT("Rsap.Voxelization.AxisBuffer.%i"), PassIdx)
+		);
+		FRDGBufferSRVRef AxisBufferSRV = GraphBuilder.CreateSRV(ProjectedAxisBuffer, PF_R32_UINT);
+		FRDGBufferUAVRef AxisBufferUAV = GraphBuilder.CreateUAV(ProjectedAxisBuffer, PF_R32_UINT);
+
+
+		// Add the passes in order of the dependencies between them.
+		
+		FProjectionShaderInterface::AddPass(GraphBuilder, VertexBufferSRV, IndexBufferSRV, SharedBufferUAV, AxisBufferUAV, NumTriangles, ComponentTransform, PassIdx);
+		FPrefixSumShaderInterface::AddPass(GraphBuilder, SharedBufferSRV, SharedBufferUAV, NumTriangles);
+
+		
 		FRHIGPUBufferReadback* PrefixSumResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
-		AddEnqueueCopyPass(GraphBuilder, PrefixSumResultReadback, PrefixSumResultBuffer, NumTriangles * sizeof(uint32));
+		AddEnqueueCopyPass(GraphBuilder, PrefixSumResultReadback, SharedBuffer, NumTriangles * sizeof(uint32));
 		PrefixSumResults.Add(PrefixSumResultReadback);
 	}
 	
