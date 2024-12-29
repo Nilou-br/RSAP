@@ -109,7 +109,7 @@ inline FArchive& operator<<(FArchive& Ar, Rsap::Map::flat_map<actor_key, FGuid>&
 	return Ar;
 }
 
-inline void SaveNodes(std::vector<uint8>& Batch, const FRsapChunk& Chunk, const FRsapNode& Node, const node_morton NodeMC, const layer_idx LayerIdx)
+inline void SaveNodes(std::vector<uint8>& Batch, const FRsapChunkOld& Chunk, const FRsapNode& Node, const node_morton NodeMC, const layer_idx LayerIdx)
 {
 	Batch.push_back(Node.Children);
 
@@ -135,7 +135,7 @@ inline void SaveNodes(std::vector<uint8>& Batch, const FRsapChunk& Chunk, const 
  * Only the children-mask on the nodes are serialized, as the whole octree can be rebuild from this data.
  * The other fields on a node are not stored as they can be recalculated efficiently.
  */
-void SaveStaticOctree(FArchive& ChunkAr, const FRsapChunk& Chunk)
+void SaveStaticOctree(FArchive& ChunkAr, const FRsapChunkOld& Chunk)
 {
 	// TArray<uint8> TestArray;
 	// TestArray.AddUninitialized(70000);
@@ -156,7 +156,7 @@ void SaveStaticOctree(FArchive& ChunkAr, const FRsapChunk& Chunk)
 	ChunkAr.Serialize(Batch.data(), Batch.size());
 }
 
-inline void LoadNodes(FArchive& ChunkAr, const FRsapChunk& Chunk, const node_morton NodeMC, const layer_idx LayerIdx)
+inline void LoadNodes(FArchive& ChunkAr, const FRsapChunkOld& Chunk, const node_morton NodeMC, const layer_idx LayerIdx)
 {
 	uint8 Children;
 	ChunkAr << Children;
@@ -178,15 +178,15 @@ inline void LoadNodes(FArchive& ChunkAr, const FRsapChunk& Chunk, const node_mor
  * Deserializes the static octree by loading the nodes in the same sequence as they have been saved.
  * We can calculate the morton-codes based on the child's index in their parent and their layer-index.
  */
-void LoadStaticOctree(FArchive& ChunkAr, const FRsapChunk& Chunk)
+void LoadStaticOctree(FArchive& ChunkAr, const FRsapChunkOld& Chunk)
 {
 	constexpr node_morton RootNodeMC = 0;
 	constexpr layer_idx RootLayerIdx = 0;
 	LoadNodes(ChunkAr, Chunk, RootNodeMC, RootLayerIdx);
 }
 
-// Serializes an FRsapChunk.
-inline FArchive& operator<<(FArchive& Ar, const FRsapChunk& Chunk)
+// Serializes an FRsapChunkOld.
+inline FArchive& operator<<(FArchive& Ar, const FRsapChunkOld& Chunk)
 {
 	Ar << *Chunk.ActorEntries;
 
@@ -215,7 +215,7 @@ inline FString GetChunkDirectory(const FString& LevelPath, const chunk_morton Ch
 	return PathBuilder.ToString();
 }
 
-inline void SerializeChunk(const FRsapChunk& Chunk, const chunk_morton ChunkMC, FGuid* ChunkID, const FString& NavmeshFolderPath)
+inline void SerializeChunk(const FRsapChunkOld& Chunk, const chunk_morton ChunkMC, FGuid* ChunkID, const FString& NavmeshFolderPath)
 {
 	const FString ChunkDirectory = GetChunkDirectory(NavmeshFolderPath, ChunkMC);
 	if (!IFileManager::Get().DirectoryExists(*ChunkDirectory)) IFileManager::Get().MakeDirectory(*ChunkDirectory, true);
@@ -239,7 +239,7 @@ inline void SerializeChunk(const FRsapChunk& Chunk, const chunk_morton ChunkMC, 
 // 	return NavmeshPath;
 // }
 
-FRsapNavmeshLoadResult FRsapNavmesh::Load(const IRsapWorld* RsapWorld)
+FRsapNavmeshOldLoadResult FRsapNavmeshOld::Load(const IRsapWorld* RsapWorld)
 {
 	return { ERsapNavmeshLoadResult::NotFound };
 	// Chunks.clear();
@@ -288,7 +288,7 @@ FRsapNavmeshLoadResult FRsapNavmesh::Load(const IRsapWorld* RsapWorld)
 	// 	}
 	//
 	// 	// Deserialize the chunk, and add it to the navmesh.
-	// 	FRsapChunk StoredChunk; *ChunkFileArchive << StoredChunk;
+	// 	FRsapChunkOld StoredChunk; *ChunkFileArchive << StoredChunk;
 	// 	Chunks.emplace(ChunkMC, std::move(StoredChunk));
 	//
 	// 	ChunkFileArchive->Close();
@@ -299,7 +299,7 @@ FRsapNavmeshLoadResult FRsapNavmesh::Load(const IRsapWorld* RsapWorld)
 	// return { ERsapNavmeshLoadResult::Success };
 }
 
-void FRsapNavmesh::Save()
+void FRsapNavmeshOld::Save()
 {
 	// const FString NavmeshPath = GetNavmeshBinaryPath(Metadata);
 	//
@@ -328,7 +328,7 @@ void FRsapNavmesh::Save()
 	// {
 	// 	for (const chunk_morton ChunkMC : UpdatedChunkMCs)
 	// 	{
-	// 		const FRsapChunk& Chunk = Chunks.find(ChunkMC)->second;
+	// 		const FRsapChunkOld& Chunk = Chunks.find(ChunkMC)->second;
 	// 		SerializeChunk(Chunk, ChunkMC, Metadata->Chunks.Find(ChunkMC), NavmeshPath);
 	// 	}
 	//

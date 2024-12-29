@@ -2,20 +2,23 @@
 
 #include "CoreMinimal.h"
 #include "GenericPlatform/GenericPlatformMisc.h"
-
+#include "Rsap/Definitions.h"
 
 
 struct RSAPSHADERS_API FVoxelizationDispatchParams
 {
-	TArray<TObjectPtr<UStaticMeshComponent>> ChangedSMComponents;
+	TArray<TObjectPtr<UStaticMeshComponent>> StaticMeshComponents;
 	
-	explicit FVoxelizationDispatchParams(TArray<TObjectPtr<UStaticMeshComponent>>&& InChangedSMComponents)
-		: ChangedSMComponents(MoveTemp(InChangedSMComponents))
+	explicit FVoxelizationDispatchParams(TArray<TObjectPtr<UStaticMeshComponent>>&& Components)
+		: StaticMeshComponents(MoveTemp(Components))
 	{}
 };
 
 // This is a public interface that we define so outside code can invoke our compute shader.
 class RSAPSHADERS_API FVoxelizationInterface {
+
+	FORCEINLINE static Rsap::Map::flat_map<chunk_morton, TArray<TObjectPtr<UStaticMeshComponent>>> ChunkComponents(const TArray<TObjectPtr<UStaticMeshComponent>>& StaticMeshComponents);
+	
 public:
 	// Executes this shader on the render thread
 	static void DispatchRenderThread(FRHICommandListImmediate& RHICmdList,const FVoxelizationDispatchParams& Params, const TFunction<void(const TArray<FUintVector3>&)>& Callback);

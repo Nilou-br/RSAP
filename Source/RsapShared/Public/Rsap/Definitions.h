@@ -179,7 +179,7 @@ namespace Rsap::NavMesh::Direction
 	static inline constexpr rsap_direction List[6] = {Negative::X, Negative::Y, Negative::Z, Positive::X, Positive::Y, Positive::Z};	
 }
 
-struct FRsapChunk;
+struct FRsapChunkOld;
 struct FRsapNode;
 struct FRsapVectorU10;
 struct FRsapVector32;

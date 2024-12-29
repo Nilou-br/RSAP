@@ -28,7 +28,8 @@ public class RsapShaders: ModuleRules
 			"Renderer",
 			"RenderCore",
 			"RHI",
-			"Projects"
+			"Projects",
+			"RsapShared"
 		});
 		
 		if (Target.bBuildEditor == true)

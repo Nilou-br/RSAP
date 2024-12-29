@@ -11,50 +11,6 @@ class IRsapWorld;
 
 
 
-/*
- * Metadata for Rsap's navmesh.
- * Used to locate the binaries, and to check for validity in them.
- */
-// UCLASS()
-// class RSAPSHARED_API URsapNavmeshMetadata : public UAssetUserData
-// {
-// 	GENERATED_BODY()
-//
-// public:
-// 	// ID of the navmesh, used to locate the binaries.
-// 	UPROPERTY(VisibleAnywhere, Category="RSAP | NavigationMesh")
-// 	FGuid ID;
-//
-// 	// Chunks that have been serialized. The ID is used to check if the binaries for a given chunk is in-sync with the world.
-// 	UPROPERTY(VisibleAnywhere, Category="RSAP | NavigationMesh")
-// 	TMap<uint64, FGuid> Chunks;
-//
-// 	URsapNavmeshMetadata()
-// 	{
-// 		ID = FGuid::NewGuid();
-// 	}
-//
-// 	static URsapNavmeshMetadata* Init(const UWorld* World)
-// 	{
-// 		URsapNavmeshMetadata* Metadata = NewObject<URsapNavmeshMetadata>(World->PersistentLevel, StaticClass());
-// 		return Metadata;
-// 	}
-//
-// 	static URsapNavmeshMetadata* Load(const UWorld* World)
-// 	{
-// 		URsapNavmeshMetadata* Metadata = World->PersistentLevel->GetAssetUserData<URsapNavmeshMetadata>();
-// 		if(!Metadata) Metadata = Init(World);
-// 		return Metadata;
-// 	}
-//
-// 	void Save(const UWorld* World)
-// 	{
-// 		World->PersistentLevel->AddAssetUserData(this);
-// 	}
-// };
-
-
-
 enum class ERsapNavmeshLoadResult
 {
 	Success,	// Navmesh is in-sync with the world.
@@ -62,7 +18,7 @@ enum class ERsapNavmeshLoadResult
 	MisMatch	// Navmesh is found, but certain actors are out-of-sync.
 };
 
-struct FRsapNavmeshLoadResult
+struct FRsapNavmeshOldLoadResult
 {
 	ERsapNavmeshLoadResult Result;
 	FRsapActorMap MismatchedActors;
@@ -113,29 +69,29 @@ public:
  *The sound-navigation-mesh wrapper for loading, saving, generating and updating the navmesh.
  * Call the load method before anything else.
  */
-class RSAPSHARED_API FRsapNavmesh : public TRsapNavMeshBase<FRsapChunk>
+class RSAPSHARED_API FRsapNavmeshOld : public TRsapNavMeshBase<FRsapChunkOld>
 {
 public:
 	void Generate(const IRsapWorld* RsapWorld);
 
 	void Save();
-	FRsapNavmeshLoadResult Load(const IRsapWorld* RsapWorld);
+	FRsapNavmeshOldLoadResult Load(const IRsapWorld* RsapWorld);
 
 private:
 	// Processing
 	void HandleGenerate(const FRsapActorMap& ActorMap);
 	
-	void RasterizeNode(FRsapChunk& Chunk, chunk_morton ChunkMC, FRsapNode& Node,
+	void RasterizeNode(FRsapChunkOld& Chunk, chunk_morton ChunkMC, FRsapNode& Node,
 	                   node_morton NodeMC, const FRsapVector32& NodeLocation, layer_idx LayerIdx,
 	                   const FRsapCollisionComponent& CollisionComponent, bool bIsAABBContained);
 	static void RasterizeLeaf(FRsapLeaf& LeafNode, const FRsapVector32& NodeLocation,
 	                   const FRsapCollisionComponent& CollisionComponent, bool bIsAABBContained);
 	
-	FRsapNode& InitNode(const FRsapChunk& Chunk, chunk_morton ChunkMC, node_morton NodeMC, layer_idx LayerIdx, node_state NodeState, rsap_direction RelationsToSet);
-	FRsapLeaf& InitLeaf(const FRsapChunk& Chunk, chunk_morton ChunkMC, node_morton NodeMC, node_state NodeState);
-	void InitNodeParents(const FRsapChunk& Chunk, chunk_morton ChunkMC, node_morton NodeMC, layer_idx LayerIdx, node_state NodeState);
-	void SetNodeRelation(const FRsapChunk& Chunk, chunk_morton ChunkMC, FRsapNode& Node, node_morton NodeMC, layer_idx LayerIdx, rsap_direction Relation);
-	void SetNodeRelations(const FRsapChunk& Chunk, chunk_morton ChunkMC, FRsapNode& Node, node_morton NodeMC, layer_idx LayerIdx, rsap_direction Relations);
+	FRsapNode& InitNode(const FRsapChunkOld& Chunk, chunk_morton ChunkMC, node_morton NodeMC, layer_idx LayerIdx, node_state NodeState, rsap_direction RelationsToSet);
+	FRsapLeaf& InitLeaf(const FRsapChunkOld& Chunk, chunk_morton ChunkMC, node_morton NodeMC, node_state NodeState);
+	void InitNodeParents(const FRsapChunkOld& Chunk, chunk_morton ChunkMC, node_morton NodeMC, layer_idx LayerIdx, node_state NodeState);
+	void SetNodeRelation(const FRsapChunkOld& Chunk, chunk_morton ChunkMC, FRsapNode& Node, node_morton NodeMC, layer_idx LayerIdx, rsap_direction Relation);
+	void SetNodeRelations(const FRsapChunkOld& Chunk, chunk_morton ChunkMC, FRsapNode& Node, node_morton NodeMC, layer_idx LayerIdx, rsap_direction Relations);
 	
 	//URsapNavmeshMetadata* Metadata = nullptr;
 	bool bRegenerated = false;
@@ -151,7 +107,7 @@ private:
 	 * @param ProcessNodeCallback The callback that receives all the necessary data to process the node in any way.
 	 *
 	 * The callback will receive:
-	 * - FRsapChunk*& The chunk the node is in, which will be nullptr if it has not been initialized yet.
+	 * - FRsapChunkOld*& The chunk the node is in, which will be nullptr if it has not been initialized yet.
 	 * - chunk_morton Morton-code of the chunk.
 	 * - layer_idx The layer the node is in.
 	 * - node_morton The morton-code of the node.
@@ -162,8 +118,8 @@ private:
 	template<typename TCallback>
 	void IterateIntersectingNodes(const FRsapCollisionComponent& CollisionComponent, TCallback ProcessNodeCallback)
 	{
-		static_assert(std::is_invocable_v<TCallback, FRsapChunk*&, chunk_morton, layer_idx, node_morton, FRsapVector32&>,
-		"IterateIntersectingNodes: argument 'TCallback ProcessNodeCallback' signature must match (FRsapChunk*&, chunk_morton, layer_idx, node_morton, FRsapVector32&)");
+		static_assert(std::is_invocable_v<TCallback, FRsapChunkOld*&, chunk_morton, layer_idx, node_morton, FRsapVector32&>,
+		"IterateIntersectingNodes: argument 'TCallback ProcessNodeCallback' signature must match (FRsapChunkOld*&, chunk_morton, layer_idx, node_morton, FRsapVector32&)");
 
 		const FRsapBounds& AABB = CollisionComponent.GetBoundaries();
 		const layer_idx LayerIdx = AABB.GetOptimalRasterizationLayer();
@@ -171,7 +127,7 @@ private:
 		// Loop through the chunks intersecting these component's AABB. This also returns the intersection of the AABB with the chunk.
 		AABB.ForEachChunk([&](const chunk_morton ChunkMC, const FRsapVector32& ChunkLocation, const FRsapBounds& Intersection)
 		{
-			FRsapChunk* Chunk = FindChunk(ChunkMC);
+			FRsapChunkOld* Chunk = FindChunk(ChunkMC);
 
 			// Loop through the nodes within the intersection.
 			Intersection.ForEachNode(LayerIdx, [&](const node_morton NodeMC, const FRsapVector32& NodeLocation)
@@ -203,20 +159,17 @@ private:
 };
 
 /**
- * The dirty-navmesh is used to store dirty-nodes which is used to update the actual navmesh.
- * With this we can give update priority to specific regions, g.e. close proximity to the player and areas that are often being traversed.
+ * Render-thread navmesh that links to all the buffers on the GPU side
  */
-class RSAPSHARED_API FRsapDirtyNavmesh : public TRsapNavMeshBase<FRsapDirtyChunk>
+class RSAPSHARED_API FRsapNavmeshComputeData
 {
-	
+	// Rsap::Map::flat_map<chunk_morton, FRsapChunkBuffer> ChunkBuffers;
 };
 
 /**
- * Handles running certain tasks related to the navmesh asynchronously in sequence.
- *
  * 
  */
-class RSAPSHARED_API FRsapAsyncTaskSequencer
+class RSAPSHARED_API FRsapNavmesh
 {
-	
+	FRsapNavmeshComputeData ComputeData;
 };

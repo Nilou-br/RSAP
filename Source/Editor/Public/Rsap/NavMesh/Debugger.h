@@ -10,10 +10,10 @@
 
 class FRsapDebugger
 {
-	FRsapNavmesh& Navmesh;
+	FRsapNavmeshOld& Navmesh;
 	
 public:
-	explicit FRsapDebugger(FRsapNavmesh& InNavmesh)
+	explicit FRsapDebugger(FRsapNavmeshOld& InNavmesh)
 		: Navmesh(InNavmesh)
 	{
 		//NavMeshUpdatedHandle = FRsapUpdater::OnUpdateComplete.AddStatic(&FRsapDebugger::OnNavMeshUpdated);
@@ -40,8 +40,8 @@ private:
 	void Draw(const FVector& CameraLocation, const FRotator& CameraRotation);
 
 	void DrawNode(const UWorld* World, const FRsapVector32& NodeCenter, const layer_idx LayerIdx);
-	void DrawLeafNode(const UWorld* World, const FRsapChunk& Chunk, FRsapVector32 ChunkLocation, node_morton NodeMC, const FVector& CameraLocation);
-	void DrawNodes(const UWorld* World, const FRsapChunk& Chunk, const chunk_morton ChunkMC, const FRsapVector32 ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation);
+	void DrawLeafNode(const UWorld* World, const FRsapChunkOld& Chunk, FRsapVector32 ChunkLocation, node_morton NodeMC, const FVector& CameraLocation);
+	void DrawNodes(const UWorld* World, const FRsapChunkOld& Chunk, const chunk_morton ChunkMC, const FRsapVector32 ChunkLocation, const node_morton NodeMC, const layer_idx LayerIdx, const FVector& CameraLocation);
 	void DrawNodeInfo(const UWorld* World, const node_morton NodeMC, const FRsapVector32& NodeCenter, layer_idx LayerIdx);
 	void DrawNodeRelations(const UWorld* World, const chunk_morton ChunkMC, const FRsapVector32 ChunkLocation, const FRsapNode& Node, const node_morton NodeMC, const FRsapVector32& NodeCenter, const layer_idx LayerIdx);
 

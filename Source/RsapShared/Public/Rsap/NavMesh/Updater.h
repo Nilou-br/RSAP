@@ -14,15 +14,15 @@
  *
  * Pause the updater when you want to use the navmesh to avoid race conditions.
  */
-class RSAPSHARED_API FRsapNavmeshUpdater
+class RSAPSHARED_API FRsapNavmeshOldUpdater
 {
-	FRsapNavmesh& Navmesh;
+	FRsapNavmeshOld& Navmesh;
 	FRsapDirtyNavmesh DirtyNavmesh;
 	
 	std::unordered_set<std::shared_ptr<FRsapCollisionComponent>> StagedComponents;
 
 public:
-	explicit FRsapNavmeshUpdater(FRsapNavmesh& InNavmesh) : Navmesh(InNavmesh){}
+	explicit FRsapNavmeshOldUpdater(FRsapNavmeshOld& InNavmesh) : Navmesh(InNavmesh){}
 
 	void StageComponent(const std::shared_ptr<FRsapCollisionComponent>& Component)
 	{

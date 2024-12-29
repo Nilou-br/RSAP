@@ -12,7 +12,7 @@
  * Fetches all the actor's components which are used for rasterization.
  * Will rasterize the octrees to a certain depth.
  */
-void FRsapNavmesh::Generate(const IRsapWorld* RsapWorld)
+void FRsapNavmeshOld::Generate(const IRsapWorld* RsapWorld)
 {
 	if(!RsapWorld->GetWorld()) return;
 	
@@ -34,7 +34,7 @@ void FRsapNavmesh::Generate(const IRsapWorld* RsapWorld)
 	bRegenerated = true;
 }
 
-void FRsapNavmesh::HandleGenerate(const FRsapActorMap& ActorMap)
+void FRsapNavmeshOld::HandleGenerate(const FRsapActorMap& ActorMap)
 {
 	FRsapOverlap::InitCollisionBoxes();
 
@@ -50,7 +50,7 @@ void FRsapNavmesh::HandleGenerate(const FRsapActorMap& ActorMap)
 			FPhysicsCommand::ExecuteRead(CollisionComponent->GetPrimitive()->BodyInstance.ActorHandle, [&](const FPhysicsActorHandle& ActorHandle)
 			{
 				// todo: variable determining the minimum size a component needs to be for it to be used for rasterization?
-				IterateIntersectingNodes(*CollisionComponent, [&](FRsapChunk*& Chunk, const chunk_morton ChunkMC, const layer_idx LayerIdx, const node_morton NodeMC, const FRsapVector32& NodeLocation)
+				IterateIntersectingNodes(*CollisionComponent, [&](FRsapChunkOld*& Chunk, const chunk_morton ChunkMC, const layer_idx LayerIdx, const node_morton NodeMC, const FRsapVector32& NodeLocation)
 				{
 					// Check if the component overlaps this voxel.
 					if(!FRsapNode::HasComponentOverlap(CollisionComponent->GetPrimitive(), NodeLocation, LayerIdx, true)) return;
@@ -81,7 +81,7 @@ void FRsapNavmesh::HandleGenerate(const FRsapActorMap& ActorMap)
 		const actor_key ActorKey = RsapActor->GetActorKey();
 		for (auto ChunkMC : OccludedChunks)
 		{
-			FRsapChunk& Chunk = Chunks.find(ChunkMC)->second;
+			FRsapChunkOld& Chunk = Chunks.find(ChunkMC)->second;
 			Chunk.UpdateActorEntry(ActorKey);
 		}
 	}

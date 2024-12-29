@@ -1,5 +1,8 @@
 #include "Voxelization.h"
 #include "RsapShaders/Public/Voxelization/Voxelization.h"
+
+#include <vector>
+
 #include "PixelShaderUtils.h"
 #include "MeshPassProcessor.inl"
 #include "StaticMeshResources.h"
@@ -8,7 +11,7 @@
 #include "RHIGPUReadback.h"
 #include "Passes/PrefixSumShader.h"
 #include "Passes/ProjectionShader.h"
-
+#include "Rsap/Math/Bounds.h"
 
 
 struct FTriangle
@@ -44,8 +47,6 @@ public:
 		SHADER_PARAMETER(FUintVector, ChunkLocation)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<FProjectionResult>, OutputBuffer)
 	END_SHADER_PARAMETER_STRUCT()
-
-
 	
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
 	{
@@ -68,9 +69,24 @@ public:
 	}
 };
 
-// This will tell the engine to create the shader and where the shader entry point is.
-// ShaderType | ShaderPath | Shader function name | Type
-//IMPLEMENT_GLOBAL_SHADER(FVoxelization, "/RsapShadersShaders/Voxelization/Voxelization.usf", "Voxelization", SF_Compute);
+/**
+ * Separates the components by chunks.
+ */
+Rsap::Map::flat_map<chunk_morton, TArray<TObjectPtr<UStaticMeshComponent>>> FVoxelizationInterface::ChunkComponents(const TArray<TObjectPtr<UStaticMeshComponent>>& StaticMeshComponents)
+{
+	Rsap::Map::flat_map<chunk_morton, TArray<TObjectPtr<UStaticMeshComponent>>> ChunkedComponents;
+
+	for (const auto& StaticMeshComponent : StaticMeshComponents)
+	{
+		FRsapBounds(StaticMeshComponent).ForEachChunk([&](const chunk_morton ChunkMC, const FRsapVector32& ChunkLocation, const FRsapBounds& ChunkBounds)
+		{
+			auto& Chunk = ChunkedComponents[ChunkMC];
+			Chunk.Emplace(StaticMeshComponent);
+		});
+	}
+	
+	return ChunkedComponents;
+}
 
 void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHICmdList, const FVoxelizationDispatchParams& Params, const TFunction<void(const TArray<FUintVector3>&)>& Callback)
 {
@@ -85,9 +101,22 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 	FRHIViewDesc::FBufferSRV::FInitializer IndexBuffer32Initializer = FRHIViewDesc::CreateBufferSRV();
 	IndexBuffer32Initializer.SetType(FRHIViewDesc::EBufferType::Typed);
 	IndexBuffer32Initializer.SetFormat(PF_R32_UINT);
+	
+	uint32 ChunkIdx = 0;
+	for (auto& [ChunkMC, Components] : ChunkComponents(Params.StaticMeshComponents))
+	{
+		UE_LOG(LogRsap, Log, TEXT("Chunk: %i"), ChunkIdx);
 
+		for (const auto& StaticMeshComponent : Components)
+		{
+			UE_LOG(LogRsap, Log, TEXT("Static-mesh: %s"), *StaticMeshComponent.GetFullName());
+		}
+
+		++ChunkIdx;
+	}
+	
 	uint32 PassIdx = 0;
-	for (const TObjectPtr<UStaticMeshComponent>& StaticMeshComponent : Params.ChangedSMComponents)
+	for (const TObjectPtr<UStaticMeshComponent>& StaticMeshComponent : Params.StaticMeshComponents)
 	{
 		++PassIdx;
 
@@ -124,11 +153,19 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 		FRDGBufferSRVRef AxisBufferSRV = GraphBuilder.CreateSRV(ProjectedAxisBuffer, PF_R32_UINT);
 		FRDGBufferUAVRef AxisBufferUAV = GraphBuilder.CreateUAV(ProjectedAxisBuffer, PF_R32_UINT);
 
+		
+
 
 		// Add the passes in order of the dependencies between them.
 		
 		FProjectionShaderInterface::AddPass(GraphBuilder, VertexBufferSRV, IndexBufferSRV, SharedBufferUAV, AxisBufferUAV, NumTriangles, ComponentTransform, PassIdx);
 		FPrefixSumShaderInterface::AddPass(GraphBuilder, SharedBufferSRV, SharedBufferUAV, NumTriangles);
+		
+		
+		
+		FRHIResourceCreateInfo NavMeshBufferCreateInfo(TEXT("RsapNavMeshBuffer"));
+		constexpr EBufferUsageFlags NavMeshBufferUsageFlags = BUF_UnorderedAccess | BUF_ShaderResource;
+		FBufferRHIRef NavMeshBufferRHI = RHICmdList.CreateStructuredBuffer(4, 100, NavMeshBufferUsageFlags, NavMeshBufferCreateInfo);
 
 		
 		FRHIGPUBufferReadback* PrefixSumResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));

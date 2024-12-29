@@ -33,7 +33,7 @@ public:
 	void Regenerate(const UWorld* World);
 
 private:
-	FRsapNavmesh NavMesh;
+	FRsapNavmeshOld NavMesh;
 	FRsapDebugger* Debugger;
 	TArray<TObjectPtr<UStaticMeshComponent>> ComponentChangedResults;
 

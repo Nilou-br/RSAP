@@ -62,13 +62,13 @@ enum class EOctreeType
  *
  * Call ::SetActiveOctree to set one of the two active.
  */
-struct RSAPSHARED_API FRsapChunk : TRsapChunkBase<THighResSparseOctree<FRsapNode>>
+struct RSAPSHARED_API FRsapChunkOld : TRsapChunkBase<THighResSparseOctree<FRsapNode>>
 {
 	std::array<THighResSparseOctree<FRsapNode>*, 2> Octrees; // Accessed using a node-state, 0 static, 1 dynamic.
 	Rsap::Map::flat_map<actor_key, FGuid>* ActorEntries;
 	uint8 ActiveOctreeType = Node::State::Static;
 
-	FRsapChunk()
+	FRsapChunkOld()
 	{
 		Octrees[0] = new THighResSparseOctree<FRsapNode>;
 		Octrees[1] = new THighResSparseOctree<FRsapNode>;
@@ -77,7 +77,7 @@ struct RSAPSHARED_API FRsapChunk : TRsapChunkBase<THighResSparseOctree<FRsapNode
 		ActorEntries = new Rsap::Map::flat_map<actor_key, FGuid>();
 	}
 
-	~FRsapChunk()
+	~FRsapChunkOld()
 	{
 		delete Octrees[0];
 		delete Octrees[1];
@@ -180,7 +180,7 @@ struct RSAPSHARED_API FRsapChunk : TRsapChunkBase<THighResSparseOctree<FRsapNode
 
 /**
  * Used within the dirty-navmesh for updating the real navmesh.
- * Initializes the nodes similarly to FRsapChunk.
+ * Initializes the nodes similarly to FRsapChunkOld.
  */
 struct RSAPSHARED_API FRsapDirtyChunk
 {
@@ -233,4 +233,12 @@ struct RSAPSHARED_API FRsapDirtyChunk
 		const child_idx ChildIdx = FMortonUtils::Node::GetChildIndex(NodeMC, LayerIdx);
 		ParentNode.SetChildActive(ChildIdx);
 	}
+};
+
+
+
+struct RSAPSHARED_API FRsapChunkBuffer
+{
+	// FRHIBuffer ChunkBufferRHI;
+	// FRDGBufferSRV ChunkBufferSRV;
 };

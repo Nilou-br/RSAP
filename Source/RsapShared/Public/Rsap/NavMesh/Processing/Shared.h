@@ -10,10 +10,10 @@
 class RSAPSHARED_API FRsapProcessing
 {
 public:
-	static FRsapNode& InitNodeAndParents(FRsapNavmesh& NavMesh, const FRsapChunk& Chunk, chunk_morton ChunkMC, node_morton NodeMC, layer_idx LayerIdx, node_state NodeState, rsap_direction RelationsToSet);
-	static FRsapLeaf& InitLeafNodeAndParents(FRsapNavmesh& NavMesh, const FRsapChunk& Chunk, chunk_morton ChunkMC, node_morton NodeMC, node_state NodeState);
-	static void InitParentsOfNode(FRsapNavmesh& NavMesh, const FRsapChunk& Chunk, chunk_morton ChunkMC, node_morton NodeMC, layer_idx LayerIdx, node_state NodeState);
-	static void SetNodeRelation(FRsapNavmesh& NavMesh, const FRsapChunk& Chunk, chunk_morton ChunkMC, FRsapNode& Node, node_morton NodeMC, layer_idx LayerIdx, rsap_direction Relation);
-	static void SetNodeRelations(FRsapNavmesh& NavMesh, const FRsapChunk& Chunk, chunk_morton ChunkMC, FRsapNode& Node, node_morton NodeMC, layer_idx LayerIdx, rsap_direction Relations);
-	static void ReRasterize(FRsapNavmesh& NavMesh, FRsapChunk& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, const node_morton NodeMC, const FRsapVector32& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent);
+	static FRsapNode& InitNodeAndParents(FRsapNavmeshOld& NavMesh, const FRsapChunkOld& Chunk, chunk_morton ChunkMC, node_morton NodeMC, layer_idx LayerIdx, node_state NodeState, rsap_direction RelationsToSet);
+	static FRsapLeaf& InitLeafNodeAndParents(FRsapNavmeshOld& NavMesh, const FRsapChunkOld& Chunk, chunk_morton ChunkMC, node_morton NodeMC, node_state NodeState);
+	static void InitParentsOfNode(FRsapNavmeshOld& NavMesh, const FRsapChunkOld& Chunk, chunk_morton ChunkMC, node_morton NodeMC, layer_idx LayerIdx, node_state NodeState);
+	static void SetNodeRelation(FRsapNavmeshOld& NavMesh, const FRsapChunkOld& Chunk, chunk_morton ChunkMC, FRsapNode& Node, node_morton NodeMC, layer_idx LayerIdx, rsap_direction Relation);
+	static void SetNodeRelations(FRsapNavmeshOld& NavMesh, const FRsapChunkOld& Chunk, chunk_morton ChunkMC, FRsapNode& Node, node_morton NodeMC, layer_idx LayerIdx, rsap_direction Relations);
+	static void ReRasterize(FRsapNavmeshOld& NavMesh, FRsapChunkOld& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, const node_morton NodeMC, const FRsapVector32& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* CollisionComponent);
 };

@@ -12,7 +12,7 @@
 class RSAPSHARED_API FRsapCollisionComponent
 {
 	friend class FRsapActor; // Owns the components.
-	friend class FRsapNavmeshUpdater; // Co-owner if processing dirty nodes.
+	friend class FRsapNavmeshOldUpdater; // Co-owner if processing dirty nodes.
 	
 	TWeakObjectPtr<UPrimitiveComponent> PrimitiveComponent;
 	uint16 SoundPresetID = 0;

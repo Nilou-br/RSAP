@@ -7,7 +7,7 @@
 
 // todo: maybe add bool to init parents?
 // Returns a reference to this node. Will initialize one if it does not exist yet. Will also init any parents of this node that do not exist yet, and set it's relations.
-FRsapNode& FRsapNavmesh::InitNode(const FRsapChunk& Chunk, const chunk_morton ChunkMC, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState, const rsap_direction RelationsToSet = Direction::Negative::XYZ)
+FRsapNode& FRsapNavmeshOld::InitNode(const FRsapChunkOld& Chunk, const chunk_morton ChunkMC, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState, const rsap_direction RelationsToSet = Direction::Negative::XYZ)
 {
 	bool bWasInserted;
 	FRsapNode& Node = Chunk.TryInitNode(bWasInserted, NodeMC, LayerIdx, NodeState);
@@ -22,7 +22,7 @@ FRsapNode& FRsapNavmesh::InitNode(const FRsapChunk& Chunk, const chunk_morton Ch
 }
 
 // Returns a reference to this leaf-node. Will initialize one if it does not exist yet. Will also init any parents of this node that do not exist yet.
-FRsapLeaf& FRsapNavmesh::InitLeaf(const FRsapChunk& Chunk, const chunk_morton ChunkMC, const node_morton NodeMC, const node_state NodeState)
+FRsapLeaf& FRsapNavmeshOld::InitLeaf(const FRsapChunkOld& Chunk, const chunk_morton ChunkMC, const node_morton NodeMC, const node_state NodeState)
 {
 	bool bWasInserted;
 	FRsapLeaf& LeafNode = Chunk.TryInitLeafNode(bWasInserted, NodeMC, NodeState);
@@ -37,7 +37,7 @@ FRsapLeaf& FRsapNavmesh::InitLeaf(const FRsapChunk& Chunk, const chunk_morton Ch
 }
 
 // Recursively inits the parents of the node until an existing one is found. All parents will have their Children mask updated correctly.
-void FRsapNavmesh::InitNodeParents(const FRsapChunk& Chunk, const chunk_morton ChunkMC, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState)
+void FRsapNavmeshOld::InitNodeParents(const FRsapChunkOld& Chunk, const chunk_morton ChunkMC, const node_morton NodeMC, const layer_idx LayerIdx, const node_state NodeState)
 {
 	const layer_idx ParentLayerIdx = LayerIdx-1;
 	const node_morton ParentNodeMC = FMortonUtils::Node::GetParent(NodeMC, ParentLayerIdx);
@@ -62,13 +62,13 @@ void FRsapNavmesh::InitNodeParents(const FRsapChunk& Chunk, const chunk_morton C
 // Tries to set the given relation for the node.
 // Will be set to a valid neighbour if found in the same layer, or any upper layers.
 // If the neighbour is located within the same parent and does not exist, then the relation will be set to point to this node's parent.
-void FRsapNavmesh::SetNodeRelation(const FRsapChunk& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, const node_morton NodeMC, const layer_idx LayerIdx, const rsap_direction Relation)
+void FRsapNavmeshOld::SetNodeRelation(const FRsapChunkOld& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, const node_morton NodeMC, const layer_idx LayerIdx, const rsap_direction Relation)
 {
 	// Get the neighbour's morton-code for this relation starting from the current layer.
 	node_morton NeighbourMC = FMortonUtils::Node::Move(NodeMC, LayerIdx, Relation);
 
 	// Get the neighbouring chunk.
-	const FRsapChunk* NeighbourChunk;
+	const FRsapChunkOld* NeighbourChunk;
 	if(FMortonUtils::Node::HasMovedIntoNewChunk(NodeMC, NeighbourMC, Relation))
 	{
 		NeighbourChunk = FindChunk(FMortonUtils::Chunk::GetNeighbour(ChunkMC, Relation));
@@ -108,7 +108,7 @@ void FRsapNavmesh::SetNodeRelation(const FRsapChunk& Chunk, const chunk_morton C
 }
 
 // Tries to set the given relations for the node.
-void FRsapNavmesh::SetNodeRelations(const FRsapChunk& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, const node_morton NodeMC, const layer_idx LayerIdx, const rsap_direction Relations)
+void FRsapNavmeshOld::SetNodeRelations(const FRsapChunkOld& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, const node_morton NodeMC, const layer_idx LayerIdx, const rsap_direction Relations)
 {
 	for (const rsap_direction Direction : Direction::List)
 	{
@@ -117,7 +117,7 @@ void FRsapNavmesh::SetNodeRelations(const FRsapChunk& Chunk, const chunk_morton 
 }
 
 // Re-rasterizes the node while skipping children that are not intersecting with the actor's boundaries.
-void FRsapNavmesh::RasterizeNode(FRsapChunk& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, const node_morton NodeMC, const FRsapVector32& NodeLocation, const layer_idx LayerIdx, const FRsapCollisionComponent& CollisionComponent, const bool bIsAABBContained)
+void FRsapNavmeshOld::RasterizeNode(FRsapChunkOld& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, const node_morton NodeMC, const FRsapVector32& NodeLocation, const layer_idx LayerIdx, const FRsapCollisionComponent& CollisionComponent, const bool bIsAABBContained)
 {
 	// Create the children.
 	const layer_idx ChildLayerIdx = LayerIdx+1;
@@ -173,7 +173,7 @@ void FRsapNavmesh::RasterizeNode(FRsapChunk& Chunk, const chunk_morton ChunkMC, 
 	}
 }
 
-void FRsapNavmesh::RasterizeLeaf(FRsapLeaf& LeafNode, const FRsapVector32& NodeLocation, const FRsapCollisionComponent& CollisionComponent, const bool bIsAABBContained)
+void FRsapNavmeshOld::RasterizeLeaf(FRsapLeaf& LeafNode, const FRsapVector32& NodeLocation, const FRsapCollisionComponent& CollisionComponent, const bool bIsAABBContained)
 {
 	// Rasterize the 64 leafs the same way as the octree, so dividing it per 8, and only rasterize individual leafs if a group of 8 is occluding.
 	for(child_idx LeafGroupIdx = 0; LeafGroupIdx < 8; ++LeafGroupIdx)
