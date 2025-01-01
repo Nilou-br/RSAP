@@ -1,8 +1,7 @@
 #include "/Engine/Public/Platform.ush"
 
-StructuredBuffer<uint>   InputBuffer	: register(t0);
-RWStructuredBuffer<uint> OutPrefixSums	: register(u0);
-RWStructuredBuffer<uint> OutGroupSums	: register(u1);
+StructuredBuffer<uint>   InputBuffer    : register(t0);
+RWStructuredBuffer<uint> OutPrefixSums  : register(u0);
 uint NumElements;
 
 groupshared uint SharedData[GROUP_TOTAL_TASKS];
@@ -12,8 +11,6 @@ void Main(uint3 GlobalThreadID : SV_DispatchThreadID, uint3 GroupThreadID : SV_G
 {
 	const uint GlobalThreadIdx = GlobalThreadID.x;
 	const uint GroupThreadIdx = GroupThreadID.x;
-	const uint GroupIdx = GroupID.x;
-	const bool bLastThreadInGroup = GroupThreadIdx == (THREAD_GROUP_SIZE - 1);
 
 	// Each thread has a number of tasks to handle. So these mark the offset for the thread to access the buffers.
 	const uint GlobalTaskOffset = GlobalThreadIdx * TASKS_PER_THREAD;
@@ -27,7 +24,7 @@ void Main(uint3 GlobalThreadID : SV_DispatchThreadID, uint3 GroupThreadID : SV_G
 		
 		if (GlobalTaskIdx < NumElements)
 		{
-			SharedData[GroupTaskIdx] = GlobalTaskIdx > 0 ? InputBuffer[GlobalTaskIdx - 1] : 0;
+			SharedData[GroupTaskIdx] = InputBuffer[GlobalTaskIdx];
 			continue;
 		}
 		
@@ -82,11 +79,5 @@ void Main(uint3 GlobalThreadID : SV_DispatchThreadID, uint3 GroupThreadID : SV_G
 		{
 			OutPrefixSums[GlobalTaskIdx] = 0; // Zero out unused threads
 		}
-	}
-
-	// Store group sum.
-	if(bLastThreadInGroup && (GlobalThreadIdx + TASKS_PER_THREAD - 1) < NumElements)
-	{
-		OutGroupSums[GroupIdx] = SharedData[GroupTaskOffset + TASKS_PER_THREAD - 1];
 	}
 }

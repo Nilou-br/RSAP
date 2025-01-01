@@ -79,7 +79,7 @@ struct FProjectionShaderInterface
 	static constexpr uint32 Stride = 4;
 	
 	// Counts how many 2D points intersect with a triangle projected onto it's major axis.
-	static void AddPass(FRDGBuilder& GraphBuilder, FRHIShaderResourceView* VertexBufferSRV, FRHIShaderResourceView* IndexBufferSRV, const FRDGBufferUAVRef CountsBufferUAV, const FRDGBufferUAVRef AxisBufferUAV, const uint32 NumTriangles, const FMatrix44f& ComponentTransform, const uint32 PassIdx)
+	static void AddPass(FRDGBuilder& GraphBuilder, FRHIShaderResourceView* VertexBufferSRV, FRHIShaderResourceView* IndexBufferSRV, const FRDGBufferUAVRef CountsBufferUAV, const FRDGBufferUAVRef AxisBufferUAV, const uint32 NumTriangles, const FMatrix44f& ComponentTransform)
 	{
 		TShaderMapRef<FProjectionShader> Shader(GetGlobalShaderMap(GMaxRHIFeatureLevel), FProjectionShader::FPermutationDomain());
 		
@@ -94,7 +94,7 @@ struct FProjectionShaderInterface
 		
 		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(NumTriangles, NUM_THREADS_PROJECTION_X);
 		GraphBuilder.AddPass(
-			RDG_EVENT_NAME("%s", *FString::Printf(TEXT("Rsap.ProjectionShader.Dispatch.%i"), PassIdx)),
+			RDG_EVENT_NAME("%s", *FString::Printf(TEXT("Rsap.ProjectionShader.Dispatch"))),
 			PassParameters,
 			ERDGPassFlags::Compute,
 			[Shader, PassParameters, GroupCount](FRHIComputeCommandList& RHICommandList)

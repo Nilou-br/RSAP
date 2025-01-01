@@ -22,14 +22,18 @@ public class RsapShaders: ModuleRules
 		PublicDependencyModuleNames.Add("Engine");
 		PublicDependencyModuleNames.Add("MaterialShaderQualitySettings");
 		
+		PublicDependencyModuleNames.AddRange(new string[]
+		{
+			"RsapShared"
+		});
+		
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
 			"CoreUObject",
 			"Renderer",
 			"RenderCore",
 			"RHI",
-			"Projects",
-			"RsapShared"
+			"Projects"
 		});
 		
 		if (Target.bBuildEditor == true)

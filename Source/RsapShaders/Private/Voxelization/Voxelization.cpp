@@ -1,8 +1,5 @@
 #include "Voxelization.h"
 #include "RsapShaders/Public/Voxelization/Voxelization.h"
-
-#include <vector>
-
 #include "PixelShaderUtils.h"
 #include "MeshPassProcessor.inl"
 #include "StaticMeshResources.h"
@@ -11,7 +8,7 @@
 #include "RHIGPUReadback.h"
 #include "Passes/PrefixSumShader.h"
 #include "Passes/ProjectionShader.h"
-#include "Rsap/Math/Bounds.h"
+#include "RsapShared/Public/Rsap/Math/Bounds.h"
 
 
 struct FTriangle
@@ -69,30 +66,14 @@ public:
 	}
 };
 
-/**
- * Separates the components by chunks.
- */
-Rsap::Map::flat_map<chunk_morton, TArray<TObjectPtr<UStaticMeshComponent>>> FVoxelizationInterface::ChunkComponents(const TArray<TObjectPtr<UStaticMeshComponent>>& StaticMeshComponents)
-{
-	Rsap::Map::flat_map<chunk_morton, TArray<TObjectPtr<UStaticMeshComponent>>> ChunkedComponents;
-
-	for (const auto& StaticMeshComponent : StaticMeshComponents)
-	{
-		FRsapBounds(StaticMeshComponent).ForEachChunk([&](const chunk_morton ChunkMC, const FRsapVector32& ChunkLocation, const FRsapBounds& ChunkBounds)
-		{
-			auto& Chunk = ChunkedComponents[ChunkMC];
-			Chunk.Emplace(StaticMeshComponent);
-		});
-	}
-	
-	return ChunkedComponents;
-}
-
 void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHICmdList, const FVoxelizationDispatchParams& Params, const TFunction<void(const TArray<FUintVector3>&)>& Callback)
 {
+	TRefCountPtr<FRDGPooledBuffer> SharedBufferPooled;
+	TRefCountPtr<FRDGPooledBuffer> ProjectedAxisBufferPooled;
+	
 	FRDGBuilder GraphBuilder(RHICmdList);
-	TArray<FRHIGPUBufferReadback*> ProjectionResults;
-	TArray<FRHIGPUBufferReadback*> PrefixSumResults;
+	
+	TArray<FRHIGPUBufferReadback*> CountsResults;
 
 	FRHIViewDesc::FBufferSRV::FInitializer IndexBuffer16Initializer = FRHIViewDesc::CreateBufferSRV();
 	IndexBuffer16Initializer.SetType(FRHIViewDesc::EBufferType::Typed);
@@ -101,26 +82,11 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 	FRHIViewDesc::FBufferSRV::FInitializer IndexBuffer32Initializer = FRHIViewDesc::CreateBufferSRV();
 	IndexBuffer32Initializer.SetType(FRHIViewDesc::EBufferType::Typed);
 	IndexBuffer32Initializer.SetFormat(PF_R32_UINT);
-	
-	uint32 ChunkIdx = 0;
-	for (auto& [ChunkMC, Components] : ChunkComponents(Params.StaticMeshComponents))
-	{
-		UE_LOG(LogRsap, Log, TEXT("Chunk: %i"), ChunkIdx);
 
-		for (const auto& StaticMeshComponent : Components)
-		{
-			UE_LOG(LogRsap, Log, TEXT("Static-mesh: %s"), *StaticMeshComponent.GetFullName());
-		}
-
-		++ChunkIdx;
-	}
 	
-	uint32 PassIdx = 0;
+	
 	for (const TObjectPtr<UStaticMeshComponent>& StaticMeshComponent : Params.StaticMeshComponents)
 	{
-		++PassIdx;
-
-		// Get required data.
 		const FStaticMeshRenderData* RenderData = StaticMeshComponent->GetStaticMesh()->GetRenderData();
 		const FStaticMeshLODResources& LODResources = RenderData->LODResources[0];
 		const FMatrix44f ComponentTransform(StaticMeshComponent->GetComponentTransform().ToMatrixWithScale().GetTransposed());
@@ -128,12 +94,10 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 		const FPositionVertexBuffer& PositionVertexBuffer = LODResources.VertexBuffers.PositionVertexBuffer;
 		const FBufferRHIRef& IndexBufferRHI = LODResources.IndexBuffer.GetRHI();
 		const bool bIsIndexBuffer32Bit = IndexBufferRHI->GetStride() == 4;
+		const uint32 NumTriangles = LODResources.GetNumTriangles();
 
 		FRHIShaderResourceView* VertexBufferSRV = PositionVertexBuffer.GetSRV();
 		FRHIShaderResourceView* IndexBufferSRV= RHICmdList.CreateShaderResourceView(IndexBufferRHI, bIsIndexBuffer32Bit ? IndexBuffer32Initializer : IndexBuffer16Initializer);
-		
-		const uint32 NumVertices = LODResources.GetNumVertices();
-		const uint32 NumTriangles = LODResources.GetNumTriangles();
 
 		
 		// Create buffers and resource/access-views
@@ -141,71 +105,62 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 		// This buffer is reused between multiple passes. The num-elements and stride stay the same between them, and the RDG handles dependencies.
 		const FRDGBufferRef SharedBuffer = GraphBuilder.CreateBuffer(
 			FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), NumTriangles),
-			*FString::Printf(TEXT("Rsap.Voxelization.SharedBuffer.%i"), PassIdx)
+			*FString::Printf(TEXT("Rsap.Voxelization.SharedBuffer"))
 		);
 		FRDGBufferSRVRef SharedBufferSRV = GraphBuilder.CreateSRV(SharedBuffer, PF_R32_UINT);
 		FRDGBufferUAVRef SharedBufferUAV = GraphBuilder.CreateUAV(SharedBuffer, PF_R32_UINT);
+
 		
 		const FRDGBufferRef ProjectedAxisBuffer = GraphBuilder.CreateBuffer(
 			FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), NumTriangles),
-			*FString::Printf(TEXT("Rsap.Voxelization.AxisBuffer.%i"), PassIdx)
+			*FString::Printf(TEXT("Rsap.Voxelization.AxisBuffer"))
 		);
 		FRDGBufferSRVRef AxisBufferSRV = GraphBuilder.CreateSRV(ProjectedAxisBuffer, PF_R32_UINT);
 		FRDGBufferUAVRef AxisBufferUAV = GraphBuilder.CreateUAV(ProjectedAxisBuffer, PF_R32_UINT);
-
 		
-
 
 		// Add the passes in order of the dependencies between them.
 		
-		FProjectionShaderInterface::AddPass(GraphBuilder, VertexBufferSRV, IndexBufferSRV, SharedBufferUAV, AxisBufferUAV, NumTriangles, ComponentTransform, PassIdx);
+		FProjectionShaderInterface::AddPass(GraphBuilder, VertexBufferSRV, IndexBufferSRV, SharedBufferUAV, AxisBufferUAV, NumTriangles, ComponentTransform);
 		FPrefixSumShaderInterface::AddPass(GraphBuilder, SharedBufferSRV, SharedBufferUAV, NumTriangles);
-		
-		
-		
-		FRHIResourceCreateInfo NavMeshBufferCreateInfo(TEXT("RsapNavMeshBuffer"));
-		constexpr EBufferUsageFlags NavMeshBufferUsageFlags = BUF_UnorderedAccess | BUF_ShaderResource;
-		FBufferRHIRef NavMeshBufferRHI = RHICmdList.CreateStructuredBuffer(4, 100, NavMeshBufferUsageFlags, NavMeshBufferCreateInfo);
 
+		// Get uint32 total-count from SharedBuffer ...
+
+		// Create new RDG buffer using this value ...
+
+		// Third shader pass that uses this buffer.
 		
-		FRHIGPUBufferReadback* PrefixSumResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback.%i"), PassIdx));
-		AddEnqueueCopyPass(GraphBuilder, PrefixSumResultReadback, SharedBuffer, NumTriangles * sizeof(uint32));
-		PrefixSumResults.Add(PrefixSumResultReadback);
+		FRHIGPUBufferReadback* CountsResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback")));
+		AddEnqueueCopyPass(GraphBuilder, CountsResultReadback, SharedBuffer, NumTriangles * sizeof(uint32));
+		CountsResults.Add(CountsResultReadback);
 	}
 	
 	GraphBuilder.Execute();
 	RHICmdList.BlockUntilGPUIdle();
+
+
+	GraphBuilder.EndEventScope();
+
+	// FRHIResourceCreateInfo NavMeshBufferCreateInfo(TEXT("RsapNavMeshBuffer"));
+	// constexpr EBufferUsageFlags NavMeshBufferUsageFlags = BUF_UnorderedAccess | BUF_ShaderResource;
+	// FBufferRHIRef NavMeshBufferRHI = RHICmdList.CreateStructuredBuffer(4, 100, NavMeshBufferUsageFlags, NavMeshBufferCreateInfo);
 	
-	for (FRHIGPUBufferReadback* Readback : ProjectionResults)
+	// Readback test.
+	uint32 PrefixSumIteration = 0;
+	for (FRHIGPUBufferReadback* Readback : CountsResults)
 	{
-		void* ProjectionResultData = Readback->Lock(0);
+		void* PrefixSumResultsData = Readback->Lock(0);
 		const uint32 NumElements = Readback->GetGPUSizeBytes() / sizeof(uint32);
-		uint32* Buffer = static_cast<uint32*>(ProjectionResultData);
+		uint32* Buffer = static_cast<uint32*>(PrefixSumResultsData);
 
 		uint32 TotalCount = 0;
 		for (uint32 i = 0; i < NumElements; ++i)
 		{
 			const uint32 Count = Buffer[i];
-			TotalCount+=Count;
+			// TotalCount+=Count;
 			UE_LOG(LogTemp, Log, TEXT("Index: %i, Count: %i"), i, Count)
 		}
 		UE_LOG(LogTemp, Log, TEXT("Total-Count: %i,"), TotalCount)
-	
-		Readback->Unlock();
-		delete Readback;
-	}
-
-	uint32 PrefixSumIteration = 0;
-	for (FRHIGPUBufferReadback* Readback : PrefixSumResults)
-	{
-		void* PrefixSumResultsData = Readback->Lock(0);
-		const uint32 NumElements = Readback->GetGPUSizeBytes() / sizeof(uint32);
-		uint32* Buffer = static_cast<uint32*>(PrefixSumResultsData);
-	
-		for (uint32 i = 0; i < NumElements; ++i)
-		{
-			UE_LOG(LogTemp, Log, TEXT("Index: %i, Prefix-sum: %i"), i, Buffer[i])
-		}
 	
 		Readback->Unlock();
 		delete Readback;

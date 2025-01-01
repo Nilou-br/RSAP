@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GenericPlatform/GenericPlatformMisc.h"
-#include "Rsap/Definitions.h"
+#include "RsapShared/Public/Rsap/Math/Vectors.h"
 
 
 struct RSAPSHADERS_API FVoxelizationDispatchParams
@@ -15,13 +15,15 @@ struct RSAPSHADERS_API FVoxelizationDispatchParams
 };
 
 // This is a public interface that we define so outside code can invoke our compute shader.
-class RSAPSHADERS_API FVoxelizationInterface {
+class RSAPSHADERS_API FVoxelizationInterface
+{
 
-	FORCEINLINE static Rsap::Map::flat_map<chunk_morton, TArray<TObjectPtr<UStaticMeshComponent>>> ChunkComponents(const TArray<TObjectPtr<UStaticMeshComponent>>& StaticMeshComponents);
+	static void StartnitialGraph();
+	static void StartVoxelGraph();
 	
 public:
 	// Executes this shader on the render thread
-	static void DispatchRenderThread(FRHICommandListImmediate& RHICmdList,const FVoxelizationDispatchParams& Params, const TFunction<void(const TArray<FUintVector3>&)>& Callback);
+	static void DispatchRenderThread(FRHICommandListImmediate& RHICmdList, const FVoxelizationDispatchParams& Params, const TFunction<void(const TArray<FUintVector3>&)>& Callback);
 
 	// Executes this shader on the render thread from the game thread via EnqueueRenderThreadCommand
 	static void DispatchGameThread(FVoxelizationDispatchParams Params, TFunction<void(const TArray<FUintVector3>&)> Callback)
