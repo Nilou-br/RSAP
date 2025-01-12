@@ -21,8 +21,6 @@
 #include "RendererInterface.h"
 #include "RenderResource.h"
 #include "RenderGraphResources.h"
-
-#include "RenderGraphResources.h"
 #include "Runtime/Engine/Classes/Engine/TextureRenderTarget2D.h"
 
 #define NUM_THREADS_VOXELIZATION_X 1

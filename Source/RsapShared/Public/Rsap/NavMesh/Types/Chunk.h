@@ -237,6 +237,12 @@ struct RSAPSHARED_API FRsapDirtyChunk
 
 
 
+struct RSAPSHARED_API FRsapChunk
+{
+	Rsap::Map::flat_map<node_morton, uint32> StaticNodes;
+	Rsap::Map::flat_map<node_morton, uint32> DynamicNodes;
+};
+
 struct RSAPSHARED_API FRsapChunkBuffer
 {
 	// FRHIBuffer ChunkBufferRHI;

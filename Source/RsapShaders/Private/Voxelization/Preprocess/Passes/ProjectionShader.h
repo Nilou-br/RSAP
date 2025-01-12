@@ -66,7 +66,7 @@ public:
 	}
 };
 
-IMPLEMENT_GLOBAL_SHADER(FProjectionShader, "/RsapShadersShaders/Voxelization/Projection.usf", "Main", SF_Compute);
+IMPLEMENT_GLOBAL_SHADER(FProjectionShader, "/RsapShadersShaders/Voxelization/Preprocess/Projection.usf", "Main", SF_Compute);
 
 struct FProjectionShaderResult
 {

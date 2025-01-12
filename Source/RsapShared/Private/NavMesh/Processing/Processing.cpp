@@ -117,7 +117,7 @@ void FRsapNavmeshOld::SetNodeRelations(const FRsapChunkOld& Chunk, const chunk_m
 }
 
 // Re-rasterizes the node while skipping children that are not intersecting with the actor's boundaries.
-void FRsapNavmeshOld::RasterizeNode(FRsapChunkOld& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, const node_morton NodeMC, const FRsapVector32& NodeLocation, const layer_idx LayerIdx, const FRsapCollisionComponent& CollisionComponent, const bool bIsAABBContained)
+void FRsapNavmeshOld::RasterizeNode(FRsapChunkOld& Chunk, const chunk_morton ChunkMC, FRsapNode& Node, const node_morton NodeMC, const FRsapVector32& NodeLocation, const layer_idx LayerIdx, const UPrimitiveComponent* Component, const bool bIsAABBContained)
 {
 	// Create the children.
 	const layer_idx ChildLayerIdx = LayerIdx+1;
@@ -131,20 +131,22 @@ void FRsapNavmeshOld::RasterizeNode(FRsapChunkOld& Chunk, const chunk_morton Chu
 		// Do a complex trace if the node for this child is fully contained within the AABB.
 		if(!bIsAABBContained)
 		{
+			FRsapBounds Boundaries(Component);
+			
 			// Not contained, so do a fast AABB intersection check, and do the actual trace when overlapping. Complex only when contained.
-			switch (FRsapNode::HasAABBIntersection(CollisionComponent.GetBoundaries(), ChildNodeLocation, ChildLayerIdx))
+			switch (FRsapNode::HasAABBIntersection(Boundaries, ChildNodeLocation, ChildLayerIdx))
 			{
 				case EAABBOverlapResult::NoOverlap: continue;
 				case EAABBOverlapResult::Intersect:
-					if(!FRsapNode::HasComponentOverlap(*CollisionComponent, ChildNodeLocation, ChildLayerIdx, false)) continue;
+					if(!FRsapNode::HasComponentOverlap(Component, ChildNodeLocation, ChildLayerIdx, false)) continue;
 					break;
 				case EAABBOverlapResult::Contained:
-					if(!FRsapNode::HasComponentOverlap(*CollisionComponent, ChildNodeLocation, ChildLayerIdx, true )) continue;
+					if(!FRsapNode::HasComponentOverlap(Component, ChildNodeLocation, ChildLayerIdx, true )) continue;
 					bIsChildContained = true;
 					break;
 			}
 		}
-		else if(!FRsapNode::HasComponentOverlap(*CollisionComponent, ChildNodeLocation, ChildLayerIdx, true)) continue;
+		else if(!FRsapNode::HasComponentOverlap(Component, ChildNodeLocation, ChildLayerIdx, true)) continue;
 		
 		const node_morton ChildNodeMC = FMortonUtils::Node::GetChild(NodeMC, ChildLayerIdx, ChildIdx);
 
@@ -153,7 +155,7 @@ void FRsapNavmeshOld::RasterizeNode(FRsapChunkOld& Chunk, const chunk_morton Chu
 		Node.SetChildActive(ChildIdx);
 		
 		if(ChildLayerIdx > Layer::StaticDepth) continue;
-		RasterizeNode(Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildNodeLocation, ChildLayerIdx, CollisionComponent, bIsChildContained);
+		RasterizeNode(Chunk, ChunkMC, ChildNode, ChildNodeMC, ChildNodeLocation, ChildLayerIdx, Component, bIsChildContained);
 
 		// This code was for testing leafs.
 		// if(ChildLayerIdx < Layer::NodeDepth)
@@ -173,13 +175,13 @@ void FRsapNavmeshOld::RasterizeNode(FRsapChunkOld& Chunk, const chunk_morton Chu
 	}
 }
 
-void FRsapNavmeshOld::RasterizeLeaf(FRsapLeaf& LeafNode, const FRsapVector32& NodeLocation, const FRsapCollisionComponent& CollisionComponent, const bool bIsAABBContained)
+void FRsapNavmeshOld::RasterizeLeaf(FRsapLeaf& LeafNode, const FRsapVector32& NodeLocation, const UPrimitiveComponent* Component, const bool bIsAABBContained)
 {
 	// Rasterize the 64 leafs the same way as the octree, so dividing it per 8, and only rasterize individual leafs if a group of 8 is occluding.
 	for(child_idx LeafGroupIdx = 0; LeafGroupIdx < 8; ++LeafGroupIdx)
 	{
 		const FRsapVector32 GroupLocation = FRsapNode::GetChildLocation(NodeLocation, Layer::GroupedLeaf, LeafGroupIdx);
-		if(!FRsapNode::HasComponentOverlap(*CollisionComponent, GroupLocation, Layer::GroupedLeaf, true))
+		if(!FRsapNode::HasComponentOverlap(Component, GroupLocation, Layer::GroupedLeaf, true))
 		{
 			// todo: for updater, clear these 8 bits.
 			continue;
@@ -192,7 +194,7 @@ void FRsapNavmeshOld::RasterizeLeaf(FRsapLeaf& LeafNode, const FRsapVector32& No
 		child_idx LeafIdx = 0;
 		for(const uint8 Leaf : Node::Children::Masks)
 		{
-			if(!FRsapNode::HasComponentOverlap(*CollisionComponent, FRsapNode::GetChildLocation(GroupLocation, Layer::Leaf, LeafIdx++), Layer::Leaf, true))
+			if(!FRsapNode::HasComponentOverlap(Component, FRsapNode::GetChildLocation(GroupLocation, Layer::Leaf, LeafIdx++), Layer::Leaf, true))
 			{
 				// todo: for updater, clear this single bit.
 				continue;

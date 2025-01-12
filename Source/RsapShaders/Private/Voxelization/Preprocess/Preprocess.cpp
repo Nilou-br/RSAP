@@ -1,5 +1,5 @@
-#include "Voxelization.h"
-#include "RsapShaders/Public/Voxelization/Voxelization.h"
+#include "Preprocess.h"
+#include "RsapShaders/Public/Voxelization/Preprocess.h"
 #include "PixelShaderUtils.h"
 #include "MeshPassProcessor.inl"
 #include "StaticMeshResources.h"
@@ -8,7 +8,10 @@
 #include "RHIGPUReadback.h"
 #include "Passes/PrefixSumShader.h"
 #include "Passes/ProjectionShader.h"
-#include "RsapShared/Public/Rsap/Math/Bounds.h"
+#include "Rsap/NavMesh/NavmeshShaderProxy.h"
+
+FVoxelizationPreprocessInterface::FOnVoxelizationPreprocessComplete FVoxelizationPreprocessInterface::OnVoxelizationPreprocessComplete;
+
 
 
 struct FTriangle
@@ -25,11 +28,11 @@ struct FTriangle
 DECLARE_STATS_GROUP(TEXT("Voxelization"), STATGROUP_Voxelization, STATCAT_Advanced);
 DECLARE_CYCLE_STAT(TEXT("Voxelization Execute"), STAT_Voxelization_Execute, STATGROUP_Voxelization);
 
-class RSAPSHADERS_API FVoxelization: public FGlobalShader
+class RSAPSHADERS_API FVoxelizationPreprocess: public FGlobalShader
 {
 public:
-	DECLARE_GLOBAL_SHADER(FVoxelization);
-	SHADER_USE_PARAMETER_STRUCT(FVoxelization, FGlobalShader);
+	DECLARE_GLOBAL_SHADER(FVoxelizationPreprocess);
+	SHADER_USE_PARAMETER_STRUCT(FVoxelizationPreprocess, FGlobalShader);
 	
 	class FVoxelization_Perm_Test : SHADER_PERMUTATION_INT("TEST", 1);
 	using FPermutationDomain = TShaderPermutationDomain<FVoxelization_Perm_Test>;
@@ -66,7 +69,7 @@ public:
 	}
 };
 
-void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHICmdList, const FVoxelizationDispatchParams& Params, const TFunction<void(const TArray<FUintVector3>&)>& Callback)
+void FVoxelizationPreprocessInterface::DispatchRenderThread(FRHICommandListImmediate& RHICmdList, FRsapNavmeshShaderProxy& NavmeshShaderProxy)
 {
 	TRefCountPtr<FRDGPooledBuffer> SharedBufferPooled;
 	TRefCountPtr<FRDGPooledBuffer> ProjectedAxisBufferPooled;
@@ -85,7 +88,7 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 
 	
 	
-	for (const TObjectPtr<UStaticMeshComponent>& StaticMeshComponent : Params.StaticMeshComponents)
+	for (const TObjectPtr<UStaticMeshComponent>& StaticMeshComponent : NavmeshShaderProxy.PreprocessBatch)
 	{
 		const FStaticMeshRenderData* RenderData = StaticMeshComponent->GetStaticMesh()->GetRenderData();
 		const FStaticMeshLODResources& LODResources = RenderData->LODResources[0];
@@ -118,17 +121,8 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 		FRDGBufferSRVRef AxisBufferSRV = GraphBuilder.CreateSRV(ProjectedAxisBuffer, PF_R32_UINT);
 		FRDGBufferUAVRef AxisBufferUAV = GraphBuilder.CreateUAV(ProjectedAxisBuffer, PF_R32_UINT);
 		
-
-		// Add the passes in order of the dependencies between them.
-		
 		FProjectionShaderInterface::AddPass(GraphBuilder, VertexBufferSRV, IndexBufferSRV, SharedBufferUAV, AxisBufferUAV, NumTriangles, ComponentTransform);
 		FPrefixSumShaderInterface::AddPass(GraphBuilder, SharedBufferSRV, SharedBufferUAV, NumTriangles);
-
-		// Get uint32 total-count from SharedBuffer ...
-
-		// Create new RDG buffer using this value ...
-
-		// Third shader pass that uses this buffer.
 		
 		FRHIGPUBufferReadback* CountsResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback")));
 		AddEnqueueCopyPass(GraphBuilder, CountsResultReadback, SharedBuffer, NumTriangles * sizeof(uint32));
@@ -138,8 +132,7 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 	GraphBuilder.Execute();
 	RHICmdList.BlockUntilGPUIdle();
 
-
-	GraphBuilder.EndEventScope();
+	OnVoxelizationPreprocessComplete.Execute();
 
 	// FRHIResourceCreateInfo NavMeshBufferCreateInfo(TEXT("RsapNavMeshBuffer"));
 	// constexpr EBufferUsageFlags NavMeshBufferUsageFlags = BUF_UnorderedAccess | BUF_ShaderResource;
@@ -152,7 +145,7 @@ void FVoxelizationInterface::DispatchRenderThread(FRHICommandListImmediate& RHIC
 		void* PrefixSumResultsData = Readback->Lock(0);
 		const uint32 NumElements = Readback->GetGPUSizeBytes() / sizeof(uint32);
 		uint32* Buffer = static_cast<uint32*>(PrefixSumResultsData);
-
+	
 		uint32 TotalCount = 0;
 		for (uint32 i = 0; i < NumElements; ++i)
 		{

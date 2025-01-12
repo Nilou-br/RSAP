@@ -13,9 +13,4 @@ class FRsapGameWorld final : public IRsapWorld
 public:
 	virtual void Initialize() override {}
 	virtual void Deinitialize() override {}
-
-	void HandleMapOpened() {}
-	void HandleOnActorMoved() {}
-	void HandleActorAdded() {}
-	void HandleActorDeleted() {}
 };

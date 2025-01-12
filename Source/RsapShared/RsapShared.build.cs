@@ -10,7 +10,8 @@ public class RsapShared : ModuleRules
 		PublicDependencyModuleNames.AddRange(
 			new string[]
 			{
-				"Core"
+				"Core",
+				"RsapShaders"
 			}
 		);
         

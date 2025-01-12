@@ -28,7 +28,7 @@
 		{
 			"Name": "RsapEditor",
 			"Type": "Editor",
-			"LoadingPhase": "Default"
+			"LoadingPhase": "None"
 		},
 		{
 			"Name": "RsapShaders",

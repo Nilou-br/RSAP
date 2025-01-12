@@ -41,7 +41,7 @@ private:
 	void PreMapSaved();
 	void PostMapSaved(const bool bSuccess);
 
-	void OnCollisionComponentChanged(const FRsapCollisionComponentChangedResult& ChangedResult);
+	void OnStaticMeshComponentChanged(const TObjectPtr<UStaticMeshComponent>& StaticMeshComponent, const EStaticMeshComponentChangedType ChangedType);
 	void OnWorldPostActorTick(UWorld* World, ELevelTick TickType, float DeltaSeconds);
 	void VoxelizationCallback(const TArray<FUintVector3>& Vertices);
 

@@ -1,6 +1,7 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
+#include "Rsap/NavMesh/Navmesh.h"
 #include "GameManager.generated.h"
 
 
@@ -20,11 +21,16 @@ protected:
 	
 private:
 	FDelegateHandle OnWorldInitializedActorsDelegateHandle;
-	void OnWorldInitializedActors(const FActorsInitializedParams& ActorsInitializedParams);
-
-	UPROPERTY() UWorld* World;
+	FDelegateHandle OnWorldPostActorTickDelegateHandle;
 	
-	bool bWorldReady;
+	void OnWorldInitializedActors(const FActorsInitializedParams& ActorsInitializedParams);
+	void OnWorldPostActorTick(UWorld* World, ELevelTick TickType, float DeltaSeconds)
+	{
+		//Navmesh.TryUpdate();
+	};
+	
 	FVector LastCameraLocation;
 	FRotator LastCameraRotation;
+
+	FRsapNavmesh Navmesh;
 };

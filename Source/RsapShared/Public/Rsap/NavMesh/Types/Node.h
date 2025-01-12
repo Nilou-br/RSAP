@@ -1,7 +1,6 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-#include "Actor.h"
 #include "Relations.h"
 #include "Rsap/Definitions.h"
 #include "Rsap/Math/Morton.h"
@@ -165,7 +164,7 @@ struct RSAPSHARED_API FRsapNode : IRsapNodeBase
 
 struct RSAPSHARED_API FRsapDirtyNode : IRsapNodeBase
 {
-	std::unordered_set<std::shared_ptr<FRsapCollisionComponent>> Components;
+	
 };
 
 struct RSAPSHARED_API FRsapLeaf

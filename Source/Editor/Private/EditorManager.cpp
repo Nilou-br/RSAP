@@ -6,7 +6,7 @@
 #include "Rsap/EditorWorld.h"
 #include "Rsap/NavMesh/Debugger.h"
 #include "Engine/World.h"
-#include "Voxelization/Voxelization.h"
+#include "Voxelization/Preprocess.h"
 
 
 void URsapEditorManager::Initialize(FSubsystemCollectionBase& Collection)
@@ -23,7 +23,7 @@ void URsapEditorManager::Initialize(FSubsystemCollectionBase& Collection)
 	EditorWorld.PreMapSaved.BindUObject(this, &ThisClass::PreMapSaved);
 	EditorWorld.PostMapSaved.BindUObject(this, &ThisClass::PostMapSaved);
 
-	EditorWorld.OnCollisionComponentChanged.BindUObject(this, &ThisClass::OnCollisionComponentChanged);
+	EditorWorld.OnStaticMeshComponentChanged.BindUObject(this, &ThisClass::OnStaticMeshComponentChanged);
 
 	FWorldDelegates::OnWorldPostActorTick.AddUObject(this, &ThisClass::OnWorldPostActorTick);
 
@@ -38,7 +38,7 @@ void URsapEditorManager::Deinitialize()
 	EditorWorld.PreMapSaved.Unbind();
 	EditorWorld.PostMapSaved.Unbind();
 
-	EditorWorld.OnCollisionComponentChanged.Unbind();
+	EditorWorld.OnStaticMeshComponentChanged.Unbind();
 
 	// FRsapUpdater::OnUpdateComplete.RemoveAll(this);
 
@@ -66,35 +66,7 @@ void URsapEditorManager::Regenerate(const UWorld* World)
 void URsapEditorManager::OnMapOpened(const IRsapWorld* RsapWorld)
 {
 	Debugger->Stop();
-	
-	// switch (const auto [Result, MismatchedActors] = NavMesh.Load(RsapWorld); Result) {
-	// 	case ERsapNavmeshLoadResult::Success: break;
-	// 	case ERsapNavmeshLoadResult::NotFound:
-	// 		NavMesh.Generate(RsapWorld);
-	// 		if(RsapWorld->MarkDirty()) UE_LOG(LogRsap, Log, TEXT("Generation complete. The sound-navigation-mesh will be cached when you save the map."))
-	// 		break;
-	// 	case ERsapNavmeshLoadResult::MisMatch:
-	// 		// NavMesh.Regenerate(RsapWorld, MismatchedActors);
-	// 		// if(RsapWorld->MarkDirty()) UE_LOG(LogRsap, Log, TEXT("Regenerated out-of-sync areas. The sound-navigation-mesh will be cached when you save the map."))
-	// 		break;
-	// }
-
 	Debugger->Start();
-
-	// Start the updater/debugger. todo: stop before closing map.
-	// FRsapUpdater::GetInstance().Start(World, NavMesh);
-	
-	// Backup code to wait for update complete ( for PIE start during update scenario ):
-	// NavMeshUpdater->StageData(Data);
-	// auto OnNavMeshUpdatedHandlePtr = MakeShared<FDelegateHandle>();
-	// *OnNavMeshUpdatedHandlePtr = FRsapUpdater::OnUpdateComplete.AddLambda([OnNavMeshUpdatedHandlePtr, &World = EditorWorld]()
-	// {
-	// 	FRsapUpdater::OnUpdateComplete.Remove(*OnNavMeshUpdatedHandlePtr);
-	// 	if(World->GetOuter()->MarkPackageDirty())
-	// 	{
-	// 		UE_LOG(LogRsap, Log, TEXT("Regeneration complete. The sound-navigation-mesh will be cached when you save the map."))
-	// 	}
-	// });
 }
 
 void URsapEditorManager::PreMapSaved()
@@ -104,34 +76,24 @@ void URsapEditorManager::PreMapSaved()
 
 void URsapEditorManager::PostMapSaved(const bool bSuccess)
 {
-	// if(bSuccess) NavMesh.Save(); // todo: check if this also runs if a different level is saved from the one that is opened?
+	
 }
 
-void URsapEditorManager::OnCollisionComponentChanged(const FRsapCollisionComponentChangedResult& ChangedResult)
+void URsapEditorManager::OnStaticMeshComponentChanged(const TObjectPtr<UStaticMeshComponent>& StaticMeshComponent, const EStaticMeshComponentChangedType ChangedType)
 {
-	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnCollisionComponentChanged"))
-	switch (ChangedResult.Type)
-	{
-		case ERsapCollisionComponentChangedType::Added:		UE_LOG(LogRsap, Warning, TEXT("Added")); break;
-		case ERsapCollisionComponentChangedType::Moved:		UE_LOG(LogRsap, Warning, TEXT("Moved")); break;
-		case ERsapCollisionComponentChangedType::Deleted:	UE_LOG(LogRsap, Warning, TEXT("Deleted")); break;
-		case ERsapCollisionComponentChangedType::None:		UE_LOG(LogRsap, Warning, TEXT("None")); break;
-		default: break;
-	}
-
-	if(ChangedResult.Type == ERsapCollisionComponentChangedType::Deleted) return;
-	UStaticMeshComponent* SM = Cast<UStaticMeshComponent>(ChangedResult.Component->GetPrimitive());
-	if(!SM || !SM->GetStaticMesh()) return;
-	ComponentChangedResults.Add(SM);
+	UE_LOG(LogRsap, Warning, TEXT("RsapEditorManager::OnStaticMeshComponentChanged"))
+	if(ChangedType == EStaticMeshComponentChangedType::Deleted) return;
+	// if(!StaticMeshComponent || !StaticMeshComponent->GetStaticMesh()) return;
+	ComponentChangedResults.Add(StaticMeshComponent);
 }
 
 void URsapEditorManager::OnWorldPostActorTick(UWorld* World, ELevelTick TickType, float DeltaSeconds)
 {
 	if (ComponentChangedResults.IsEmpty()) return;
-	FVoxelizationInterface::Dispatch(FVoxelizationDispatchParams(MoveTemp(ComponentChangedResults)), [this](const TArray<FUintVector3>& Vertices)
-	{
-		VoxelizationCallback(Vertices);
-	});
+	// FVoxelizationPreprocessInterface::Dispatch(FVoxelizationPreprocessDispatchParams(MoveTemp(ComponentChangedResults)), [this](const TArray<FUintVector3>& Vertices)
+	// {
+	// 	VoxelizationCallback(Vertices);
+	// });
 }
 
 void URsapEditorManager::VoxelizationCallback(const TArray<FUintVector3>& Vertices)

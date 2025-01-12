@@ -52,7 +52,7 @@ public:
 		OutEnvironment.SetDefine(TEXT("GROUP_TOTAL_TASKS"),NUM_GROUP_TOTAL_TASKS);
 	}
 };
-IMPLEMENT_GLOBAL_SHADER(FSinglePrefixSumShader, "/RsapShadersShaders/Voxelization/PrefixSum/SinglePrefixSum.usf", "Main", SF_Compute);
+IMPLEMENT_GLOBAL_SHADER(FSinglePrefixSumShader, "/RsapShadersShaders/Voxelization/Preprocess/PrefixSum/SinglePrefixSum.usf", "Main", SF_Compute);
 
 
 class RSAPSHADERS_API FGroupedPrefixSumShader: public FGlobalShader
@@ -82,7 +82,7 @@ public:
 		OutEnvironment.SetDefine(TEXT("GROUP_TOTAL_TASKS"),NUM_GROUP_TOTAL_TASKS);
 	}
 };
-IMPLEMENT_GLOBAL_SHADER(FGroupedPrefixSumShader, "/RsapShadersShaders/Voxelization/PrefixSum/GroupedPrefixSum.usf", "Main", SF_Compute);
+IMPLEMENT_GLOBAL_SHADER(FGroupedPrefixSumShader, "/RsapShadersShaders/Voxelization/Preprocess/PrefixSum/GroupedPrefixSum.usf", "Main", SF_Compute);
 
 
 class RSAPSHADERS_API FApplyGroupSumsShader: public FGlobalShader
@@ -112,7 +112,7 @@ public:
 		OutEnvironment.SetDefine(TEXT("GROUP_TOTAL_TASKS"),NUM_GROUP_TOTAL_TASKS);
 	}
 };
-IMPLEMENT_GLOBAL_SHADER(FApplyGroupSumsShader, "/RsapShadersShaders/Voxelization/PrefixSum/ApplyGroupSums.usf", "Main", SF_Compute);
+IMPLEMENT_GLOBAL_SHADER(FApplyGroupSumsShader, "/RsapShadersShaders/Voxelization/Preprocess/PrefixSum/ApplyGroupSums.usf", "Main", SF_Compute);
 
 
 struct FPrefixSumDebugResult

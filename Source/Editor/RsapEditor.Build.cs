@@ -11,8 +11,7 @@ public class RsapEditor : ModuleRules
 			new string[]
 			{
 				"Core",
-				"RsapShared",
-				"RsapShaders"
+				"RsapShared"
 			}
 		);
 

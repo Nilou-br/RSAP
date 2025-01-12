@@ -4,7 +4,7 @@
 #include "LevelEditor.h"
 #include "Engine/StaticMeshActor.h"
 #include "Kismet/GameplayStatics.h"
-#include "Rsap/NavMesh/Types/Actor.h"
+#include "..\..\RsapShared\Public\Rsap\NavMesh\Types\RsapActor.h"
 #include "UObject/ObjectSaveContext.h"
 
 
@@ -50,7 +50,7 @@ void FRsapEditorWorld::HandleMapOpened(const FString& Filename, bool bAsTemplate
 			const auto RsapActor = std::make_shared<FRsapActor>(Actor);
 
 			// Skip the actors that don't have any collision.
-			if (!RsapActor->HasAnyCollisionComponent()) continue;
+			if (!RsapActor->HasAnyStaticMeshComponents()) continue;
 			
 			const actor_key ActorKey = GetTypeHash(Actor->GetActorGuid());
 			RsapActors.emplace(ActorKey, RsapActor);
@@ -109,10 +109,9 @@ void FRsapEditorWorld::HandleActorSelectionChanged(const TArray<UObject*>& Objec
 		if(IsValid(Iterator->second->GetActor())) continue;
 
 		// The actor has been deleted, broadcast the event for each component.
-		const auto RsapActor = Iterator->second;
-		for (const auto& Component : RsapActor->GetCollisionComponents())
+		for (const auto& StaticMeshComponent : Iterator->second->GetStaticMeshComponents())
 		{
-			OnCollisionComponentChanged.Execute(FRsapCollisionComponentChangedResult(ERsapCollisionComponentChangedType::Deleted, Component));
+			OnStaticMeshComponentChanged.Execute(StaticMeshComponent, EStaticMeshComponentChangedType::Deleted);
 		}
 		
 		RsapActors.erase(Iterator);
@@ -137,11 +136,11 @@ void FRsapEditorWorld::HandleObjectPropertyChanged(UObject* Object, FPropertyCha
 		return;
 	}
 
-	// The actor is cached, so try to detect any changes in its collision-components.
-	for (const FRsapCollisionComponentChangedResult& Result : Iterator->second->DetectAndSyncChanges())
-	{
-		OnCollisionComponentChanged.Execute(Result);
-	}
+	// // The actor is cached, so try to detect any changes in its collision-components.
+	// for (const FRsapCollisionComponentChangedResult& Result : Iterator->second->DetectAndSyncChanges())
+	// {
+	// 	OnCollisionComponentChanged.Execute(Result);
+	// }
 }
 
 /**
@@ -152,15 +151,15 @@ void FRsapEditorWorld::CacheActor(const actor_key ActorKey, const AActor* Actor)
 {
 	// Convert it to an RsapActor which will init any data we need.
 	const auto RsapActor = std::make_shared<FRsapActor>(Actor);
-	if(!RsapActor->HasAnyCollisionComponent()) return;
+	if(!RsapActor->HasAnyStaticMeshComponents()) return;
 		
 	// The actor has collision so update the entry.
 	RsapActors[ActorKey] = RsapActor;
 
 	// Call the event for each collision-component on the actor. This could be done in bulk, but this is easier.
-	for (const auto& Component : RsapActor->GetCollisionComponents())
+	for (const auto& Component : RsapActor->GetStaticMeshComponents())
 	{
-		OnCollisionComponentChanged.Execute(FRsapCollisionComponentChangedResult(ERsapCollisionComponentChangedType::Added, Component));
+		OnStaticMeshComponentChanged.Execute(Component, EStaticMeshComponentChangedType::Added);
 	}
 }
 

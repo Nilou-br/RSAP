@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "Modules/ModuleManager.h"
 
-class FRsapShaders : public IModuleInterface
+class FRsapShaders final : public IModuleInterface
 {
 public:
 

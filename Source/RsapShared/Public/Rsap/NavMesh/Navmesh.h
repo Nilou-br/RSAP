@@ -1,13 +1,17 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
+#include <ranges>
+#include <unordered_set>
+
+#include "NavmeshShaderProxy.h"
 #include "Engine/AssetUserData.h"
 #include "Rsap/Definitions.h"
 #include "Rsap/NavMesh/Types/Chunk.h"
-#include "Types/Actor.h"
-#include <unordered_set>
+#include "Rsap/NavMesh/Types/RsapActor.h"
 
 class IRsapWorld;
+class UStaticMeshComponent;
 
 
 
@@ -83,9 +87,9 @@ private:
 	
 	void RasterizeNode(FRsapChunkOld& Chunk, chunk_morton ChunkMC, FRsapNode& Node,
 	                   node_morton NodeMC, const FRsapVector32& NodeLocation, layer_idx LayerIdx,
-	                   const FRsapCollisionComponent& CollisionComponent, bool bIsAABBContained);
+	                   const UPrimitiveComponent* Component, bool bIsAABBContained);
 	static void RasterizeLeaf(FRsapLeaf& LeafNode, const FRsapVector32& NodeLocation,
-	                   const FRsapCollisionComponent& CollisionComponent, bool bIsAABBContained);
+	                   const UPrimitiveComponent* Component, bool bIsAABBContained);
 	
 	FRsapNode& InitNode(const FRsapChunkOld& Chunk, chunk_morton ChunkMC, node_morton NodeMC, layer_idx LayerIdx, node_state NodeState, rsap_direction RelationsToSet);
 	FRsapLeaf& InitLeaf(const FRsapChunkOld& Chunk, chunk_morton ChunkMC, node_morton NodeMC, node_state NodeState);
@@ -103,7 +107,7 @@ private:
 	/**
 	 * Runs the given callback for each node, in the most optimal layer, that is intersecting the collision component.
 	 *
-	 * @param CollisionComponent The FRsapCollisionComponent to iterate over.
+	 * @param Component The UPrimitiveComponent to iterate over.
 	 * @param ProcessNodeCallback The callback that receives all the necessary data to process the node in any way.
 	 *
 	 * The callback will receive:
@@ -116,12 +120,12 @@ private:
 	 * @note The chunk ptr reference can be null, and if so, init a new chunk ( if required ) into this reference so that it can be reused in the next iteration.
 	 */
 	template<typename TCallback>
-	void IterateIntersectingNodes(const FRsapCollisionComponent& CollisionComponent, TCallback ProcessNodeCallback)
+	void IterateIntersectingNodes(const UPrimitiveComponent* Component, TCallback ProcessNodeCallback)
 	{
 		static_assert(std::is_invocable_v<TCallback, FRsapChunkOld*&, chunk_morton, layer_idx, node_morton, FRsapVector32&>,
 		"IterateIntersectingNodes: argument 'TCallback ProcessNodeCallback' signature must match (FRsapChunkOld*&, chunk_morton, layer_idx, node_morton, FRsapVector32&)");
 
-		const FRsapBounds& AABB = CollisionComponent.GetBoundaries();
+		const FRsapBounds AABB(Component);
 		const layer_idx LayerIdx = AABB.GetOptimalRasterizationLayer();
 
 		// Loop through the chunks intersecting these component's AABB. This also returns the intersection of the AABB with the chunk.
@@ -159,17 +163,27 @@ private:
 };
 
 /**
- * Render-thread navmesh that links to all the buffers on the GPU side
- */
-class RSAPSHARED_API FRsapNavmeshComputeData
-{
-	// Rsap::Map::flat_map<chunk_morton, FRsapChunkBuffer> ChunkBuffers;
-};
-
-/**
  * 
  */
 class RSAPSHARED_API FRsapNavmesh
 {
-	FRsapNavmeshComputeData ComputeData;
+	FRsapNavmeshShaderProxy ShaderProxy;
+	Rsap::Map::flat_map<chunk_morton, FRsapChunk> Chunks;
+
+	TSet<TObjectPtr<UStaticMeshComponent>> DirtyMeshComponents;
+
+	void OnPreprocessCompleted();
+	void OnVoxelizationCompleted();
+
+public:
+	FRsapNavmesh();
+	
+	void Initialize(const TArray<TObjectPtr<UStaticMeshComponent>>& StaticMeshComponents);
+	void MarkComponentDirty(TObjectPtr<UStaticMeshComponent>& StaticMeshComponent);
+
+	// // Updates the navmesh async if there are any dirty components.
+	// void TryUpdate()
+	// {
+	// 	if(DirtyMeshComponents.IsEmpty()) return;
+	// }
 };

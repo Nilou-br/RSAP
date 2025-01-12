@@ -1,7 +1,7 @@
 ﻿// Copyright Melvin Brink 2023. All Rights Reserved.
 
 #pragma once
-#include "Rsap/NavMesh/Types/Actor.h"
+#include "NavMesh\Types\RsapActor.h"
 
 
 
@@ -9,7 +9,7 @@
 class RSAPSHARED_API IRsapWorld
 {
 	DECLARE_DELEGATE_OneParam(FOnMapOpened,	const IRsapWorld* RsapWorld);
-	DECLARE_DELEGATE_OneParam(FOnCollisionComponentChanged,	const FRsapCollisionComponentChangedResult& Result);
+	DECLARE_DELEGATE_TwoParams(FOnStaticMeshComponentChanged, const TObjectPtr<UStaticMeshComponent>& Component, const EStaticMeshComponentChangedType ChangedType);
 	
 public:
 	virtual ~IRsapWorld() = default;
@@ -24,7 +24,7 @@ public:
 	bool MarkDirty() const { return World ? World->GetOuter()->MarkPackageDirty() : false; }
 
 	FOnMapOpened	OnMapOpened;
-	FOnCollisionComponentChanged OnCollisionComponentChanged;
+	FOnStaticMeshComponentChanged OnStaticMeshComponentChanged;
 	
 protected:
 	FDelegateHandle MapOpenedHandle;
