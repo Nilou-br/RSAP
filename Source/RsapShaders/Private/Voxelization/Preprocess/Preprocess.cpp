@@ -9,6 +9,7 @@
 #include "Passes/PrefixSumShader.h"
 #include "Passes/ProjectionShader.h"
 #include "Rsap/NavMesh/NavmeshShaderProxy.h"
+#include "GPUSort.h"
 
 FVoxelizationPreprocessInterface::FOnVoxelizationPreprocessComplete FVoxelizationPreprocessInterface::OnVoxelizationPreprocessComplete;
 
@@ -90,6 +91,7 @@ void FVoxelizationPreprocessInterface::DispatchRenderThread(FRHICommandListImmed
 	
 	for (const TObjectPtr<UStaticMeshComponent>& StaticMeshComponent : NavmeshShaderProxy.PreprocessBatch)
 	{
+		// Get necessary static-mesh render-data
 		const FStaticMeshRenderData* RenderData = StaticMeshComponent->GetStaticMesh()->GetRenderData();
 		const FStaticMeshLODResources& LODResources = RenderData->LODResources[0];
 		const FMatrix44f ComponentTransform(StaticMeshComponent->GetComponentTransform().ToMatrixWithScale().GetTransposed());
@@ -101,11 +103,14 @@ void FVoxelizationPreprocessInterface::DispatchRenderThread(FRHICommandListImmed
 
 		FRHIShaderResourceView* VertexBufferSRV = PositionVertexBuffer.GetSRV();
 		FRHIShaderResourceView* IndexBufferSRV= RHICmdList.CreateShaderResourceView(IndexBufferRHI, bIsIndexBuffer32Bit ? IndexBuffer32Initializer : IndexBuffer16Initializer);
-
 		
-		// Create buffers and resource/access-views
 
-		// This buffer is reused between multiple passes. The num-elements and stride stay the same between them, and the RDG handles dependencies.
+		// Get/init our render-data for this static-mesh-component.
+		FRsapMeshComponentRenderData ComponentRenderData = NavmeshShaderProxy.MeshComponentsRenderData.FindOrAdd(StaticMeshComponent);
+		FRDGBufferDesc BufferDesc = FRDGBufferDesc::CreateStructuredDesc(4, NumTriangles);
+		ComponentRenderData.PrefixSumBuffer = AllocatePooledBuffer(BufferDesc, TEXT("PrefixSumBuffer"));
+
+		// // This buffer is reused between multiple passes. The num-elements and stride stay the same between them, and the RDG handles dependencies.
 		const FRDGBufferRef SharedBuffer = GraphBuilder.CreateBuffer(
 			FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), NumTriangles),
 			*FString::Printf(TEXT("Rsap.Voxelization.SharedBuffer"))
@@ -127,6 +132,14 @@ void FVoxelizationPreprocessInterface::DispatchRenderThread(FRHICommandListImmed
 		FRHIGPUBufferReadback* CountsResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback")));
 		AddEnqueueCopyPass(GraphBuilder, CountsResultReadback, SharedBuffer, NumTriangles * sizeof(uint32));
 		CountsResults.Add(CountsResultReadback);
+		
+		FRHIResourceCreateInfo ExternalBufferInfo(TEXT("PersistentBuffer"));
+		FBufferRHIRef ExternalBuffer = FRHICommandList::CreateStructuredBuffer(
+			sizeof(uint32), 
+			NumTriangles * sizeof(uint32), 
+			BUF_ShaderResource | BUF_UnorderedAccess, 
+			ExternalBufferInfo
+		);
 	}
 	
 	GraphBuilder.Execute();

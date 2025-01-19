@@ -6,6 +6,7 @@
 #include "Rsap/Definitions.h"
 
 
+
 void URsapGameManager::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);

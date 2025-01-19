@@ -6,5 +6,9 @@
 
 struct FRsapMeshComponentRenderData
 {
-	
+	// FBufferRHIRef PrefixSumBuffer;
+	// FShaderResourceViewRHIRef  PrefixSumBufferSRV;
+	// FUnorderedAccessViewRHIRef PrefixSumBufferUAV;
+
+	TRefCountPtr<FRDGPooledBuffer> PrefixSumBuffer;
 };
