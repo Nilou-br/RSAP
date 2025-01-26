@@ -88,59 +88,59 @@ void FVoxelizationPreprocessInterface::DispatchRenderThread(FRHICommandListImmed
 	IndexBuffer32Initializer.SetFormat(PF_R32_UINT);
 
 	
-	
-	for (const TObjectPtr<UStaticMeshComponent>& StaticMeshComponent : NavmeshShaderProxy.PreprocessBatch)
-	{
-		// Get necessary static-mesh render-data
-		const FStaticMeshRenderData* RenderData = StaticMeshComponent->GetStaticMesh()->GetRenderData();
-		const FStaticMeshLODResources& LODResources = RenderData->LODResources[0];
-		const FMatrix44f ComponentTransform(StaticMeshComponent->GetComponentTransform().ToMatrixWithScale().GetTransposed());
-		
-		const FPositionVertexBuffer& PositionVertexBuffer = LODResources.VertexBuffers.PositionVertexBuffer;
-		const FBufferRHIRef& IndexBufferRHI = LODResources.IndexBuffer.GetRHI();
-		const bool bIsIndexBuffer32Bit = IndexBufferRHI->GetStride() == 4;
-		const uint32 NumTriangles = LODResources.GetNumTriangles();
-
-		FRHIShaderResourceView* VertexBufferSRV = PositionVertexBuffer.GetSRV();
-		FRHIShaderResourceView* IndexBufferSRV= RHICmdList.CreateShaderResourceView(IndexBufferRHI, bIsIndexBuffer32Bit ? IndexBuffer32Initializer : IndexBuffer16Initializer);
-		
-
-		// Get/init our render-data for this static-mesh-component.
-		FRsapMeshComponentRenderData ComponentRenderData = NavmeshShaderProxy.MeshComponentsRenderData.FindOrAdd(StaticMeshComponent);
-		FRDGBufferDesc BufferDesc = FRDGBufferDesc::CreateStructuredDesc(4, NumTriangles);
-		ComponentRenderData.PrefixSumBuffer = AllocatePooledBuffer(BufferDesc, TEXT("PrefixSumBuffer"));
-
-		// // This buffer is reused between multiple passes. The num-elements and stride stay the same between them, and the RDG handles dependencies.
-		const FRDGBufferRef SharedBuffer = GraphBuilder.CreateBuffer(
-			FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), NumTriangles),
-			*FString::Printf(TEXT("Rsap.Voxelization.SharedBuffer"))
-		);
-		FRDGBufferSRVRef SharedBufferSRV = GraphBuilder.CreateSRV(SharedBuffer, PF_R32_UINT);
-		FRDGBufferUAVRef SharedBufferUAV = GraphBuilder.CreateUAV(SharedBuffer, PF_R32_UINT);
-
-		
-		const FRDGBufferRef ProjectedAxisBuffer = GraphBuilder.CreateBuffer(
-			FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), NumTriangles),
-			*FString::Printf(TEXT("Rsap.Voxelization.AxisBuffer"))
-		);
-		FRDGBufferSRVRef AxisBufferSRV = GraphBuilder.CreateSRV(ProjectedAxisBuffer, PF_R32_UINT);
-		FRDGBufferUAVRef AxisBufferUAV = GraphBuilder.CreateUAV(ProjectedAxisBuffer, PF_R32_UINT);
-		
-		FProjectionShaderInterface::AddPass(GraphBuilder, VertexBufferSRV, IndexBufferSRV, SharedBufferUAV, AxisBufferUAV, NumTriangles, ComponentTransform);
-		FPrefixSumShaderInterface::AddPass(GraphBuilder, SharedBufferSRV, SharedBufferUAV, NumTriangles);
-		
-		FRHIGPUBufferReadback* CountsResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback")));
-		AddEnqueueCopyPass(GraphBuilder, CountsResultReadback, SharedBuffer, NumTriangles * sizeof(uint32));
-		CountsResults.Add(CountsResultReadback);
-		
-		FRHIResourceCreateInfo ExternalBufferInfo(TEXT("PersistentBuffer"));
-		FBufferRHIRef ExternalBuffer = FRHICommandList::CreateStructuredBuffer(
-			sizeof(uint32), 
-			NumTriangles * sizeof(uint32), 
-			BUF_ShaderResource | BUF_UnorderedAccess, 
-			ExternalBufferInfo
-		);
-	}
+	// // These buffers are used for all meshes to store their prefix-sum and total-sum.
+	// const FRDGBufferRef SharedSumBuffer = GraphBuilder.CreateBuffer(
+	// 	FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), NumTriangles),
+	// 	*FString::Printf(TEXT("Rsap.Voxelization.SharedBuffer"))
+	// );
+	// FRDGBufferSRVRef SharedSumBufferSRV = GraphBuilder.CreateSRV(SharedBuffer, PF_R32_UINT);
+	// FRDGBufferUAVRef SharedSumBufferUAV = GraphBuilder.CreateUAV(SharedBuffer, PF_R32_UINT);
+	//
+	//
+	//
+	// for (const TObjectPtr<UStaticMeshComponent>& StaticMeshComponent : NavmeshShaderProxy.PreprocessBatch)
+	// {
+	// 	// Get necessary static-mesh render-data
+	// 	const FStaticMeshRenderData* RenderData = StaticMeshComponent->GetStaticMesh()->GetRenderData();
+	// 	const FStaticMeshLODResources& LODResources = RenderData->LODResources[0];
+	// 	const FMatrix44f ComponentTransform(StaticMeshComponent->GetComponentTransform().ToMatrixWithScale().GetTransposed());
+	// 	
+	// 	const FPositionVertexBuffer& PositionVertexBuffer = LODResources.VertexBuffers.PositionVertexBuffer;
+	// 	const FBufferRHIRef& IndexBufferRHI = LODResources.IndexBuffer.GetRHI();
+	// 	const bool bIsIndexBuffer32Bit = IndexBufferRHI->GetStride() == 4;
+	// 	const uint32 NumTriangles = LODResources.GetNumTriangles();
+	//
+	// 	FRHIShaderResourceView* VertexBufferSRV = PositionVertexBuffer.GetSRV();
+	// 	FRHIShaderResourceView* IndexBufferSRV= RHICmdList.CreateShaderResourceView(IndexBufferRHI, bIsIndexBuffer32Bit ? IndexBuffer32Initializer : IndexBuffer16Initializer);
+	// 	
+	//
+	// 	// Get/init our render-data for this static-mesh-component.
+	// 	FRsapMeshComponentRenderData ComponentRenderData = NavmeshShaderProxy.MeshComponentsRenderData.FindOrAdd(StaticMeshComponent);
+	// 	FRDGBufferDesc BufferDesc = FRDGBufferDesc::CreateStructuredDesc(4, NumTriangles);
+	// 	ComponentRenderData.PrefixSumBuffer = AllocatePooledBuffer(BufferDesc, TEXT("PrefixSumBuffer"));
+	// 	
+	// 	const FRDGBufferRef ProjectedAxisBuffer = GraphBuilder.CreateBuffer(
+	// 		FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), NumTriangles),
+	// 		*FString::Printf(TEXT("Rsap.Voxelization.AxisBuffer"))
+	// 	);
+	// 	FRDGBufferSRVRef AxisBufferSRV = GraphBuilder.CreateSRV(ProjectedAxisBuffer, PF_R32_UINT);
+	// 	FRDGBufferUAVRef AxisBufferUAV = GraphBuilder.CreateUAV(ProjectedAxisBuffer, PF_R32_UINT);
+	// 	
+	// 	FProjectionShaderInterface::AddPass(GraphBuilder, VertexBufferSRV, IndexBufferSRV, SharedBufferUAV, AxisBufferUAV, NumTriangles, ComponentTransform);
+	// 	FPrefixSumShaderInterface::AddPass(GraphBuilder, SharedBufferSRV, SharedBufferUAV, NumTriangles);
+	// 	
+	// 	FRHIGPUBufferReadback* CountsResultReadback = new FRHIGPUBufferReadback(*FString::Printf(TEXT("Rsap.PrefixSum.Output.Readback")));
+	// 	AddEnqueueCopyPass(GraphBuilder, CountsResultReadback, SharedBuffer, NumTriangles * sizeof(uint32));
+	// 	CountsResults.Add(CountsResultReadback);
+	// 	
+	// 	FRHIResourceCreateInfo ExternalBufferInfo(TEXT("PersistentBuffer"));
+	// 	FBufferRHIRef ExternalBuffer = FRHICommandList::CreateStructuredBuffer(
+	// 		sizeof(uint32), 
+	// 		NumTriangles * sizeof(uint32), 
+	// 		BUF_ShaderResource | BUF_UnorderedAccess, 
+	// 		ExternalBufferInfo
+	// 	);
+	// }
 	
 	GraphBuilder.Execute();
 	RHICmdList.BlockUntilGPUIdle();
