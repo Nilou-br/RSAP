@@ -6,6 +6,8 @@
 
 
 
+class USubmixEffectReverbPreset;
+
 UCLASS()
 class RSAPGAME_API URsapGameManager : public UWorldSubsystem, public FTickableGameObject
 {
@@ -28,6 +30,9 @@ private:
 	{
 		//Navmesh.TryUpdate();
 	};
+	
+	UPROPERTY() USoundSubmix* ReverbSubmix;
+	UPROPERTY() USubmixEffectReverbPreset* ReverbSubmixEffect;
 	
 	FVector LastCameraLocation;
 	FRotator LastCameraRotation;

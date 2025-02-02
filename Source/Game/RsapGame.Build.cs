@@ -24,9 +24,9 @@ public class RsapGame : ModuleRules
 				"Slate",
 				"SlateCore",
 				"UnrealEd",
-				// "AudioMixer",
-				// "AudioPlatformConfiguration",
-				// "SignalProcessing"
+				"AudioMixer",
+				"AudioPlatformConfiguration",
+				"SignalProcessing"
 			}
 		);
 	}
